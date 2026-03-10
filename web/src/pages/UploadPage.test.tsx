@@ -10,12 +10,12 @@ describe("UploadPage", () => {
     expect(screen.getByLabelText("Month")).toBeInTheDocument();
     expect(screen.getByLabelText("Year")).toBeInTheDocument();
     expect(screen.getByLabelText("Monarch CSV")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Upload" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Preview" })).toBeInTheDocument();
   });
 
-  it("disables upload button when no person selected", () => {
+  it("disables preview button when no person selected", () => {
     renderWithProviders(<UploadPage />);
-    const button = screen.getByRole("button", { name: "Upload" });
+    const button = screen.getByRole("button", { name: "Preview" });
     expect(button).toBeDisabled();
   });
 });

@@ -22,7 +22,6 @@ Ideas and features without version assignment. Move to a version file when ready
 - Budget alerts when approaching limit mid-month
 
 ## UI & UX
-- Dark/light theme toggle
 - Mobile-responsive layout
 - Keyboard shortcuts for common actions
 - Data visualization (spending trends, category pie charts)

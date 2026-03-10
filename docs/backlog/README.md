@@ -6,12 +6,15 @@
 |---|---|---|---|
 | v0.1.0 | Project scaffold + data model + CSV parser + category groups | Completed (2026-03-09) | L |
 | v0.1.1 | Upload flow (API + basic UI) | In Progress | M |
-| v0.2.0 | Reconciliation engine + reconciliation page | Not Started | L |
+| v0.1.2 | Design foundations (fonts, warm theme, dark/light mode) | Not Started | M |
+| v0.1.3 | App shell, navigation, user identity & switching | Not Started | M |
+| v0.1.4 | UI audit & polish | Not Started | S |
+| v0.2.0 | Reconciliation engine + transactions page | Not Started | L |
 | v0.2.1 | Dashboard + month navigation | Not Started | M |
 | v0.3.0 | Adjustment export engine (per-person Monarch-importable CSVs) | Not Started | M |
-| v0.3.1 | Export UI (download adjustments from reconciliation page) | Not Started | S |
+| v0.3.1 | Export UI (download adjustments from transactions page) | Not Started | S |
 | v0.4.0 | Budget tracking (monthly + YTD, set budgets, view progress) | Not Started | M |
-| v0.4.1 | History & finalization (lock months, archive) | Not Started | S |
+| v0.4.1 | Month finalization (lock months, prevent changes) | Not Started | S |
 
 ## Infrastructure Readiness
 
@@ -23,6 +26,10 @@
 | React frontend | ✅ | ✅ | ✅ | ✅ |
 | Upload flow | ✅ | ✅ | ✅ | ✅ |
 | Category groups | ✅ | ✅ | ✅ | ✅ |
+| Design system (fonts, theme) | ✅ | ✅ | ✅ | ✅ |
+| Dark/light mode | ✅ | ✅ | ✅ | ✅ |
+| App shell / navigation | ✅ | ✅ | ✅ | ✅ |
+| User identity (localStorage) | ✅ | ✅ | ✅ | ✅ |
 | Reconciliation engine | — | ✅ | ✅ | ✅ |
 | Dashboard | — | ✅ | ✅ | ✅ |
 | Adjustment export | — | — | ✅ | ✅ |
@@ -35,6 +42,11 @@
 - **Backend**: FastAPI with Clean Architecture (domain / application / infrastructure / interface)
 - **Frontend**: React 19 + Tailwind v4 + Tanstack Query, Orval codegen from OpenAPI
 - **Auth**: None — two named profiles, select on upload
+- **User identity**: localStorage via Zustand persist (~1KB). Stores `currentPersonId` (UUID). Setup flow sets it, sidebar toggle switches it. Three app states: needs-setup, needs-identity, has-identity.
+- **Information architecture**: Left sidebar with 5 pages: Dashboard / Transactions / Budget / Upload / Settings. "Transactions" replaces "Reconciliation" (standard finance-app naming). "Settings" absorbs person config + category management. "History" is not a standalone page — month navigation lives within Dashboard and Transactions.
+- **Design system**: Satoshi font (Fontshare) + Geist Mono. Warm neutrals (not pure black/white), teal for positive, coral for negative. CSS custom properties via Tailwind v4 `@theme` for light/dark switching. Defined in `.claude/rules/web-design-system.md`.
+- **Theme**: System preference by default (`prefers-color-scheme`), manual override stored in localStorage. Three-way: system/light/dark. Tailwind v4 class strategy with `@custom-variant dark`. Synchronous `<script>` in `<head>` prevents flash of wrong theme.
+- **App shell**: Left sidebar navigation (industry standard for finance apps). React Router v7 `createBrowserRouter` with layout routes.
 - **CSV source**: Monarch Money export (Date, Merchant, Category, Account, Original Statement, Notes, Amount, Tags)
 - **Shared detection**: "shared" tag in Monarch CSV
 - **Split ratios**: `sXX` tag (e.g., `s70` = payer pays 70%), default 50/50. Internally stored as `payer_person_id` + `payer_percentage` on each transaction — input-mechanism-agnostic

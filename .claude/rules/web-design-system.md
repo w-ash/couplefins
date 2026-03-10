@@ -2,6 +2,8 @@
 paths:
   - "web/src/components/**"
   - "web/src/pages/**"
+  - "web/src/layouts/**"
+  - "web/src/stores/**"
 ---
 # Web Design System — Warm Personal Finance
 
@@ -62,3 +64,48 @@ Load Satoshi as a variable font from Fontshare. Load Geist Mono from Google Font
 - No animate-pulse skeleton loaders
 - No native browser form controls unstyled in the design
 - No decorative elements that serve no purpose
+
+## User Identity
+
+- Current person ID stored in localStorage via Zustand persist (`couplefins:currentPersonId`)
+- Three app states:
+  1. **needs-setup**: `GET /api/v1/persons/` returns < 2 people → full-screen SetupPage
+  2. **needs-identity**: persons exist but `currentPersonId` is null or stale → full-screen ProfilePicker
+  3. **has-identity**: persons exist and identity is valid → main app with shell
+- ProfilePicker is a lightweight "click your name" screen (2 person cards) — NOT the SetupPage
+- Sidebar shows user identity toggle: both names, active emphasized, click inactive to switch (1-click toggle, NOT a dropdown — only 2 users)
+- Upload page auto-selects person from identity store — no "Who are you?" re-identification
+- Never require re-identification on every page visit
+
+## Dark/Light Mode
+
+- `@custom-variant dark (&:where(.dark, .dark *))` in app.css for class-based control
+- Semantic color tokens via `@theme` (NOT `@theme inline` for colors — inline bakes values at build time, breaking dark mode)
+- Three-way preference: system / light / dark, stored in localStorage as `couplefins:theme`
+- FOIT prevention: synchronous `<script>` in `<head>` (not `type="module"`, not `defer`) reads localStorage + matchMedia, sets `.dark` class on `<html>` before first paint
+- `color-scheme` property on `:root` (light) and `.dark` (dark) for native browser elements (scrollbars, selects, form controls)
+- Prefer CSS variable swaps over `dark:` utility prefixes — markup should rarely need `dark:` classes
+- Listen for `matchMedia` change events when in "system" mode (user toggles OS while app is open)
+
+## Information Architecture
+
+Left sidebar with 5 pages: Dashboard / Transactions / Budget / Upload / Settings.
+- "Transactions" (not "Reconciliation") — standard finance-app naming
+- "Settings" absorbs person config, category management, and theme toggle
+- "History" is NOT a standalone page — month navigation lives within Dashboard and Transactions
+- Upload is lower in the nav (monthly task, not daily)
+
+## UI Audit Checklist (run before marking any UI story as complete)
+
+- [ ] Typography: Satoshi loaded and applied? No Inter/system font fallback visible?
+- [ ] Numbers: `tabular-nums` on all financial figures?
+- [ ] Color: warm neutrals only, no pure black/white, semantic teal/coral?
+- [ ] Spacing: varied rhythm between sections, not uniform padding?
+- [ ] Depth: warm shadows, 2-3 elevation levels, not all flat?
+- [ ] States: empty, loading, error states for every list/table?
+- [ ] Dark mode: renders correctly in both modes? Native elements styled?
+- [ ] Accessibility: contrast ratios pass, focus indicators visible, keyboard nav works?
+- [ ] Metadata: custom page title, custom favicon (not Vite default)?
+- [ ] Finance: numbers right-aligned in tables, currency consistent, amounts colored?
+- [ ] Copy: no generic placeholder text ("Welcome to..."), helpful error messages?
+- [ ] No AI slop: no uniform card grids, no identical spacing, no purple gradients?

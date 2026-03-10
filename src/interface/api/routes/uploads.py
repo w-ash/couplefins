@@ -3,10 +3,27 @@ from uuid import UUID
 from fastapi import APIRouter, Form, UploadFile
 
 from src.application.runner import execute_use_case
+from src.application.use_cases.preview_csv import PreviewCsvCommand, PreviewCsvUseCase
 from src.application.use_cases.upload_csv import UploadCsvCommand, UploadCsvUseCase
-from src.interface.api.schemas.uploads import UploadSummaryResponse
+from src.interface.api.schemas.uploads import (
+    PreviewUploadResponse,
+    UploadSummaryResponse,
+)
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
+
+
+@router.post("/preview")
+async def post_upload_preview(
+    file: UploadFile,
+    person_id: UUID = Form(),
+) -> PreviewUploadResponse:
+    csv_bytes = await file.read()
+    csv_text = csv_bytes.decode("utf-8-sig")
+
+    command = PreviewCsvCommand(csv_text=csv_text, person_id=person_id)
+    result = await execute_use_case(lambda uow: PreviewCsvUseCase(uow).execute(command))
+    return PreviewUploadResponse.from_result(result)
 
 
 @router.post("/", status_code=201)
