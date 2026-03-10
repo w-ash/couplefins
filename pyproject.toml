@@ -1,0 +1,141 @@
+[tool.poetry]
+package-mode = false
+name = "couplefins"
+version = "0.1.0"
+description = "Shared finance reconciliation tool for couples"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = ">=3.14"
+fastapi = ">=0.115"
+uvicorn = {version = ">=0.34", extras = ["standard"]}
+httpx = ">=0.28"
+loguru = ">=0.7"
+pydantic = ">=2.10"
+pydantic-settings = ">=2.7"
+sqlalchemy = {version = ">=2.0", extras = ["asyncio"]}
+aiosqlite = ">=0.21"
+alembic = ">=1.15"
+python-multipart = ">=0.0.20"
+attrs = "^25.4.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.3"
+pytest-asyncio = ">=0.25"
+ruff = ">=0.11"
+basedpyright = ">=1.29"
+pre-commit = ">=4.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+# ── Ruff ───────────────────────────────────────
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+preview = true
+output-format = "full"
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "F",     # pyflakes
+    "I",     # isort (import sorting)
+    "B",     # flake8-bugbear
+    "UP",    # pyupgrade — modernize syntax
+    "N",     # pep8-naming
+    "SIM",   # flake8-simplify
+    "RUF",   # Ruff-specific rules
+    "C4",    # flake8-comprehensions
+    "S",     # flake8-bandit (security)
+    "PT",    # flake8-pytest-style
+    "COM",   # flake8-commas (trailing commas)
+    "DTZ",   # flake8-datetimez (timezone awareness)
+    "PERF",  # Performance anti-patterns
+    "ASYNC", # Async/await issues
+    "ARG",   # Function argument validation
+    "FURB",  # Modernize Python patterns
+    "LOG",   # Logging best practices
+    "TRY",   # Exception handling
+    "PL",    # Pylint checks
+    "PTH",   # Use pathlib
+]
+ignore = [
+    "E501",    # Line too long — handled by formatter
+    "COM812",  # Trailing comma — conflicts with formatter
+    "TC001",   # Move to TYPE_CHECKING — obsolete with PEP 649
+    "TC002",   # Move to TYPE_CHECKING — obsolete with PEP 649
+    "TC003",   # Move to TYPE_CHECKING — obsolete with PEP 649
+    "TC006",   # Cast quotes — contradicts PEP 649
+    "TRY003",  # Long exception messages — clear errors are good
+    "TRY400",  # Use logging.exception — doesn't apply to loguru
+]
+fixable = ["ALL"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"src/interface/api/**/*.py" = [
+    "RUF029",  # FastAPI async handlers without await
+]
+"tests/**/*.py" = [
+    "S101",     # Allow assert
+    "ARG001",   # Unused function args (fixtures)
+    "ARG002",   # Unused method args (fixtures)
+    "PLR2004",  # Magic numbers in tests
+    "PLR0913",  # Many args in factory functions
+    "PLC0415",  # Deferred imports in fixtures
+    "PT011",    # Broad pytest.raises
+    "ERA001",   # Commented-out code (documentation)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+combine-as-imports = true
+split-on-trailing-comma = true
+force-sort-within-sections = true
+order-by-type = true
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
+# ── BasedPyright ───────────────────────────────
+[tool.basedpyright]
+include = ["src"]
+exclude = ["tests", "**/__pycache__"]
+typeCheckingMode = "strict"
+pythonVersion = "3.14"
+pythonPlatform = "All"
+venvPath = "."
+venv = ".venv"
+
+reportMissingImports = true
+reportMissingTypeStubs = false
+reportUnusedImport = true
+reportUnusedVariable = true
+reportDeprecated = "warning"
+
+reportAny = "warning"
+reportExplicitAny = "warning"
+reportUnusedCallResult = "none"
+reportMissingTypeArgument = "warning"
+reportUninitializedInstanceVariable = "none"
+enableTypeIgnoreComments = true
+
+# ── pytest ─────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "--strict-markers --tb=short -m 'not slow and not performance and not diagnostic'"
+markers = [
+    "unit: unit tests — pure logic, no external deps (<100ms)",
+    "integration: integration tests — real DB, mocked APIs (<1s)",
+    "slow: tests >1 second (skipped by default)",
+    "performance: timing assertion tests (skipped by default)",
+    "diagnostic: investigation-only tests (skipped by default)",
+]

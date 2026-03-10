@@ -1,0 +1,60 @@
+# Reference documents (not part of the project)
+refs/
+
+# macOS
+.DS_Store
+
+# Byte-compiled / optimized
+__pycache__/
+*.py[codz]
+*$py.class
+*.so
+
+# Distribution / packaging
+build/
+dist/
+
+# Unit test / coverage reports
+htmlcov/
+.coverage
+.coverage.*
+.pytest_cache/
+coverage.xml
+
+# Environments
+.env
+.envrc
+.venv/
+
+# Ruff
+.ruff_cache/
+
+# Type checkers
+.mypy_cache/
+.pytype/
+.pyre/
+.basedpyright/
+
+# Logs
+logs/
+
+# Data (DB + personal fixture files)
+data/
+
+# Poetry
+# poetry.lock is committed for app projects (reproducible installs)
+# poetry.toml
+
+# Claude Code
+.claude/settings.local.json
+
+# Frontend
+web/node_modules/
+web/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

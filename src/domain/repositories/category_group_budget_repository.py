@@ -1,0 +1,13 @@
+from typing import Protocol
+from uuid import UUID
+
+from src.domain.entities.category_group_budget import CategoryGroupBudget
+
+
+class CategoryGroupBudgetRepositoryProtocol(Protocol):
+    async def get_by_id(self, id: UUID) -> CategoryGroupBudget | None: ...
+    async def get_by_group_id(self, group_id: UUID) -> list[CategoryGroupBudget]: ...
+    async def save(self, entity: CategoryGroupBudget) -> CategoryGroupBudget: ...
+    async def save_batch(
+        self, entities: list[CategoryGroupBudget]
+    ) -> list[CategoryGroupBudget]: ...
