@@ -1,7 +1,7 @@
 [tool.poetry]
 package-mode = false
 name = "couplefins"
-version = "0.1.0"
+version = "0.1.1"
 description = "Shared finance reconciliation tool for couples"
 packages = [{include = "src"}]
 
@@ -88,6 +88,9 @@ fixable = ["ALL"]
     "PT011",    # Broad pytest.raises
     "ERA001",   # Commented-out code (documentation)
 ]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Form", "fastapi.Query", "fastapi.Path", "fastapi.Body"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["src"]

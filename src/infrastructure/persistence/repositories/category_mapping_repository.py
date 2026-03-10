@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import CursorResult, delete as sa_delete, select
 
 from src.domain.entities.category_mapping import CategoryMapping
 from src.infrastructure.persistence.models.category_mapping_model import (
@@ -36,3 +36,13 @@ class CategoryMappingRepository(BaseRepository[CategoryMapping, CategoryMappingM
         )
         result = await self._session.execute(stmt)
         return [self._to_domain(row) for row in result.scalars().all()]
+
+    async def delete_by_group_id(self, group_id: UUID) -> int:
+        stmt = sa_delete(CategoryMappingModel).where(
+            CategoryMappingModel.group_id == str(group_id)
+        )
+        result = await self._session.execute(stmt)
+        await self._session.flush()
+        if isinstance(result, CursorResult):
+            return result.rowcount
+        return 0

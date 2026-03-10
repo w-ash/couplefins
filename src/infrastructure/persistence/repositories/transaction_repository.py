@@ -73,3 +73,8 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         if isinstance(result, CursorResult):
             return result.rowcount
         return 0
+
+    async def get_distinct_categories(self) -> list[str]:
+        stmt = select(TransactionModel.category).distinct()
+        result = await self._session.execute(stmt)
+        return [row[0] for row in result.all()]

@@ -14,7 +14,10 @@ from src.infrastructure.persistence.database.db_connection import (
     init_db,
 )
 from src.interface.api.middleware import register_exception_handlers
+from src.interface.api.routes.category_groups import router as category_groups_router
 from src.interface.api.routes.health import router as health_router
+from src.interface.api.routes.persons import router as persons_router
+from src.interface.api.routes.uploads import router as uploads_router
 
 
 @asynccontextmanager
@@ -46,6 +49,9 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
     app.include_router(health_router, prefix=AppConfig.API_V1_PREFIX)
+    app.include_router(persons_router, prefix=AppConfig.API_V1_PREFIX)
+    app.include_router(uploads_router, prefix=AppConfig.API_V1_PREFIX)
+    app.include_router(category_groups_router, prefix=AppConfig.API_V1_PREFIX)
 
     return app
 

@@ -4,8 +4,8 @@
 
 | Version | Goal | Status | Effort |
 |---|---|---|---|
-| v0.1.0 | Project scaffold + data model + CSV parser + category groups | Not Started | L |
-| v0.1.1 | Upload flow (API + basic UI) | Not Started | M |
+| v0.1.0 | Project scaffold + data model + CSV parser + category groups | Completed (2026-03-09) | L |
+| v0.1.1 | Upload flow (API + basic UI) | In Progress | M |
 | v0.2.0 | Reconciliation engine + reconciliation page | Not Started | L |
 | v0.2.1 | Dashboard + month navigation | Not Started | M |
 | v0.3.0 | Adjustment export engine (per-person Monarch-importable CSVs) | Not Started | M |
