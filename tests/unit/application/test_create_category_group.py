@@ -9,7 +9,7 @@ async def test_creates_group_and_commits() -> None:
     uow = make_mock_uow()
     command = CreateCategoryGroupCommand(name="New Group")
 
-    await CreateCategoryGroupUseCase(uow).execute(command)
+    await CreateCategoryGroupUseCase().execute(command, uow)
 
     uow.category_groups.save.assert_called_once()
     saved = uow.category_groups.save.call_args[0][0]

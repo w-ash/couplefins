@@ -12,7 +12,10 @@ from src.application.use_cases.create_category_group import (
     CreateCategoryGroupCommand,
     CreateCategoryGroupUseCase,
 )
-from src.application.use_cases.delete_category_group import DeleteCategoryGroupUseCase
+from src.application.use_cases.delete_category_group import (
+    DeleteCategoryGroupCommand,
+    DeleteCategoryGroupUseCase,
+)
 from src.application.use_cases.list_category_groups import list_category_groups
 from src.application.use_cases.list_unmapped_categories import list_unmapped_categories
 from src.application.use_cases.update_category_group import (
@@ -31,8 +34,8 @@ router = APIRouter(tags=["category-groups"])
 
 @router.get("/category-groups")
 async def get_category_groups() -> list[CategoryGroupResponse]:
-    items = await execute_use_case(list_category_groups)
-    return [CategoryGroupResponse.from_domain(item) for item in items]
+    result = await execute_use_case(list_category_groups)
+    return [CategoryGroupResponse.from_domain(item) for item in result.items]
 
 
 @router.post("/category-groups", status_code=201)
@@ -40,10 +43,10 @@ async def post_category_group(
     body: CreateCategoryGroupRequest,
 ) -> CategoryGroupResponse:
     command = CreateCategoryGroupCommand(name=body.name)
-    group = await execute_use_case(
-        lambda uow: CreateCategoryGroupUseCase(uow).execute(command)
+    result = await execute_use_case(
+        lambda uow: CreateCategoryGroupUseCase().execute(command, uow)
     )
-    return CategoryGroupResponse.from_group(group)
+    return CategoryGroupResponse.from_group(result.group)
 
 
 @router.put("/category-groups/{group_id}")
@@ -51,16 +54,17 @@ async def put_category_group(
     group_id: UUID, body: UpdateCategoryGroupRequest
 ) -> CategoryGroupResponse:
     command = UpdateCategoryGroupCommand(id=group_id, name=body.name)
-    group = await execute_use_case(
-        lambda uow: UpdateCategoryGroupUseCase(uow).execute(command)
+    result = await execute_use_case(
+        lambda uow: UpdateCategoryGroupUseCase().execute(command, uow)
     )
-    return CategoryGroupResponse.from_group(group)
+    return CategoryGroupResponse.from_group(result.group)
 
 
 @router.delete("/category-groups/{group_id}", status_code=204)
 async def delete_category_group(group_id: UUID) -> None:
+    command = DeleteCategoryGroupCommand(group_id=group_id)
     await execute_use_case(
-        lambda uow: DeleteCategoryGroupUseCase(uow).execute(group_id)
+        lambda uow: DeleteCategoryGroupUseCase().execute(command, uow)
     )
 
 
@@ -72,12 +76,13 @@ async def put_category_mappings(body: BulkUpdateMappingsRequest) -> dict[str, in
             for m in body.mappings
         ]
     )
-    count = await execute_use_case(
-        lambda uow: BulkUpdateMappingsUseCase(uow).execute(command)
+    result = await execute_use_case(
+        lambda uow: BulkUpdateMappingsUseCase().execute(command, uow)
     )
-    return {"updated": count}
+    return {"updated": result.updated_count}
 
 
 @router.get("/category-mappings/unmapped")
 async def get_unmapped_categories() -> list[str]:
-    return await execute_use_case(list_unmapped_categories)
+    result = await execute_use_case(list_unmapped_categories)
+    return result.categories

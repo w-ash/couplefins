@@ -1,4 +1,4 @@
-from typing import Protocol
+from typing import Protocol, Self
 
 from src.domain.repositories.category_group_budget_repository import (
     CategoryGroupBudgetRepositoryProtocol,
@@ -38,6 +38,15 @@ class UnitOfWorkProtocol(Protocol):
 
     @property
     def reconciliation_periods(self) -> ReconciliationPeriodRepositoryProtocol: ...
+
+    async def __aenter__(self) -> Self: ...
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object,
+    ) -> None: ...
 
     async def commit(self) -> None: ...
 

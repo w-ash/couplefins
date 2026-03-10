@@ -28,7 +28,9 @@ describe("SettingsPage", () => {
       screen.getByRole("heading", { name: "Category Mappings" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Category group management coming in a future update."),
+      screen.getByText(
+        "Monarch categories map to budget groups like Food & Dining or Home Expenses. This will be configurable once budget tracking arrives.",
+      ),
     ).toBeInTheDocument();
   });
 
@@ -36,7 +38,25 @@ describe("SettingsPage", () => {
     renderWithProviders(<SettingsPage />);
     expect(screen.getByRole("heading", { name: "People" })).toBeInTheDocument();
     expect(
-      screen.getByText("Person configuration coming in a future update."),
+      screen.getByText(
+        "Both profiles were created during setup. Name editing and other profile options will appear here in a future update.",
+      ),
     ).toBeInTheDocument();
+  });
+
+  it("has aria-labelledby on each section", () => {
+    renderWithProviders(<SettingsPage />);
+    const sections = screen.getAllByRole("region");
+    expect(sections).toHaveLength(3);
+
+    expect(sections[0]).toHaveAttribute(
+      "aria-labelledby",
+      "settings-appearance",
+    );
+    expect(sections[1]).toHaveAttribute(
+      "aria-labelledby",
+      "settings-category-mappings",
+    );
+    expect(sections[2]).toHaveAttribute("aria-labelledby", "settings-people");
   });
 });

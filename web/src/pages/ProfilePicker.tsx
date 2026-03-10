@@ -20,11 +20,14 @@ export function ProfilePicker({ persons }: ProfilePickerProps) {
             Who are you?
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Select your profile to continue
+            Pick your name so we know whose transactions to track
           </p>
         </div>
 
-        <div className="grid gap-4">
+        <fieldset
+          aria-label="Choose your profile"
+          className="grid gap-4 border-none p-0"
+        >
           {persons.map((person, index) => (
             <button
               key={person.id}
@@ -42,7 +45,7 @@ export function ProfilePicker({ persons }: ProfilePickerProps) {
               </span>
             </button>
           ))}
-        </div>
+        </fieldset>
       </div>
     </div>
   );

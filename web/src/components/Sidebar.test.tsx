@@ -100,4 +100,33 @@ describe("Sidebar", () => {
     await user.click(screen.getByText("Bob"));
     expect(useIdentityStore.getState().currentPersonId).toBe("p2");
   });
+
+  it("has aria-label on aside and nav", () => {
+    renderWithProviders(<Sidebar />, {
+      routerProps: { initialEntries: ["/upload"] },
+    });
+    expect(
+      screen.getByRole("complementary", { name: "Main navigation" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", { name: "App navigation" }),
+    ).toBeInTheDocument();
+  });
+
+  it("has aria-pressed on identity toggle buttons", async () => {
+    renderWithProviders(<Sidebar />, {
+      routerProps: { initialEntries: ["/upload"] },
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Alice (active)" }),
+      ).toBeInTheDocument();
+    });
+
+    const aliceButton = screen.getByRole("button", { name: "Alice (active)" });
+    const bobButton = screen.getByRole("button", { name: "Switch to Bob" });
+
+    expect(aliceButton).toHaveAttribute("aria-pressed", "true");
+    expect(bobButton).toHaveAttribute("aria-pressed", "false");
+  });
 });

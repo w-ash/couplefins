@@ -64,6 +64,12 @@ Load Satoshi as a variable font from Fontshare. Load Geist Mono from Google Font
 - No animate-pulse skeleton loaders
 - No native browser form controls unstyled in the design
 - No decorative elements that serve no purpose
+- No generic CTAs ("Submit", "OK", "Click Here")
+- No blank empty states
+- No jargon in user-facing text
+- No color-only status indicators
+- No missing loading/error states on async operations
+- No interactive elements without visible focus state
 
 ## User Identity
 
@@ -95,6 +101,47 @@ Left sidebar with 5 pages: Dashboard / Transactions / Budget / Upload / Settings
 - "History" is NOT a standalone page — month navigation lives within Dashboard and Transactions
 - Upload is lower in the nav (monthly task, not daily)
 
+## Self-Evidence & Microcopy
+
+Every screen must be understandable without a guide.
+
+- **Progressive disclosure**: show information contextually, not all at once
+- **Affordances**: interactive elements must look interactive (shadow, border, hover state)
+- **Action-oriented CTAs**: verb + object ("Upload CSV", "Confirm Import"), never generic ("Submit", "OK")
+- **Plain language**: "Alice's share" not "payer allocation percentage" — no jargon in UI
+- **Empty states**: meaningful heading + one sentence of context + clear CTA. "Two parts instruction, one part delight"
+- **Error messages**: actionable, next to the field, no error codes or technical jargon
+- **Contextual help**: tooltips for domain terms users might not know (payer percentage, split ratio)
+
+## Component States
+
+Every interactive component must handle all applicable states:
+
+- **Empty**: guidance text + CTA (never blank)
+- **Loading**: spinner or skeleton with contextual label ("Analyzing transactions...")
+- **Error**: inline, actionable, adjacent to field, `aria-live="polite"`
+- **Success**: explicit confirmation with summary of what happened
+- **Hover/Focus**: visible on all interactive elements
+- **Disabled**: `opacity-50 cursor-not-allowed`, visually distinct
+
+## Accessibility Baseline (WCAG 2.2)
+
+- Semantic HTML: `<button>`, `<nav>`, `<main>`, `<aside>`, `<section>`
+- Focus rings: all interactive elements get visible focus via base CSS rule in `app.css`
+- Touch targets: primary actions min 44px (`min-h-11`)
+- `aria-live="polite"` for async feedback (errors, success, loading changes)
+- Heading hierarchy: sequential, never skip levels
+- Form inputs: always `<label>` via `htmlFor` + `aria-describedby` for errors
+- Skip-to-content link in app shell layout
+- `aria-label` on landmark elements (`<aside>`, `<nav>`)
+
+## Finance Display Patterns
+
+- Numbers: right-aligned, `tabular-nums`, bold key metrics
+- Currency: `Intl.NumberFormat("en-US", { style: "currency", currency: "USD" })` everywhere
+- Positive amounts: `text-positive` (teal). Negative: `text-negative` (coral)
+- Status: always color + icon, never color alone
+
 ## UI Audit Checklist (run before marking any UI story as complete)
 
 - [ ] Typography: Satoshi loaded and applied? No Inter/system font fallback visible?
@@ -109,3 +156,11 @@ Left sidebar with 5 pages: Dashboard / Transactions / Budget / Upload / Settings
 - [ ] Finance: numbers right-aligned in tables, currency consistent, amounts colored?
 - [ ] Copy: no generic placeholder text ("Welcome to..."), helpful error messages?
 - [ ] No AI slop: no uniform card grids, no identical spacing, no purple gradients?
+- [ ] Self-evidence: every screen understandable without a guide? Action-oriented CTAs?
+- [ ] Component states: empty, loading, error, success, hover, focus, disabled all handled?
+- [ ] Focus rings: visible `focus-visible` outline on all interactive elements?
+- [ ] Touch targets: primary action buttons at least 44px (`min-h-11`)?
+- [ ] `aria-live`: async feedback (errors, success, loading) announced to screen readers?
+- [ ] Skip-to-content: link present in app shell, works on Tab → Enter?
+- [ ] Heading hierarchy: sequential, no skipped levels?
+- [ ] Label associations: all inputs have `<label>` via `htmlFor`, errors linked via `aria-describedby`?

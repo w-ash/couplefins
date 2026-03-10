@@ -11,8 +11,14 @@ export function SettingsPage() {
 
       <div className="space-y-6">
         {/* Appearance */}
-        <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <h2 className="mb-4 font-medium text-lg text-foreground">
+        <section
+          aria-labelledby="settings-appearance"
+          className="rounded-xl border border-border bg-card p-6 shadow-sm"
+        >
+          <h2
+            id="settings-appearance"
+            className="mb-4 font-medium text-lg text-foreground"
+          >
             Appearance
           </h2>
           <div className="flex items-center justify-between">
@@ -27,20 +33,36 @@ export function SettingsPage() {
         </section>
 
         {/* Category Mappings */}
-        <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <h2 className="mb-2 font-medium text-lg text-foreground">
+        <section
+          aria-labelledby="settings-category-mappings"
+          className="rounded-xl border border-border bg-card p-6 shadow-sm"
+        >
+          <h2
+            id="settings-category-mappings"
+            className="mb-2 font-medium text-lg text-foreground"
+          >
             Category Mappings
           </h2>
           <p className="text-sm text-muted-foreground">
-            Category group management coming in a future update.
+            Monarch categories map to budget groups like Food & Dining or Home
+            Expenses. This will be configurable once budget tracking arrives.
           </p>
         </section>
 
         {/* People */}
-        <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <h2 className="mb-2 font-medium text-lg text-foreground">People</h2>
+        <section
+          aria-labelledby="settings-people"
+          className="rounded-xl border border-border bg-card p-6 shadow-sm"
+        >
+          <h2
+            id="settings-people"
+            className="mb-2 font-medium text-lg text-foreground"
+          >
+            People
+          </h2>
           <p className="text-sm text-muted-foreground">
-            Person configuration coming in a future update.
+            Both profiles were created during setup. Name editing and other
+            profile options will appear here in a future update.
           </p>
         </section>
       </div>

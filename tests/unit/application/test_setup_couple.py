@@ -16,8 +16,8 @@ async def test_creates_both_persons_and_commits() -> None:
     uow.persons.count.return_value = 0
     uow.persons.save_batch.return_value = [alice, bob]
 
-    result = await SetupCoupleUseCase(uow).execute(
-        SetupCoupleCommand(name1="Alice", name2="Bob")
+    result = await SetupCoupleUseCase().execute(
+        SetupCoupleCommand(name1="Alice", name2="Bob"), uow
     )
 
     assert len(result.persons) == 2
@@ -38,8 +38,8 @@ async def test_strips_whitespace_from_names() -> None:
         make_person(name="Bob"),
     ]
 
-    await SetupCoupleUseCase(uow).execute(
-        SetupCoupleCommand(name1="  Alice  ", name2="  Bob  ")
+    await SetupCoupleUseCase().execute(
+        SetupCoupleCommand(name1="  Alice  ", name2="  Bob  "), uow
     )
 
     saved = uow.persons.save_batch.call_args[0][0]
@@ -52,8 +52,8 @@ async def test_rejects_when_persons_already_exist() -> None:
     uow.persons.count.return_value = 2
 
     with pytest.raises(DuplicateError, match="already set up"):
-        await SetupCoupleUseCase(uow).execute(
-            SetupCoupleCommand(name1="Alice", name2="Bob")
+        await SetupCoupleUseCase().execute(
+            SetupCoupleCommand(name1="Alice", name2="Bob"), uow
         )
 
     uow.persons.save_batch.assert_not_called()
@@ -65,8 +65,8 @@ async def test_rejects_identical_names_case_insensitive() -> None:
     uow.persons.count.return_value = 0
 
     with pytest.raises(ValidationError, match="different"):
-        await SetupCoupleUseCase(uow).execute(
-            SetupCoupleCommand(name1="Alice", name2="alice")
+        await SetupCoupleUseCase().execute(
+            SetupCoupleCommand(name1="Alice", name2="alice"), uow
         )
 
     uow.persons.save_batch.assert_not_called()
@@ -78,8 +78,8 @@ async def test_rejects_identical_names_after_stripping() -> None:
     uow.persons.count.return_value = 0
 
     with pytest.raises(ValidationError, match="different"):
-        await SetupCoupleUseCase(uow).execute(
-            SetupCoupleCommand(name1="  Bob  ", name2="bob")
+        await SetupCoupleUseCase().execute(
+            SetupCoupleCommand(name1="  Bob  ", name2="bob"), uow
         )
 
     uow.persons.save_batch.assert_not_called()
@@ -93,8 +93,8 @@ async def test_generates_unique_ids_for_each_person() -> None:
         make_person(name="Bob"),
     ]
 
-    await SetupCoupleUseCase(uow).execute(
-        SetupCoupleCommand(name1="Alice", name2="Bob")
+    await SetupCoupleUseCase().execute(
+        SetupCoupleCommand(name1="Alice", name2="Bob"), uow
     )
 
     saved = uow.persons.save_batch.call_args[0][0]

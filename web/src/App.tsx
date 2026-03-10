@@ -31,9 +31,13 @@ export function App() {
 
   if (isLoading || !hasHydrated) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
+      <output
+        aria-label="Loading CoupleFins"
+        className="flex min-h-screen items-center justify-center bg-background"
+      >
         <Loader2 className="size-6 animate-spin text-muted-foreground" />
-      </div>
+        <span className="sr-only">Loading...</span>
+      </output>
     );
   }
 

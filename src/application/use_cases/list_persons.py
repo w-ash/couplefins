@@ -1,14 +1,28 @@
+from attrs import define
+
 from src.domain.entities.person import Person
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
+@define(frozen=True, slots=True)
+class ListPersonsCommand:
+    """Parameterless — exists for API uniformity."""
+
+
+@define(frozen=True, slots=True)
+class ListPersonsResult:
+    persons: list[Person]
+
+
+@define(slots=True)
 class ListPersonsUseCase:
-    def __init__(self, uow: UnitOfWorkProtocol) -> None:
-        self._uow = uow
+    async def execute(
+        self, _command: ListPersonsCommand, uow: UnitOfWorkProtocol
+    ) -> ListPersonsResult:
+        async with uow:
+            persons = await uow.persons.get_all()
+            return ListPersonsResult(persons=persons)
 
-    async def execute(self) -> list[Person]:
-        return await self._uow.persons.get_all()
 
-
-async def list_persons(uow: UnitOfWorkProtocol) -> list[Person]:
-    return await ListPersonsUseCase(uow).execute()
+async def list_persons(uow: UnitOfWorkProtocol) -> ListPersonsResult:
+    return await ListPersonsUseCase().execute(ListPersonsCommand(), uow)

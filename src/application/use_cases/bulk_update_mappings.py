@@ -18,21 +18,27 @@ class BulkUpdateMappingsCommand:
     mappings: list[MappingEntry]
 
 
+@define(frozen=True, slots=True)
+class BulkUpdateMappingsResult:
+    updated_count: int
+
+
+@define(slots=True)
 class BulkUpdateMappingsUseCase:
-    def __init__(self, uow: UnitOfWorkProtocol) -> None:
-        self._uow = uow
+    async def execute(
+        self, command: BulkUpdateMappingsCommand, uow: UnitOfWorkProtocol
+    ) -> BulkUpdateMappingsResult:
+        async with uow:
+            group_ids = {entry.group_id for entry in command.mappings}
+            for group_id in group_ids:
+                group = await uow.category_groups.get_by_id(group_id)
+                if group is None:
+                    raise ValidationError(f"Category group {group_id} not found")
 
-    async def execute(self, command: BulkUpdateMappingsCommand) -> int:
-        group_ids = {entry.group_id for entry in command.mappings}
-        for group_id in group_ids:
-            group = await self._uow.category_groups.get_by_id(group_id)
-            if group is None:
-                raise ValidationError(f"Category group {group_id} not found")
-
-        entities = [
-            CategoryMapping(category=entry.category, group_id=entry.group_id)
-            for entry in command.mappings
-        ]
-        await self._uow.category_mappings.save_batch(entities)
-        await self._uow.commit()
-        return len(entities)
+            entities = [
+                CategoryMapping(category=entry.category, group_id=entry.group_id)
+                for entry in command.mappings
+            ]
+            await uow.category_mappings.save_batch(entities)
+            await uow.commit()
+            return BulkUpdateMappingsResult(updated_count=len(entities))

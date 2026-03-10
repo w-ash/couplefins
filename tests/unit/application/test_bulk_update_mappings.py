@@ -18,9 +18,9 @@ async def test_saves_mappings_and_commits() -> None:
         mappings=[MappingEntry(category="Groceries", group_id=group.id)]
     )
 
-    count = await BulkUpdateMappingsUseCase(uow).execute(command)
+    result = await BulkUpdateMappingsUseCase().execute(command, uow)
 
-    assert count == 1
+    assert result.updated_count == 1
     uow.category_mappings.save_batch.assert_called_once()
     uow.commit.assert_called_once()
 
@@ -33,4 +33,4 @@ async def test_raises_validation_error_for_missing_group() -> None:
     )
 
     with pytest.raises(ValidationError):
-        await BulkUpdateMappingsUseCase(uow).execute(command)
+        await BulkUpdateMappingsUseCase().execute(command, uow)

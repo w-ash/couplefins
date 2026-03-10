@@ -1,3 +1,5 @@
+import { apiFetch } from "@/lib/api";
+
 export interface Person {
   id: string;
   name: string;
@@ -11,8 +13,6 @@ export const PERSON_ACCENT_COLORS = [
 
 export const PERSONS_QUERY_KEY = ["persons"] as const;
 
-export async function fetchPersons(): Promise<Person[]> {
-  const res = await fetch("/api/v1/persons/");
-  if (!res.ok) throw new Error("Failed to fetch persons");
-  return res.json();
+export function fetchPersons(): Promise<Person[]> {
+  return apiFetch("/api/v1/persons/", undefined, "Failed to fetch persons");
 }

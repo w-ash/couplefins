@@ -1,7 +1,8 @@
 from uuid import UUID
 
-from attrs import define
+from attrs import define, field
 
+from src.application.use_cases._shared.command_validators import non_empty_string
 from src.domain.entities.category_group import CategoryGroup
 from src.domain.exceptions import NotFoundError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
@@ -10,19 +11,25 @@ from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 @define(frozen=True, slots=True)
 class UpdateCategoryGroupCommand:
     id: UUID
-    name: str
+    name: str = field(validator=non_empty_string)
 
 
+@define(frozen=True, slots=True)
+class UpdateCategoryGroupResult:
+    group: CategoryGroup
+
+
+@define(slots=True)
 class UpdateCategoryGroupUseCase:
-    def __init__(self, uow: UnitOfWorkProtocol) -> None:
-        self._uow = uow
+    async def execute(
+        self, command: UpdateCategoryGroupCommand, uow: UnitOfWorkProtocol
+    ) -> UpdateCategoryGroupResult:
+        async with uow:
+            existing = await uow.category_groups.get_by_id(command.id)
+            if existing is None:
+                raise NotFoundError(f"Category group {command.id} not found")
 
-    async def execute(self, command: UpdateCategoryGroupCommand) -> CategoryGroup:
-        existing = await self._uow.category_groups.get_by_id(command.id)
-        if existing is None:
-            raise NotFoundError(f"Category group {command.id} not found")
-
-        updated = CategoryGroup(id=existing.id, name=command.name)
-        saved = await self._uow.category_groups.save(updated)
-        await self._uow.commit()
-        return saved
+            updated = CategoryGroup(id=existing.id, name=command.name)
+            saved = await uow.category_groups.save(updated)
+            await uow.commit()
+            return UpdateCategoryGroupResult(group=saved)

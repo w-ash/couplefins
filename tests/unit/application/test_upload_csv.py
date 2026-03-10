@@ -39,7 +39,7 @@ async def test_uploads_all_transactions() -> None:
     ]
     command = _make_command(person_id=person.id)
 
-    result = await UploadCsvUseCase(uow).execute(command)
+    result = await UploadCsvUseCase().execute(command, uow)
 
     assert result.total_transactions == 3
     assert result.shared_count == 2
@@ -58,7 +58,7 @@ async def test_detects_unmapped_categories() -> None:
     ]
     command = _make_command()
 
-    result = await UploadCsvUseCase(uow).execute(command)
+    result = await UploadCsvUseCase().execute(command, uow)
 
     assert result.unmapped_categories == ["Dining Out", "Gas"]
 
@@ -69,7 +69,7 @@ async def test_raises_not_found_for_missing_person() -> None:
     command = _make_command()
 
     with pytest.raises(NotFoundError, match="Person"):
-        await UploadCsvUseCase(uow).execute(command)
+        await UploadCsvUseCase().execute(command, uow)
 
 
 async def test_handles_empty_csv() -> None:
@@ -79,7 +79,7 @@ async def test_handles_empty_csv() -> None:
     csv_text = "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
     command = _make_command(csv_text=csv_text)
 
-    result = await UploadCsvUseCase(uow).execute(command)
+    result = await UploadCsvUseCase().execute(command, uow)
 
     assert result.total_transactions == 0
     assert result.shared_count == 0

@@ -12,6 +12,7 @@ import {
   Users,
 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
+import { apiFetch } from "@/lib/api";
 import { useIdentityStore } from "@/lib/identity";
 import { fetchPersons, PERSONS_QUERY_KEY } from "@/types/person";
 
@@ -46,28 +47,20 @@ interface PreviewData {
 type Step = "form" | "preview" | "confirmed";
 type Filter = "all" | "shared" | "personal";
 
-async function previewCsv(formData: FormData): Promise<PreviewData> {
-  const res = await fetch("/api/v1/uploads/preview", {
-    method: "POST",
-    body: formData,
-  });
-  if (!res.ok) {
-    const body = await res.json();
-    throw new Error(body?.error?.message ?? "Preview failed");
-  }
-  return res.json();
+function previewCsv(formData: FormData): Promise<PreviewData> {
+  return apiFetch(
+    "/api/v1/uploads/preview",
+    { method: "POST", body: formData },
+    "Preview failed",
+  );
 }
 
-async function uploadCsv(formData: FormData): Promise<UploadSummary> {
-  const res = await fetch("/api/v1/uploads/", {
-    method: "POST",
-    body: formData,
-  });
-  if (!res.ok) {
-    const body = await res.json();
-    throw new Error(body?.error?.message ?? "Upload failed");
-  }
-  return res.json();
+function uploadCsv(formData: FormData): Promise<UploadSummary> {
+  return apiFetch(
+    "/api/v1/uploads/",
+    { method: "POST", body: formData },
+    "Upload failed",
+  );
 }
 
 const MONTHS = [
@@ -93,22 +86,52 @@ function currentMonth() {
   return new Date().getMonth() + 1;
 }
 
+const dateFmt = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+});
+const currencyFmt = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+});
+
 function formatDate(dateStr: string): string {
-  const d = new Date(`${dateStr}T00:00:00`);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return dateFmt.format(new Date(`${dateStr}T00:00:00`));
 }
 
 function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount);
+  return currencyFmt.format(amount);
 }
 
 function formatSplit(tx: PreviewTransaction): string {
   if (!tx.is_shared) return "";
   const payer = tx.payer_percentage ?? 50;
   return `${payer} / ${100 - payer}`;
+}
+
+function UnmappedCategoriesWarning({
+  categories,
+  className,
+}: {
+  categories: string[];
+  className?: string;
+}) {
+  if (categories.length === 0) return null;
+  return (
+    <div
+      className={`rounded-lg border border-warning-border bg-warning-muted p-3 ${className ?? ""}`}
+    >
+      <p className="mb-1 flex items-center gap-1.5 font-medium text-sm text-warning">
+        <AlertTriangle className="size-4 shrink-0" />
+        Unmapped categories
+      </p>
+      <ul className="text-sm text-warning-muted-foreground">
+        {categories.map((cat) => (
+          <li key={cat}>{cat}</li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 export function UploadPage() {
@@ -295,7 +318,7 @@ export function UploadPage() {
           <button
             type="submit"
             disabled={previewMutation.isPending || !personId}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {previewMutation.isPending ? (
               <>
@@ -313,12 +336,17 @@ export function UploadPage() {
       </form>
 
       {/* Error */}
-      {error && (
-        <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-destructive-border bg-destructive-muted p-4 text-sm text-destructive-muted-foreground">
-          <CircleAlert className="mt-0.5 size-4 shrink-0" />
-          {error.message}
-        </div>
-      )}
+      <div aria-live="polite" aria-atomic="true">
+        {error && (
+          <div
+            role="alert"
+            className="mt-4 flex items-start gap-2.5 rounded-lg border border-destructive-border bg-destructive-muted p-4 text-sm text-destructive-muted-foreground"
+          >
+            <CircleAlert className="mt-0.5 size-4 shrink-0" />
+            {error.message}
+          </div>
+        )}
+      </div>
 
       {/* Preview */}
       {step === "preview" && preview && (
@@ -332,25 +360,21 @@ export function UploadPage() {
             {preview.personal_count} personal)
           </p>
 
-          {/* Unmapped categories warning */}
-          {preview.unmapped_categories.length > 0 && (
-            <div className="mb-4 rounded-lg border border-warning-border bg-warning-muted p-3">
-              <p className="mb-1 flex items-center gap-1.5 font-medium text-sm text-warning">
-                <AlertTriangle className="size-4 shrink-0" />
-                Unmapped categories
-              </p>
-              <p className="text-sm text-warning-muted-foreground">
-                {preview.unmapped_categories.join(", ")}
-              </p>
-            </div>
-          )}
+          <UnmappedCategoriesWarning
+            categories={preview.unmapped_categories}
+            className="mb-4"
+          />
 
           {/* Filter pills */}
-          <div className="mb-4 flex gap-2">
+          <fieldset
+            aria-label="Filter transactions"
+            className="mb-4 flex gap-2 border-none p-0"
+          >
             {(["all", "shared", "personal"] as const).map((f) => (
               <button
                 key={f}
                 type="button"
+                aria-pressed={filter === f}
                 onClick={() => setFilter(f)}
                 className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
                   filter === f
@@ -365,7 +389,7 @@ export function UploadPage() {
                     : `Personal (${preview.personal_count})`}
               </button>
             ))}
-          </div>
+          </fieldset>
 
           {/* Transaction table */}
           <div className="overflow-x-auto">
@@ -428,7 +452,7 @@ export function UploadPage() {
               type="button"
               onClick={handleConfirm}
               disabled={uploadMutation.isPending}
-              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {uploadMutation.isPending ? (
                 <>
@@ -457,7 +481,10 @@ export function UploadPage() {
 
       {/* Confirmed summary */}
       {step === "confirmed" && summary && (
-        <div className="mt-6 rounded-xl border border-border bg-card p-6 shadow-sm">
+        <div
+          aria-live="polite"
+          className="mt-6 rounded-xl border border-border bg-card p-6 shadow-sm"
+        >
           <h2 className="mb-4 flex items-center gap-2 font-medium text-lg text-foreground">
             <Check className="size-5 text-primary" />
             Upload Complete
@@ -477,17 +504,10 @@ export function UploadPage() {
             </dd>
           </dl>
 
-          {summary.unmapped_categories.length > 0 && (
-            <div className="mt-4 rounded-lg border border-warning-border bg-warning-muted p-3">
-              <p className="mb-1 flex items-center gap-1.5 font-medium text-sm text-warning">
-                <AlertTriangle className="size-4 shrink-0" />
-                Unmapped categories
-              </p>
-              <p className="text-sm text-warning-muted-foreground">
-                {summary.unmapped_categories.join(", ")}
-              </p>
-            </div>
-          )}
+          <UnmappedCategoriesWarning
+            categories={summary.unmapped_categories}
+            className="mt-4"
+          />
 
           <button
             type="button"

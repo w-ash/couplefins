@@ -78,6 +78,9 @@ fixable = ["ALL"]
 "src/interface/api/**/*.py" = [
     "RUF029",  # FastAPI async handlers without await
 ]
+"src/application/use_cases/**/*.py" = [
+    "PLR6301",  # Stateless execute() is intentional — use case architecture pattern
+]
 "tests/**/*.py" = [
     "S101",     # Allow assert
     "ARG001",   # Unused function args (fixtures)

@@ -1,21 +1,19 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Heart, Loader2, UserPlus } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import { apiFetch } from "@/lib/api";
 import { PERSONS_QUERY_KEY } from "@/types/person";
 
-async function setupCouple(name1: string, name2: string) {
-  const res = await fetch("/api/v1/persons/setup", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name1, name2 }),
-  });
-  if (!res.ok) {
-    const body = await res.json();
-    throw new Error(
-      body?.error?.message ?? body?.detail ?? "Failed to create profiles",
-    );
-  }
-  return res.json();
+function setupCouple(name1: string, name2: string) {
+  return apiFetch(
+    "/api/v1/persons/setup",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name1, name2 }),
+    },
+    "Failed to create profiles",
+  );
 }
 
 export function SetupPage() {
@@ -76,6 +74,7 @@ export function SetupPage() {
               placeholder="e.g. Alice"
               required
               disabled={mutation.isPending}
+              aria-describedby={mutation.error ? "setup-error" : undefined}
               className="w-full rounded-lg border border-input bg-card px-3 py-2 text-foreground shadow-sm placeholder:text-placeholder focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             />
           </div>
@@ -96,24 +95,32 @@ export function SetupPage() {
               placeholder="e.g. Bob"
               required
               disabled={mutation.isPending}
+              aria-describedby={mutation.error ? "setup-error" : undefined}
               className="w-full rounded-lg border border-input bg-card px-3 py-2 text-foreground shadow-sm placeholder:text-placeholder focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             />
           </div>
 
-          {namesMatch && (
-            <p className="text-sm text-warning">
-              Both names are the same — are you sure?
-            </p>
-          )}
-
-          {mutation.error && (
-            <p className="text-sm text-destructive">{mutation.error.message}</p>
-          )}
+          <div aria-live="polite" aria-atomic="true">
+            {namesMatch && (
+              <p role="alert" className="text-sm text-warning">
+                Both names are the same — are you sure?
+              </p>
+            )}
+            {mutation.error && (
+              <p
+                role="alert"
+                id="setup-error"
+                className="text-sm text-destructive"
+              >
+                {mutation.error.message}
+              </p>
+            )}
+          </div>
 
           <button
             type="submit"
             disabled={mutation.isPending || !name1.trim() || !name2.trim()}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {mutation.isPending ? (
               <>

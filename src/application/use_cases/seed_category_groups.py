@@ -27,7 +27,7 @@ _fixture_adapter = TypeAdapter(list[_CategoryGroupFixture])
 
 @define(frozen=True, slots=True)
 class SeedCategoryGroupsCommand:
-    pass
+    """Parameterless — exists for API uniformity."""
 
 
 @define(frozen=True, slots=True)
@@ -37,51 +37,50 @@ class SeedCategoryGroupsResult:
     skipped: bool
 
 
+@define(slots=True)
 class SeedCategoryGroupsUseCase:
-    def __init__(self, uow: UnitOfWorkProtocol) -> None:
-        self._uow = uow
-
     async def execute(
-        self, _command: SeedCategoryGroupsCommand | None = None
+        self, _command: SeedCategoryGroupsCommand, uow: UnitOfWorkProtocol
     ) -> SeedCategoryGroupsResult:
-        existing_count = await self._uow.category_groups.count()
-        if existing_count > 0:
+        async with uow:
+            existing_count = await uow.category_groups.count()
+            if existing_count > 0:
+                logger.info(
+                    "Category groups already seeded ({} groups), skipping",
+                    existing_count,
+                )
+                return SeedCategoryGroupsResult(
+                    groups_created=0, mappings_created=0, skipped=True
+                )
+
+            fixture_text = FIXTURE_PATH.read_bytes()
+            fixture_data = _fixture_adapter.validate_json(fixture_text)
+
+            groups: list[CategoryGroup] = []
+            mappings: list[CategoryMapping] = []
+
+            for group_data in fixture_data:
+                group_id = uuid.uuid4()
+                groups.append(CategoryGroup(id=group_id, name=group_data["name"]))
+                mappings.extend(
+                    CategoryMapping(category=category_name, group_id=group_id)
+                    for category_name in group_data["categories"]
+                )
+
+            await uow.category_groups.save_batch(groups)
+            await uow.category_mappings.save_batch(mappings)
+            await uow.commit()
             logger.info(
-                "Category groups already seeded ({} groups), skipping", existing_count
+                "Seeded {} category groups with {} category mappings",
+                len(groups),
+                len(mappings),
             )
             return SeedCategoryGroupsResult(
-                groups_created=0, mappings_created=0, skipped=True
+                groups_created=len(groups),
+                mappings_created=len(mappings),
+                skipped=False,
             )
-
-        fixture_text = FIXTURE_PATH.read_bytes()
-        fixture_data = _fixture_adapter.validate_json(fixture_text)
-
-        groups: list[CategoryGroup] = []
-        mappings: list[CategoryMapping] = []
-
-        for group_data in fixture_data:
-            group_id = uuid.uuid4()
-            groups.append(CategoryGroup(id=group_id, name=group_data["name"]))
-            mappings.extend(
-                CategoryMapping(category=category_name, group_id=group_id)
-                for category_name in group_data["categories"]
-            )
-
-        await self._uow.category_groups.save_batch(groups)
-        await self._uow.category_mappings.save_batch(mappings)
-        await self._uow.commit()
-        logger.info(
-            "Seeded {} category groups with {} category mappings",
-            len(groups),
-            len(mappings),
-        )
-        return SeedCategoryGroupsResult(
-            groups_created=len(groups),
-            mappings_created=len(mappings),
-            skipped=False,
-        )
 
 
 async def seed_category_groups(uow: UnitOfWorkProtocol) -> SeedCategoryGroupsResult:
-    use_case = SeedCategoryGroupsUseCase(uow)
-    return await use_case.execute()
+    return await SeedCategoryGroupsUseCase().execute(SeedCategoryGroupsCommand(), uow)

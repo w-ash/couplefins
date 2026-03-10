@@ -45,4 +45,13 @@ describe("NavItem", () => {
     expect(link).toHaveClass("text-muted-foreground");
     expect(link).not.toHaveClass("border-primary");
   });
+
+  it("has aria-disabled and title on disabled items", () => {
+    renderWithProviders(
+      <NavItem to="/dashboard" label="Dashboard" icon={Upload} disabled />,
+    );
+    const span = screen.getByText("Dashboard").closest("span");
+    expect(span).toHaveAttribute("aria-disabled", "true");
+    expect(span).toHaveAttribute("title", "Coming soon");
+  });
 });

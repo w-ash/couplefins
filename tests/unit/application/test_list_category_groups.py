@@ -12,9 +12,9 @@ async def test_returns_groups_with_mappings() -> None:
 
     result = await list_category_groups(uow)
 
-    assert len(result) == 1
-    assert result[0].group == group
-    assert result[0].mappings == [mapping]
+    assert len(result.items) == 1
+    assert result.items[0].group == group
+    assert result.items[0].mappings == [mapping]
 
 
 async def test_returns_empty_mappings_for_group_without_categories() -> None:
@@ -25,5 +25,5 @@ async def test_returns_empty_mappings_for_group_without_categories() -> None:
 
     result = await list_category_groups(uow)
 
-    assert len(result) == 1
-    assert result[0].mappings == []
+    assert len(result.items) == 1
+    assert result.items[0].mappings == []

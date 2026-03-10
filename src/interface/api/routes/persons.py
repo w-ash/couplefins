@@ -13,14 +13,14 @@ router = APIRouter(prefix="/persons", tags=["persons"])
 
 @router.get("/")
 async def get_persons() -> list[PersonResponse]:
-    persons = await execute_use_case(list_persons)
-    return [PersonResponse.from_domain(p) for p in persons]
+    result = await execute_use_case(list_persons)
+    return [PersonResponse.from_domain(p) for p in result.persons]
 
 
 @router.post("/setup", status_code=201)
 async def setup_couple(body: SetupCoupleRequest) -> list[PersonResponse]:
     command = SetupCoupleCommand(name1=body.name1, name2=body.name2)
     result = await execute_use_case(
-        lambda uow: SetupCoupleUseCase(uow).execute(command)
+        lambda uow: SetupCoupleUseCase().execute(command, uow)
     )
     return [PersonResponse.from_domain(p) for p in result.persons]

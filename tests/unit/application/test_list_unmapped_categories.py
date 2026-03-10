@@ -17,7 +17,7 @@ async def test_returns_unmapped_categories() -> None:
 
     result = await list_unmapped_categories(uow)
 
-    assert result == ["Mystery Category"]
+    assert result.categories == ["Mystery Category"]
 
 
 async def test_returns_empty_when_all_mapped() -> None:
@@ -29,7 +29,7 @@ async def test_returns_empty_when_all_mapped() -> None:
 
     result = await list_unmapped_categories(uow)
 
-    assert result == []
+    assert result.categories == []
 
 
 async def test_returns_empty_when_no_transactions() -> None:
@@ -39,4 +39,4 @@ async def test_returns_empty_when_no_transactions() -> None:
 
     result = await list_unmapped_categories(uow)
 
-    assert result == []
+    assert result.categories == []

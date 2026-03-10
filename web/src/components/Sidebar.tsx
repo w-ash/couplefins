@@ -24,7 +24,10 @@ export function Sidebar() {
   const setCurrentPersonId = useIdentityStore((s) => s.setCurrentPersonId);
 
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-card">
+    <aside
+      aria-label="Main navigation"
+      className="flex w-56 shrink-0 flex-col border-r border-border bg-card"
+    >
       {/* Wordmark */}
       <div className="flex items-center gap-2 px-5 py-5">
         <Heart className="size-5 text-primary" />
@@ -34,7 +37,7 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 px-3 py-4">
+      <nav aria-label="App navigation" className="flex-1 space-y-1 px-3 py-4">
         <NavItem to="/" label="Dashboard" icon={LayoutDashboard} disabled />
         <NavItem
           to="/transactions"
@@ -57,6 +60,12 @@ export function Sidebar() {
                 <button
                   key={person.id}
                   type="button"
+                  aria-pressed={isActive}
+                  aria-label={
+                    isActive
+                      ? `${person.name} (active)`
+                      : `Switch to ${person.name}`
+                  }
                   onClick={() => {
                     if (!isActive) setCurrentPersonId(person.id);
                   }}

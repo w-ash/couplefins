@@ -15,7 +15,7 @@ async def test_updates_group_name() -> None:
     uow.category_groups.get_by_id.return_value = group
     command = UpdateCategoryGroupCommand(id=group.id, name="New Name")
 
-    await UpdateCategoryGroupUseCase(uow).execute(command)
+    await UpdateCategoryGroupUseCase().execute(command, uow)
 
     saved = uow.category_groups.save.call_args[0][0]
     assert saved.name == "New Name"
@@ -29,4 +29,4 @@ async def test_raises_not_found_for_missing_group() -> None:
     command = UpdateCategoryGroupCommand(id=make_category_group().id, name="New Name")
 
     with pytest.raises(NotFoundError):
-        await UpdateCategoryGroupUseCase(uow).execute(command)
+        await UpdateCategoryGroupUseCase().execute(command, uow)

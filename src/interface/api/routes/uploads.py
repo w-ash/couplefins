@@ -22,7 +22,9 @@ async def post_upload_preview(
     csv_text = csv_bytes.decode("utf-8-sig")
 
     command = PreviewCsvCommand(csv_text=csv_text, person_id=person_id)
-    result = await execute_use_case(lambda uow: PreviewCsvUseCase(uow).execute(command))
+    result = await execute_use_case(
+        lambda uow: PreviewCsvUseCase().execute(command, uow)
+    )
     return PreviewUploadResponse.from_result(result)
 
 
@@ -43,5 +45,7 @@ async def post_upload(
         year=year,
         month=month,
     )
-    result = await execute_use_case(lambda uow: UploadCsvUseCase(uow).execute(command))
+    result = await execute_use_case(
+        lambda uow: UploadCsvUseCase().execute(command, uow)
+    )
     return UploadSummaryResponse.from_result(result)

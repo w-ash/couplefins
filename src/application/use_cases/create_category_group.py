@@ -1,22 +1,29 @@
 import uuid
 
-from attrs import define
+from attrs import define, field
 
+from src.application.use_cases._shared.command_validators import non_empty_string
 from src.domain.entities.category_group import CategoryGroup
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
 @define(frozen=True, slots=True)
 class CreateCategoryGroupCommand:
-    name: str
+    name: str = field(validator=non_empty_string)
 
 
+@define(frozen=True, slots=True)
+class CreateCategoryGroupResult:
+    group: CategoryGroup
+
+
+@define(slots=True)
 class CreateCategoryGroupUseCase:
-    def __init__(self, uow: UnitOfWorkProtocol) -> None:
-        self._uow = uow
-
-    async def execute(self, command: CreateCategoryGroupCommand) -> CategoryGroup:
-        group = CategoryGroup(id=uuid.uuid4(), name=command.name)
-        saved = await self._uow.category_groups.save(group)
-        await self._uow.commit()
-        return saved
+    async def execute(
+        self, command: CreateCategoryGroupCommand, uow: UnitOfWorkProtocol
+    ) -> CreateCategoryGroupResult:
+        async with uow:
+            group = CategoryGroup(id=uuid.uuid4(), name=command.name)
+            saved = await uow.category_groups.save(group)
+            await uow.commit()
+            return CreateCategoryGroupResult(group=saved)

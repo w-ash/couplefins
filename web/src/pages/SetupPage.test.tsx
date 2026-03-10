@@ -112,4 +112,40 @@ describe("SetupPage", () => {
       expect(screen.getByText("Name is required")).toBeInTheDocument();
     });
   });
+
+  it("shows warning with role=alert when names match", async () => {
+    renderWithProviders(<SetupPage />);
+    const user = userEvent.setup();
+
+    await user.type(screen.getByLabelText("Person 1"), "Alice");
+    await user.type(screen.getByLabelText("Person 2"), "Alice");
+
+    const warning = screen.getByRole("alert");
+    expect(warning).toHaveTextContent(
+      "Both names are the same — are you sure?",
+    );
+  });
+
+  it("shows error with role=alert on API failure", async () => {
+    server.use(
+      http.post("/api/v1/persons/setup", () => {
+        return HttpResponse.json(
+          { error: { code: "VALIDATION_ERROR", message: "Name is required" } },
+          { status: 422 },
+        );
+      }),
+    );
+
+    renderWithProviders(<SetupPage />);
+    const user = userEvent.setup();
+
+    await user.type(screen.getByLabelText("Person 1"), "Alice");
+    await user.type(screen.getByLabelText("Person 2"), "Bob");
+    await user.click(screen.getByRole("button", { name: "Get Started" }));
+
+    await waitFor(() => {
+      const alert = screen.getByRole("alert");
+      expect(alert).toHaveTextContent("Name is required");
+    });
+  });
 });

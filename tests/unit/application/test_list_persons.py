@@ -10,7 +10,7 @@ async def test_returns_all_persons() -> None:
 
     result = await list_persons(uow)
 
-    assert result == persons
+    assert result.persons == persons
     uow.persons.get_all.assert_called_once()
 
 
@@ -20,4 +20,4 @@ async def test_returns_empty_list_when_no_persons() -> None:
 
     result = await list_persons(uow)
 
-    assert result == []
+    assert result.persons == []

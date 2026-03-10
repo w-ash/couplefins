@@ -30,6 +30,13 @@ describe("ProfilePicker", () => {
     expect(screen.getByText("Who are you?")).toBeInTheDocument();
   });
 
+  it("shows self-evident subtitle", () => {
+    renderWithProviders(<ProfilePicker persons={persons} />);
+    expect(
+      screen.getByText("Pick your name so we know whose transactions to track"),
+    ).toBeInTheDocument();
+  });
+
   it("sets identity when a person card is clicked", async () => {
     const user = userEvent.setup();
     renderWithProviders(<ProfilePicker persons={persons} />);
@@ -44,5 +51,12 @@ describe("ProfilePicker", () => {
 
     await user.click(screen.getByText("Bob"));
     expect(useIdentityStore.getState().currentPersonId).toBe("p2");
+  });
+
+  it("has role=group with aria-label on button container", () => {
+    renderWithProviders(<ProfilePicker persons={persons} />);
+    expect(
+      screen.getByRole("group", { name: "Choose your profile" }),
+    ).toBeInTheDocument();
   });
 });

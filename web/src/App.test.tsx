@@ -94,4 +94,28 @@ describe("App three-state gate", () => {
     expect(screen.getByText("Upload")).toBeInTheDocument();
     expect(screen.getByText("Settings")).toBeInTheDocument();
   });
+
+  it("renders skip-to-content link in app shell", async () => {
+    useIdentityStore.setState({ currentPersonId: "p1" });
+    server.use(http.get("/api/v1/persons/", () => HttpResponse.json(persons)));
+    renderApp();
+    await waitFor(() => {
+      expect(screen.getByText("Skip to content")).toBeInTheDocument();
+    });
+    const link = screen.getByText("Skip to content");
+    expect(link.tagName).toBe("A");
+    expect(link).toHaveAttribute("href", "#main-content");
+  });
+
+  it("shows accessible loading state", () => {
+    server.use(
+      http.get("/api/v1/persons/", async () => {
+        await new Promise(() => {});
+        return HttpResponse.json([]);
+      }),
+    );
+    renderApp();
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(screen.getByText("Loading...")).toBeInTheDocument();
+  });
 });

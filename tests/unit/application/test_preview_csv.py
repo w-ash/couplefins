@@ -36,7 +36,7 @@ async def test_previews_all_transactions() -> None:
     ]
     command = _make_command(person_id=person.id)
 
-    result = await PreviewCsvUseCase(uow).execute(command)
+    result = await PreviewCsvUseCase().execute(command, uow)
 
     assert result.total_count == 3
     assert result.shared_count == 2
@@ -57,7 +57,7 @@ async def test_detects_unmapped_categories() -> None:
     ]
     command = _make_command()
 
-    result = await PreviewCsvUseCase(uow).execute(command)
+    result = await PreviewCsvUseCase().execute(command, uow)
 
     assert result.unmapped_categories == ["Dining Out", "Gas"]
 
@@ -68,7 +68,7 @@ async def test_raises_not_found_for_missing_person() -> None:
     command = _make_command()
 
     with pytest.raises(NotFoundError, match="Person"):
-        await PreviewCsvUseCase(uow).execute(command)
+        await PreviewCsvUseCase().execute(command, uow)
 
 
 async def test_handles_empty_csv() -> None:
@@ -78,7 +78,7 @@ async def test_handles_empty_csv() -> None:
     csv_text = "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
     command = _make_command(csv_text=csv_text)
 
-    result = await PreviewCsvUseCase(uow).execute(command)
+    result = await PreviewCsvUseCase().execute(command, uow)
 
     assert result.total_count == 0
     assert result.shared_count == 0
@@ -92,7 +92,7 @@ async def test_never_persists_data() -> None:
     uow.category_mappings.get_all.return_value = []
     command = _make_command()
 
-    await PreviewCsvUseCase(uow).execute(command)
+    await PreviewCsvUseCase().execute(command, uow)
 
     uow.uploads.save.assert_not_called()
     uow.transactions.save_batch.assert_not_called()
