@@ -1,7 +1,9 @@
+import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from alembic.config import Config
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -9,8 +11,8 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from alembic import command
 from src.config.settings import get_settings
-from src.infrastructure.persistence.models import Base
 
 _engine_cache: list[AsyncEngine] = []
 _session_factory_cache: list[async_sessionmaker[AsyncSession]] = []
@@ -40,14 +42,19 @@ async def get_session() -> AsyncGenerator[AsyncSession]:
         yield session
 
 
+def _run_migrations(database_url: str) -> None:
+    alembic_cfg = Config()
+    alembic_cfg.set_main_option("script_location", "alembic")
+    alembic_cfg.set_main_option("sqlalchemy.url", database_url)
+    command.upgrade(alembic_cfg, "head")
+
+
 async def init_db() -> None:
     settings = get_settings()
     parts = settings.database.url.partition("///")
     if parts[2]:
         Path(parts[2]).parent.mkdir(parents=True, exist_ok=True)
-    engine = _get_engine()
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    await asyncio.to_thread(_run_migrations, settings.database.url)
 
 
 async def dispose_engine() -> None:

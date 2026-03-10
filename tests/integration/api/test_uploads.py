@@ -9,12 +9,18 @@ VALID_CSV = (
 )
 
 
-async def test_upload_csv_full_flow(client: AsyncClient) -> None:
-    # Create a person first
-    person_resp = await client.post("/api/v1/persons/", json={"name": "Alice"})
-    person_id = person_resp.json()["id"]
+async def _setup_couple(client: AsyncClient) -> list[dict]:
+    resp = await client.post(
+        "/api/v1/persons/setup",
+        json={"name1": "Alice", "name2": "Bob"},
+    )
+    return resp.json()
 
-    # Upload CSV
+
+async def test_upload_csv_full_flow(client: AsyncClient) -> None:
+    persons = await _setup_couple(client)
+    person_id = persons[0]["id"]
+
     response = await client.post(
         "/api/v1/uploads/",
         data={"person_id": person_id, "year": "2026", "month": "1"},
@@ -41,8 +47,8 @@ async def test_upload_csv_unknown_person_returns_404(client: AsyncClient) -> Non
 
 
 async def test_preview_csv_full_flow(client: AsyncClient) -> None:
-    person_resp = await client.post("/api/v1/persons/", json={"name": "Alice"})
-    person_id = person_resp.json()["id"]
+    persons = await _setup_couple(client)
+    person_id = persons[0]["id"]
 
     response = await client.post(
         "/api/v1/uploads/preview",

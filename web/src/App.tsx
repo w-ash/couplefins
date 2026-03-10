@@ -1,28 +1,35 @@
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { Route, Routes } from "react-router";
-import { ThemeToggle } from "./components/ThemeToggle";
+import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
+import { AppLayout } from "./layouts/AppLayout";
+import { useIdentityHydrated, useIdentityStore } from "./lib/identity";
+import { ProfilePicker } from "./pages/ProfilePicker";
+import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
 import { UploadPage } from "./pages/UploadPage";
+import { fetchPersons, PERSONS_QUERY_KEY } from "./types/person";
 
-interface Person {
-  id: string;
-  name: string;
-}
-
-async function fetchPersons(): Promise<Person[]> {
-  const res = await fetch("/api/v1/persons/");
-  if (!res.ok) throw new Error("Failed to fetch persons");
-  return res.json();
-}
+const router = createBrowserRouter([
+  {
+    element: <AppLayout />,
+    children: [
+      { index: true, element: <Navigate to="/upload" replace /> },
+      { path: "upload", element: <UploadPage /> },
+      { path: "settings", element: <SettingsPage /> },
+      { path: "*", element: <Navigate to="/upload" replace /> },
+    ],
+  },
+]);
 
 export function App() {
   const { data: persons, isLoading } = useQuery({
-    queryKey: ["persons"],
+    queryKey: PERSONS_QUERY_KEY,
     queryFn: fetchPersons,
   });
+  const currentPersonId = useIdentityStore((s) => s.currentPersonId);
+  const hasHydrated = useIdentityHydrated();
 
-  if (isLoading) {
+  if (isLoading || !hasHydrated) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <Loader2 className="size-6 animate-spin text-muted-foreground" />
@@ -30,20 +37,14 @@ export function App() {
     );
   }
 
-  const needsSetup = !persons || persons.length < 2;
-
-  if (needsSetup) {
+  if (!persons || persons.length < 2) {
     return <SetupPage />;
   }
 
-  return (
-    <>
-      <div className="fixed top-4 right-4 z-50">
-        <ThemeToggle />
-      </div>
-      <Routes>
-        <Route path="/" element={<UploadPage />} />
-      </Routes>
-    </>
-  );
+  const isValidIdentity = persons.some((p) => p.id === currentPersonId);
+  if (!currentPersonId || !isValidIdentity) {
+    return <ProfilePicker persons={persons} />;
+  }
+
+  return <RouterProvider router={router} />;
 }

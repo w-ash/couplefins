@@ -1,16 +1,19 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Heart, Loader2, UserPlus } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import { PERSONS_QUERY_KEY } from "@/types/person";
 
-async function createPerson(name: string) {
-  const res = await fetch("/api/v1/persons/", {
+async function setupCouple(name1: string, name2: string) {
+  const res = await fetch("/api/v1/persons/setup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name1, name2 }),
   });
   if (!res.ok) {
     const body = await res.json();
-    throw new Error(body?.detail ?? "Failed to create person");
+    throw new Error(
+      body?.error?.message ?? body?.detail ?? "Failed to create profiles",
+    );
   }
   return res.json();
 }
@@ -21,12 +24,10 @@ export function SetupPage() {
   const [name2, setName2] = useState("");
 
   const mutation = useMutation({
-    mutationFn: async ({ name1, name2 }: { name1: string; name2: string }) => {
-      await createPerson(name1.trim());
-      await createPerson(name2.trim());
-    },
+    mutationFn: ({ name1, name2 }: { name1: string; name2: string }) =>
+      setupCouple(name1.trim(), name2.trim()),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["persons"] });
+      queryClient.invalidateQueries({ queryKey: PERSONS_QUERY_KEY });
     },
   });
 
@@ -48,7 +49,7 @@ export function SetupPage() {
             <Heart className="size-6 text-primary" />
           </div>
           <h1 className="font-semibold text-2xl text-foreground">
-            Welcome to Couplefins
+            Welcome to CoupleFins
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Enter both names to get started with shared finance tracking.

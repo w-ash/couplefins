@@ -18,7 +18,7 @@ afterAll(() => server.close());
 describe("SetupPage", () => {
   it("renders the setup form with two name inputs", () => {
     renderWithProviders(<SetupPage />);
-    expect(screen.getByText("Welcome to Couplefins")).toBeInTheDocument();
+    expect(screen.getByText("Welcome to CoupleFins")).toBeInTheDocument();
     expect(screen.getByLabelText("Person 1")).toBeInTheDocument();
     expect(screen.getByLabelText("Person 2")).toBeInTheDocument();
     expect(
@@ -53,14 +53,27 @@ describe("SetupPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("submits both names to the API", async () => {
-    const createdNames: string[] = [];
+  it("submits both names to the API in a single request", async () => {
+    let capturedBody: { name1: string; name2: string } | null = null;
     server.use(
-      http.post("/api/v1/persons/", async ({ request }) => {
-        const body = (await request.json()) as { name: string };
-        createdNames.push(body.name);
+      http.post("/api/v1/persons/setup", async ({ request }) => {
+        capturedBody = (await request.json()) as {
+          name1: string;
+          name2: string;
+        };
         return HttpResponse.json(
-          { id: crypto.randomUUID(), name: body.name, adjustment_account: "" },
+          [
+            {
+              id: crypto.randomUUID(),
+              name: capturedBody.name1,
+              adjustment_account: "",
+            },
+            {
+              id: crypto.randomUUID(),
+              name: capturedBody.name2,
+              adjustment_account: "",
+            },
+          ],
           { status: 201 },
         );
       }),
@@ -74,16 +87,16 @@ describe("SetupPage", () => {
     await user.click(screen.getByRole("button", { name: "Get Started" }));
 
     await waitFor(() => {
-      expect(createdNames).toEqual(["Alice", "Bob"]);
+      expect(capturedBody).toEqual({ name1: "Alice", name2: "Bob" });
     });
   });
 
   it("shows error on API failure", async () => {
     server.use(
-      http.post("/api/v1/persons/", () => {
+      http.post("/api/v1/persons/setup", () => {
         return HttpResponse.json(
-          { detail: "Name is required" },
-          { status: 400 },
+          { error: { code: "VALIDATION_ERROR", message: "Name is required" } },
+          { status: 422 },
         );
       }),
     );

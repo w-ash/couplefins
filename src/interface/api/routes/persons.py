@@ -1,12 +1,12 @@
 from fastapi import APIRouter
 
 from src.application.runner import execute_use_case
-from src.application.use_cases.create_person import (
-    CreatePersonCommand,
-    CreatePersonUseCase,
-)
 from src.application.use_cases.list_persons import list_persons
-from src.interface.api.schemas.persons import CreatePersonRequest, PersonResponse
+from src.application.use_cases.setup_couple import (
+    SetupCoupleCommand,
+    SetupCoupleUseCase,
+)
+from src.interface.api.schemas.persons import PersonResponse, SetupCoupleRequest
 
 router = APIRouter(prefix="/persons", tags=["persons"])
 
@@ -17,12 +17,10 @@ async def get_persons() -> list[PersonResponse]:
     return [PersonResponse.from_domain(p) for p in persons]
 
 
-@router.post("/", status_code=201)
-async def post_person(body: CreatePersonRequest) -> PersonResponse:
-    command = CreatePersonCommand(
-        name=body.name, adjustment_account=body.adjustment_account
-    )
+@router.post("/setup", status_code=201)
+async def setup_couple(body: SetupCoupleRequest) -> list[PersonResponse]:
+    command = SetupCoupleCommand(name1=body.name1, name2=body.name2)
     result = await execute_use_case(
-        lambda uow: CreatePersonUseCase(uow).execute(command)
+        lambda uow: SetupCoupleUseCase(uow).execute(command)
     )
-    return PersonResponse.from_domain(result.person)
+    return [PersonResponse.from_domain(p) for p in result.persons]
