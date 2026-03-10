@@ -5,8 +5,8 @@
 | Version | Goal | Status | Effort |
 |---|---|---|---|
 | v0.1.0 | Project scaffold + data model + CSV parser + category groups | Completed (2026-03-09) | L |
-| v0.1.1 | Upload flow (API + basic UI) | In Progress | M |
-| v0.1.2 | Design foundations (fonts, warm theme, dark/light mode) | Not Started | M |
+| v0.1.1 | Upload flow (API + basic UI) | Completed (2026-03-10) | M |
+| v0.1.2 | Design foundations (fonts, warm theme, dark/light mode) | Completed (2026-03-10) | M |
 | v0.1.3 | App shell, navigation, user identity & switching | Not Started | M |
 | v0.1.4 | UI audit & polish | Not Started | S |
 | v0.2.0 | Reconciliation engine + transactions page | Not Started | L |

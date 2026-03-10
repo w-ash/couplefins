@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { Route, Routes } from "react-router";
+import { ThemeToggle } from "./components/ThemeToggle";
 import { SetupPage } from "./pages/SetupPage";
 import { UploadPage } from "./pages/UploadPage";
 
@@ -23,8 +24,8 @@ export function App() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-stone-50">
-        <Loader2 className="size-6 animate-spin text-stone-400" />
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -36,8 +37,13 @@ export function App() {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<UploadPage />} />
-    </Routes>
+    <>
+      <div className="fixed top-4 right-4 z-50">
+        <ThemeToggle />
+      </div>
+      <Routes>
+        <Route path="/" element={<UploadPage />} />
+      </Routes>
+    </>
   );
 }
