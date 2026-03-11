@@ -9,6 +9,7 @@ from src.application.runner import execute_use_case
 from src.application.use_cases.seed_category_groups import seed_category_groups
 from src.config.constants import AppConfig
 from src.config.logging import setup_logging
+from src.config.settings import get_settings
 from src.infrastructure.persistence.database.db_connection import (
     dispose_engine,
     init_db,
@@ -17,6 +18,7 @@ from src.interface.api.middleware import register_exception_handlers
 from src.interface.api.routes.category_groups import router as category_groups_router
 from src.interface.api.routes.health import router as health_router
 from src.interface.api.routes.persons import router as persons_router
+from src.interface.api.routes.reconciliation import router as reconciliation_router
 from src.interface.api.routes.uploads import router as uploads_router
 
 
@@ -39,9 +41,10 @@ def create_app() -> FastAPI:
         openapi_url="/api/openapi.json",
     )
 
+    settings = get_settings()
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5174"],
+        allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -52,6 +55,7 @@ def create_app() -> FastAPI:
     app.include_router(persons_router, prefix=AppConfig.API_V1_PREFIX)
     app.include_router(uploads_router, prefix=AppConfig.API_V1_PREFIX)
     app.include_router(category_groups_router, prefix=AppConfig.API_V1_PREFIX)
+    app.include_router(reconciliation_router, prefix=AppConfig.API_V1_PREFIX)
 
     return app
 

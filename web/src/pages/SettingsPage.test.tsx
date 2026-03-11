@@ -1,6 +1,17 @@
-import { describe, expect, it } from "vitest";
-import { renderWithProviders, screen } from "@/test/test-utils";
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { renderWithProviders, screen, waitFor } from "@/test/test-utils";
 import { SettingsPage } from "./SettingsPage";
+
+const server = setupServer(
+  http.get("/api/v1/category-groups", () => HttpResponse.json([])),
+  http.get("/api/v1/category-mappings/unmapped", () => HttpResponse.json([])),
+);
+
+beforeAll(() => server.listen());
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
 
 describe("SettingsPage", () => {
   it("renders the settings heading", () => {
@@ -16,21 +27,15 @@ describe("SettingsPage", () => {
       screen.getByRole("heading", { name: "Appearance" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Theme")).toBeInTheDocument();
-    // ThemeToggle renders Light/System/Dark radio buttons
     expect(screen.getByLabelText("Light")).toBeInTheDocument();
     expect(screen.getByLabelText("System")).toBeInTheDocument();
     expect(screen.getByLabelText("Dark")).toBeInTheDocument();
   });
 
-  it("renders the category mappings placeholder", () => {
+  it("renders the category groups section", () => {
     renderWithProviders(<SettingsPage />);
     expect(
-      screen.getByRole("heading", { name: "Category Mappings" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Monarch categories map to budget groups like Food & Dining or Home Expenses. This will be configurable once budget tracking arrives.",
-      ),
+      screen.getByRole("heading", { name: "Category Groups" }),
     ).toBeInTheDocument();
   });
 
@@ -58,5 +63,15 @@ describe("SettingsPage", () => {
       "settings-category-mappings",
     );
     expect(sections[2]).toHaveAttribute("aria-labelledby", "settings-people");
+  });
+
+  it("shows empty state when no categories exist", async () => {
+    renderWithProviders(<SettingsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/No categories yet/)).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Upload a CSV")).toBeInTheDocument();
   });
 });

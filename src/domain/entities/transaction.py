@@ -16,6 +16,7 @@ class Transaction:
     category: str
     account: str
     original_statement: str
+    occurrence: int
     notes: str
     amount: Decimal
     tags: tuple[str, ...]

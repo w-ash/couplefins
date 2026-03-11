@@ -10,7 +10,7 @@ import {
 import { useIdentityStore } from "@/lib/identity";
 import {
   fetchPersons,
-  PERSON_ACCENT_COLORS,
+  getPersonAccentColor,
   PERSONS_QUERY_KEY,
 } from "@/types/person";
 import { NavItem } from "./NavItem";
@@ -43,7 +43,6 @@ export function Sidebar() {
           to="/transactions"
           label="Transactions"
           icon={ArrowLeftRight}
-          disabled
         />
         <NavItem to="/budget" label="Budget" icon={PieChart} disabled />
         <NavItem to="/upload" label="Upload" icon={Upload} />
@@ -52,42 +51,40 @@ export function Sidebar() {
 
       {/* Identity toggle */}
       {persons && persons.length >= 2 && (
-        <div className="border-t border-border px-4 py-4">
-          <div className="space-y-1">
-            {persons.map((person, index) => {
-              const isActive = person.id === currentPersonId;
-              return (
-                <button
-                  key={person.id}
-                  type="button"
-                  aria-pressed={isActive}
-                  aria-label={
-                    isActive
-                      ? `${person.name} (active)`
-                      : `Switch to ${person.name}`
-                  }
-                  onClick={() => {
-                    if (!isActive) setCurrentPersonId(person.id);
-                  }}
-                  className={`flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-sm transition-colors duration-150 ${
-                    isActive
-                      ? "font-semibold text-foreground"
-                      : "cursor-pointer text-muted-foreground hover:text-foreground"
-                  }`}
+        <div className="space-y-1 border-t border-border px-4 py-4">
+          {persons.map((person, index) => {
+            const isActive = person.id === currentPersonId;
+            return (
+              <button
+                key={person.id}
+                type="button"
+                aria-pressed={isActive}
+                aria-label={
+                  isActive
+                    ? `${person.name} (active)`
+                    : `Switch to ${person.name}`
+                }
+                onClick={() => {
+                  if (!isActive) setCurrentPersonId(person.id);
+                }}
+                className={`flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-sm transition-colors duration-150 ${
+                  isActive
+                    ? "font-semibold text-foreground"
+                    : "cursor-pointer text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <div
+                  className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${getPersonAccentColor(index)}`}
                 >
-                  <div
-                    className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${PERSON_ACCENT_COLORS[index % PERSON_ACCENT_COLORS.length]}`}
-                  >
-                    {person.name.charAt(0).toUpperCase()}
-                  </div>
-                  {person.name}
-                  {isActive && (
-                    <div className="ml-auto size-2 rounded-full bg-primary" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
+                  {person.name.charAt(0).toUpperCase()}
+                </div>
+                {person.name}
+                {isActive && (
+                  <div className="ml-auto size-2 rounded-full bg-primary" />
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
     </aside>

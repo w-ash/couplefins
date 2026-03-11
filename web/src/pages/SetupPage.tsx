@@ -5,15 +5,11 @@ import { apiFetch } from "@/lib/api";
 import { PERSONS_QUERY_KEY } from "@/types/person";
 
 function setupCouple(name1: string, name2: string) {
-  return apiFetch(
-    "/api/v1/persons/setup",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name1, name2 }),
-    },
-    "Failed to create profiles",
-  );
+  return apiFetch("/api/v1/persons/setup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name1, name2 }),
+  });
 }
 
 export function SetupPage() {

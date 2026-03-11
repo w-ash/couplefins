@@ -31,6 +31,7 @@ def make_transaction(
     category: str = "Dining Out",
     account: str = "Chase Sapphire",
     original_statement: str = "TEST MERCHANT",
+    occurrence: int = 0,
     notes: str = "",
     amount: Decimal = Decimal("-50.00"),
     tags: tuple[str, ...] = ("shared",),
@@ -45,6 +46,7 @@ def make_transaction(
         category=category,
         account=account,
         original_statement=original_statement,
+        occurrence=occurrence,
         notes=notes,
         amount=amount,
         tags=tags,
@@ -59,16 +61,12 @@ def make_upload(
     person_id: uuid.UUID | None = None,
     filename: str = "transactions.csv",
     uploaded_at: datetime | None = None,
-    period_year: int = 2026,
-    period_month: int = 1,
 ) -> Upload:
     return Upload(
         id=id or uuid.uuid4(),
         person_id=person_id or uuid.uuid4(),
         filename=filename,
         uploaded_at=uploaded_at or datetime.now(UTC),
-        period_year=period_year,
-        period_month=period_month,
     )
 
 
@@ -80,12 +78,18 @@ def make_category_group(
     return CategoryGroup(id=id or uuid.uuid4(), name=name)
 
 
+_MISSING = object()
+
+
 def make_category_mapping(
     *,
     category: str = "Dining Out",
-    group_id: uuid.UUID | None = None,
+    group_id: uuid.UUID | object | None = _MISSING,
 ) -> CategoryMapping:
-    return CategoryMapping(category=category, group_id=group_id or uuid.uuid4())
+    return CategoryMapping(
+        category=category,
+        group_id=uuid.uuid4() if group_id is _MISSING else group_id,  # type: ignore[arg-type]
+    )
 
 
 def make_reconciliation_period(

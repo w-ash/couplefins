@@ -38,6 +38,16 @@ if (
   });
 }
 
+// Polyfill HTMLDialogElement for jsdom (no native <dialog> support)
+HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+  this.setAttribute("open", "");
+  this.setAttribute("aria-modal", "true");
+};
+HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
+  this.removeAttribute("open");
+  this.dispatchEvent(new Event("close"));
+};
+
 // MSW server will be configured once Orval generates mock handlers
 // For now, set up basic test lifecycle
 beforeAll(() => {

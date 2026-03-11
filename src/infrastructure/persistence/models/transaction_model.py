@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, ForeignKey, Index, Integer, String
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infrastructure.persistence.models.base import Base
@@ -7,8 +7,18 @@ from src.infrastructure.persistence.models.base import Base
 class TransactionModel(Base):
     __tablename__ = "transactions"
     __table_args__ = (
+        UniqueConstraint(
+            "date",
+            "amount",
+            "account",
+            "original_statement",
+            "occurrence",
+            "payer_person_id",
+            name="uq_transactions_natural_key",
+        ),
         Index("ix_transactions_shared_date", "is_shared", "date"),
         Index("ix_transactions_upload_id", "upload_id"),
+        Index("ix_transactions_person_date", "payer_person_id", "date"),
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
@@ -20,6 +30,7 @@ class TransactionModel(Base):
     category: Mapped[str] = mapped_column(String, nullable=False)
     account: Mapped[str] = mapped_column(String, nullable=False)
     original_statement: Mapped[str] = mapped_column(String, nullable=False)
+    occurrence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     notes: Mapped[str] = mapped_column(String, nullable=False)
     amount: Mapped[str] = mapped_column(String, nullable=False)
     tags_json: Mapped[str] = mapped_column(String, nullable=False)

@@ -1,6 +1,7 @@
+import json
 from uuid import UUID
 
-from fastapi import APIRouter, Form, UploadFile
+from fastapi import APIRouter, Form, HTTPException, UploadFile
 
 from src.application.runner import execute_use_case
 from src.application.use_cases.preview_csv import PreviewCsvCommand, PreviewCsvUseCase
@@ -32,18 +33,22 @@ async def post_upload_preview(
 async def post_upload(
     file: UploadFile,
     person_id: UUID = Form(),
-    year: int = Form(),
-    month: int = Form(),
+    accepted_change_ids: str = Form(default="[]"),
 ) -> UploadSummaryResponse:
     csv_bytes = await file.read()
     csv_text = csv_bytes.decode("utf-8-sig")
+
+    try:
+        raw_ids: list[str] = json.loads(accepted_change_ids)  # pyright: ignore[reportAny]
+        change_ids = frozenset(UUID(id_str) for id_str in raw_ids)
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise HTTPException(422, "Invalid accepted_change_ids") from exc
 
     command = UploadCsvCommand(
         csv_text=csv_text,
         person_id=person_id,
         filename=file.filename or "upload.csv",
-        year=year,
-        month=month,
+        accepted_change_ids=change_ids,
     )
     result = await execute_use_case(
         lambda uow: UploadCsvUseCase().execute(command, uow)

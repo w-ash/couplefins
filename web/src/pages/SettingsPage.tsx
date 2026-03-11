@@ -1,4 +1,5 @@
 import { Settings } from "lucide-react";
+import { CategoryMappingEditor } from "@/components/CategoryMappingEditor";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function SettingsPage() {
@@ -39,14 +40,11 @@ export function SettingsPage() {
         >
           <h2
             id="settings-category-mappings"
-            className="mb-2 font-medium text-lg text-foreground"
+            className="mb-4 font-medium text-lg text-foreground"
           >
-            Category Mappings
+            Category Groups
           </h2>
-          <p className="text-sm text-muted-foreground">
-            Monarch categories map to budget groups like Food & Dining or Home
-            Expenses. This will be configurable once budget tracking arrives.
-          </p>
+          <CategoryMappingEditor />
         </section>
 
         {/* People */}

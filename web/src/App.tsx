@@ -6,6 +6,7 @@ import { useIdentityHydrated, useIdentityStore } from "./lib/identity";
 import { ProfilePicker } from "./pages/ProfilePicker";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
+import { TransactionsPage } from "./pages/TransactionsPage";
 import { UploadPage } from "./pages/UploadPage";
 import { fetchPersons, PERSONS_QUERY_KEY } from "./types/person";
 
@@ -13,10 +14,11 @@ const router = createBrowserRouter([
   {
     element: <AppLayout />,
     children: [
-      { index: true, element: <Navigate to="/upload" replace /> },
+      { index: true, element: <Navigate to="/transactions" replace /> },
+      { path: "transactions", element: <TransactionsPage /> },
       { path: "upload", element: <UploadPage /> },
       { path: "settings", element: <SettingsPage /> },
-      { path: "*", element: <Navigate to="/upload" replace /> },
+      { path: "*", element: <Navigate to="/transactions" replace /> },
     ],
   },
 ]);

@@ -1,3 +1,4 @@
+import collections
 import csv
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -36,6 +37,9 @@ def parse_monarch_csv(
             f"CSV missing required columns: {', '.join(sorted(missing))}"
         )
 
+    occurrence_counter: collections.Counter[tuple[date, Decimal, str, str]] = (
+        collections.Counter()
+    )
     transactions: list[Transaction] = []
     for row in reader:
         tags = _parse_tags(row["Tags"])
@@ -56,6 +60,10 @@ def parse_monarch_csv(
                 f"Invalid date '{row['Date']}' for merchant '{row['Merchant']}'"
             ) from e
 
+        base_key = (tx_date, amount, row["Account"], row["Original Statement"])
+        occurrence = occurrence_counter[base_key]
+        occurrence_counter[base_key] += 1
+
         transactions.append(
             Transaction(
                 id=uuid.uuid4(),
@@ -65,6 +73,7 @@ def parse_monarch_csv(
                 category=row["Category"],
                 account=row["Account"],
                 original_statement=row["Original Statement"],
+                occurrence=occurrence,
                 notes=row["Notes"],
                 amount=amount,
                 tags=tags,

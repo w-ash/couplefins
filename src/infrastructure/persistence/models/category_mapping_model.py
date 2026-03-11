@@ -8,6 +8,6 @@ class CategoryMappingModel(Base):
     __tablename__ = "category_mappings"
 
     category: Mapped[str] = mapped_column(String, primary_key=True)
-    group_id: Mapped[str] = mapped_column(
-        String, ForeignKey("category_groups.id"), nullable=False
+    group_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("category_groups.id"), nullable=True
     )

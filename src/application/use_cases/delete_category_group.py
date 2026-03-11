@@ -33,7 +33,7 @@ class DeleteCategoryGroupUseCase:
                     f"{len(budgets)} budget(s) reference it"
                 )
 
-            await uow.category_mappings.delete_by_group_id(command.group_id)
+            await uow.category_mappings.unmap_by_group_id(command.group_id)
             await uow.category_groups.delete(command.group_id)
             await uow.commit()
             return DeleteCategoryGroupResult()

@@ -6,4 +6,4 @@ from attrs import define
 @define(frozen=True, slots=True)
 class CategoryMapping:
     category: str
-    group_id: UUID
+    group_id: UUID | None

@@ -172,3 +172,31 @@ def test_invalid_sxx_over_100_defaults_to_50() -> None:
 
     assert len(result) == 1
     assert result[0].payer_percentage == 50
+
+
+def test_occurrence_assigned_for_duplicate_natural_keys() -> None:
+    csv = _make_csv(
+        {"Original Statement": "CLIPPER TRANSIT FARE", "Merchant": "Clipper"},
+        {"Original Statement": "CLIPPER TRANSIT FARE", "Merchant": "Clipper"},
+        {"Original Statement": "COFFEE SHOP", "Merchant": "Coffee"},
+        {"Original Statement": "CLIPPER TRANSIT FARE", "Merchant": "Clipper"},
+    )
+    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+
+    assert len(result) == 4
+    # First two Clipper rows + third share the same base key (same date/amount/account/stmt)
+    assert result[0].occurrence == 0
+    assert result[1].occurrence == 1
+    assert result[2].occurrence == 0  # Different statement → own group
+    assert result[3].occurrence == 2
+
+
+def test_unique_rows_all_get_occurrence_zero() -> None:
+    csv = _make_csv(
+        {"Original Statement": "STORE A"},
+        {"Original Statement": "STORE B"},
+        {"Original Statement": "STORE C"},
+    )
+    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+
+    assert all(tx.occurrence == 0 for tx in result)

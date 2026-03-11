@@ -10,5 +10,3 @@ class Upload:
     person_id: UUID
     filename: str
     uploaded_at: datetime
-    period_year: int
-    period_month: int

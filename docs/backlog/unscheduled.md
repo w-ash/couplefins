@@ -8,7 +8,7 @@ Ideas and features without version assignment. Move to a version file when ready
 - Duplicate transaction detection across uploads
 - Transaction editing after upload (fix miscategorized items)
 - Manual split entry UI (enter split percentages directly instead of relying on Monarch tags)
-- Unmapped category alerts (notify when uploaded transactions contain categories not in any group)
+
 
 ## Reconciliation
 - Settlement tracking (mark debts as paid, record payment date)

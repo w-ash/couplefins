@@ -4,8 +4,12 @@ from uuid import UUID
 from sqlalchemy import select
 
 from src.domain.entities.upload import Upload
+from src.infrastructure.persistence.models.transaction_model import TransactionModel
 from src.infrastructure.persistence.models.upload_model import UploadModel
-from src.infrastructure.persistence.repositories.base import BaseRepository
+from src.infrastructure.persistence.repositories.base import (
+    BaseRepository,
+    date_month_prefix,
+)
 
 
 class UploadRepository(BaseRepository[Upload, UploadModel]):
@@ -18,8 +22,6 @@ class UploadRepository(BaseRepository[Upload, UploadModel]):
             person_id=UUID(model.person_id),
             filename=model.filename,
             uploaded_at=datetime.fromisoformat(model.uploaded_at),
-            period_year=model.period_year,
-            period_month=model.period_month,
         )
 
     @staticmethod
@@ -29,14 +31,22 @@ class UploadRepository(BaseRepository[Upload, UploadModel]):
             person_id=str(entity.person_id),
             filename=entity.filename,
             uploaded_at=entity.uploaded_at.isoformat(),
-            period_year=entity.period_year,
-            period_month=entity.period_month,
         )
 
-    async def get_by_period(self, year: int, month: int) -> list[Upload]:
-        stmt = select(UploadModel).where(
-            UploadModel.period_year == year,
-            UploadModel.period_month == month,
+    async def get_by_person_ids_with_transactions_in_period(
+        self, person_ids: list[UUID], year: int, month: int
+    ) -> list[Upload]:
+        if not person_ids:
+            return []
+        prefix = date_month_prefix(year, month)
+        person_id_strs = [str(pid) for pid in person_ids]
+        subq = (
+            select(TransactionModel.upload_id)
+            .where(TransactionModel.date.startswith(prefix))
+            .where(TransactionModel.payer_person_id.in_(person_id_strs))
+            .distinct()
+            .subquery()
         )
+        stmt = select(UploadModel).where(UploadModel.id.in_(select(subq)))
         result = await self._session.execute(stmt)
         return [self._to_domain(row) for row in result.scalars().all()]

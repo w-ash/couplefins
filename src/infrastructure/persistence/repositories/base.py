@@ -7,6 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.infrastructure.persistence.models.base import Base
 
 
+def date_month_prefix(year: int, month: int) -> str:
+    return f"{year:04d}-{month:02d}-"
+
+
 class BaseRepository[TEntity, TModel: Base]:
     _model_class: type[TModel]
 

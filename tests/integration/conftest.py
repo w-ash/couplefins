@@ -53,3 +53,12 @@ async def client() -> AsyncGenerator[AsyncClient]:
     reset_settings()
     os.environ.pop("DATABASE__URL", None)
     pathlib.Path(db_path).unlink()  # noqa: ASYNC240
+
+
+async def setup_couple(client: AsyncClient) -> list[dict]:
+    """Create a couple (Alice & Bob) and return the person dicts."""
+    resp = await client.post(
+        "/api/v1/persons/setup",
+        json={"name1": "Alice", "name2": "Bob"},
+    )
+    return resp.json()

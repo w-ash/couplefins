@@ -34,7 +34,8 @@ class ListCategoryGroupsUseCase:
 
             mappings_by_group: dict[UUID, list[CategoryMapping]] = {}
             for mapping in all_mappings:
-                mappings_by_group.setdefault(mapping.group_id, []).append(mapping)
+                if mapping.group_id is not None:
+                    mappings_by_group.setdefault(mapping.group_id, []).append(mapping)
 
             items = [
                 CategoryGroupWithMappings(

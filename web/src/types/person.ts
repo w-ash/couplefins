@@ -11,8 +11,14 @@ export const PERSON_ACCENT_COLORS = [
   "bg-accent text-accent-foreground",
 ] as const;
 
+export function getPersonAccentColor(index: number): string {
+  return PERSON_ACCENT_COLORS[
+    index >= 0 ? index % PERSON_ACCENT_COLORS.length : 0
+  ];
+}
+
 export const PERSONS_QUERY_KEY = ["persons"] as const;
 
 export function fetchPersons(): Promise<Person[]> {
-  return apiFetch("/api/v1/persons/", undefined, "Failed to fetch persons");
+  return apiFetch("/api/v1/persons/");
 }

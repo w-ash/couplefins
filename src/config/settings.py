@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     model_config = {"env_nested_delimiter": "__"}
 
     database: DatabaseConfig = DatabaseConfig()
+    cors_origins: list[str] = ["http://localhost:5174"]
 
 
 def get_settings() -> Settings:

@@ -9,7 +9,7 @@ from tests.fixtures.factories import make_category_group, make_category_group_bu
 from tests.fixtures.mocks import make_mock_uow
 
 
-async def test_deletes_group_and_mappings() -> None:
+async def test_nullifies_mappings_and_deletes_group() -> None:
     uow = make_mock_uow()
     group = make_category_group()
     uow.category_groups.get_by_id.return_value = group
@@ -18,7 +18,7 @@ async def test_deletes_group_and_mappings() -> None:
 
     await DeleteCategoryGroupUseCase().execute(command, uow)
 
-    uow.category_mappings.delete_by_group_id.assert_called_once_with(group.id)
+    uow.category_mappings.unmap_by_group_id.assert_called_once_with(group.id)
     uow.category_groups.delete.assert_called_once_with(group.id)
     uow.commit.assert_called_once()
 

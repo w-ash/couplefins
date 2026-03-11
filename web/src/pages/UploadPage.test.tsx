@@ -19,8 +19,8 @@ const persons = [
   { id: "p2", name: "Bob", adjustment_account: "adj-2" },
 ];
 
-const previewResponse = {
-  transactions: [
+const previewResponseAllNew = {
+  new_transactions: [
     {
       date: "2026-01-15",
       merchant: "Trader Joe's",
@@ -38,9 +38,49 @@ const previewResponse = {
       payer_percentage: null,
     },
   ],
-  total_count: 2,
-  shared_count: 1,
-  personal_count: 1,
+  unchanged_count: 0,
+  changed_transactions: [],
+  unmapped_categories: [],
+};
+
+const previewResponseNothingNew = {
+  new_transactions: [],
+  unchanged_count: 3,
+  changed_transactions: [],
+  unmapped_categories: [],
+};
+
+const previewResponseWithChanges = {
+  new_transactions: [],
+  unchanged_count: 1,
+  changed_transactions: [
+    {
+      existing_id: "tx-123",
+      incoming: {
+        date: "2026-01-15",
+        merchant: "Updated Store",
+        category: "Groceries",
+        amount: -50.0,
+        is_shared: true,
+        payer_percentage: 50,
+      },
+      existing: {
+        date: "2026-01-15",
+        merchant: "Old Store",
+        category: "Groceries",
+        amount: -50.0,
+        is_shared: true,
+        payer_percentage: 50,
+      },
+      diffs: [
+        {
+          field_name: "merchant",
+          old_value: "Old Store",
+          new_value: "Updated Store",
+        },
+      ],
+    },
+  ],
   unmapped_categories: [],
 };
 
@@ -58,7 +98,7 @@ function setFileAndSubmit() {
     type: "text/csv",
   });
   fireEvent.change(fileInput, { target: { files: [file] } });
-  const form = fileInput.closest("form")!;
+  const form = fileInput.closest("form") as HTMLFormElement;
   fireEvent.submit(form);
 }
 
@@ -67,12 +107,12 @@ describe("UploadPage", () => {
     useIdentityStore.setState({ currentPersonId: "p1" });
   });
 
-  it("renders the upload form", () => {
+  it("renders the upload form without month/year", () => {
     renderWithProviders(<UploadPage />);
     expect(screen.getByText("Upload Transactions")).toBeInTheDocument();
     expect(screen.getByLabelText("Who are you?")).toBeInTheDocument();
-    expect(screen.getByLabelText("Month")).toBeInTheDocument();
-    expect(screen.getByLabelText("Year")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Month")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Year")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Monarch CSV")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Preview" })).toBeInTheDocument();
   });
@@ -84,10 +124,10 @@ describe("UploadPage", () => {
     expect(button).toBeDisabled();
   });
 
-  it("shows filter pills with aria-pressed after preview", async () => {
+  it("shows new transactions preview with confirm button", async () => {
     server.use(
       http.post("/api/v1/uploads/preview", () =>
-        HttpResponse.json(previewResponse),
+        HttpResponse.json(previewResponseAllNew),
       ),
     );
 
@@ -100,13 +140,68 @@ describe("UploadPage", () => {
     setFileAndSubmit();
 
     await waitFor(() => {
-      expect(screen.getByText("All (2)")).toBeInTheDocument();
+      expect(screen.getByText("2 new transactions")).toBeInTheDocument();
     });
 
-    const allButton = screen.getByText("All (2)");
-    const sharedButton = screen.getByText("Shared (1)");
-    expect(allButton).toHaveAttribute("aria-pressed", "true");
-    expect(sharedButton).toHaveAttribute("aria-pressed", "false");
+    expect(
+      screen.getByRole("button", { name: "Confirm Import" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows nothing-to-import message when all unchanged", async () => {
+    server.use(
+      http.post("/api/v1/uploads/preview", () =>
+        HttpResponse.json(previewResponseNothingNew),
+      ),
+    );
+
+    renderWithProviders(<UploadPage />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Who are you?")).toBeInTheDocument();
+    });
+
+    setFileAndSubmit();
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("All transactions already imported. Nothing to do."),
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "Confirm Import" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows review step with checkboxes when changes detected", async () => {
+    server.use(
+      http.post("/api/v1/uploads/preview", () =>
+        HttpResponse.json(previewResponseWithChanges),
+      ),
+    );
+
+    renderWithProviders(<UploadPage />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Who are you?")).toBeInTheDocument();
+    });
+
+    setFileAndSubmit();
+
+    await waitFor(() => {
+      expect(screen.getByText("Review Changes")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Accept All")).toBeInTheDocument();
+    expect(screen.getByText("Reject All")).toBeInTheDocument();
+    // The changed field diff values should be shown
+    expect(screen.getByText("Old Store")).toBeInTheDocument();
+    // "Updated Store" appears in both the merchant label and the diff new value
+    expect(screen.getAllByText("Updated Store")).toHaveLength(2);
+    // Checkbox should be checked by default
+    const checkbox = screen.getByRole("checkbox");
+    expect(checkbox).toBeChecked();
   });
 
   it("shows error with role=alert on preview failure", async () => {

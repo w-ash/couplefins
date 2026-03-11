@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle,
   ArrowLeft,
   Check,
   CircleAlert,
@@ -12,20 +11,12 @@ import {
   Users,
 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
+import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { apiFetch } from "@/lib/api";
+import { useInvalidateCategories } from "@/lib/categories";
+import { formatCurrency, formatDate, formatSplit } from "@/lib/format";
 import { useIdentityStore } from "@/lib/identity";
 import { fetchPersons, PERSONS_QUERY_KEY } from "@/types/person";
-
-interface UploadSummary {
-  upload_id: string;
-  filename: string;
-  period_year: number;
-  period_month: number;
-  total_transactions: number;
-  shared_count: number;
-  personal_count: number;
-  unmapped_categories: string[];
-}
 
 interface PreviewTransaction {
   date: string;
@@ -36,116 +27,62 @@ interface PreviewTransaction {
   payer_percentage: number | null;
 }
 
+interface FieldDiff {
+  field_name: string;
+  old_value: string;
+  new_value: string;
+}
+
+interface ChangedTransaction {
+  existing_id: string;
+  incoming: PreviewTransaction;
+  existing: PreviewTransaction;
+  diffs: FieldDiff[];
+}
+
 interface PreviewData {
-  transactions: PreviewTransaction[];
-  total_count: number;
-  shared_count: number;
-  personal_count: number;
+  new_transactions: PreviewTransaction[];
+  unchanged_count: number;
+  changed_transactions: ChangedTransaction[];
   unmapped_categories: string[];
 }
 
-type Step = "form" | "preview" | "confirmed";
-type Filter = "all" | "shared" | "personal";
+interface UploadSummary {
+  upload_id: string;
+  filename: string;
+  new_count: number;
+  updated_count: number;
+  skipped_count: number;
+  unmapped_categories: string[];
+}
+
+type Step = "form" | "preview" | "review" | "confirmed";
 
 function previewCsv(formData: FormData): Promise<PreviewData> {
-  return apiFetch(
-    "/api/v1/uploads/preview",
-    { method: "POST", body: formData },
-    "Preview failed",
-  );
+  return apiFetch("/api/v1/uploads/preview", {
+    method: "POST",
+    body: formData,
+  });
 }
 
 function uploadCsv(formData: FormData): Promise<UploadSummary> {
-  return apiFetch(
-    "/api/v1/uploads/",
-    { method: "POST", body: formData },
-    "Upload failed",
-  );
-}
-
-const MONTHS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
-function currentYear() {
-  return new Date().getFullYear();
-}
-
-function currentMonth() {
-  return new Date().getMonth() + 1;
-}
-
-const dateFmt = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-});
-const currencyFmt = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-});
-
-function formatDate(dateStr: string): string {
-  return dateFmt.format(new Date(`${dateStr}T00:00:00`));
-}
-
-function formatCurrency(amount: number): string {
-  return currencyFmt.format(amount);
-}
-
-function formatSplit(tx: PreviewTransaction): string {
-  if (!tx.is_shared) return "";
-  const payer = tx.payer_percentage ?? 50;
-  return `${payer} / ${100 - payer}`;
-}
-
-function UnmappedCategoriesWarning({
-  categories,
-  className,
-}: {
-  categories: string[];
-  className?: string;
-}) {
-  if (categories.length === 0) return null;
-  return (
-    <div
-      className={`rounded-lg border border-warning-border bg-warning-muted p-3 ${className ?? ""}`}
-    >
-      <p className="mb-1 flex items-center gap-1.5 font-medium text-sm text-warning">
-        <AlertTriangle className="size-4 shrink-0" />
-        Unmapped categories
-      </p>
-      <ul className="text-sm text-warning-muted-foreground">
-        {categories.map((cat) => (
-          <li key={cat}>{cat}</li>
-        ))}
-      </ul>
-    </div>
-  );
+  return apiFetch("/api/v1/uploads/", {
+    method: "POST",
+    body: formData,
+  });
 }
 
 export function UploadPage() {
   const queryClient = useQueryClient();
+  const invalidateCategories = useInvalidateCategories();
   const currentPersonId = useIdentityStore((s) => s.currentPersonId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [personId, setPersonId] = useState(currentPersonId ?? "");
   useEffect(() => {
     if (currentPersonId) setPersonId(currentPersonId);
   }, [currentPersonId]);
-  const [year, setYear] = useState(currentYear());
-  const [month, setMonth] = useState(currentMonth());
   const [step, setStep] = useState<Step>("form");
-  const [filter, setFilter] = useState<Filter>("all");
+  const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set());
 
   const personsQuery = useQuery({
     queryKey: PERSONS_QUERY_KEY,
@@ -154,65 +91,131 @@ export function UploadPage() {
 
   const previewMutation = useMutation({
     mutationFn: previewCsv,
-    onSuccess: () => setStep("preview"),
+    onSuccess: (data) => {
+      if (data.changed_transactions.length > 0) {
+        // Default all checked
+        setAcceptedIds(
+          new Set(data.changed_transactions.map((ct) => ct.existing_id)),
+        );
+        setStep("review");
+      } else {
+        setStep("preview");
+      }
+    },
   });
 
   const uploadMutation = useMutation({
     mutationFn: uploadCsv,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["uploads"] });
+      invalidateCategories();
       setStep("confirmed");
     },
   });
 
-  function handlePreview(e: FormEvent) {
-    e.preventDefault();
+  function buildFormData(): FormData | null {
     const file = fileInputRef.current?.files?.[0];
-    if (!file || !personId) return;
-
+    if (!file || !personId) return null;
     const formData = new FormData();
     formData.append("file", file);
     formData.append("person_id", personId);
+    return formData;
+  }
+
+  function handlePreview(e: FormEvent) {
+    e.preventDefault();
+    const formData = buildFormData();
+    if (!formData) return;
     previewMutation.mutate(formData);
   }
 
   function handleConfirm() {
-    const file = fileInputRef.current?.files?.[0];
-    if (!file || !personId) return;
-
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("person_id", personId);
-    formData.append("year", String(year));
-    formData.append("month", String(month));
+    const formData = buildFormData();
+    if (!formData) return;
+    formData.append(
+      "accepted_change_ids",
+      JSON.stringify(Array.from(acceptedIds)),
+    );
     uploadMutation.mutate(formData);
   }
 
   function handleBack() {
-    setStep("form");
-    previewMutation.reset();
-    setFilter("all");
+    if (step === "review") {
+      setStep("preview");
+    } else {
+      setStep("form");
+      previewMutation.reset();
+    }
   }
 
   function handleReset() {
     setStep("form");
     previewMutation.reset();
     uploadMutation.reset();
-    setFilter("all");
+    setAcceptedIds(new Set());
     setPersonId("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  const isFormDisabled = step === "preview";
+  function toggleAccepted(id: string) {
+    setAcceptedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll(accept: boolean) {
+    if (accept && preview) {
+      setAcceptedIds(
+        new Set(preview.changed_transactions.map((ct) => ct.existing_id)),
+      );
+    } else {
+      setAcceptedIds(new Set());
+    }
+  }
+
+  const isFormDisabled = step !== "form";
   const preview = previewMutation.data;
   const summary = uploadMutation.data;
   const error = previewMutation.error || uploadMutation.error;
 
-  const filteredTransactions = preview?.transactions.filter((tx) => {
-    if (filter === "shared") return tx.is_shared;
-    if (filter === "personal") return !tx.is_shared;
-    return true;
-  });
+  const hasNewTransactions = preview && preview.new_transactions.length > 0;
+  const hasChanges = preview && preview.changed_transactions.length > 0;
+  const nothingToImport = preview && !hasNewTransactions && !hasChanges;
+
+  const confirmBackFooter = (
+    <div className="mt-6 flex gap-3">
+      <button
+        type="button"
+        onClick={handleConfirm}
+        disabled={uploadMutation.isPending}
+        className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {uploadMutation.isPending ? (
+          <>
+            <Loader2 className="size-4 animate-spin" />
+            Importing...
+          </>
+        ) : (
+          <>
+            <Check className="size-4" />
+            Confirm Import
+          </>
+        )}
+      </button>
+      <button
+        type="button"
+        onClick={handleBack}
+        disabled={uploadMutation.isPending}
+        className="flex items-center gap-2 rounded-lg border border-input bg-card px-4 py-2.5 font-medium text-secondary-foreground shadow-sm transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <ArrowLeft className="size-4" />
+        Back
+      </button>
+    </div>
+  );
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-12">
@@ -249,49 +252,6 @@ export function UploadPage() {
               </option>
             ))}
           </select>
-        </div>
-
-        {/* Month/Year */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label
-              htmlFor="month"
-              className="mb-1.5 block font-medium text-sm text-secondary-foreground"
-            >
-              Month
-            </label>
-            <select
-              id="month"
-              value={month}
-              onChange={(e) => setMonth(Number(e.target.value))}
-              disabled={isFormDisabled}
-              className="w-full rounded-lg border border-input bg-card px-3 py-2 text-foreground shadow-sm focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {MONTHS.map((name, i) => (
-                <option key={name} value={i + 1}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label
-              htmlFor="year"
-              className="mb-1.5 block font-medium text-sm text-secondary-foreground"
-            >
-              Year
-            </label>
-            <input
-              id="year"
-              type="number"
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
-              min={2020}
-              max={2030}
-              disabled={isFormDisabled}
-              className="w-full rounded-lg border border-input bg-card px-3 py-2 text-foreground shadow-sm focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-            />
-          </div>
         </div>
 
         {/* File input */}
@@ -348,16 +308,123 @@ export function UploadPage() {
         )}
       </div>
 
-      {/* Preview */}
+      {/* Preview — summary only (no full table) */}
       {step === "preview" && preview && (
         <div className="mt-6 rounded-xl border border-border bg-card p-6 shadow-sm">
           <h2 className="mb-1 flex items-center gap-2 font-medium text-lg text-foreground">
             <Eye className="size-5" />
             Preview
           </h2>
+
+          {nothingToImport ? (
+            <p className="mt-3 text-sm text-muted-foreground">
+              All transactions already imported. Nothing to do.
+            </p>
+          ) : (
+            <>
+              <p className="mb-4 text-sm text-muted-foreground">
+                {preview.new_transactions.length} new transaction
+                {preview.new_transactions.length !== 1 && "s"}
+                {preview.unchanged_count > 0 &&
+                  `, ${preview.unchanged_count} unchanged`}
+              </p>
+
+              <UnmappedCategoriesWarning
+                categories={preview.unmapped_categories}
+                className="mb-4"
+              />
+
+              {/* New transactions table */}
+              {hasNewTransactions && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left text-muted-foreground">
+                        <th className="pb-2 pr-4 font-medium">Date</th>
+                        <th className="pb-2 pr-4 font-medium">Merchant</th>
+                        <th className="pb-2 pr-4 font-medium">Category</th>
+                        <th className="pb-2 pr-4 text-right font-medium">
+                          Amount
+                        </th>
+                        <th className="pb-2 pr-4 font-medium">Type</th>
+                        <th className="pb-2 font-medium">Split</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.new_transactions.map((tx, i) => (
+                        // biome-ignore lint/suspicious/noArrayIndexKey: static preview rows, never reordered
+                        <tr key={i} className="border-b border-border-muted">
+                          <td className="py-2 pr-4 text-muted-foreground tabular-nums">
+                            {formatDate(tx.date)}
+                          </td>
+                          <td className="py-2 pr-4 text-foreground">
+                            {tx.merchant}
+                          </td>
+                          <td className="py-2 pr-4 text-muted-foreground">
+                            {tx.category}
+                          </td>
+                          <td
+                            className={`py-2 pr-4 text-right tabular-nums ${tx.amount < 0 ? "text-negative" : "text-positive"}`}
+                          >
+                            {formatCurrency(tx.amount)}
+                          </td>
+                          <td className="py-2 pr-4">
+                            {tx.is_shared ? (
+                              <span className="inline-block rounded-full bg-primary-muted px-2 py-0.5 text-xs font-medium text-primary-muted-foreground">
+                                Shared
+                              </span>
+                            ) : (
+                              <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                                Personal
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2 text-muted-foreground tabular-nums">
+                            {tx.is_shared ? (
+                              formatSplit(tx.payer_percentage)
+                            ) : (
+                              <Minus className="size-4 text-icon-muted" />
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {confirmBackFooter}
+            </>
+          )}
+
+          {nothingToImport && (
+            <button
+              type="button"
+              onClick={handleReset}
+              className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg border border-input bg-card px-4 py-2.5 font-medium text-secondary-foreground shadow-sm transition-colors hover:bg-muted"
+            >
+              <ArrowLeft className="size-4" />
+              Back
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Review changed transactions */}
+      {step === "review" && preview && hasChanges && (
+        <div className="mt-6 rounded-xl border border-border bg-card p-6 shadow-sm">
+          <h2 className="mb-1 flex items-center gap-2 font-medium text-lg text-foreground">
+            <Eye className="size-5" />
+            Review Changes
+          </h2>
           <p className="mb-4 text-sm text-muted-foreground">
-            {preview.total_count} transactions ({preview.shared_count} shared,{" "}
-            {preview.personal_count} personal)
+            {preview.changed_transactions.length} transaction
+            {preview.changed_transactions.length !== 1 && "s"} changed since
+            last upload.
+            {preview.new_transactions.length > 0 &&
+              ` ${preview.new_transactions.length} new will also be imported.`}
+            {preview.unchanged_count > 0 &&
+              ` ${preview.unchanged_count} unchanged.`}
           </p>
 
           <UnmappedCategoriesWarning
@@ -365,117 +432,75 @@ export function UploadPage() {
             className="mb-4"
           />
 
-          {/* Filter pills */}
-          <fieldset
-            aria-label="Filter transactions"
-            className="mb-4 flex gap-2 border-none p-0"
-          >
-            {(["all", "shared", "personal"] as const).map((f) => (
-              <button
-                key={f}
-                type="button"
-                aria-pressed={filter === f}
-                onClick={() => setFilter(f)}
-                className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                  filter === f
-                    ? "bg-primary-muted text-primary-muted-foreground"
-                    : "bg-muted text-muted-foreground hover:bg-secondary"
-                }`}
+          {/* Accept/Reject all */}
+          <div className="mb-4 flex gap-2">
+            <button
+              type="button"
+              onClick={() => toggleAll(true)}
+              className="rounded-full px-3 py-1 text-sm font-medium bg-primary-muted text-primary-muted-foreground transition-colors hover:bg-primary-muted/80"
+            >
+              Accept All
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleAll(false)}
+              className="rounded-full px-3 py-1 text-sm font-medium bg-muted text-muted-foreground transition-colors hover:bg-secondary"
+            >
+              Reject All
+            </button>
+          </div>
+
+          {/* Changed transactions list */}
+          <div className="space-y-3">
+            {preview.changed_transactions.map((ct) => (
+              <label
+                key={ct.existing_id}
+                className="flex cursor-pointer items-start gap-3 rounded-lg border border-border-muted p-4 transition-colors hover:bg-muted/50"
               >
-                {f === "all"
-                  ? `All (${preview.total_count})`
-                  : f === "shared"
-                    ? `Shared (${preview.shared_count})`
-                    : `Personal (${preview.personal_count})`}
-              </button>
-            ))}
-          </fieldset>
-
-          {/* Transaction table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="pb-2 pr-4 font-medium">Date</th>
-                  <th className="pb-2 pr-4 font-medium">Merchant</th>
-                  <th className="pb-2 pr-4 font-medium">Category</th>
-                  <th className="pb-2 pr-4 text-right font-medium">Amount</th>
-                  <th className="pb-2 pr-4 font-medium">Type</th>
-                  <th className="pb-2 font-medium">Split</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTransactions?.map((tx) => (
-                  <tr
-                    key={`${tx.date}-${tx.merchant}-${tx.amount}-${tx.category}`}
-                    className="border-b border-border-muted"
-                  >
-                    <td className="py-2 pr-4 text-muted-foreground tabular-nums">
-                      {formatDate(tx.date)}
-                    </td>
-                    <td className="py-2 pr-4 text-foreground">{tx.merchant}</td>
-                    <td className="py-2 pr-4 text-muted-foreground">
-                      {tx.category}
-                    </td>
-                    <td
-                      className={`py-2 pr-4 text-right tabular-nums ${tx.amount < 0 ? "text-negative" : "text-positive"}`}
+                <input
+                  type="checkbox"
+                  checked={acceptedIds.has(ct.existing_id)}
+                  onChange={() => toggleAccepted(ct.existing_id)}
+                  className="mt-0.5 size-4 rounded border-input accent-primary"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="font-medium text-foreground">
+                      {ct.incoming.merchant}
+                    </span>
+                    <span className="text-muted-foreground tabular-nums">
+                      {formatDate(ct.incoming.date)}
+                    </span>
+                    <span
+                      className={`tabular-nums ${ct.incoming.amount < 0 ? "text-negative" : "text-positive"}`}
                     >
-                      {formatCurrency(tx.amount)}
-                    </td>
-                    <td className="py-2 pr-4">
-                      {tx.is_shared ? (
-                        <span className="inline-block rounded-full bg-primary-muted px-2 py-0.5 text-xs font-medium text-primary-muted-foreground">
-                          Shared
+                      {formatCurrency(ct.incoming.amount)}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 space-y-1">
+                    {ct.diffs.map((d) => (
+                      <div
+                        key={d.field_name}
+                        className="flex gap-2 text-xs text-muted-foreground"
+                      >
+                        <span className="font-medium min-w-[5rem]">
+                          {d.field_name}:
                         </span>
-                      ) : (
-                        <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                          Personal
+                        <span className="line-through text-negative/70">
+                          {d.old_value || "(empty)"}
                         </span>
-                      )}
-                    </td>
-                    <td className="py-2 text-muted-foreground tabular-nums">
-                      {tx.is_shared ? (
-                        formatSplit(tx)
-                      ) : (
-                        <Minus className="size-4 text-icon-muted" />
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        <span className="text-positive">
+                          {d.new_value || "(empty)"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </label>
+            ))}
           </div>
 
-          {/* Footer buttons */}
-          <div className="mt-6 flex gap-3">
-            <button
-              type="button"
-              onClick={handleConfirm}
-              disabled={uploadMutation.isPending}
-              className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {uploadMutation.isPending ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Importing...
-                </>
-              ) : (
-                <>
-                  <Check className="size-4" />
-                  Confirm Import
-                </>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={handleBack}
-              disabled={uploadMutation.isPending}
-              className="flex items-center gap-2 rounded-lg border border-input bg-card px-4 py-2.5 font-medium text-secondary-foreground shadow-sm transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <ArrowLeft className="size-4" />
-              Back
-            </button>
-          </div>
+          {confirmBackFooter}
         </div>
       )}
 
@@ -490,17 +515,17 @@ export function UploadPage() {
             Upload Complete
           </h2>
           <dl className="grid grid-cols-2 gap-3 text-sm">
-            <dt className="text-muted-foreground">Total transactions</dt>
+            <dt className="text-muted-foreground">New</dt>
             <dd className="font-medium text-foreground tabular-nums">
-              {summary.total_transactions}
+              {summary.new_count}
             </dd>
-            <dt className="text-muted-foreground">Shared</dt>
+            <dt className="text-muted-foreground">Updated</dt>
             <dd className="font-medium text-accent-foreground tabular-nums">
-              {summary.shared_count}
+              {summary.updated_count}
             </dd>
-            <dt className="text-muted-foreground">Personal</dt>
+            <dt className="text-muted-foreground">Skipped</dt>
             <dd className="font-medium text-muted-foreground tabular-nums">
-              {summary.personal_count}
+              {summary.skipped_count}
             </dd>
           </dl>
 
