@@ -41,9 +41,8 @@ logs/
 # Data (DB + personal fixture files)
 data/
 
-# Poetry
-# poetry.lock is committed for app projects (reproducible installs)
-# poetry.toml
+# uv
+# uv.lock is committed for reproducible installs
 
 # Claude Code
 .claude/settings.local.json

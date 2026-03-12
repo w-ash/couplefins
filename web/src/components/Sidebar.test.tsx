@@ -54,16 +54,7 @@ describe("Sidebar", () => {
     expect(screen.getByText("Settings")).toBeInTheDocument();
   });
 
-  it("disables Budget", () => {
-    renderWithProviders(<Sidebar />, {
-      routerProps: { initialEntries: ["/upload"] },
-    });
-    expect(screen.getByText("Budget").closest("span")).toHaveClass(
-      "cursor-not-allowed",
-    );
-  });
-
-  it("enables Dashboard, Transactions, Upload, and Settings as links", () => {
+  it("enables all nav items as links", () => {
     renderWithProviders(<Sidebar />, {
       routerProps: { initialEntries: ["/upload"] },
     });
@@ -71,6 +62,7 @@ describe("Sidebar", () => {
     expect(
       screen.getByRole("link", { name: "Transactions" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Budget" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Upload" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
   });

@@ -6,6 +6,7 @@ import pytest
 from src.application.use_cases.export_adjustments import (
     ExportAdjustmentsCommand,
     ExportAdjustmentsUseCase,
+    PreviewAdjustmentsUseCase,
 )
 from src.domain.exceptions import NotFoundError, ValidationError
 from tests.fixtures.factories import make_person, make_transaction
@@ -104,3 +105,51 @@ async def test_read_only_no_commit() -> None:
     await ExportAdjustmentsUseCase().execute(command, uow)
 
     uow.commit.assert_not_called()
+
+
+# --- Preview use case tests ---
+
+
+async def test_preview_returns_structured_adjustments() -> None:
+    uow = make_mock_uow()
+    alice = make_person(name="Alice", adjustment_account="Alice Adjustments")
+    bob = make_person(name="Bob", adjustment_account="Bob Adjustments")
+    uow.persons.get_all.return_value = [alice, bob]
+
+    txs = [
+        make_transaction(
+            amount=Decimal("-100.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+        make_transaction(
+            amount=Decimal("-60.00"),
+            payer_person_id=bob.id,
+            payer_percentage=70,
+        ),
+    ]
+    uow.transactions.get_shared_by_period.return_value = txs
+
+    command = _make_command(person_id=alice.id)
+    result = await PreviewAdjustmentsUseCase().execute(command, uow)
+
+    assert result.adjustment_count == 2
+    assert result.person_name == "Alice"
+    assert len(result.adjustments) == 2
+    for adj in result.adjustments:
+        assert adj.merchant
+        assert adj.category
+
+
+async def test_preview_empty_month_returns_empty_list() -> None:
+    uow = make_mock_uow()
+    alice = make_person(name="Alice", adjustment_account="Adj")
+    bob = make_person(name="Bob", adjustment_account="Adj")
+    uow.persons.get_all.return_value = [alice, bob]
+    uow.transactions.get_shared_by_period.return_value = []
+
+    command = _make_command(person_id=alice.id)
+    result = await PreviewAdjustmentsUseCase().execute(command, uow)
+
+    assert result.adjustment_count == 0
+    assert result.adjustments == []

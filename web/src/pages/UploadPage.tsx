@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  ArrowRight,
   Check,
   CircleAlert,
   Eye,
@@ -539,10 +540,11 @@ export function UploadPage() {
                               <span className="font-medium min-w-[5rem]">
                                 {d.field_name}:
                               </span>
-                              <span className="line-through text-negative/70">
+                              <span className="inline-flex items-center gap-0.5 line-through text-negative/70">
                                 {d.old_value || "(empty)"}
                               </span>
-                              <span className="text-positive">
+                              <ArrowRight className="size-3 shrink-0 text-muted-foreground" />
+                              <span className="inline-flex items-center gap-0.5 text-positive">
                                 {d.new_value || "(empty)"}
                               </span>
                             </div>

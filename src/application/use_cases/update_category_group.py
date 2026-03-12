@@ -1,5 +1,6 @@
 from uuid import UUID
 
+import attrs
 from attrs import define, field
 
 from src.application.use_cases._shared.command_validators import non_empty_string
@@ -29,7 +30,7 @@ class UpdateCategoryGroupUseCase:
             if existing is None:
                 raise NotFoundError(f"Category group {command.id} not found")
 
-            updated = CategoryGroup(id=existing.id, name=command.name)
+            updated = attrs.evolve(existing, name=command.name)
             saved = await uow.category_groups.save(updated)
             await uow.commit()
             return UpdateCategoryGroupResult(group=saved)

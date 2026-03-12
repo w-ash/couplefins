@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import CursorResult, delete as sa_delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.infrastructure.persistence.models.base import Base
@@ -44,6 +44,12 @@ class BaseRepository[TEntity, TModel: Base]:
         merged = [await self._session.merge(m) for m in models]
         await self._session.flush()
         return [self._to_domain(m) for m in merged]
+
+    async def delete(self, id: UUID) -> bool:
+        stmt = sa_delete(self._model_class).where(self._model_class.id == str(id))  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownArgumentType]
+        result = await self._session.execute(stmt)
+        await self._session.flush()
+        return isinstance(result, CursorResult) and result.rowcount > 0
 
     async def count(self) -> int:
         result = await self._session.execute(

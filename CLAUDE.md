@@ -32,13 +32,13 @@ Patterns and tooling config: @docs/getting-started/README.md
 
 ```bash
 # Backend
-poetry run pytest                           # Fast tests (skips slow/diagnostic)
-poetry run pytest -m ""                     # All tests
-poetry run pytest tests/unit/ -x            # Unit tests, stop on first failure
-poetry run pytest -k "test_name"            # Single test by name
-poetry run ruff check . --fix               # Lint + autofix
-poetry run ruff format .                    # Format
-poetry run basedpyright src/                # Type check
+uv run pytest                           # Fast tests (skips slow/diagnostic)
+uv run pytest -m ""                     # All tests
+uv run pytest tests/unit/ -x            # Unit tests, stop on first failure
+uv run pytest -k "test_name"            # Single test by name
+uv run ruff check . --fix               # Lint + autofix
+uv run ruff format .                    # Format
+uv run basedpyright src/                # Type check
 
 # Frontend
 pnpm --prefix web dev                       # Vite dev server (port 5173)
@@ -47,7 +47,7 @@ pnpm --prefix web check                     # Biome lint + tsc
 pnpm --prefix web generate                  # Orval codegen
 
 # Quality gate (run before committing)
-poetry run ruff check . --fix && poetry run ruff format . && poetry run basedpyright src/ && poetry run pytest
+uv run ruff check . --fix && uv run ruff format . && uv run basedpyright src/ && uv run pytest
 ```
 
 ## Testing Self-Check (after every implementation)
@@ -56,4 +56,4 @@ poetry run ruff check . --fix && poetry run ruff format . && poetry run basedpyr
 2. Right level? Domain=unit, UseCase=unit+mocks, Repository=integration, Routes=integration.
 3. Beyond happy path? Error cases, edge cases, validation.
 4. Using existing factories from `tests/fixtures/`?
-5. Tests pass? `poetry run pytest tests/path/to/test_file.py -x`
+5. Tests pass? `uv run pytest tests/path/to/test_file.py -x`

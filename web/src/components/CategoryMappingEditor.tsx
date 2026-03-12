@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ChevronDown,
+  Loader2,
   Pencil,
   Plus,
   Trash2,
@@ -297,13 +298,11 @@ export function CategoryMappingEditor() {
   // Loading
   if (groupsQuery.isLoading || unmappedQuery.isLoading) {
     return (
-      <output className="block space-y-3" aria-label="Loading categories">
-        {[1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className="h-14 animate-pulse rounded-xl border border-border bg-muted"
-          />
-        ))}
+      <output
+        className="flex items-center justify-center py-12"
+        aria-label="Loading categories"
+      >
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
       </output>
     );
   }
@@ -311,7 +310,10 @@ export function CategoryMappingEditor() {
   // Error
   if (groupsQuery.isError || unmappedQuery.isError) {
     return (
-      <div className="rounded-lg border border-destructive-border bg-destructive-muted p-4 text-sm text-destructive-muted-foreground">
+      <div
+        role="alert"
+        className="rounded-lg border border-destructive-border bg-destructive-muted p-4 text-sm text-destructive-muted-foreground"
+      >
         <p>Failed to load categories.</p>
         <button
           type="button"

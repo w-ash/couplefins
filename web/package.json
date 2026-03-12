@@ -1,11 +1,11 @@
 {
   "name": "web",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "api": "cd .. && poetry run uvicorn src.interface.api.app:app --reload --port 8001 --reload-dir src",
+    "api": "cd .. && uv run uvicorn src.interface.api.app:app --reload --port 8001 --reload-dir src",
     "start": "concurrently -n api,web -c blue,green \"pnpm api\" \"pnpm dev\"",
     "build": "tsc && vite build",
     "preview": "vite preview",

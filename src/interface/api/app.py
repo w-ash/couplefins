@@ -15,6 +15,7 @@ from src.infrastructure.persistence.database.db_connection import (
     init_db,
 )
 from src.interface.api.middleware import register_exception_handlers
+from src.interface.api.routes.budgets import router as budgets_router
 from src.interface.api.routes.category_groups import router as category_groups_router
 from src.interface.api.routes.dashboard import router as dashboard_router
 from src.interface.api.routes.health import router as health_router
@@ -58,6 +59,7 @@ def create_app() -> FastAPI:
     app.include_router(category_groups_router, prefix=AppConfig.API_V1_PREFIX)
     app.include_router(reconciliation_router, prefix=AppConfig.API_V1_PREFIX)
     app.include_router(dashboard_router, prefix=AppConfig.API_V1_PREFIX)
+    app.include_router(budgets_router, prefix=AppConfig.API_V1_PREFIX)
 
     return app
 

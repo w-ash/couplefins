@@ -111,3 +111,46 @@ async def test_export_idempotent(client: AsyncClient) -> None:
     first = await client.get(f"/api/v1/persons/{alice_id}/export/2026/1")
     second = await client.get(f"/api/v1/persons/{alice_id}/export/2026/1")
     assert first.text == second.text
+
+
+# --- Preview endpoint tests ---
+
+
+async def test_preview_returns_json(client: AsyncClient) -> None:
+    alice_id, bob_id = await _setup_with_accounts(client)
+    await upload_csv(client, alice_id, SHARED_CSV_ALICE)
+    await upload_csv(client, bob_id, SHARED_CSV_BOB)
+
+    response = await client.get(f"/api/v1/persons/{alice_id}/adjustments/2026/1")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["person_name"] == "Alice"
+    assert data["adjustment_count"] == len(data["adjustments"])
+    assert data["adjustment_count"] > 0
+
+    adj = data["adjustments"][0]
+    assert "date" in adj
+    assert "merchant" in adj
+    assert "category" in adj
+    assert "amount" in adj
+
+
+async def test_preview_empty_month(client: AsyncClient) -> None:
+    alice_id, _ = await _setup_with_accounts(client)
+
+    response = await client.get(f"/api/v1/persons/{alice_id}/adjustments/2026/3")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["adjustment_count"] == 0
+    assert data["adjustments"] == []
+
+
+async def test_preview_without_adjustment_account(client: AsyncClient) -> None:
+    persons = await setup_couple(client)
+    alice_id = persons[0]["id"]
+
+    response = await client.get(f"/api/v1/persons/{alice_id}/adjustments/2026/1")
+    assert response.status_code == 422
+    assert "not configured" in response.json()["error"]["message"]

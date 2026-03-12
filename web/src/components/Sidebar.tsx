@@ -44,7 +44,7 @@ export function Sidebar() {
           label="Transactions"
           icon={ArrowLeftRight}
         />
-        <NavItem to="/budget" label="Budget" icon={PieChart} disabled />
+        <NavItem to="/budget" label="Budget" icon={PieChart} />
         <NavItem to="/upload" label="Upload" icon={Upload} />
         <NavItem to="/settings" label="Settings" icon={Settings} />
       </nav>

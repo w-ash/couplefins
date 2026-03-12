@@ -4,9 +4,15 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { renderWithProviders, screen, waitFor } from "@/test/test-utils";
 import { SettingsPage } from "./SettingsPage";
 
+const persons = [
+  { id: "p1", name: "Alice", adjustment_account: "Alice Adj" },
+  { id: "p2", name: "Bob", adjustment_account: "" },
+];
+
 const server = setupServer(
   http.get("/api/v1/category-groups", () => HttpResponse.json([])),
   http.get("/api/v1/category-mappings/unmapped", () => HttpResponse.json([])),
+  http.get("/api/v1/persons/", () => HttpResponse.json(persons)),
 );
 
 beforeAll(() => server.listen());
@@ -39,14 +45,14 @@ describe("SettingsPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the people placeholder", () => {
+  it("renders the people section with adjustment account settings", async () => {
     renderWithProviders(<SettingsPage />);
     expect(screen.getByRole("heading", { name: "People" })).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Both profiles were created during setup. Name editing and other profile options will appear here in a future update.",
-      ),
-    ).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByText("Alice")).toBeInTheDocument();
+      expect(screen.getByText("Bob")).toBeInTheDocument();
+    });
   });
 
   it("has aria-labelledby on each section", () => {

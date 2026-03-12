@@ -2,6 +2,10 @@ import re
 from typing import Final
 
 
+class CoupleDefaults:
+    EXPECTED_PERSON_COUNT: Final = 2
+
+
 class SplitDefaults:
     DEFAULT_PAYER_PERCENTAGE: Final = 50
     MAX_PAYER_PERCENTAGE: Final = 100

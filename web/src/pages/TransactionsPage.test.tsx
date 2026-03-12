@@ -129,6 +129,13 @@ const server = setupServer(
   http.get("/api/v1/reconciliation", () =>
     HttpResponse.json(reconciliationResponse),
   ),
+  http.get("/api/v1/persons/:personId/adjustments/:year/:month", () =>
+    HttpResponse.json({
+      adjustments: [],
+      person_name: "Alice",
+      adjustment_count: 0,
+    }),
+  ),
 );
 
 beforeAll(() => server.listen());

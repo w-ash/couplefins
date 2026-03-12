@@ -14,7 +14,7 @@
 | v0.2.1 | Auto-create categories from CSV + category management UI | Completed (2026-03-10) | M |
 | v0.2.2 | Dashboard + month navigation | Completed (2026-03-11) | M |
 | v0.3.0 | Adjustment export engine (per-person Monarch-importable CSVs) | Completed (2026-03-11) | M |
-| v0.3.1 | Export UI (download adjustments from transactions page) | Not Started | S |
+| v0.3.1 | Export UI (download adjustments from transactions page) | Completed (2026-03-11) | S |
 | v0.4.0 | Budget tracking (monthly + YTD, set budgets, view progress) | Not Started | M |
 | v0.4.1 | Month finalization (lock months, prevent changes) | Not Started | S |
 
@@ -34,7 +34,7 @@
 | User identity (localStorage) | ✅ | ✅ | ✅ | ✅ |
 | Reconciliation engine | — | ✅ | ✅ | ✅ |
 | Dashboard | — | ✅ | ✅ | ✅ |
-| Adjustment export | — | — | ✅ | ✅ |
+| Adjustment export (engine + UI) | — | — | ✅ | ✅ |
 | Budget tracking | — | — | — | ✅ |
 | Month finalization | — | — | — | ✅ |
 
@@ -55,4 +55,4 @@
 - **Category groups**: ~75 Monarch categories roll up into ~12 groups (e.g., "Groceries & Home Supplies" → "Food & Dining"). Budgets are set at the group level. Initial mapping seeded from JSON fixture on startup. New categories auto-created during CSV upload with `group_id=None` (unmapped). Users assign them to groups via Settings UI.
 - **Adjustment export**: Pure domain functions (no stored adjustment entities). Deterministic dedup IDs via UUID5 for idempotent Monarch re-import. `couplefins-adjustment` tag for filtering.
 - **Use case pattern**: Every use case has 3 objects — `Command` (frozen attrs, validated at construction), `Result` (frozen attrs), `UseCase` (`@define(slots=True)`, stateless). Uniform signature: `execute(self, command, uow) -> Result`. UoW passed to execute (not constructor). Transaction scoped via `async with uow:`. Even parameterless queries get an empty Command. Shared validators in `_shared/command_validators.py`.
-- **Tooling**: Poetry, Ruff, BasedPyright, pytest, Biome
+- **Tooling**: uv, Ruff, BasedPyright, pytest, Biome

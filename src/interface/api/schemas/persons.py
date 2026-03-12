@@ -2,6 +2,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
+from src.application.use_cases.export_adjustments import PreviewAdjustmentsResult
 from src.domain.entities.person import Person
 
 _NAME_MAX = 50
@@ -41,4 +42,35 @@ class PersonResponse(BaseModel):
             id=person.id,
             name=person.name,
             adjustment_account=person.adjustment_account,
+        )
+
+
+class AdjustmentResponse(BaseModel):
+    dedup_id: str
+    date: str
+    merchant: str
+    category: str
+    amount: float
+
+
+class AdjustmentPreviewResponse(BaseModel):
+    adjustments: list[AdjustmentResponse]
+    person_name: str
+    adjustment_count: int
+
+    @classmethod
+    def from_result(cls, result: PreviewAdjustmentsResult) -> AdjustmentPreviewResponse:
+        return cls(
+            adjustments=[
+                AdjustmentResponse(
+                    dedup_id=a.dedup_id,
+                    date=a.date.isoformat(),
+                    merchant=a.merchant,
+                    category=a.category,
+                    amount=float(a.amount),
+                )
+                for a in result.adjustments
+            ],
+            person_name=result.person_name,
+            adjustment_count=result.adjustment_count,
         )

@@ -5,8 +5,11 @@ import {
   ChevronDown,
   ChevronRight,
   Loader2,
+  Upload,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { Link } from "react-router";
+import { AdjustmentExportSection } from "@/components/AdjustmentExportSection";
 import { MonthSelector } from "@/components/MonthSelector";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import {
@@ -405,15 +408,29 @@ export function TransactionsPage() {
           />
 
           {data.transaction_count === 0 ? (
-            <p className="py-8 text-center text-muted-foreground">
-              No shared transactions for {monthName} {year}.
-            </p>
+            <div className="py-8 text-center">
+              <p className="text-muted-foreground">
+                No shared transactions for {monthName} {year}.
+              </p>
+              <Link
+                to="/upload"
+                className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+              >
+                <Upload className="size-4" />
+                Upload a CSV to get started
+              </Link>
+            </div>
           ) : (
             <>
               <SummaryStats data={data} personNames={personNames} />
               <CategoryGroupBreakdownTable
                 breakdowns={data.category_group_breakdowns}
                 hasRefunds={data.total_shared_refunds > 0}
+              />
+              <AdjustmentExportSection
+                persons={persons ?? []}
+                year={year}
+                month={month}
               />
               <TransactionTable
                 transactions={data.transactions}
