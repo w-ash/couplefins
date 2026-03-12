@@ -2,7 +2,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ChevronDown,
-  Loader2,
   Pencil,
   Plus,
   Trash2,
@@ -10,6 +9,7 @@ import {
 } from "lucide-react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
+import { Button } from "@/components/Button";
 import {
   bulkUpdateMappings,
   CATEGORY_GROUPS_QUERY_KEY,
@@ -214,24 +214,25 @@ function GroupCard({ group }: { group: CategoryGroup }) {
             : "This group has no categories."}
         </p>
         <div className="mt-5 flex gap-3">
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={() => setConfirmDelete(false)}
-            className="flex-1 rounded-lg border border-input bg-card px-4 py-2 text-sm font-medium text-secondary-foreground shadow-sm transition-colors hover:bg-muted"
+            className="flex-1"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="destructive"
+            size="sm"
             onClick={() => deleteGroupMutation.mutate()}
-            disabled={deleteGroupMutation.isPending}
-            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-destructive/90 disabled:opacity-50"
+            loading={deleteGroupMutation.isPending}
+            className="flex-1"
           >
-            {deleteGroupMutation.isPending ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : null}
             Remove Group
-          </button>
+          </Button>
         </div>
       </dialog>
     </>
@@ -267,18 +268,15 @@ function AddGroupForm() {
         aria-label="New group name"
         className="min-w-0 flex-1 rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground shadow-sm placeholder:text-placeholder focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none"
       />
-      <button
+      <Button
         type="submit"
-        disabled={!name.trim() || createMutation.isPending}
-        className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+        size="sm"
+        disabled={!name.trim()}
+        loading={createMutation.isPending}
+        icon={<Plus className="size-4" />}
       >
-        {createMutation.isPending ? (
-          <Loader2 className="size-4 animate-spin" />
-        ) : (
-          <Plus className="size-4" />
-        )}
         Add Group
-      </button>
+      </Button>
     </form>
   );
 }

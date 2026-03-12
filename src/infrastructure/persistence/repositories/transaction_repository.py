@@ -69,6 +69,15 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         result = await self._session.execute(stmt)
         return [self._to_domain(row) for row in result.scalars().all()]
 
+    async def get_shared_by_year(self, year: int) -> list[Transaction]:
+        prefix = f"{year:04d}-"
+        stmt = select(TransactionModel).where(
+            TransactionModel.date.startswith(prefix),
+            TransactionModel.is_shared.is_(True),
+        )
+        result = await self._session.execute(stmt)
+        return [self._to_domain(row) for row in result.scalars().all()]
+
     async def get_by_person_and_date_range(
         self, person_id: UUID, start_date: date, end_date: date
     ) -> list[Transaction]:

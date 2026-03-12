@@ -62,3 +62,15 @@ async def setup_couple(client: AsyncClient) -> list[dict]:
         json={"name1": "Alice", "name2": "Bob"},
     )
     return resp.json()
+
+
+async def upload_csv(client: AsyncClient, person_id: str, csv_text: str) -> dict:
+    """Upload a CSV string for a person and return the response JSON."""
+    import io
+
+    resp = await client.post(
+        "/api/v1/uploads/",
+        data={"person_id": person_id},
+        files={"file": ("test.csv", io.BytesIO(csv_text.encode()), "text/csv")},
+    )
+    return resp.json()

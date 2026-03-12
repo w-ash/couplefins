@@ -16,6 +16,7 @@ from src.infrastructure.persistence.database.db_connection import (
 )
 from src.interface.api.middleware import register_exception_handlers
 from src.interface.api.routes.category_groups import router as category_groups_router
+from src.interface.api.routes.dashboard import router as dashboard_router
 from src.interface.api.routes.health import router as health_router
 from src.interface.api.routes.persons import router as persons_router
 from src.interface.api.routes.reconciliation import router as reconciliation_router
@@ -56,6 +57,7 @@ def create_app() -> FastAPI:
     app.include_router(uploads_router, prefix=AppConfig.API_V1_PREFIX)
     app.include_router(category_groups_router, prefix=AppConfig.API_V1_PREFIX)
     app.include_router(reconciliation_router, prefix=AppConfig.API_V1_PREFIX)
+    app.include_router(dashboard_router, prefix=AppConfig.API_V1_PREFIX)
 
     return app
 

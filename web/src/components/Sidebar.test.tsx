@@ -54,22 +54,20 @@ describe("Sidebar", () => {
     expect(screen.getByText("Settings")).toBeInTheDocument();
   });
 
-  it("disables Dashboard and Budget", () => {
+  it("disables Budget", () => {
     renderWithProviders(<Sidebar />, {
       routerProps: { initialEntries: ["/upload"] },
     });
-    expect(screen.getByText("Dashboard").closest("span")).toHaveClass(
-      "cursor-not-allowed",
-    );
     expect(screen.getByText("Budget").closest("span")).toHaveClass(
       "cursor-not-allowed",
     );
   });
 
-  it("enables Transactions, Upload, and Settings as links", () => {
+  it("enables Dashboard, Transactions, Upload, and Settings as links", () => {
     renderWithProviders(<Sidebar />, {
       routerProps: { initialEntries: ["/upload"] },
     });
+    expect(screen.getByRole("link", { name: "Dashboard" })).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Transactions" }),
     ).toBeInTheDocument();

@@ -1,9 +1,7 @@
-import io
-
 from httpx import AsyncClient
 import pytest
 
-from tests.integration.conftest import setup_couple
+from tests.integration.conftest import setup_couple, upload_csv
 
 SHARED_CSV = (
     "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
@@ -17,26 +15,13 @@ SHARED_CSV_BOB = (
 )
 
 
-async def _upload_csv(
-    client: AsyncClient,
-    person_id: str,
-    csv_text: str,
-) -> dict:
-    resp = await client.post(
-        "/api/v1/uploads/",
-        data={"person_id": person_id},
-        files={"file": ("test.csv", io.BytesIO(csv_text.encode()), "text/csv")},
-    )
-    return resp.json()
-
-
 async def test_full_reconciliation_both_uploaded(client: AsyncClient) -> None:
     persons = await setup_couple(client)
     alice_id = persons[0]["id"]
     bob_id = persons[1]["id"]
 
-    await _upload_csv(client, alice_id, SHARED_CSV)
-    await _upload_csv(client, bob_id, SHARED_CSV_BOB)
+    await upload_csv(client, alice_id, SHARED_CSV)
+    await upload_csv(client, bob_id, SHARED_CSV_BOB)
 
     response = await client.get("/api/v1/reconciliation?year=2026&month=1")
     assert response.status_code == 200
@@ -57,7 +42,7 @@ async def test_partial_upload_one_person(client: AsyncClient) -> None:
     persons = await setup_couple(client)
     alice_id = persons[0]["id"]
 
-    await _upload_csv(client, alice_id, SHARED_CSV)
+    await upload_csv(client, alice_id, SHARED_CSV)
 
     response = await client.get("/api/v1/reconciliation?year=2026&month=1")
     assert response.status_code == 200
@@ -92,7 +77,7 @@ async def test_settlement_math(client: AsyncClient) -> None:
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
         '2026-02-15,Test,Dining Out,Chase,TEST,,"-100.00",shared\n'
     )
-    await _upload_csv(client, alice_id, csv)
+    await upload_csv(client, alice_id, csv)
 
     response = await client.get("/api/v1/reconciliation?year=2026&month=2")
     data = response.json()

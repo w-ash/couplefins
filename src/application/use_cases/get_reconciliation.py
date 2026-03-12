@@ -1,6 +1,3 @@
-from collections import Counter
-import uuid
-
 from attrs import define, field
 
 from src.application.use_cases._shared.command_validators import (
@@ -8,6 +5,10 @@ from src.application.use_cases._shared.command_validators import (
     positive_int,
 )
 from src.application.use_cases._shared.transactions import find_all_unmapped_categories
+from src.application.use_cases._shared.upload_status import (
+    UploadStatus,
+    build_upload_statuses,
+)
 from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
 from src.domain.reconciliation import ReconciliationSummary, reconcile
@@ -18,14 +19,6 @@ from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 class GetReconciliationCommand:
     year: int = field(validator=positive_int)
     month: int = field(validator=month_range)
-
-
-@define(frozen=True, slots=True)
-class UploadStatus:
-    person_id: uuid.UUID
-    person_name: str
-    has_uploaded: bool
-    upload_count: int
 
 
 @define(frozen=True, slots=True)
@@ -63,17 +56,7 @@ class GetReconciliationUseCase:
                 month=command.month,
             )
 
-            upload_counts = Counter(u.person_id for u in uploads)
-            upload_statuses = [
-                UploadStatus(
-                    person_id=p.id,
-                    person_name=p.name,
-                    has_uploaded=upload_counts[p.id] > 0,
-                    upload_count=upload_counts[p.id],
-                )
-                for p in persons
-            ]
-
+            upload_statuses = build_upload_statuses(persons, uploads)
             tx_categories = {tx.category for tx in transactions}
             unmapped = find_all_unmapped_categories(category_mappings, tx_categories)
 

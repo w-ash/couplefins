@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Heart, Loader2, UserPlus } from "lucide-react";
+import { Heart, UserPlus } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import { Button } from "@/components/Button";
 import { apiFetch } from "@/lib/api";
 import { PERSONS_QUERY_KEY } from "@/types/person";
 
@@ -113,20 +114,15 @@ export function SetupPage() {
             )}
           </div>
 
-          <button
+          <Button
             type="submit"
-            disabled={mutation.isPending || !name1.trim() || !name2.trim()}
-            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!name1.trim() || !name2.trim()}
+            loading={mutation.isPending}
+            loadingText="Setting up..."
+            fullWidth
           >
-            {mutation.isPending ? (
-              <>
-                <Loader2 className="size-4 animate-spin" />
-                Setting up...
-              </>
-            ) : (
-              "Get Started"
-            )}
-          </button>
+            Get Started
+          </Button>
         </form>
       </div>
     </div>

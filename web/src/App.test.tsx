@@ -86,7 +86,10 @@ describe("App three-state gate", () => {
 
   it("shows app shell when identity is valid", async () => {
     useIdentityStore.setState({ currentPersonId: "p1" });
-    server.use(http.get("/api/v1/persons/", () => HttpResponse.json(persons)));
+    server.use(
+      http.get("/api/v1/persons/", () => HttpResponse.json(persons)),
+      http.get("/api/v1/dashboard", () => HttpResponse.json({})),
+    );
     renderApp();
     await waitFor(() => {
       expect(screen.getByText("CoupleFins")).toBeInTheDocument();
@@ -97,7 +100,10 @@ describe("App three-state gate", () => {
 
   it("renders skip-to-content link in app shell", async () => {
     useIdentityStore.setState({ currentPersonId: "p1" });
-    server.use(http.get("/api/v1/persons/", () => HttpResponse.json(persons)));
+    server.use(
+      http.get("/api/v1/persons/", () => HttpResponse.json(persons)),
+      http.get("/api/v1/dashboard", () => HttpResponse.json({})),
+    );
     renderApp();
     await waitFor(() => {
       expect(screen.getByText("Skip to content")).toBeInTheDocument();

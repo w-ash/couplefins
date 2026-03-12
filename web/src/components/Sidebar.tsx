@@ -38,7 +38,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav aria-label="App navigation" className="flex-1 space-y-1 px-3 py-4">
-        <NavItem to="/" label="Dashboard" icon={LayoutDashboard} disabled />
+        <NavItem to="/" label="Dashboard" icon={LayoutDashboard} />
         <NavItem
           to="/transactions"
           label="Transactions"

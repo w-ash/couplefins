@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { AppLayout } from "./layouts/AppLayout";
 import { useIdentityHydrated, useIdentityStore } from "./lib/identity";
+import { DashboardPage } from "./pages/DashboardPage";
 import { ProfilePicker } from "./pages/ProfilePicker";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
@@ -14,11 +15,11 @@ const router = createBrowserRouter([
   {
     element: <AppLayout />,
     children: [
-      { index: true, element: <Navigate to="/transactions" replace /> },
+      { index: true, element: <DashboardPage /> },
       { path: "transactions", element: <TransactionsPage /> },
       { path: "upload", element: <UploadPage /> },
       { path: "settings", element: <SettingsPage /> },
-      { path: "*", element: <Navigate to="/transactions" replace /> },
+      { path: "*", element: <Navigate to="/" replace /> },
     ],
   },
 ]);
