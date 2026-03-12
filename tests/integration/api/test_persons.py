@@ -74,3 +74,49 @@ async def test_list_persons_empty(client: AsyncClient) -> None:
     response = await client.get("/api/v1/persons/")
     assert response.status_code == 200
     assert response.json() == []
+
+
+async def test_patch_person_updates_adjustment_account(
+    client: AsyncClient,
+) -> None:
+    setup = await client.post(
+        "/api/v1/persons/setup",
+        json={"name1": "Alice", "name2": "Bob"},
+    )
+    person_id = setup.json()[0]["id"]
+
+    response = await client.patch(
+        f"/api/v1/persons/{person_id}",
+        json={"adjustment_account": "Shared Adjustments"},
+    )
+    assert response.status_code == 200
+    assert response.json()["adjustment_account"] == "Shared Adjustments"
+    assert response.json()["name"] == "Alice"
+
+    get_resp = await client.get("/api/v1/persons/")
+    alice = next(p for p in get_resp.json() if p["id"] == person_id)
+    assert alice["adjustment_account"] == "Shared Adjustments"
+
+
+async def test_patch_person_not_found(client: AsyncClient) -> None:
+    response = await client.patch(
+        "/api/v1/persons/00000000-0000-0000-0000-000000000000",
+        json={"adjustment_account": "Test"},
+    )
+    assert response.status_code == 404
+
+
+async def test_patch_person_rejects_blank_account(
+    client: AsyncClient,
+) -> None:
+    setup = await client.post(
+        "/api/v1/persons/setup",
+        json={"name1": "Alice", "name2": "Bob"},
+    )
+    person_id = setup.json()[0]["id"]
+
+    response = await client.patch(
+        f"/api/v1/persons/{person_id}",
+        json={"adjustment_account": "   "},
+    )
+    assert response.status_code == 422

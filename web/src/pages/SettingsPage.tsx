@@ -1,5 +1,6 @@
 import { Settings } from "lucide-react";
 import { CategoryMappingEditor } from "@/components/CategoryMappingEditor";
+import { PersonAccountSettings } from "@/components/PersonAccountSettings";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function SettingsPage() {
@@ -54,14 +55,11 @@ export function SettingsPage() {
         >
           <h2
             id="settings-people"
-            className="mb-2 font-medium text-lg text-foreground"
+            className="mb-4 font-medium text-lg text-foreground"
           >
             People
           </h2>
-          <p className="text-sm text-muted-foreground">
-            Both profiles were created during setup. Name editing and other
-            profile options will appear here in a future update.
-          </p>
+          <PersonAccountSettings />
         </section>
       </div>
     </div>

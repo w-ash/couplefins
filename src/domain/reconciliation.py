@@ -1,16 +1,14 @@
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from uuid import UUID
 
 from attrs import define
 
-from src.domain.constants import SplitDefaults
 from src.domain.entities.category_group import CategoryGroup
 from src.domain.entities.category_mapping import CategoryMapping
 from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
+from src.domain.splits import compute_shares
 
-_QUANTIZE_EXP = Decimal("0.01")
-_HUNDRED = Decimal(100)
 _EXPECTED_PERSON_COUNT = 2
 _UNCATEGORIZED = "Uncategorized"
 
@@ -81,29 +79,18 @@ def _compute_person_summaries(
     partner_of = {person_ids[i]: person_ids[1 - i] for i in range(len(person_ids))}
 
     for tx in transactions:
-        abs_amount = abs(tx.amount)
-        payer_pct = Decimal(
-            tx.payer_percentage
-            if tx.payer_percentage is not None
-            else SplitDefaults.DEFAULT_PAYER_PERCENTAGE
-        )
-        payer_share = (abs_amount * payer_pct / _HUNDRED).quantize(
-            _QUANTIZE_EXP, rounding=ROUND_HALF_UP
-        )
-        other_share = (abs_amount * (_HUNDRED - payer_pct) / _HUNDRED).quantize(
-            _QUANTIZE_EXP, rounding=ROUND_HALF_UP
-        )
+        payer_share, other_share = compute_shares(tx.amount, tx.payer_percentage)
 
         other_id = partner_of[tx.payer_person_id]
 
         if tx.amount < 0:
             # Expense: payer paid the full amount
-            paid[tx.payer_person_id] += abs_amount
+            paid[tx.payer_person_id] += abs(tx.amount)
             share[tx.payer_person_id] += payer_share
             share[other_id] += other_share
         else:
             # Refund: payer received the refund
-            paid[tx.payer_person_id] -= abs_amount
+            paid[tx.payer_person_id] -= abs(tx.amount)
             share[tx.payer_person_id] -= payer_share
             share[other_id] -= other_share
 

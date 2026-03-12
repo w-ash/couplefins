@@ -12,8 +12,8 @@
 | v0.1.5 | Use case architecture refactor | Completed (2026-03-10) | M |
 | v0.2.0 | Reconciliation engine + transactions page | Completed (2026-03-10) | L |
 | v0.2.1 | Auto-create categories from CSV + category management UI | Completed (2026-03-10) | M |
-| v0.2.2 | Dashboard + month navigation | Not Started | M |
-| v0.3.0 | Adjustment export engine (per-person Monarch-importable CSVs) | Not Started | M |
+| v0.2.2 | Dashboard + month navigation | Completed (2026-03-11) | M |
+| v0.3.0 | Adjustment export engine (per-person Monarch-importable CSVs) | Completed (2026-03-11) | M |
 | v0.3.1 | Export UI (download adjustments from transactions page) | Not Started | S |
 | v0.4.0 | Budget tracking (monthly + YTD, set budgets, view progress) | Not Started | M |
 | v0.4.1 | Month finalization (lock months, prevent changes) | Not Started | S |

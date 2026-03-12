@@ -19,6 +19,17 @@ class SetupCoupleRequest(BaseModel):
         return v
 
 
+class UpdatePersonRequest(BaseModel):
+    adjustment_account: str
+
+    @field_validator("adjustment_account")
+    @classmethod
+    def must_not_be_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Adjustment account must not be blank")
+        return v
+
+
 class PersonResponse(BaseModel):
     id: UUID
     name: str

@@ -22,3 +22,14 @@ export const PERSONS_QUERY_KEY = ["persons"] as const;
 export function fetchPersons(): Promise<Person[]> {
   return apiFetch("/api/v1/persons/");
 }
+
+export function updatePerson(
+  personId: string,
+  data: { adjustment_account: string },
+): Promise<Person> {
+  return apiFetch(`/api/v1/persons/${personId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
