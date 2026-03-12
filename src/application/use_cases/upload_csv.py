@@ -6,6 +6,7 @@ from attrs import define, field
 from loguru import logger
 
 from src.application.use_cases._shared.command_validators import non_empty_string
+from src.application.use_cases._shared.finalization import assert_periods_not_finalized
 from src.application.use_cases._shared.transactions import (
     classify_against_existing,
     find_new_categories,
@@ -48,6 +49,9 @@ class UploadCsvUseCase:
 
             upload_id = uuid.uuid4()
             incoming = parse_monarch_csv(command.csv_text, command.person_id, upload_id)
+
+            affected_periods = {(tx.date.year, tx.date.month) for tx in incoming}
+            await assert_periods_not_finalized(uow, affected_periods)
 
             all_mappings = await uow.category_mappings.get_all()
             categories_in_csv = {tx.category for tx in incoming}

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from attrs import define, field
 
 from src.application.use_cases._shared.command_validators import (
@@ -28,6 +30,8 @@ class GetReconciliationResult:
     upload_statuses: list[UploadStatus]
     unmapped_categories: list[str]
     persons: list[Person]
+    is_finalized: bool
+    finalized_at: datetime | None
 
 
 @define(slots=True)
@@ -45,6 +49,10 @@ class GetReconciliationUseCase:
             person_ids = [p.id for p in persons]
             uploads = await uow.uploads.get_by_person_ids_with_transactions_in_period(
                 person_ids, command.year, command.month
+            )
+
+            period = await uow.reconciliation_periods.get_by_period(
+                command.year, command.month
             )
 
             summary = reconcile(
@@ -66,4 +74,6 @@ class GetReconciliationUseCase:
                 upload_statuses=upload_statuses,
                 unmapped_categories=unmapped,
                 persons=persons,
+                is_finalized=period.is_finalized if period else False,
+                finalized_at=period.finalized_at if period else None,
             )

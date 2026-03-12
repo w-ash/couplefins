@@ -12,3 +12,7 @@ class ValidationError(DomainError):
 
 class DuplicateError(DomainError):
     pass
+
+
+class PeriodFinalizedError(DomainError):
+    pass

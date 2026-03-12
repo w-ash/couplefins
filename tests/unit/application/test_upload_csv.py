@@ -221,3 +221,23 @@ async def test_handles_empty_csv() -> None:
     assert result.updated_count == 0
     assert result.skipped_count == 0
     uow.transactions.save_batch.assert_not_called()
+
+
+async def test_rejects_upload_to_finalized_month() -> None:
+    from datetime import UTC, datetime
+
+    from src.domain.exceptions import PeriodFinalizedError
+    from tests.fixtures.factories import make_reconciliation_period
+
+    uow = make_mock_uow()
+    uow.persons.get_by_id.return_value = make_person()
+    uow.category_mappings.get_all.return_value = []
+    uow.reconciliation_periods.get_by_period.return_value = make_reconciliation_period(
+        year=2026, month=1, is_finalized=True, finalized_at=datetime.now(UTC)
+    )
+    command = _make_command()
+
+    with pytest.raises(PeriodFinalizedError, match="2026-01"):
+        await UploadCsvUseCase().execute(command, uow)
+
+    uow.commit.assert_not_called()

@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -17,6 +18,7 @@ class MonthHistoryEntryResponse(BaseModel):
     settlement_amount: float
     settlement_from_person_id: UUID | None
     settlement_to_person_id: UUID | None
+    is_finalized: bool
 
 
 class PersonResponse(BaseModel):
@@ -38,6 +40,8 @@ class DashboardResponse(BaseModel):
     month_history: list[MonthHistoryEntryResponse]
     persons: list[PersonResponse]
     unmapped_categories: list[str]
+    is_finalized: bool
+    finalized_at: datetime | None
 
     @classmethod
     def from_result(cls, result: GetDashboardResult) -> DashboardResponse:
@@ -92,9 +96,12 @@ class DashboardResponse(BaseModel):
                     settlement_amount=float(mh.settlement_amount),
                     settlement_from_person_id=mh.settlement_from_person_id,
                     settlement_to_person_id=mh.settlement_to_person_id,
+                    is_finalized=mh.is_finalized,
                 )
                 for mh in result.month_history
             ],
             persons=[PersonResponse(id=p.id, name=p.name) for p in result.persons],
             unmapped_categories=result.unmapped_categories,
+            is_finalized=result.is_finalized,
+            finalized_at=result.finalized_at,
         )

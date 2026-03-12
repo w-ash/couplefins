@@ -12,6 +12,7 @@ export interface MonthHistoryEntry {
   settlement_amount: number;
   settlement_from_person_id: string | null;
   settlement_to_person_id: string | null;
+  is_finalized: boolean;
 }
 
 export interface DashboardPerson {
@@ -33,6 +34,8 @@ export interface DashboardData {
   month_history: MonthHistoryEntry[];
   persons: DashboardPerson[];
   unmapped_categories: string[];
+  is_finalized: boolean;
+  finalized_at: string | null;
 }
 
 export const DASHBOARD_QUERY_KEY = ["dashboard"] as const;

@@ -15,8 +15,8 @@
 | v0.2.2 | Dashboard + month navigation | Completed (2026-03-11) | M |
 | v0.3.0 | Adjustment export engine (per-person Monarch-importable CSVs) | Completed (2026-03-11) | M |
 | v0.3.1 | Export UI (download adjustments from transactions page) | Completed (2026-03-11) | S |
-| v0.4.0 | Budget tracking (monthly + YTD, set budgets, view progress) | Not Started | M |
-| v0.4.1 | Month finalization (lock months, prevent changes) | Not Started | S |
+| v0.4.0 | Budget tracking (monthly + YTD, set budgets, view progress) | Completed (2026-03-12) | M |
+| v0.4.1 | Month finalization (lock months, prevent changes) | Completed (2026-03-12) | S |
 
 ## Infrastructure Readiness
 

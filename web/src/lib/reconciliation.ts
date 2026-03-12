@@ -59,6 +59,14 @@ export interface ReconciliationData {
   transactions: ReconciliationTransaction[];
   upload_statuses: UploadStatus[];
   unmapped_categories: string[];
+  is_finalized: boolean;
+  finalized_at: string | null;
+}
+
+export interface PeriodStatus {
+  is_finalized: boolean;
+  finalized_at: string | null;
+  notes: string;
 }
 
 export function fetchReconciliation(
@@ -66,4 +74,36 @@ export function fetchReconciliation(
   month: number,
 ): Promise<ReconciliationData> {
   return apiFetch(`/api/v1/reconciliation?year=${year}&month=${month}`);
+}
+
+export function finalizePeriod(
+  year: number,
+  month: number,
+  notes = "",
+): Promise<PeriodStatus> {
+  return apiFetch("/api/v1/reconciliation/finalize", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ year, month, notes }),
+  });
+}
+
+export function unfinalizePeriod(
+  year: number,
+  month: number,
+): Promise<PeriodStatus> {
+  return apiFetch("/api/v1/reconciliation/unfinalize", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ year, month }),
+  });
+}
+
+export function fetchPeriodStatus(
+  year: number,
+  month: number,
+): Promise<PeriodStatus> {
+  return apiFetch(
+    `/api/v1/reconciliation/period-status?year=${year}&month=${month}`,
+  );
 }

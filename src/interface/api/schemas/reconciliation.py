@@ -1,9 +1,10 @@
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel
 
 from src.application.use_cases.get_reconciliation import GetReconciliationResult
+from src.domain.entities.reconciliation_period import ReconciliationPeriod
 
 
 class UploadStatusResponse(BaseModel):
@@ -52,6 +53,33 @@ class TransactionResponse(BaseModel):
     payer_percentage: int | None
 
 
+class FinalizePeriodRequest(BaseModel):
+    year: int
+    month: int
+    notes: str = ""
+
+
+class UnfinalizePeriodRequest(BaseModel):
+    year: int
+    month: int
+
+
+class PeriodStatusResponse(BaseModel):
+    is_finalized: bool
+    finalized_at: datetime | None
+    notes: str
+
+    @classmethod
+    def from_domain(cls, period: ReconciliationPeriod | None) -> PeriodStatusResponse:
+        if period is None:
+            return cls(is_finalized=False, finalized_at=None, notes="")
+        return cls(
+            is_finalized=period.is_finalized,
+            finalized_at=period.finalized_at,
+            notes=period.notes,
+        )
+
+
 class ReconciliationResponse(BaseModel):
     year: int
     month: int
@@ -65,6 +93,8 @@ class ReconciliationResponse(BaseModel):
     transactions: list[TransactionResponse]
     upload_statuses: list[UploadStatusResponse]
     unmapped_categories: list[str]
+    is_finalized: bool
+    finalized_at: datetime | None
 
     @classmethod
     def from_result(cls, result: GetReconciliationResult) -> ReconciliationResponse:
@@ -135,4 +165,6 @@ class ReconciliationResponse(BaseModel):
                 for us in result.upload_statuses
             ],
             unmapped_categories=result.unmapped_categories,
+            is_finalized=result.is_finalized,
+            finalized_at=result.finalized_at,
         )

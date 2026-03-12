@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -35,6 +36,7 @@ class MonthHistoryEntry:
     settlement_amount: Decimal
     settlement_from_person_id: UUID | None
     settlement_to_person_id: UUID | None
+    is_finalized: bool
 
 
 @define(frozen=True, slots=True)
@@ -46,6 +48,8 @@ class GetDashboardResult:
     month_history: list[MonthHistoryEntry]
     persons: list[Person]
     unmapped_categories: list[str]
+    is_finalized: bool
+    finalized_at: datetime | None
 
 
 def _partition_by_month(
@@ -75,6 +79,7 @@ def _reconcile_all_months(
 def _build_month_history(
     summaries: dict[int, ReconciliationSummary],
     year: int,
+    finalized_months: set[int],
 ) -> list[MonthHistoryEntry]:
     entries: list[MonthHistoryEntry] = []
     for month in sorted(summaries, reverse=True):
@@ -89,6 +94,7 @@ def _build_month_history(
                 if settlement
                 else None,
                 settlement_to_person_id=settlement.to_person_id if settlement else None,
+                is_finalized=month in finalized_months,
             )
         )
     return entries
@@ -137,6 +143,12 @@ class GetDashboardUseCase:
                 [p.id for p in persons], command.year, command.month
             )
 
+            year_periods = await uow.reconciliation_periods.get_by_year(command.year)
+            finalized_months = {p.month for p in year_periods if p.is_finalized}
+            current_period = next(
+                (p for p in year_periods if p.month == command.month), None
+            )
+
             tx_categories = {tx.category for tx in by_month.get(command.month, [])}
 
             return GetDashboardResult(
@@ -144,9 +156,13 @@ class GetDashboardUseCase:
                 upload_statuses=build_upload_statuses(persons, uploads),
                 ytd_total_shared_spending=ytd_summary.total_shared_spending,
                 ytd_settlement=ytd_summary.settlement,
-                month_history=_build_month_history(month_summaries, command.year),
+                month_history=_build_month_history(
+                    month_summaries, command.year, finalized_months
+                ),
                 persons=persons,
                 unmapped_categories=find_all_unmapped_categories(
                     category_mappings, tx_categories
                 ),
+                is_finalized=current_period.is_finalized if current_period else False,
+                finalized_at=current_period.finalized_at if current_period else None,
             )

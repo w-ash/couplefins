@@ -27,4 +27,6 @@ def make_mock_uow() -> AsyncMock:
     uow.category_mappings = AsyncMock(spec=CategoryMappingRepositoryProtocol)
     uow.category_group_budgets = AsyncMock(spec=CategoryGroupBudgetRepositoryProtocol)
     uow.reconciliation_periods = AsyncMock(spec=ReconciliationPeriodRepositoryProtocol)
+    uow.reconciliation_periods.get_by_period.return_value = None
+    uow.reconciliation_periods.get_by_year.return_value = []
     return uow

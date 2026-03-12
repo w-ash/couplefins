@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowLeftRight,
@@ -10,8 +10,10 @@ import {
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { AdjustmentExportSection } from "@/components/AdjustmentExportSection";
+import { FinalizationBanner } from "@/components/FinalizationBanner";
 import { MonthSelector } from "@/components/MonthSelector";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
+import { DASHBOARD_QUERY_KEY } from "@/lib/dashboard";
 import {
   formatCurrency,
   formatDate,
@@ -24,7 +26,11 @@ import type {
   ReconciliationData,
   ReconciliationTransaction,
 } from "@/lib/reconciliation";
-import { fetchReconciliation } from "@/lib/reconciliation";
+import {
+  fetchReconciliation,
+  finalizePeriod,
+  unfinalizePeriod,
+} from "@/lib/reconciliation";
 import {
   fetchPersons,
   getPersonAccentColor,
@@ -340,15 +346,33 @@ function TransactionTable({
 
 export function TransactionsPage() {
   const { year, month } = useMonthYear();
+  const queryClient = useQueryClient();
 
   const { data: persons } = useQuery({
     queryKey: PERSONS_QUERY_KEY,
     queryFn: fetchPersons,
   });
 
+  const reconciliationQueryKey = ["reconciliation", year, month];
   const { data, isLoading, error } = useQuery({
-    queryKey: ["reconciliation", year, month],
+    queryKey: reconciliationQueryKey,
     queryFn: () => fetchReconciliation(year, month),
+  });
+
+  const finalizeMutation = useMutation({
+    mutationFn: () => finalizePeriod(year, month),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: reconciliationQueryKey });
+      queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY });
+    },
+  });
+
+  const unfinalizeMutation = useMutation({
+    mutationFn: () => unfinalizePeriod(year, month),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: reconciliationQueryKey });
+      queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY });
+    },
   });
 
   const personNames = useMemo(
@@ -400,6 +424,15 @@ export function TransactionsPage() {
 
       {data && (
         <div className="space-y-6">
+          <FinalizationBanner
+            isFinalized={data.is_finalized}
+            finalizedAt={data.finalized_at}
+            onFinalize={() => finalizeMutation.mutate()}
+            onUnfinalize={() => unfinalizeMutation.mutate()}
+            isPending={
+              finalizeMutation.isPending || unfinalizeMutation.isPending
+            }
+          />
           <UploadStatusBanner statuses={data.upload_statuses} />
           <SettlementCard
             data={data}

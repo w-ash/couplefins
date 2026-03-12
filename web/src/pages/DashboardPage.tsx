@@ -1,20 +1,23 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   CheckCircle2,
   Clock,
   LayoutDashboard,
   Loader2,
+  Lock,
   Upload,
 } from "lucide-react";
 import { useMemo } from "react";
 import { Link, useNavigate } from "react-router";
+import { FinalizationBanner } from "@/components/FinalizationBanner";
 import { MonthSelector } from "@/components/MonthSelector";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import type { DashboardData, MonthHistoryEntry } from "@/lib/dashboard";
 import { DASHBOARD_QUERY_KEY, fetchDashboard } from "@/lib/dashboard";
 import { formatCurrency, MONTHS, useMonthYear } from "@/lib/format";
 import type { Settlement } from "@/lib/reconciliation";
+import { finalizePeriod, unfinalizePeriod } from "@/lib/reconciliation";
 import { getPersonAccentColor } from "@/types/person";
 
 function SettlementCard({
@@ -209,7 +212,12 @@ function MonthHistory({
                 }
               >
                 <td className="py-2.5 pr-4 font-medium text-foreground">
-                  {monthName} {entry.year}
+                  <span className="inline-flex items-center gap-1.5">
+                    {monthName} {entry.year}
+                    {entry.is_finalized && (
+                      <Lock className="size-3 text-primary-muted-foreground" />
+                    )}
+                  </span>
                 </td>
                 <td className="py-2.5 pr-4 text-muted-foreground">{label}</td>
                 <td className="py-2.5 text-right tabular-nums text-foreground">
@@ -248,10 +256,28 @@ function buildHistorySettlementLabel(
 
 export function DashboardPage() {
   const { year, month } = useMonthYear();
+  const queryClient = useQueryClient();
 
+  const dashboardQueryKey = [...DASHBOARD_QUERY_KEY, year, month];
   const { data, isLoading, error } = useQuery({
-    queryKey: [...DASHBOARD_QUERY_KEY, year, month],
+    queryKey: dashboardQueryKey,
     queryFn: () => fetchDashboard(year, month),
+  });
+
+  const finalizeMutation = useMutation({
+    mutationFn: () => finalizePeriod(year, month),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
+    },
+  });
+
+  const unfinalizeMutation = useMutation({
+    mutationFn: () => unfinalizePeriod(year, month),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
+    },
   });
 
   const { personNames, personIndexMap } = useMemo(() => {
@@ -310,6 +336,15 @@ export function DashboardPage() {
 
       {data && !isEmpty && (
         <div className="space-y-6">
+          <FinalizationBanner
+            isFinalized={data.is_finalized}
+            finalizedAt={data.finalized_at}
+            onFinalize={() => finalizeMutation.mutate()}
+            onUnfinalize={() => unfinalizeMutation.mutate()}
+            isPending={
+              finalizeMutation.isPending || unfinalizeMutation.isPending
+            }
+          />
           <SettlementCard
             data={data}
             personNames={personNames}
