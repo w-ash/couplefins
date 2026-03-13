@@ -47,44 +47,23 @@ class DashboardResponse(BaseModel):
     def from_result(cls, result: GetDashboardResult) -> DashboardResponse:
         cm = result.current_month
         return cls(
-            current_month_year=cm.year,
-            current_month_month=cm.month,
+            current_month_year=cm.start_date.year,
+            current_month_month=cm.start_date.month,
             current_month_total_shared_spending=float(cm.total_shared_spending),
             current_month_net_shared_spending=float(cm.net_shared_spending),
             current_month_transaction_count=cm.transaction_count,
             current_month_person_summaries=[
-                PersonSummaryResponse(
-                    person_id=ps.person_id,
-                    total_paid=float(ps.total_paid),
-                    total_share=float(ps.total_share),
-                )
-                for ps in cm.person_summaries
+                PersonSummaryResponse.from_domain(ps) for ps in cm.person_summaries
             ],
             current_month_settlement=(
-                SettlementResponse(
-                    amount=float(cm.settlement.amount),
-                    from_person_id=cm.settlement.from_person_id,
-                    to_person_id=cm.settlement.to_person_id,
-                )
-                if cm.settlement
-                else None
+                SettlementResponse.from_domain(cm.settlement) if cm.settlement else None
             ),
             upload_statuses=[
-                UploadStatusResponse(
-                    person_id=us.person_id,
-                    person_name=us.person_name,
-                    has_uploaded=us.has_uploaded,
-                    upload_count=us.upload_count,
-                )
-                for us in result.upload_statuses
+                UploadStatusResponse.from_domain(us) for us in result.upload_statuses
             ],
             ytd_total_shared_spending=float(result.ytd_total_shared_spending),
             ytd_settlement=(
-                SettlementResponse(
-                    amount=float(result.ytd_settlement.amount),
-                    from_person_id=result.ytd_settlement.from_person_id,
-                    to_person_id=result.ytd_settlement.to_person_id,
-                )
+                SettlementResponse.from_domain(result.ytd_settlement)
                 if result.ytd_settlement
                 else None
             ),

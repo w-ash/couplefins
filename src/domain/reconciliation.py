@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
@@ -32,8 +33,8 @@ class SettlementResult:
 
 @define(frozen=True, slots=True)
 class ReconciliationSummary:
-    year: int
-    month: int
+    start_date: date
+    end_date: date
     total_shared_spending: Decimal
     total_shared_refunds: Decimal
     net_shared_spending: Decimal
@@ -104,8 +105,8 @@ def reconcile(  # noqa: PLR0913
     category_mappings: list[CategoryMapping],
     category_groups: list[CategoryGroup],
     *,
-    year: int = 0,
-    month: int = 0,
+    start_date: date,
+    end_date: date,
 ) -> ReconciliationSummary:
     person_ids = [p.id for p in persons]
 
@@ -128,8 +129,8 @@ def reconcile(  # noqa: PLR0913
     breakdowns = compute_category_breakdowns(shared, category_lookup)
 
     return ReconciliationSummary(
-        year=year,
-        month=month,
+        start_date=start_date,
+        end_date=end_date,
         total_shared_spending=total_spending,
         total_shared_refunds=total_refunds,
         net_shared_spending=total_spending - total_refunds,

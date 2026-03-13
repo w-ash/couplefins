@@ -19,8 +19,12 @@ const persons = [
 ];
 
 const reconciliationResponse = {
+  start_date: "2026-01-01",
+  end_date: "2026-01-31",
   year: 2026,
   month: 1,
+  is_finalized: false,
+  finalized_at: null,
   total_shared_spending: 160.0,
   total_shared_refunds: 0.0,
   net_shared_spending: 160.0,
@@ -62,8 +66,12 @@ const reconciliationResponse = {
       category: "Dining Out",
       account: "Chase",
       amount: -100.0,
+      notes: "",
+      tags: ["shared"],
       payer_person_id: "p1",
       payer_percentage: 50,
+      original_date: null,
+      original_amount: null,
     },
     {
       id: "tx2",
@@ -72,8 +80,12 @@ const reconciliationResponse = {
       category: "Groceries",
       account: "Amex",
       amount: -60.0,
+      notes: "",
+      tags: ["shared"],
       payer_person_id: "p2",
       payer_percentage: 50,
+      original_date: null,
+      original_amount: null,
     },
   ],
   upload_statuses: [
@@ -94,8 +106,12 @@ const reconciliationResponse = {
 };
 
 const emptyResponse = {
+  start_date: "2026-03-01",
+  end_date: "2026-03-31",
   year: 2026,
   month: 3,
+  is_finalized: false,
+  finalized_at: null,
   total_shared_spending: 0.0,
   total_shared_refunds: 0.0,
   net_shared_spending: 0.0,
@@ -129,6 +145,7 @@ const server = setupServer(
   http.get("/api/v1/reconciliation", () =>
     HttpResponse.json(reconciliationResponse),
   ),
+  http.get("/api/v1/category-groups", () => HttpResponse.json([])),
   http.get("/api/v1/persons/:personId/adjustments/:year/:month", () =>
     HttpResponse.json({
       adjustments: [],

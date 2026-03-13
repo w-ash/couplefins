@@ -7,7 +7,13 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import {
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Link } from "react-router";
 import { Button } from "@/components/Button";
 import { PageError, PageLoading } from "@/components/PageStates";
@@ -24,6 +30,7 @@ import {
   useInvalidateCategories,
 } from "@/lib/categories";
 import { getCategoryGroupIcon, ICON_OPTIONS } from "@/lib/category-icons";
+import { useClickOutside } from "@/lib/use-click-outside";
 
 // -- Unmapped category row --
 
@@ -77,16 +84,8 @@ function IconPicker({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node))
-        setOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
+  const close = useCallback(() => setOpen(false), []);
+  useClickOutside(ref, open, close);
 
   const CurrentIcon = getCategoryGroupIcon(currentIcon);
 

@@ -51,8 +51,10 @@ export interface ReconciliationTransaction {
 }
 
 export interface ReconciliationData {
-  year: number;
-  month: number;
+  start_date: string;
+  end_date: string;
+  year: number | null;
+  month: number | null;
   total_shared_spending: number;
   total_shared_refunds: number;
   net_shared_spending: number;
@@ -63,7 +65,7 @@ export interface ReconciliationData {
   transactions: ReconciliationTransaction[];
   upload_statuses: UploadStatus[];
   unmapped_categories: string[];
-  is_finalized: boolean;
+  is_finalized: boolean | null;
   finalized_at: string | null;
 }
 
@@ -73,11 +75,13 @@ export interface PeriodStatus {
   notes: string;
 }
 
-export function fetchReconciliation(
-  year: number,
-  month: number,
+export function fetchReconciliationByRange(
+  startDate: string,
+  endDate: string,
 ): Promise<ReconciliationData> {
-  return apiFetch(`/api/v1/reconciliation?year=${year}&month=${month}`);
+  return apiFetch(
+    `/api/v1/reconciliation?start_date=${startDate}&end_date=${endDate}`,
+  );
 }
 
 export function finalizePeriod(

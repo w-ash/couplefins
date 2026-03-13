@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -43,6 +43,24 @@ class UploadRepository(BaseRepository[Upload, UploadModel]):
         subq = (
             select(TransactionModel.upload_id)
             .where(TransactionModel.date.startswith(prefix))
+            .where(TransactionModel.payer_person_id.in_(person_id_strs))
+            .distinct()
+            .subquery()
+        )
+        stmt = select(UploadModel).where(UploadModel.id.in_(select(subq)))
+        result = await self._session.execute(stmt)
+        return [self._to_domain(row) for row in result.scalars().all()]
+
+    async def get_by_person_ids_with_transactions_in_date_range(
+        self, person_ids: list[UUID], start_date: date, end_date: date
+    ) -> list[Upload]:
+        if not person_ids:
+            return []
+        person_id_strs = [str(pid) for pid in person_ids]
+        subq = (
+            select(TransactionModel.upload_id)
+            .where(TransactionModel.date >= start_date.isoformat())
+            .where(TransactionModel.date <= end_date.isoformat())
             .where(TransactionModel.payer_person_id.in_(person_id_strs))
             .distinct()
             .subquery()

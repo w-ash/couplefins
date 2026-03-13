@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 
 from src.application.use_cases.get_reconciliation import (
@@ -15,7 +16,7 @@ from tests.fixtures.mocks import make_mock_uow
 
 
 def _make_command(year: int = 2026, month: int = 1) -> GetReconciliationCommand:
-    return GetReconciliationCommand(year=year, month=month)
+    return GetReconciliationCommand.from_month(year, month)
 
 
 async def test_happy_path_both_uploaded() -> None:
@@ -43,24 +44,26 @@ async def test_happy_path_both_uploaded() -> None:
             payer_percentage=50,
         ),
     ]
-    uow.transactions.get_shared_by_period.return_value = txs
+    uow.transactions.get_shared_by_date_range.return_value = txs
 
     uploads = [
         make_upload(person_id=alice.id),
         make_upload(person_id=bob.id),
     ]
-    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = uploads
+    uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = uploads
 
     result = await GetReconciliationUseCase().execute(_make_command(), uow)
 
-    assert result.summary.year == 2026
-    assert result.summary.month == 1
+    assert result.summary.start_date == date(2026, 1, 1)
+    assert result.summary.end_date == date(2026, 1, 31)
     assert result.summary.transaction_count == 2
     assert result.summary.total_shared_spending == Decimal("160.00")
     assert result.summary.settlement is not None
     assert all(s.has_uploaded for s in result.upload_statuses)
     assert len(result.transactions) == 2
     assert result.unmapped_categories == []
+    assert result.year == 2026
+    assert result.month == 1
 
 
 async def test_partial_upload_one_person() -> None:
@@ -78,8 +81,8 @@ async def test_partial_upload_one_person() -> None:
             payer_percentage=50,
         ),
     ]
-    uow.transactions.get_shared_by_period.return_value = txs
-    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = [
+    uow.transactions.get_shared_by_date_range.return_value = txs
+    uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = [
         make_upload(person_id=alice.id)
     ]
 
@@ -100,8 +103,8 @@ async def test_empty_month_no_transactions() -> None:
     uow.persons.get_all.return_value = [alice, bob]
     uow.category_groups.get_all.return_value = []
     uow.category_mappings.get_all.return_value = []
-    uow.transactions.get_shared_by_period.return_value = []
-    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+    uow.transactions.get_shared_by_date_range.return_value = []
+    uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = []
 
     result = await GetReconciliationUseCase().execute(_make_command(), uow)
 
@@ -137,9 +140,40 @@ async def test_unmapped_categories_detected() -> None:
             payer_percentage=50,
         ),
     ]
-    uow.transactions.get_shared_by_period.return_value = txs
-    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+    uow.transactions.get_shared_by_date_range.return_value = txs
+    uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = []
 
     result = await GetReconciliationUseCase().execute(_make_command(), uow)
 
     assert result.unmapped_categories == ["Unknown Service"]
+
+
+async def test_multi_month_range_finalization_is_none() -> None:
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    uow.persons.get_all.return_value = [alice, bob]
+    uow.category_groups.get_all.return_value = []
+    uow.category_mappings.get_all.return_value = []
+    uow.transactions.get_shared_by_date_range.return_value = []
+    uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = []
+
+    command = GetReconciliationCommand.from_range(date(2026, 1, 1), date(2026, 3, 31))
+    result = await GetReconciliationUseCase().execute(command, uow)
+
+    assert result.is_finalized is None
+    assert result.finalized_at is None
+    assert result.year is None
+    assert result.month is None
+    # Period lookup should not have been called for multi-month range
+    uow.reconciliation_periods.get_by_period.assert_not_called()
+
+
+def test_from_range_detects_single_month() -> None:
+    command = GetReconciliationCommand.from_range(date(2026, 2, 1), date(2026, 2, 28))
+    assert command.single_month == (2026, 2)
+
+
+def test_from_range_multi_month_no_single() -> None:
+    command = GetReconciliationCommand.from_range(date(2026, 1, 15), date(2026, 2, 15))
+    assert command.single_month is None

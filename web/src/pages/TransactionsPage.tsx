@@ -4,6 +4,7 @@ import {
   ArrowLeftRight,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   Pencil,
   Upload,
 } from "lucide-react";
@@ -11,12 +12,20 @@ import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { AdjustmentExportSection } from "@/components/AdjustmentExportSection";
 import { Button } from "@/components/Button";
+import { DateRangePicker } from "@/components/DateRangePicker";
 import { FinalizationBanner } from "@/components/FinalizationBanner";
-import { MonthSelector } from "@/components/MonthSelector";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
 import { SettlementCard } from "@/components/SettlementCard";
 import { BulkSplitEditor } from "@/components/SplitEditor";
 import { TransactionEditor } from "@/components/TransactionEditor";
+import {
+  ActiveFilterPills,
+  AmountRangeFilter,
+  CategoryFilter,
+  PayerFilter,
+  TagFilter,
+} from "@/components/TransactionFilters";
+import { TransactionSearch } from "@/components/TransactionSearch";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import {
   CATEGORY_GROUPS_QUERY_KEY,
@@ -24,13 +33,12 @@ import {
 } from "@/lib/categories";
 import { getCategoryGroupIcon } from "@/lib/category-icons";
 import { DASHBOARD_QUERY_KEY } from "@/lib/dashboard";
+import { formatRangeLabel, useDateRange } from "@/lib/date-range";
 import {
   computeShares,
   formatCurrency,
   formatDate,
   formatSplit,
-  MONTHS,
-  useMonthYear,
 } from "@/lib/format";
 import type {
   CategoryGroupBreakdown,
@@ -38,10 +46,15 @@ import type {
   ReconciliationTransaction,
 } from "@/lib/reconciliation";
 import {
-  fetchReconciliation,
+  fetchReconciliationByRange,
   finalizePeriod,
   unfinalizePeriod,
 } from "@/lib/reconciliation";
+import type { SortField, SortState } from "@/lib/transaction-filters";
+import {
+  cycleSortState,
+  useTransactionFilters,
+} from "@/lib/transaction-filters";
 import type { TransactionUpdateFields } from "@/lib/transactions";
 import { updateTransaction, updateTransactionSplits } from "@/lib/transactions";
 import {
@@ -219,21 +232,63 @@ function buildCategoryGroupLookup(
   return lookup;
 }
 
+function SortIndicator({ field, sort }: { field: SortField; sort: SortState }) {
+  if (sort.field !== field) return null;
+  return sort.dir === "asc" ? (
+    <ChevronUp className="ml-0.5 inline size-3.5" />
+  ) : (
+    <ChevronDown className="ml-0.5 inline size-3.5" />
+  );
+}
+
+function SortableHeader({
+  field,
+  sort,
+  onSort,
+  align,
+  title,
+  children,
+}: {
+  field: SortField;
+  sort: SortState;
+  onSort: (s: SortState) => void;
+  align?: "right";
+  title?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <th
+      className={`pb-2 pr-4 font-medium cursor-pointer select-none transition-colors hover:text-foreground ${align === "right" ? "text-right" : ""}`}
+      title={title}
+      onClick={() => onSort(cycleSortState(sort, field))}
+    >
+      {children}
+      <SortIndicator field={field} sort={sort} />
+    </th>
+  );
+}
+
 function TransactionTable({
   transactions,
   personNames,
+  personEntries,
   personIndexMap,
   categoryGroups,
   isFinalized,
+  sort,
+  onSort,
   onSplitUpdate,
   onTransactionUpdate,
   isSaving,
 }: {
   transactions: ReconciliationTransaction[];
   personNames: Map<string, string>;
+  personEntries: Array<{ id: string; name: string }>;
   personIndexMap: Map<string, number>;
   categoryGroups: Map<string, string>;
   isFinalized: boolean;
+  sort: SortState;
+  onSort: (s: SortState) => void;
   onSplitUpdate: (
     splits: Array<{ transaction_id: string; payer_percentage: number }>,
   ) => void;
@@ -243,20 +298,6 @@ function TransactionTable({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [bulkMode, setBulkMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-
-  const personEntries = useMemo(
-    () => [...personNames].map(([id, name]) => ({ id, name })),
-    [personNames],
-  );
-
-  const sorted = useMemo(
-    () =>
-      [...transactions].sort(
-        (a, b) =>
-          b.date.localeCompare(a.date) || a.merchant.localeCompare(b.merchant),
-      ),
-    [transactions],
-  );
 
   const colCount = 7 + personEntries.length + (bulkMode ? 1 : 0);
 
@@ -271,11 +312,11 @@ function TransactionTable({
 
   const toggleAll = useCallback(() => {
     setSelected((prev) =>
-      prev.size === sorted.length
+      prev.size === transactions.length
         ? new Set()
-        : new Set(sorted.map((tx) => tx.id)),
+        : new Set(transactions.map((tx) => tx.id)),
     );
-  }, [sorted]);
+  }, [transactions]);
 
   const exitBulkMode = useCallback(() => {
     setBulkMode(false);
@@ -343,19 +384,33 @@ function TransactionTable({
                   <input
                     type="checkbox"
                     checked={
-                      selected.size === sorted.length && sorted.length > 0
+                      selected.size === transactions.length &&
+                      transactions.length > 0
                     }
                     onChange={toggleAll}
                     className="accent-primary"
                   />
                 </th>
               )}
-              <th className="pb-2 pr-4 font-medium">Date</th>
-              <th className="pb-2 pr-4 font-medium">Merchant</th>
+              <SortableHeader field="date" sort={sort} onSort={onSort}>
+                Date
+              </SortableHeader>
+              <SortableHeader field="merchant" sort={sort} onSort={onSort}>
+                Merchant
+              </SortableHeader>
               <th className="pb-2 pr-4 font-medium">Category</th>
-              <th className="pb-2 pr-4 font-medium">Group</th>
+              <SortableHeader field="group" sort={sort} onSort={onSort}>
+                Group
+              </SortableHeader>
               <th className="pb-2 pr-4 font-medium">Paid by</th>
-              <th className="pb-2 pr-4 text-right font-medium">Amount</th>
+              <SortableHeader
+                field="amount"
+                sort={sort}
+                onSort={onSort}
+                align="right"
+              >
+                Amount
+              </SortableHeader>
               <th
                 className="pb-2 pr-4 text-right font-medium"
                 title="How the expense is divided between you"
@@ -370,7 +425,7 @@ function TransactionTable({
             </tr>
           </thead>
           <tbody>
-            {sorted.map((tx) => {
+            {transactions.map((tx) => {
               const payerPct = tx.payer_percentage ?? 50;
               const { payerShare, otherShare } = computeShares(
                 Math.abs(tx.amount),
@@ -528,7 +583,7 @@ function TransactionRow({
 }
 
 export function TransactionsPage() {
-  const { year, month } = useMonthYear();
+  const { startDate, endDate, setDateRange, singleMonth } = useDateRange();
   const queryClient = useQueryClient();
 
   const { data: persons } = useQuery({
@@ -542,12 +597,12 @@ export function TransactionsPage() {
   });
 
   const reconciliationQueryKey = useMemo(
-    () => ["reconciliation", year, month],
-    [year, month],
+    () => ["reconciliation", startDate, endDate],
+    [startDate, endDate],
   );
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: reconciliationQueryKey,
-    queryFn: () => fetchReconciliation(year, month),
+    queryFn: () => fetchReconciliationByRange(startDate, endDate),
   });
 
   const invalidateReconciliation = useCallback(() => {
@@ -556,12 +611,18 @@ export function TransactionsPage() {
   }, [queryClient, reconciliationQueryKey]);
 
   const finalizeMutation = useMutation({
-    mutationFn: () => finalizePeriod(year, month),
+    mutationFn: () => {
+      if (!singleMonth) throw new Error("Cannot finalize multi-month range");
+      return finalizePeriod(singleMonth.year, singleMonth.month);
+    },
     onSuccess: invalidateReconciliation,
   });
 
   const unfinalizeMutation = useMutation({
-    mutationFn: () => unfinalizePeriod(year, month),
+    mutationFn: () => {
+      if (!singleMonth) throw new Error("Cannot unfinalize multi-month range");
+      return unfinalizePeriod(singleMonth.year, singleMonth.month);
+    },
     onSuccess: invalidateReconciliation,
   });
 
@@ -607,7 +668,18 @@ export function TransactionsPage() {
     [categoryGroups],
   );
 
-  const monthName = MONTHS[month - 1] ?? "";
+  const personEntries = useMemo(
+    () => [...personNames].map(([id, name]) => ({ id, name })),
+    [personNames],
+  );
+
+  const filters = useTransactionFilters(
+    data?.transactions ?? [],
+    categoryGroupLookup,
+  );
+
+  const periodLabel = formatRangeLabel(startDate, endDate);
+  const isFinalized = data?.is_finalized === true;
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-12">
@@ -616,7 +688,11 @@ export function TransactionsPage() {
           <ArrowLeftRight className="size-6" />
           Transactions
         </h1>
-        <MonthSelector />
+        <DateRangePicker
+          startDate={startDate}
+          endDate={endDate}
+          setDateRange={setDateRange}
+        />
       </div>
 
       {isLoading && <PageLoading label="Loading transactions..." />}
@@ -625,29 +701,31 @@ export function TransactionsPage() {
 
       {data && (
         <div className="space-y-6">
-          <FinalizationBanner
-            isFinalized={data.is_finalized}
-            finalizedAt={data.finalized_at}
-            onFinalize={() => finalizeMutation.mutate()}
-            onUnfinalize={() => unfinalizeMutation.mutate()}
-            isPending={
-              finalizeMutation.isPending || unfinalizeMutation.isPending
-            }
-          />
+          {singleMonth && (
+            <FinalizationBanner
+              isFinalized={isFinalized}
+              finalizedAt={data.finalized_at}
+              onFinalize={() => finalizeMutation.mutate()}
+              onUnfinalize={() => unfinalizeMutation.mutate()}
+              isPending={
+                finalizeMutation.isPending || unfinalizeMutation.isPending
+              }
+            />
+          )}
           <UploadStatusBanner statuses={data.upload_statuses} />
           {data.settlement && (
             <SettlementCard
               settlement={data.settlement}
               personNames={personNames}
               personIndexMap={personIndexMap}
-              periodLabel={`${monthName} ${year}`}
+              periodLabel={periodLabel}
             />
           )}
 
           {data.transaction_count === 0 ? (
             <PageEmpty
               icon={<Upload />}
-              heading={`No shared transactions for ${monthName} ${year}`}
+              heading={`No shared transactions for ${periodLabel}`}
               description="Upload a CSV to see transactions."
               action={
                 <Link
@@ -666,17 +744,55 @@ export function TransactionsPage() {
                 hasRefunds={data.total_shared_refunds > 0}
                 groupIconMap={groupIconMap}
               />
-              <AdjustmentExportSection
-                persons={persons ?? []}
-                year={year}
-                month={month}
+              {singleMonth && (
+                <AdjustmentExportSection
+                  persons={persons ?? []}
+                  year={singleMonth.year}
+                  month={singleMonth.month}
+                />
+              )}
+
+              <TransactionSearch
+                value={filters.query}
+                onChange={filters.setQuery}
+                filteredCount={filters.filtered.length}
+                totalCount={filters.totalCount}
               />
+
+              <div className="flex flex-wrap items-center gap-2">
+                <PayerFilter
+                  persons={personEntries}
+                  activePayers={filters.payers}
+                  onChange={filters.setPayers}
+                />
+                <CategoryFilter
+                  breakdowns={data.category_group_breakdowns}
+                  activeCategories={filters.categories}
+                  onChange={filters.setCategories}
+                />
+                <TagFilter
+                  availableTags={filters.availableTags}
+                  activeTags={filters.tags}
+                  onChange={filters.setTags}
+                />
+                <AmountRangeFilter
+                  minAmount={filters.minAmount}
+                  maxAmount={filters.maxAmount}
+                  onChange={filters.setAmountRange}
+                />
+              </div>
+
+              <ActiveFilterPills filters={filters} personNames={personNames} />
+
               <TransactionTable
-                transactions={data.transactions}
+                transactions={filters.filtered}
                 personNames={personNames}
+                personEntries={personEntries}
                 personIndexMap={personIndexMap}
                 categoryGroups={categoryGroupLookup}
-                isFinalized={data.is_finalized}
+                isFinalized={isFinalized}
+                sort={filters.sort}
+                onSort={filters.setSort}
                 onSplitUpdate={(splits) => splitMutation.mutate(splits)}
                 onTransactionUpdate={(id, fields) =>
                   editMutation.mutate({ id, fields })

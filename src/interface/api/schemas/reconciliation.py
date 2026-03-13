@@ -3,8 +3,10 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from src.application.use_cases._shared.upload_status import UploadStatus
 from src.application.use_cases.get_reconciliation import GetReconciliationResult
 from src.domain.entities.reconciliation_period import ReconciliationPeriod
+from src.domain.reconciliation import PersonSummary, SettlementResult
 
 
 class UploadStatusResponse(BaseModel):
@@ -13,17 +15,42 @@ class UploadStatusResponse(BaseModel):
     has_uploaded: bool
     upload_count: int
 
+    @classmethod
+    def from_domain(cls, us: UploadStatus) -> UploadStatusResponse:
+        return cls(
+            person_id=us.person_id,
+            person_name=us.person_name,
+            has_uploaded=us.has_uploaded,
+            upload_count=us.upload_count,
+        )
+
 
 class SettlementResponse(BaseModel):
     amount: float
     from_person_id: UUID
     to_person_id: UUID
 
+    @classmethod
+    def from_domain(cls, sr: SettlementResult) -> SettlementResponse:
+        return cls(
+            amount=float(sr.amount),
+            from_person_id=sr.from_person_id,
+            to_person_id=sr.to_person_id,
+        )
+
 
 class PersonSummaryResponse(BaseModel):
     person_id: UUID
     total_paid: float
     total_share: float
+
+    @classmethod
+    def from_domain(cls, ps: PersonSummary) -> PersonSummaryResponse:
+        return cls(
+            person_id=ps.person_id,
+            total_paid=float(ps.total_paid),
+            total_share=float(ps.total_share),
+        )
 
 
 class CategoryBreakdownResponse(BaseModel):
@@ -85,8 +112,10 @@ class PeriodStatusResponse(BaseModel):
 
 
 class ReconciliationResponse(BaseModel):
-    year: int
-    month: int
+    start_date: datetime.date
+    end_date: datetime.date
+    year: int | None
+    month: int | None
     total_shared_spending: float
     total_shared_refunds: float
     net_shared_spending: float
@@ -97,32 +126,26 @@ class ReconciliationResponse(BaseModel):
     transactions: list[TransactionResponse]
     upload_statuses: list[UploadStatusResponse]
     unmapped_categories: list[str]
-    is_finalized: bool
+    is_finalized: bool | None
     finalized_at: datetime.datetime | None
 
     @classmethod
     def from_result(cls, result: GetReconciliationResult) -> ReconciliationResponse:
         summary = result.summary
+
         return cls(
-            year=summary.year,
-            month=summary.month,
+            start_date=summary.start_date,
+            end_date=summary.end_date,
+            year=result.year,
+            month=result.month,
             total_shared_spending=float(summary.total_shared_spending),
             total_shared_refunds=float(summary.total_shared_refunds),
             net_shared_spending=float(summary.net_shared_spending),
             person_summaries=[
-                PersonSummaryResponse(
-                    person_id=ps.person_id,
-                    total_paid=float(ps.total_paid),
-                    total_share=float(ps.total_share),
-                )
-                for ps in summary.person_summaries
+                PersonSummaryResponse.from_domain(ps) for ps in summary.person_summaries
             ],
             settlement=(
-                SettlementResponse(
-                    amount=float(summary.settlement.amount),
-                    from_person_id=summary.settlement.from_person_id,
-                    to_person_id=summary.settlement.to_person_id,
-                )
+                SettlementResponse.from_domain(summary.settlement)
                 if summary.settlement
                 else None
             ),
@@ -168,13 +191,7 @@ class ReconciliationResponse(BaseModel):
                 for tx in result.transactions
             ],
             upload_statuses=[
-                UploadStatusResponse(
-                    person_id=us.person_id,
-                    person_name=us.person_name,
-                    has_uploaded=us.has_uploaded,
-                    upload_count=us.upload_count,
-                )
-                for us in result.upload_statuses
+                UploadStatusResponse.from_domain(us) for us in result.upload_statuses
             ],
             unmapped_categories=result.unmapped_categories,
             is_finalized=result.is_finalized,

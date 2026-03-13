@@ -50,8 +50,8 @@ async def test_happy_path_current_month() -> None:
 
     result = await GetDashboardUseCase().execute(_make_command(), uow)
 
-    assert result.current_month.year == 2026
-    assert result.current_month.month == 3
+    assert result.current_month.start_date == date(2026, 3, 1)
+    assert result.current_month.end_date == date(2026, 3, 31)
     assert result.current_month.total_shared_spending == Decimal("100.00")
     assert result.current_month.transaction_count == 1
     assert all(s.has_uploaded for s in result.upload_statuses)

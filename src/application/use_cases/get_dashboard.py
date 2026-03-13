@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -9,6 +9,7 @@ from src.application.use_cases._shared.command_validators import (
     month_range,
     positive_int,
 )
+from src.application.use_cases._shared.date_math import month_bounds
 from src.application.use_cases._shared.transactions import find_all_unmapped_categories
 from src.application.use_cases._shared.upload_status import (
     UploadStatus,
@@ -68,12 +69,18 @@ def _reconcile_all_months(
     category_groups: list[CategoryGroup],
     year: int,
 ) -> dict[int, ReconciliationSummary]:
-    return {
-        month: reconcile(
-            txs, persons, category_mappings, category_groups, year=year, month=month
+    results: dict[int, ReconciliationSummary] = {}
+    for month, txs in by_month.items():
+        start, end = month_bounds(year, month)
+        results[month] = reconcile(
+            txs,
+            persons,
+            category_mappings,
+            category_groups,
+            start_date=start,
+            end_date=end,
         )
-        for month, txs in by_month.items()
-    }
+    return results
 
 
 def _build_month_history(
@@ -117,6 +124,7 @@ class GetDashboardUseCase:
             month_summaries = _reconcile_all_months(
                 by_month, persons, category_mappings, category_groups, command.year
             )
+            start, end = month_bounds(command.year, command.month)
             current_month = month_summaries.get(
                 command.month,
                 reconcile(
@@ -124,8 +132,8 @@ class GetDashboardUseCase:
                     persons,
                     category_mappings,
                     category_groups,
-                    year=command.year,
-                    month=command.month,
+                    start_date=start,
+                    end_date=end,
                 ),
             )
 
@@ -135,8 +143,8 @@ class GetDashboardUseCase:
                 persons,
                 category_mappings,
                 category_groups,
-                year=command.year,
-                month=command.month,
+                start_date=date(command.year, 1, 1),
+                end_date=end,
             )
 
             uploads = await uow.uploads.get_by_person_ids_with_transactions_in_period(

@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 import uuid
 
@@ -33,7 +34,14 @@ def test_equal_split_both_paid_equally() -> None:
         ),
     ]
 
-    result = reconcile(txs, [alice, bob], [], [])
+    result = reconcile(
+        txs,
+        [alice, bob],
+        [],
+        [],
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+    )
 
     assert result.transaction_count == 2
     assert result.total_shared_spending == Decimal("200.00")
@@ -56,7 +64,14 @@ def test_one_person_paid_everything() -> None:
         ),
     ]
 
-    result = reconcile(txs, [alice, bob], [], [])
+    result = reconcile(
+        txs,
+        [alice, bob],
+        [],
+        [],
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+    )
 
     assert result.settlement is not None
     assert result.settlement.amount == Decimal("80.00")
@@ -74,7 +89,14 @@ def test_70_30_split() -> None:
         ),
     ]
 
-    result = reconcile(txs, [alice, bob], [], [])
+    result = reconcile(
+        txs,
+        [alice, bob],
+        [],
+        [],
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+    )
 
     assert result.settlement is not None
     # Alice paid 100, her share is 70. Bob's share is 30.
@@ -99,7 +121,14 @@ def test_mixed_splits() -> None:
         ),
     ]
 
-    result = reconcile(txs, [alice, bob], [], [])
+    result = reconcile(
+        txs,
+        [alice, bob],
+        [],
+        [],
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+    )
 
     assert result.settlement is not None
     # Alice paid 100, share = 50 + 60 = 110 → net_owed = 10
@@ -124,7 +153,14 @@ def test_refund_reduces_settlement() -> None:
         ),
     ]
 
-    result = reconcile(txs, [alice, bob], [], [])
+    result = reconcile(
+        txs,
+        [alice, bob],
+        [],
+        [],
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+    )
 
     assert result.total_shared_spending == Decimal("100.00")
     assert result.total_shared_refunds == Decimal("20.00")
@@ -147,7 +183,14 @@ def test_100_0_split() -> None:
         ),
     ]
 
-    result = reconcile(txs, [alice, bob], [], [])
+    result = reconcile(
+        txs,
+        [alice, bob],
+        [],
+        [],
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+    )
 
     assert result.settlement is not None
     # Alice paid 100, her share is 100, Bob's share is 0.
@@ -164,7 +207,14 @@ def test_0_100_split() -> None:
         ),
     ]
 
-    result = reconcile(txs, [alice, bob], [], [])
+    result = reconcile(
+        txs,
+        [alice, bob],
+        [],
+        [],
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+    )
 
     assert result.settlement is not None
     # Alice paid 100, her share is 0, Bob's share is 100.
@@ -177,7 +227,14 @@ def test_0_100_split() -> None:
 def test_empty_transactions() -> None:
     alice, bob = _alice_bob()
 
-    result = reconcile([], [alice, bob], [], [])
+    result = reconcile(
+        [],
+        [alice, bob],
+        [],
+        [],
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+    )
 
     assert result.transaction_count == 0
     assert result.total_shared_spending == Decimal(0)
@@ -198,7 +255,14 @@ def test_single_transaction() -> None:
         ),
     ]
 
-    result = reconcile(txs, [alice, bob], [], [])
+    result = reconcile(
+        txs,
+        [alice, bob],
+        [],
+        [],
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+    )
 
     assert result.transaction_count == 1
     assert result.total_shared_spending == Decimal("50.00")
@@ -228,7 +292,14 @@ def test_category_group_aggregation() -> None:
         ),
     ]
 
-    result = reconcile(txs, [alice, bob], [mapping1, mapping2], [group])
+    result = reconcile(
+        txs,
+        [alice, bob],
+        [mapping1, mapping2],
+        [group],
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+    )
 
     assert len(result.category_group_breakdowns) == 1
     breakdown = result.category_group_breakdowns[0]
@@ -252,7 +323,14 @@ def test_unmapped_category_becomes_uncategorized() -> None:
         ),
     ]
 
-    result = reconcile(txs, [alice, bob], [], [])
+    result = reconcile(
+        txs,
+        [alice, bob],
+        [],
+        [],
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+    )
 
     assert len(result.category_group_breakdowns) == 1
     breakdown = result.category_group_breakdowns[0]
@@ -282,7 +360,14 @@ def test_nullable_group_id_mapping_becomes_uncategorized() -> None:
         ),
     ]
 
-    result = reconcile(txs, [alice, bob], [mapped, unmapped], [group])
+    result = reconcile(
+        txs,
+        [alice, bob],
+        [mapped, unmapped],
+        [group],
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+    )
 
     assert len(result.category_group_breakdowns) == 2
     food = next(
@@ -307,7 +392,14 @@ def test_rounding_fractional_cents() -> None:
         ),
     ]
 
-    result = reconcile(txs, [alice, bob], [], [])
+    result = reconcile(
+        txs,
+        [alice, bob],
+        [],
+        [],
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+    )
 
     alice_summary = next(s for s in result.person_summaries if s.person_id == alice.id)
     bob_summary = next(s for s in result.person_summaries if s.person_id == bob.id)
@@ -330,7 +422,14 @@ def test_all_refunds_no_expenses() -> None:
         ),
     ]
 
-    result = reconcile(txs, [alice, bob], [], [])
+    result = reconcile(
+        txs,
+        [alice, bob],
+        [],
+        [],
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+    )
 
     assert result.total_shared_spending == Decimal(0)
     assert result.total_shared_refunds == Decimal("80.00")
@@ -364,7 +463,14 @@ def test_personal_transactions_excluded() -> None:
         ),
     ]
 
-    result = reconcile(txs, [alice, bob], [], [])
+    result = reconcile(
+        txs,
+        [alice, bob],
+        [],
+        [],
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+    )
 
     assert result.transaction_count == 1
     assert result.total_shared_spending == Decimal("100.00")

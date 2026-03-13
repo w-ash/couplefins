@@ -29,6 +29,8 @@ async def test_full_reconciliation_both_uploaded(client: AsyncClient) -> None:
     data = response.json()
     assert data["year"] == 2026
     assert data["month"] == 1
+    assert data["start_date"] == "2026-01-01"
+    assert data["end_date"] == "2026-01-31"
     assert data["transaction_count"] == 3
     assert data["total_shared_spending"] == pytest.approx(200.0)
     assert data["settlement"] is not None
@@ -86,3 +88,50 @@ async def test_settlement_math(client: AsyncClient) -> None:
     # Bob (persons[1]) owes Alice (persons[0])
     assert data["settlement"]["from_person_id"] == persons[1]["id"]
     assert data["settlement"]["to_person_id"] == persons[0]["id"]
+
+
+async def test_date_range_query(client: AsyncClient) -> None:
+    persons = await setup_couple(client)
+    alice_id = persons[0]["id"]
+
+    csv_jan = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        '2026-01-15,Test,Dining Out,Chase,TEST,,"-100.00",shared\n'
+    )
+    csv_feb = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        '2026-02-10,Test2,Dining Out,Chase,TEST2,,"-60.00",shared\n'
+    )
+    await upload_csv(client, alice_id, csv_jan)
+    await upload_csv(client, alice_id, csv_feb)
+
+    response = await client.get(
+        "/api/v1/reconciliation?start_date=2026-01-01&end_date=2026-02-28"
+    )
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["start_date"] == "2026-01-01"
+    assert data["end_date"] == "2026-02-28"
+    assert data["transaction_count"] == 2
+    assert data["total_shared_spending"] == pytest.approx(160.0)
+    # Multi-month range → year/month are None, is_finalized is None
+    assert data["year"] is None
+    assert data["month"] is None
+    assert data["is_finalized"] is None
+
+
+async def test_mixed_params_returns_422(client: AsyncClient) -> None:
+    await setup_couple(client)
+
+    response = await client.get(
+        "/api/v1/reconciliation?year=2026&month=1&start_date=2026-01-01&end_date=2026-01-31"
+    )
+    assert response.status_code == 422
+
+
+async def test_partial_range_returns_422(client: AsyncClient) -> None:
+    await setup_couple(client)
+
+    response = await client.get("/api/v1/reconciliation?start_date=2026-01-01")
+    assert response.status_code == 422
