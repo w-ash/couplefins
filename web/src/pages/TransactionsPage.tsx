@@ -5,16 +5,21 @@ import {
   ChevronDown,
   ChevronRight,
   Loader2,
+  Pencil,
   Upload,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { AdjustmentExportSection } from "@/components/AdjustmentExportSection";
+import { Button } from "@/components/Button";
 import { FinalizationBanner } from "@/components/FinalizationBanner";
 import { MonthSelector } from "@/components/MonthSelector";
+import { BulkSplitEditor } from "@/components/SplitEditor";
+import { TransactionEditor } from "@/components/TransactionEditor";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { DASHBOARD_QUERY_KEY } from "@/lib/dashboard";
 import {
+  computeShares,
   formatCurrency,
   formatDate,
   formatSplit,
@@ -31,6 +36,8 @@ import {
   finalizePeriod,
   unfinalizePeriod,
 } from "@/lib/reconciliation";
+import type { TransactionUpdateFields } from "@/lib/transactions";
+import { updateTransaction, updateTransactionSplits } from "@/lib/transactions";
 import {
   fetchPersons,
   getPersonAccentColor,
@@ -239,12 +246,26 @@ function TransactionTable({
   personNames,
   personIndexMap,
   categoryGroups,
+  isFinalized,
+  onSplitUpdate,
+  onTransactionUpdate,
+  isSaving,
 }: {
   transactions: ReconciliationTransaction[];
   personNames: Map<string, string>;
   personIndexMap: Map<string, number>;
   categoryGroups: Map<string, string>;
+  isFinalized: boolean;
+  onSplitUpdate: (
+    splits: Array<{ transaction_id: string; payer_percentage: number }>,
+  ) => void;
+  onTransactionUpdate: (id: string, fields: TransactionUpdateFields) => void;
+  isSaving: boolean;
 }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
   const personEntries = useMemo(
     () => [...personNames].map(([id, name]) => ({ id, name })),
     [personNames],
@@ -259,15 +280,98 @@ function TransactionTable({
     [transactions],
   );
 
+  const colCount = 7 + personEntries.length + (bulkMode ? 1 : 0);
+
+  const toggleSelected = useCallback((id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleAll = useCallback(() => {
+    setSelected((prev) =>
+      prev.size === sorted.length
+        ? new Set()
+        : new Set(sorted.map((tx) => tx.id)),
+    );
+  }, [sorted]);
+
+  const exitBulkMode = useCallback(() => {
+    setBulkMode(false);
+    setSelected(new Set());
+  }, []);
+
+  const handleBulkApply = useCallback(
+    (percentage: number) => {
+      onSplitUpdate(
+        [...selected].map((id) => ({
+          transaction_id: id,
+          payer_percentage: percentage,
+        })),
+      );
+      exitBulkMode();
+    },
+    [selected, onSplitUpdate, exitBulkMode],
+  );
+
+  const otherNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    const entries = [...personNames];
+    for (const [id] of entries) {
+      const other = entries.find(([otherId]) => otherId !== id);
+      map.set(id, other?.[1] ?? "Other");
+    }
+    return map;
+  }, [personNames]);
+
   if (transactions.length === 0) return null;
 
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-      <h2 className="mb-4 font-medium text-lg text-foreground">Transactions</h2>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="font-medium text-lg text-foreground">Transactions</h2>
+        {!isFinalized && !bulkMode && (
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Pencil className="size-3.5" />}
+            onClick={() => setBulkMode(true)}
+          >
+            Edit Splits
+          </Button>
+        )}
+      </div>
+
+      {bulkMode && (
+        <div className="mb-4">
+          <BulkSplitEditor
+            selectedCount={selected.size}
+            saving={isSaving}
+            onApply={handleBulkApply}
+            onCancel={exitBulkMode}
+          />
+        </div>
+      )}
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border text-left text-muted-foreground">
+              {bulkMode && (
+                <th className="pb-2 pr-2 w-8">
+                  <input
+                    type="checkbox"
+                    checked={
+                      selected.size === sorted.length && sorted.length > 0
+                    }
+                    onChange={toggleAll}
+                    className="accent-primary"
+                  />
+                </th>
+              )}
               <th className="pb-2 pr-4 font-medium">Date</th>
               <th className="pb-2 pr-4 font-medium">Merchant</th>
               <th className="pb-2 pr-4 font-medium">Category</th>
@@ -285,62 +389,158 @@ function TransactionTable({
           <tbody>
             {sorted.map((tx) => {
               const payerPct = tx.payer_percentage ?? 50;
-              const absAmount = Math.abs(tx.amount);
-              const payerShare = +((absAmount * payerPct) / 100).toFixed(2);
-              const otherShare = +(
-                (absAmount * (100 - payerPct)) /
-                100
-              ).toFixed(2);
+              const { payerShare, otherShare } = computeShares(
+                Math.abs(tx.amount),
+                payerPct,
+              );
               const payerName =
                 personNames.get(tx.payer_person_id) ?? "Unknown";
               const payerColor = getPersonAccentColor(
                 personIndexMap.get(tx.payer_person_id) ?? -1,
               );
+              const isExpanded = expandedId === tx.id;
+              const canEdit = !isFinalized && !bulkMode;
 
               return (
-                <tr key={tx.id} className="border-b border-border-muted">
-                  <td className="py-2 pr-4 text-muted-foreground tabular-nums">
-                    {formatDate(tx.date)}
-                  </td>
-                  <td className="py-2 pr-4 text-foreground">{tx.merchant}</td>
-                  <td className="py-2 pr-4 text-muted-foreground">
-                    {tx.category}
-                  </td>
-                  <td className="py-2 pr-4 text-muted-foreground">
-                    {categoryGroups.get(tx.category) ?? "Uncategorized"}
-                  </td>
-                  <td className="py-2 pr-4">
-                    <span
-                      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${payerColor}`}
-                    >
-                      {payerName}
-                    </span>
-                  </td>
-                  <td
-                    className={`py-2 pr-4 text-right tabular-nums ${tx.amount < 0 ? "text-negative" : "text-positive"}`}
-                  >
-                    {formatCurrency(tx.amount)}
-                  </td>
-                  <td className="py-2 pr-4 text-right text-muted-foreground tabular-nums">
-                    {formatSplit(tx.payer_percentage)}
-                  </td>
-                  {personEntries.map((p) => (
-                    <td
-                      key={p.id}
-                      className="py-2 text-right text-muted-foreground tabular-nums"
-                    >
-                      {formatCurrency(
-                        p.id === tx.payer_person_id ? payerShare : otherShare,
-                      )}
-                    </td>
-                  ))}
-                </tr>
+                <TransactionRow
+                  key={tx.id}
+                  tx={tx}
+                  payerShare={payerShare}
+                  otherShare={otherShare}
+                  payerName={payerName}
+                  payerColor={payerColor}
+                  otherName={otherNameMap.get(tx.payer_person_id) ?? "Other"}
+                  categoryGroup={
+                    categoryGroups.get(tx.category) ?? "Uncategorized"
+                  }
+                  personEntries={personEntries}
+                  isExpanded={isExpanded}
+                  canEdit={canEdit}
+                  bulkMode={bulkMode}
+                  isSelected={selected.has(tx.id)}
+                  isSaving={isSaving}
+                  colCount={colCount}
+                  onToggleExpand={() =>
+                    setExpandedId(isExpanded ? null : tx.id)
+                  }
+                  onToggleSelect={() => toggleSelected(tx.id)}
+                  onTransactionUpdate={(fields) =>
+                    onTransactionUpdate(tx.id, fields)
+                  }
+                  onCancel={() => setExpandedId(null)}
+                />
               );
             })}
           </tbody>
         </table>
       </div>
     </div>
+  );
+}
+
+function TransactionRow({
+  tx,
+  payerShare,
+  otherShare,
+  payerName,
+  payerColor,
+  otherName,
+  categoryGroup,
+  personEntries,
+  isExpanded,
+  canEdit,
+  bulkMode,
+  isSelected,
+  isSaving,
+  colCount,
+  onToggleExpand,
+  onToggleSelect,
+  onTransactionUpdate,
+  onCancel,
+}: {
+  tx: ReconciliationTransaction;
+  payerShare: number;
+  otherShare: number;
+  payerName: string;
+  payerColor: string;
+  otherName: string;
+  categoryGroup: string;
+  personEntries: Array<{ id: string; name: string }>;
+  isExpanded: boolean;
+  canEdit: boolean;
+  bulkMode: boolean;
+  isSelected: boolean;
+  isSaving: boolean;
+  colCount: number;
+  onToggleExpand: () => void;
+  onToggleSelect: () => void;
+  onTransactionUpdate: (fields: TransactionUpdateFields) => void;
+  onCancel: () => void;
+}) {
+  return (
+    <>
+      <tr
+        className={`border-b border-border-muted ${canEdit ? "cursor-pointer hover:bg-muted/50" : ""} ${isExpanded ? "bg-muted/30" : ""}`}
+        onClick={canEdit ? onToggleExpand : undefined}
+      >
+        {bulkMode && (
+          <td className="py-2 pr-2">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={onToggleSelect}
+              onClick={(e) => e.stopPropagation()}
+              className="accent-primary"
+            />
+          </td>
+        )}
+        <td className="py-2 pr-4 text-muted-foreground tabular-nums">
+          {formatDate(tx.date)}
+        </td>
+        <td className="py-2 pr-4 text-foreground">{tx.merchant}</td>
+        <td className="py-2 pr-4 text-muted-foreground">{tx.category}</td>
+        <td className="py-2 pr-4 text-muted-foreground">{categoryGroup}</td>
+        <td className="py-2 pr-4">
+          <span
+            className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${payerColor}`}
+          >
+            {payerName}
+          </span>
+        </td>
+        <td
+          className={`py-2 pr-4 text-right tabular-nums ${tx.amount < 0 ? "text-negative" : "text-positive"}`}
+        >
+          {formatCurrency(tx.amount)}
+        </td>
+        <td className="py-2 pr-4 text-right text-muted-foreground tabular-nums">
+          {formatSplit(tx.payer_percentage)}
+        </td>
+        {personEntries.map((p) => (
+          <td
+            key={p.id}
+            className="py-2 text-right text-muted-foreground tabular-nums"
+          >
+            {formatCurrency(
+              p.id === tx.payer_person_id ? payerShare : otherShare,
+            )}
+          </td>
+        ))}
+      </tr>
+      {isExpanded && (
+        <tr className="border-b border-border-muted bg-muted/30">
+          <td colSpan={colCount} className="px-4">
+            <TransactionEditor
+              tx={tx}
+              payerName={payerName}
+              otherName={otherName}
+              saving={isSaving}
+              onSave={onTransactionUpdate}
+              onCancel={onCancel}
+            />
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
@@ -353,26 +553,46 @@ export function TransactionsPage() {
     queryFn: fetchPersons,
   });
 
-  const reconciliationQueryKey = ["reconciliation", year, month];
+  const reconciliationQueryKey = useMemo(
+    () => ["reconciliation", year, month],
+    [year, month],
+  );
   const { data, isLoading, error } = useQuery({
     queryKey: reconciliationQueryKey,
     queryFn: () => fetchReconciliation(year, month),
   });
 
+  const invalidateReconciliation = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: reconciliationQueryKey });
+    queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY });
+  }, [queryClient, reconciliationQueryKey]);
+
   const finalizeMutation = useMutation({
     mutationFn: () => finalizePeriod(year, month),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: reconciliationQueryKey });
-      queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY });
-    },
+    onSuccess: invalidateReconciliation,
   });
 
   const unfinalizeMutation = useMutation({
     mutationFn: () => unfinalizePeriod(year, month),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: reconciliationQueryKey });
-      queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY });
-    },
+    onSuccess: invalidateReconciliation,
+  });
+
+  const splitMutation = useMutation({
+    mutationFn: (
+      splits: Array<{ transaction_id: string; payer_percentage: number }>,
+    ) => updateTransactionSplits(splits),
+    onSuccess: invalidateReconciliation,
+  });
+
+  const editMutation = useMutation({
+    mutationFn: ({
+      id,
+      fields,
+    }: {
+      id: string;
+      fields: TransactionUpdateFields;
+    }) => updateTransaction(id, fields),
+    onSuccess: invalidateReconciliation,
   });
 
   const personNames = useMemo(
@@ -470,6 +690,12 @@ export function TransactionsPage() {
                 personNames={personNames}
                 personIndexMap={personIndexMap}
                 categoryGroups={categoryGroupLookup}
+                isFinalized={data.is_finalized}
+                onSplitUpdate={(splits) => splitMutation.mutate(splits)}
+                onTransactionUpdate={(id, fields) =>
+                  editMutation.mutate({ id, fields })
+                }
+                isSaving={splitMutation.isPending || editMutation.isPending}
               />
               <UnmappedCategoriesWarning
                 categories={data.unmapped_categories}

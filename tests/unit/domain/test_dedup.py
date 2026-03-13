@@ -161,3 +161,35 @@ def test_classify_mixed_batch() -> None:
 
     statuses = {c.status for c in result}
     assert statuses == {"unchanged", "new"}
+
+
+def test_natural_key_uses_original_date_when_set() -> None:
+    from datetime import date
+
+    original = date(2026, 1, 10)
+    edited = date(2026, 2, 15)
+    tx = make_transaction(date=edited, original_date=original)
+    key = natural_key(tx)
+
+    assert key.date == original
+    assert key.date != edited
+
+
+def test_natural_key_uses_original_amount_when_set() -> None:
+    original = Decimal("-42.00")
+    edited = Decimal("-99.00")
+    tx = make_transaction(amount=edited, original_amount=original)
+    key = natural_key(tx)
+
+    assert key.amount == original
+    assert key.amount != edited
+
+
+def test_natural_key_falls_back_to_current_when_no_originals() -> None:
+    tx = make_transaction()
+    key = natural_key(tx)
+
+    assert key.date == tx.date
+    assert key.amount == tx.amount
+    assert tx.original_date is None
+    assert tx.original_amount is None

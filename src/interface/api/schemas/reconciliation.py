@@ -1,4 +1,4 @@
-from datetime import date, datetime
+import datetime
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -44,13 +44,17 @@ class CategoryGroupBreakdownResponse(BaseModel):
 
 class TransactionResponse(BaseModel):
     id: UUID
-    date: date
+    date: datetime.date
     merchant: str
     category: str
     account: str
     amount: float
+    notes: str
+    tags: list[str]
     payer_person_id: UUID
     payer_percentage: int | None
+    original_date: datetime.date | None
+    original_amount: float | None
 
 
 class FinalizePeriodRequest(BaseModel):
@@ -66,7 +70,7 @@ class UnfinalizePeriodRequest(BaseModel):
 
 class PeriodStatusResponse(BaseModel):
     is_finalized: bool
-    finalized_at: datetime | None
+    finalized_at: datetime.datetime | None
     notes: str
 
     @classmethod
@@ -94,7 +98,7 @@ class ReconciliationResponse(BaseModel):
     upload_statuses: list[UploadStatusResponse]
     unmapped_categories: list[str]
     is_finalized: bool
-    finalized_at: datetime | None
+    finalized_at: datetime.datetime | None
 
     @classmethod
     def from_result(cls, result: GetReconciliationResult) -> ReconciliationResponse:
@@ -150,8 +154,16 @@ class ReconciliationResponse(BaseModel):
                     category=tx.category,
                     account=tx.account,
                     amount=float(tx.amount),
+                    notes=tx.notes,
+                    tags=list(tx.tags),
                     payer_person_id=tx.payer_person_id,
                     payer_percentage=tx.payer_percentage,
+                    original_date=tx.original_date,
+                    original_amount=(
+                        float(tx.original_amount)
+                        if tx.original_amount is not None
+                        else None
+                    ),
                 )
                 for tx in result.transactions
             ],

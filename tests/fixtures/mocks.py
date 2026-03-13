@@ -13,6 +13,9 @@ from src.domain.repositories.person_repository import PersonRepositoryProtocol
 from src.domain.repositories.reconciliation_period_repository import (
     ReconciliationPeriodRepositoryProtocol,
 )
+from src.domain.repositories.transaction_edit_repository import (
+    TransactionEditRepositoryProtocol,
+)
 from src.domain.repositories.transaction_repository import TransactionRepositoryProtocol
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 from src.domain.repositories.upload_repository import UploadRepositoryProtocol
@@ -22,6 +25,7 @@ def make_mock_uow() -> AsyncMock:
     uow = AsyncMock(spec=UnitOfWorkProtocol)
     uow.persons = AsyncMock(spec=PersonRepositoryProtocol)
     uow.transactions = AsyncMock(spec=TransactionRepositoryProtocol)
+    uow.transaction_edits = AsyncMock(spec=TransactionEditRepositoryProtocol)
     uow.uploads = AsyncMock(spec=UploadRepositoryProtocol)
     uow.category_groups = AsyncMock(spec=CategoryGroupRepositoryProtocol)
     uow.category_mappings = AsyncMock(spec=CategoryMappingRepositoryProtocol)

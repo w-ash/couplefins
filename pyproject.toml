@@ -35,6 +35,7 @@ line-length = 88
 target-version = "py314"
 preview = true
 output-format = "full"
+exclude = ["docs/dev-setup-guide"]
 
 [tool.ruff.lint]
 select = [

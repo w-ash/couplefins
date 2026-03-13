@@ -6,8 +6,6 @@ Ideas and features without version assignment. Move to a version file when ready
 - Automatic CSV format detection (support non-Monarch CSVs)
 - Drag-and-drop upload with file validation preview
 - Duplicate transaction detection across uploads
-- Transaction editing after upload (fix miscategorized items)
-- Manual split entry UI (enter split percentages directly instead of relying on Monarch tags)
 
 
 ## Reconciliation

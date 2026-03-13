@@ -17,6 +17,9 @@ from src.infrastructure.persistence.repositories.person_repository import (
 from src.infrastructure.persistence.repositories.reconciliation_period_repository import (
     ReconciliationPeriodRepository,
 )
+from src.infrastructure.persistence.repositories.transaction_edit_repository import (
+    TransactionEditRepository,
+)
 from src.infrastructure.persistence.repositories.transaction_repository import (
     TransactionRepository,
 )
@@ -30,6 +33,7 @@ class UnitOfWork:
         self._session = session
         self.persons = PersonRepository(session)
         self.transactions = TransactionRepository(session)
+        self.transaction_edits = TransactionEditRepository(session)
         self.uploads = UploadRepository(session)
         self.category_groups = CategoryGroupRepository(session)
         self.category_mappings = CategoryMappingRepository(session)

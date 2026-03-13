@@ -8,6 +8,7 @@ from src.domain.entities.category_mapping import CategoryMapping
 from src.domain.entities.person import Person
 from src.domain.entities.reconciliation_period import ReconciliationPeriod
 from src.domain.entities.transaction import Transaction
+from src.domain.entities.transaction_edit import TransactionEdit
 from src.domain.entities.upload import Upload
 
 
@@ -37,6 +38,8 @@ def make_transaction(
     tags: tuple[str, ...] = ("shared",),
     payer_person_id: uuid.UUID | None = None,
     payer_percentage: int | None = 50,
+    original_date: date | None = None,
+    original_amount: Decimal | None = None,
 ) -> Transaction:
     return Transaction(
         id=id or uuid.uuid4(),
@@ -52,6 +55,8 @@ def make_transaction(
         tags=tags,
         payer_person_id=payer_person_id or uuid.uuid4(),
         payer_percentage=payer_percentage,
+        original_date=original_date,
+        original_amount=original_amount,
     )
 
 
@@ -125,4 +130,23 @@ def make_category_group_budget(
         group_id=group_id or uuid.uuid4(),
         monthly_amount=monthly_amount,
         effective_from=effective_from,
+    )
+
+
+def make_transaction_edit(
+    *,
+    id: uuid.UUID | None = None,
+    transaction_id: uuid.UUID | None = None,
+    field_name: str = "category",
+    old_value: str = "Dining Out",
+    new_value: str = "Fast Food",
+    edited_at: datetime | None = None,
+) -> TransactionEdit:
+    return TransactionEdit(
+        id=id or uuid.uuid4(),
+        transaction_id=transaction_id or uuid.uuid4(),
+        field_name=field_name,
+        old_value=old_value,
+        new_value=new_value,
+        edited_at=edited_at or datetime.now(UTC),
     )

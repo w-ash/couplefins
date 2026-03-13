@@ -39,3 +39,5 @@ class TransactionModel(Base):
         String, ForeignKey("persons.id"), nullable=False
     )
     payer_percentage: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    original_date: Mapped[str | None] = mapped_column(String, nullable=True)
+    original_amount: Mapped[str | None] = mapped_column(String, nullable=True)

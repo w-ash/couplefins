@@ -13,6 +13,9 @@ from src.domain.repositories.person_repository import PersonRepositoryProtocol
 from src.domain.repositories.reconciliation_period_repository import (
     ReconciliationPeriodRepositoryProtocol,
 )
+from src.domain.repositories.transaction_edit_repository import (
+    TransactionEditRepositoryProtocol,
+)
 from src.domain.repositories.transaction_repository import TransactionRepositoryProtocol
 from src.domain.repositories.upload_repository import UploadRepositoryProtocol
 
@@ -23,6 +26,9 @@ class UnitOfWorkProtocol(Protocol):
 
     @property
     def transactions(self) -> TransactionRepositoryProtocol: ...
+
+    @property
+    def transaction_edits(self) -> TransactionEditRepositoryProtocol: ...
 
     @property
     def uploads(self) -> UploadRepositoryProtocol: ...

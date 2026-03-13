@@ -32,26 +32,44 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             tags=tuple(json.loads(model.tags_json)),
             payer_person_id=UUID(model.payer_person_id),
             payer_percentage=model.payer_percentage,
+            original_date=(
+                date.fromisoformat(model.original_date) if model.original_date else None
+            ),
+            original_amount=(
+                Decimal(model.original_amount) if model.original_amount else None
+            ),
         )
 
     @staticmethod
+    def _to_column_values(entity: Transaction) -> dict[str, object]:
+        return {
+            "id": str(entity.id),
+            "upload_id": str(entity.upload_id),
+            "date": entity.date.isoformat(),
+            "merchant": entity.merchant,
+            "category": entity.category,
+            "account": entity.account,
+            "original_statement": entity.original_statement,
+            "occurrence": entity.occurrence,
+            "notes": entity.notes,
+            "amount": str(entity.amount),
+            "tags_json": json.dumps(list(entity.tags)),
+            "is_shared": entity.is_shared,
+            "payer_person_id": str(entity.payer_person_id),
+            "payer_percentage": entity.payer_percentage,
+            "original_date": (
+                entity.original_date.isoformat() if entity.original_date else None
+            ),
+            "original_amount": (
+                str(entity.original_amount)
+                if entity.original_amount is not None
+                else None
+            ),
+        }
+
+    @staticmethod
     def _to_model(entity: Transaction) -> TransactionModel:
-        return TransactionModel(
-            id=str(entity.id),
-            upload_id=str(entity.upload_id),
-            date=entity.date.isoformat(),
-            merchant=entity.merchant,
-            category=entity.category,
-            account=entity.account,
-            original_statement=entity.original_statement,
-            occurrence=entity.occurrence,
-            notes=entity.notes,
-            amount=str(entity.amount),
-            tags_json=json.dumps(list(entity.tags)),
-            is_shared=entity.is_shared,
-            payer_person_id=str(entity.payer_person_id),
-            payer_percentage=entity.payer_percentage,
-        )
+        return TransactionModel(**TransactionRepository._to_column_values(entity))
 
     async def get_by_upload_id(self, upload_id: UUID) -> list[Transaction]:
         stmt = select(TransactionModel).where(
@@ -90,19 +108,36 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         return [self._to_domain(row) for row in result.scalars().all()]
 
     async def update_mutable_fields(self, entity: Transaction) -> Transaction:
+        values = self._to_column_values(entity)
+        entity_id = values.pop("id")
+        for k in (
+            "account",
+            "original_statement",
+            "occurrence",
+            "date",
+            "amount",
+            "original_date",
+            "original_amount",
+        ):
+            del values[k]
         stmt = (
             update(TransactionModel)
-            .where(TransactionModel.id == str(entity.id))
-            .values(
-                merchant=entity.merchant,
-                category=entity.category,
-                notes=entity.notes,
-                tags_json=json.dumps(list(entity.tags)),
-                is_shared=entity.is_shared,
-                payer_person_id=str(entity.payer_person_id),
-                payer_percentage=entity.payer_percentage,
-                upload_id=str(entity.upload_id),
-            )
+            .where(TransactionModel.id == entity_id)
+            .values(**values)
+        )
+        await self._session.execute(stmt)
+        await self._session.flush()
+        return entity
+
+    async def update_all_fields(self, entity: Transaction) -> Transaction:
+        values = self._to_column_values(entity)
+        entity_id = values.pop("id")
+        for k in ("account", "original_statement", "occurrence"):
+            del values[k]
+        stmt = (
+            update(TransactionModel)
+            .where(TransactionModel.id == entity_id)
+            .values(**values)
         )
         await self._session.execute(stmt)
         await self._session.flush()

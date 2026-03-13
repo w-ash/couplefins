@@ -42,8 +42,12 @@ export interface ReconciliationTransaction {
   category: string;
   account: string;
   amount: number;
+  notes: string;
+  tags: string[];
   payer_person_id: string;
   payer_percentage: number | null;
+  original_date: string | null;
+  original_amount: number | null;
 }
 
 export interface ReconciliationData {

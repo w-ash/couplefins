@@ -29,6 +29,15 @@ class BaseRepository[TEntity, TModel: Base]:
         result = await self._session.get(self._model_class, str(id))
         return self._to_domain(result) if result else None
 
+    async def get_by_ids(self, ids: list[UUID]) -> list[TEntity]:
+        if not ids:
+            return []
+        stmt = select(self._model_class).where(
+            self._model_class.id.in_([str(i) for i in ids])  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownArgumentType]
+        )
+        result = await self._session.execute(stmt)
+        return [self._to_domain(row) for row in result.scalars().all()]
+
     async def get_all(self) -> list[TEntity]:
         result = await self._session.execute(select(self._model_class))
         return [self._to_domain(row) for row in result.scalars().all()]

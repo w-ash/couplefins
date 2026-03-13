@@ -46,6 +46,16 @@ export function formatSplit(payerPercentage: number | null): string {
   return `${payer}/${100 - payer}`;
 }
 
+export function computeShares(
+  absAmount: number,
+  payerPct: number,
+): { payerShare: number; otherShare: number } {
+  return {
+    payerShare: +((absAmount * payerPct) / 100).toFixed(2),
+    otherShare: +((absAmount * (100 - payerPct)) / 100).toFixed(2),
+  };
+}
+
 export function useMonthYear(): { year: number; month: number } {
   const [searchParams] = useSearchParams();
   return {

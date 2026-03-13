@@ -21,6 +21,7 @@ from src.interface.api.routes.dashboard import router as dashboard_router
 from src.interface.api.routes.health import router as health_router
 from src.interface.api.routes.persons import router as persons_router
 from src.interface.api.routes.reconciliation import router as reconciliation_router
+from src.interface.api.routes.transactions import router as transactions_router
 from src.interface.api.routes.uploads import router as uploads_router
 
 
@@ -60,6 +61,7 @@ def create_app() -> FastAPI:
     app.include_router(reconciliation_router, prefix=AppConfig.API_V1_PREFIX)
     app.include_router(dashboard_router, prefix=AppConfig.API_V1_PREFIX)
     app.include_router(budgets_router, prefix=AppConfig.API_V1_PREFIX)
+    app.include_router(transactions_router, prefix=AppConfig.API_V1_PREFIX)
 
     return app
 

@@ -22,6 +22,8 @@ class Transaction:
     tags: tuple[str, ...]
     payer_person_id: UUID
     payer_percentage: int | None
+    original_date: date | None = None
+    original_amount: Decimal | None = None
 
     def __attrs_post_init__(self) -> None:
         if self.payer_percentage is not None and not (

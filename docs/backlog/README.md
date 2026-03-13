@@ -17,26 +17,30 @@
 | v0.3.1 | Export UI (download adjustments from transactions page) | Completed (2026-03-11) | S |
 | v0.4.0 | Budget tracking (monthly + YTD, set budgets, view progress) | Completed (2026-03-12) | M |
 | v0.4.1 | Month finalization (lock months, prevent changes) | Completed (2026-03-12) | S |
+| v0.5.0 | Transaction split editing (individual + bulk) | Completed (2026-03-12) | M |
+| v0.5.1 | Transaction field editing + audit log | Completed (2026-03-12) | M |
 
 ## Infrastructure Readiness
 
-| Capability | v0.1.x | v0.2.x | v0.3.x | v0.4.x |
-|---|---|---|---|---|
-| FastAPI backend | ✅ | ✅ | ✅ | ✅ |
-| SQLite + SQLAlchemy | ✅ | ✅ | ✅ | ✅ |
-| CSV parsing | ✅ | ✅ | ✅ | ✅ |
-| React frontend | ✅ | ✅ | ✅ | ✅ |
-| Upload flow | ✅ | ✅ | ✅ | ✅ |
-| Category groups | ✅ | ✅ | ✅ | ✅ |
-| Design system (fonts, theme) | ✅ | ✅ | ✅ | ✅ |
-| Dark/light mode | ✅ | ✅ | ✅ | ✅ |
-| App shell / navigation | ✅ | ✅ | ✅ | ✅ |
-| User identity (localStorage) | ✅ | ✅ | ✅ | ✅ |
-| Reconciliation engine | — | ✅ | ✅ | ✅ |
-| Dashboard | — | ✅ | ✅ | ✅ |
-| Adjustment export (engine + UI) | — | — | ✅ | ✅ |
-| Budget tracking | — | — | — | ✅ |
-| Month finalization | — | — | — | ✅ |
+| Capability | v0.1.x | v0.2.x | v0.3.x | v0.4.x | v0.5.x |
+|---|---|---|---|---|---|
+| FastAPI backend | ✅ | ✅ | ✅ | ✅ | ✅ |
+| SQLite + SQLAlchemy | ✅ | ✅ | ✅ | ✅ | ✅ |
+| CSV parsing | ✅ | ✅ | ✅ | ✅ | ✅ |
+| React frontend | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Upload flow | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Category groups | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Design system (fonts, theme) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Dark/light mode | ✅ | ✅ | ✅ | ✅ | ✅ |
+| App shell / navigation | ✅ | ✅ | ✅ | ✅ | ✅ |
+| User identity (localStorage) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Reconciliation engine | — | ✅ | ✅ | ✅ | ✅ |
+| Dashboard | — | ✅ | ✅ | ✅ | ✅ |
+| Adjustment export (engine + UI) | — | — | ✅ | ✅ | ✅ |
+| Budget tracking | — | — | — | ✅ | ✅ |
+| Month finalization | — | — | — | ✅ | ✅ |
+| Transaction split editing | — | — | — | — | ✅ |
+| Transaction field editing + audit log | — | — | — | — | ✅ |
 
 ## Key Technical Decisions
 

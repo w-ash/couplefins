@@ -38,8 +38,8 @@ _MUTABLE_FIELDS = ("merchant", "category", "notes", "tags", "payer_percentage")
 
 def natural_key(tx: Transaction) -> TransactionNaturalKey:
     return TransactionNaturalKey(
-        date=tx.date,
-        amount=tx.amount,
+        date=tx.original_date or tx.date,
+        amount=tx.original_amount or tx.amount,
         account=tx.account,
         original_statement=tx.original_statement,
         occurrence=tx.occurrence,
