@@ -7,3 +7,4 @@ from attrs import define
 class CategoryGroup:
     id: UUID
     name: str
+    icon: str | None = None

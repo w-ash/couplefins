@@ -19,10 +19,11 @@ import {
   deleteCategoryGroup,
   fetchCategoryGroups,
   fetchUnmappedCategories,
-  renameCategoryGroup,
   UNMAPPED_CATEGORIES_QUERY_KEY,
+  updateCategoryGroup,
   useInvalidateCategories,
 } from "@/lib/categories";
+import { getCategoryGroupIcon, ICON_OPTIONS } from "@/lib/category-icons";
 
 // -- Unmapped category row --
 
@@ -67,6 +68,68 @@ function UnmappedRow({
 
 // -- Group card --
 
+function IconPicker({
+  currentIcon,
+  onSelect,
+}: {
+  currentIcon: string | null;
+  onSelect: (icon: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  const CurrentIcon = getCategoryGroupIcon(currentIcon);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(!open);
+        }}
+        aria-label="Change icon"
+        className="rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <CurrentIcon className="size-4" />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-10 mt-1 grid grid-cols-5 gap-1 rounded-lg border border-border bg-card p-2 shadow-lg">
+          {ICON_OPTIONS.map(({ name, Icon }) => (
+            <button
+              key={name}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelect(name);
+                setOpen(false);
+              }}
+              className={`rounded-md p-1.5 transition-colors ${
+                name === currentIcon
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+              aria-label={name}
+            >
+              <Icon className="size-4" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GroupCard({ group }: { group: CategoryGroup }) {
   const invalidate = useInvalidateCategories();
   const [expanded, setExpanded] = useState(false);
@@ -83,8 +146,12 @@ function GroupCard({ group }: { group: CategoryGroup }) {
     else if (!confirmDelete && dialog.open) dialog.close();
   }, [confirmDelete]);
 
-  const renameMutation = useMutation({
-    mutationFn: (name: string) => renameCategoryGroup(group.id, name),
+  const updateMutation = useMutation({
+    mutationFn: (fields: { name?: string; icon?: string | null }) =>
+      updateCategoryGroup(group.id, {
+        name: fields.name ?? group.name,
+        icon: "icon" in fields ? fields.icon : group.icon,
+      }),
     onSuccess: () => {
       setEditing(false);
       invalidate();
@@ -102,7 +169,7 @@ function GroupCard({ group }: { group: CategoryGroup }) {
   function handleSaveRename() {
     const trimmed = editName.trim();
     if (trimmed && trimmed !== group.name) {
-      renameMutation.mutate(trimmed);
+      updateMutation.mutate({ name: trimmed });
     } else {
       setEditing(false);
       setEditName(group.name);
@@ -122,6 +189,8 @@ function GroupCard({ group }: { group: CategoryGroup }) {
     setEditName(group.name);
     requestAnimationFrame(() => inputRef.current?.select());
   }
+
+  const GroupIcon = getCategoryGroupIcon(group.icon);
 
   return (
     <>
@@ -146,6 +215,7 @@ function GroupCard({ group }: { group: CategoryGroup }) {
               <ChevronDown
                 className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${expanded ? "" : "-rotate-90"}`}
               />
+              <GroupIcon className="size-4 shrink-0 text-muted-foreground" />
               <span className="truncate font-medium text-sm text-foreground">
                 {group.name}
               </span>
@@ -155,6 +225,12 @@ function GroupCard({ group }: { group: CategoryGroup }) {
             </button>
           )}
 
+          <IconPicker
+            currentIcon={group.icon}
+            onSelect={(icon) =>
+              updateMutation.mutate({ name: group.name, icon })
+            }
+          />
           <button
             type="button"
             onClick={startEditing}

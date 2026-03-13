@@ -10,6 +10,7 @@ from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 @define(frozen=True, slots=True)
 class CreateCategoryGroupCommand:
     name: str = field(validator=non_empty_string)
+    icon: str | None = None
 
 
 @define(frozen=True, slots=True)
@@ -23,7 +24,7 @@ class CreateCategoryGroupUseCase:
         self, command: CreateCategoryGroupCommand, uow: UnitOfWorkProtocol
     ) -> CreateCategoryGroupResult:
         async with uow:
-            group = CategoryGroup(id=uuid.uuid4(), name=command.name)
+            group = CategoryGroup(id=uuid.uuid4(), name=command.name, icon=command.icon)
             saved = await uow.category_groups.save(group)
             await uow.commit()
             return CreateCategoryGroupResult(group=saved)

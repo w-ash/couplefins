@@ -19,6 +19,11 @@ import {
   saveBudget,
   updateBudget,
 } from "@/lib/budgets";
+import {
+  CATEGORY_GROUPS_QUERY_KEY,
+  fetchCategoryGroups,
+} from "@/lib/categories";
+import { getCategoryGroupIcon } from "@/lib/category-icons";
 import { formatCurrency, useMonthYear } from "@/lib/format";
 
 type ViewMode = "monthly" | "ytd";
@@ -137,11 +142,13 @@ function ProgressBar({
 function BudgetGroupRow({
   status,
   viewMode,
+  icon,
   onUpdate,
   onDelete,
 }: {
   status: GroupBudgetStatus;
   viewMode: ViewMode;
+  icon: string | null;
   onUpdate: (budgetId: string, amount: number) => void;
   onDelete: (budgetId: string) => void;
 }) {
@@ -149,6 +156,7 @@ function BudgetGroupRow({
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const GroupIcon = getCategoryGroupIcon(icon);
 
   const budget =
     viewMode === "monthly" ? status.monthly_budget : status.ytd_budget;
@@ -187,6 +195,7 @@ function BudgetGroupRow({
 
         <div className="min-w-0 flex-1 space-y-1.5">
           <div className="flex items-center gap-2">
+            <GroupIcon className="size-4 shrink-0 text-muted-foreground" />
             <span className="text-sm font-medium text-foreground">
               {status.group_name}
             </span>
@@ -525,6 +534,16 @@ export function BudgetPage() {
     queryFn: () => fetchBudgetOverview(year, month),
   });
 
+  const { data: categoryGroups } = useQuery({
+    queryKey: [...CATEGORY_GROUPS_QUERY_KEY],
+    queryFn: fetchCategoryGroups,
+  });
+
+  const groupIconMap = useMemo(
+    () => new Map((categoryGroups ?? []).map((g) => [g.id, g.icon])),
+    [categoryGroups],
+  );
+
   const saveMutation = useMutation({
     mutationFn: (args: {
       group_id: string;
@@ -644,6 +663,7 @@ export function BudgetPage() {
                       key={status.group_id}
                       status={status}
                       viewMode={viewMode}
+                      icon={groupIconMap.get(status.group_id) ?? null}
                       onUpdate={(budgetId, amount) =>
                         updateMutation.mutate({ budgetId, amount })
                       }
@@ -665,6 +685,7 @@ export function BudgetPage() {
                         key={status.group_id}
                         status={status}
                         viewMode={viewMode}
+                        icon={groupIconMap.get(status.group_id) ?? null}
                         onUpdate={(budgetId, amount) =>
                           updateMutation.mutate({ budgetId, amount })
                         }

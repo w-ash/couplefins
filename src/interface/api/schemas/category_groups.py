@@ -8,10 +8,12 @@ from src.domain.entities.category_group import CategoryGroup
 
 class CreateCategoryGroupRequest(BaseModel):
     name: str
+    icon: str | None = None
 
 
 class UpdateCategoryGroupRequest(BaseModel):
     name: str
+    icon: str | None = None
 
 
 class MappingEntryRequest(BaseModel):
@@ -26,6 +28,7 @@ class BulkUpdateMappingsRequest(BaseModel):
 class CategoryGroupResponse(BaseModel):
     id: UUID
     name: str
+    icon: str | None
     categories: list[str]
 
     @classmethod
@@ -33,9 +36,10 @@ class CategoryGroupResponse(BaseModel):
         return cls(
             id=item.group.id,
             name=item.group.name,
+            icon=item.group.icon,
             categories=sorted(m.category for m in item.mappings),
         )
 
     @classmethod
     def from_group(cls, group: CategoryGroup) -> CategoryGroupResponse:
-        return cls(id=group.id, name=group.name, categories=[])
+        return cls(id=group.id, name=group.name, icon=group.icon, categories=[])

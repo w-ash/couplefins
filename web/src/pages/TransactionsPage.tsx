@@ -14,9 +14,15 @@ import { AdjustmentExportSection } from "@/components/AdjustmentExportSection";
 import { Button } from "@/components/Button";
 import { FinalizationBanner } from "@/components/FinalizationBanner";
 import { MonthSelector } from "@/components/MonthSelector";
+import { SettlementCard } from "@/components/SettlementCard";
 import { BulkSplitEditor } from "@/components/SplitEditor";
 import { TransactionEditor } from "@/components/TransactionEditor";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
+import {
+  CATEGORY_GROUPS_QUERY_KEY,
+  fetchCategoryGroups,
+} from "@/lib/categories";
+import { getCategoryGroupIcon } from "@/lib/category-icons";
 import { DASHBOARD_QUERY_KEY } from "@/lib/dashboard";
 import {
   computeShares,
@@ -63,49 +69,6 @@ function UploadStatusBanner({
   );
 }
 
-function SettlementCard({
-  data,
-  personNames,
-  personIndexMap,
-}: {
-  data: ReconciliationData;
-  personNames: Map<string, string>;
-  personIndexMap: Map<string, number>;
-}) {
-  const { settlement } = data;
-  if (!settlement) return null;
-
-  const fromName = personNames.get(settlement.from_person_id) ?? "Unknown";
-  const toName = personNames.get(settlement.to_person_id) ?? "Unknown";
-  const fromColor = getPersonAccentColor(
-    personIndexMap.get(settlement.from_person_id) ?? -1,
-  );
-
-  const isSettled = settlement.amount === 0;
-
-  return (
-    <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-      <p className="text-center text-2xl font-semibold text-foreground">
-        {isSettled ? (
-          "All settled!"
-        ) : (
-          <>
-            <span
-              className={`inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-lg font-semibold ${fromColor}`}
-            >
-              {fromName}
-            </span>{" "}
-            owes {toName}{" "}
-            <span className="tabular-nums">
-              {formatCurrency(settlement.amount)}
-            </span>
-          </>
-        )}
-      </p>
-    </div>
-  );
-}
-
 function SummaryStats({
   data,
   personNames,
@@ -140,8 +103,15 @@ function SummaryStats({
   );
 }
 
-function CategoryGroupRow({ group }: { group: CategoryGroupBreakdown }) {
+function CategoryGroupRow({
+  group,
+  icon,
+}: {
+  group: CategoryGroupBreakdown;
+  icon: string | null;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const Icon = getCategoryGroupIcon(icon);
 
   return (
     <>
@@ -161,6 +131,7 @@ function CategoryGroupRow({ group }: { group: CategoryGroupBreakdown }) {
             ) : (
               <ChevronRight className="size-4 text-muted-foreground" />
             )}
+            <Icon className="size-4 text-muted-foreground" />
             {group.group_name}
           </button>
         </td>
@@ -192,9 +163,11 @@ function CategoryGroupRow({ group }: { group: CategoryGroupBreakdown }) {
 function CategoryGroupBreakdownTable({
   breakdowns,
   hasRefunds,
+  groupIconMap,
 }: {
   breakdowns: CategoryGroupBreakdown[];
   hasRefunds: boolean;
+  groupIconMap: Map<string, string | null>;
 }) {
   if (breakdowns.length === 0) return null;
 
@@ -221,6 +194,11 @@ function CategoryGroupBreakdownTable({
             <CategoryGroupRow
               key={group.group_id ?? "uncategorized"}
               group={group}
+              icon={
+                group.group_id
+                  ? (groupIconMap.get(group.group_id) ?? null)
+                  : null
+              }
             />
           ))}
         </tbody>
@@ -553,6 +531,11 @@ export function TransactionsPage() {
     queryFn: fetchPersons,
   });
 
+  const { data: categoryGroups } = useQuery({
+    queryKey: [...CATEGORY_GROUPS_QUERY_KEY],
+    queryFn: fetchCategoryGroups,
+  });
+
   const reconciliationQueryKey = useMemo(
     () => ["reconciliation", year, month],
     [year, month],
@@ -614,6 +597,10 @@ export function TransactionsPage() {
         : new Map<string, string>(),
     [data],
   );
+  const groupIconMap = useMemo(
+    () => new Map((categoryGroups ?? []).map((g) => [g.id, g.icon])),
+    [categoryGroups],
+  );
 
   const monthName = MONTHS[month - 1] ?? "";
 
@@ -654,11 +641,14 @@ export function TransactionsPage() {
             }
           />
           <UploadStatusBanner statuses={data.upload_statuses} />
-          <SettlementCard
-            data={data}
-            personNames={personNames}
-            personIndexMap={personIndexMap}
-          />
+          {data.settlement && (
+            <SettlementCard
+              settlement={data.settlement}
+              personNames={personNames}
+              personIndexMap={personIndexMap}
+              periodLabel={`${monthName} ${year}`}
+            />
+          )}
 
           {data.transaction_count === 0 ? (
             <div className="py-8 text-center">
@@ -679,6 +669,7 @@ export function TransactionsPage() {
               <CategoryGroupBreakdownTable
                 breakdowns={data.category_group_breakdowns}
                 hasRefunds={data.total_shared_refunds > 0}
+                groupIconMap={groupIconMap}
               />
               <AdjustmentExportSection
                 persons={persons ?? []}

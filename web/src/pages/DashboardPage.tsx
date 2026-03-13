@@ -12,6 +12,7 @@ import { useMemo } from "react";
 import { Link, useNavigate } from "react-router";
 import { FinalizationBanner } from "@/components/FinalizationBanner";
 import { MonthSelector } from "@/components/MonthSelector";
+import { SettlementCard } from "@/components/SettlementCard";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import type { DashboardData, MonthHistoryEntry } from "@/lib/dashboard";
 import { DASHBOARD_QUERY_KEY, fetchDashboard } from "@/lib/dashboard";
@@ -19,55 +20,6 @@ import { formatCurrency, MONTHS, useMonthYear } from "@/lib/format";
 import type { Settlement } from "@/lib/reconciliation";
 import { finalizePeriod, unfinalizePeriod } from "@/lib/reconciliation";
 import { getPersonAccentColor } from "@/types/person";
-
-function SettlementCard({
-  data,
-  personNames,
-  personIndexMap,
-  monthName,
-  year,
-}: {
-  data: DashboardData;
-  personNames: Map<string, string>;
-  personIndexMap: Map<string, number>;
-  monthName: string;
-  year: number;
-}) {
-  const settlement = data.current_month_settlement;
-  if (!settlement) return null;
-
-  const isSettled = settlement.amount === 0;
-  const fromName = personNames.get(settlement.from_person_id) ?? "Unknown";
-  const toName = personNames.get(settlement.to_person_id) ?? "Unknown";
-  const fromColor = getPersonAccentColor(
-    personIndexMap.get(settlement.from_person_id) ?? -1,
-  );
-
-  return (
-    <div className="rounded-xl border border-border bg-card p-8 shadow-sm">
-      <p className="mb-1 text-center text-sm font-medium text-muted-foreground">
-        {monthName} {year}
-      </p>
-      <p className="text-center text-2xl font-semibold text-foreground">
-        {isSettled ? (
-          "All settled!"
-        ) : (
-          <>
-            <span
-              className={`inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-lg font-semibold ${fromColor}`}
-            >
-              {fromName}
-            </span>{" "}
-            owes {toName}{" "}
-            <span className="tabular-nums">
-              {formatCurrency(settlement.amount)}
-            </span>
-          </>
-        )}
-      </p>
-    </div>
-  );
-}
 
 function UploadStatusRow({
   statuses,
@@ -345,13 +297,14 @@ export function DashboardPage() {
               finalizeMutation.isPending || unfinalizeMutation.isPending
             }
           />
-          <SettlementCard
-            data={data}
-            personNames={personNames}
-            personIndexMap={personIndexMap}
-            monthName={monthName}
-            year={year}
-          />
+          {data.current_month_settlement && (
+            <SettlementCard
+              settlement={data.current_month_settlement}
+              personNames={personNames}
+              personIndexMap={personIndexMap}
+              periodLabel={`${monthName} ${year}`}
+            />
+          )}
           <UploadStatusRow
             statuses={data.upload_statuses}
             personIndexMap={personIndexMap}

@@ -19,6 +19,7 @@ FIXTURE_PATH = (
 
 class _CategoryGroupFixture(TypedDict):
     name: str
+    icon: str
     categories: list[str]
 
 
@@ -61,7 +62,11 @@ class SeedCategoryGroupsUseCase:
 
             for group_data in fixture_data:
                 group_id = uuid.uuid4()
-                groups.append(CategoryGroup(id=group_id, name=group_data["name"]))
+                groups.append(
+                    CategoryGroup(
+                        id=group_id, name=group_data["name"], icon=group_data["icon"]
+                    )
+                )
                 mappings.extend(
                     CategoryMapping(category=category_name, group_id=group_id)
                     for category_name in group_data["categories"]

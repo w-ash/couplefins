@@ -79,8 +79,9 @@ def make_category_group(
     *,
     id: uuid.UUID | None = None,
     name: str = "Food & Dining",
+    icon: str | None = None,
 ) -> CategoryGroup:
-    return CategoryGroup(id=id or uuid.uuid4(), name=name)
+    return CategoryGroup(id=id or uuid.uuid4(), name=name, icon=icon)
 
 
 _MISSING = object()

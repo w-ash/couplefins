@@ -9,3 +9,4 @@ class CategoryGroupModel(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     name: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    icon: Mapped[str | None] = mapped_column(String, nullable=True)

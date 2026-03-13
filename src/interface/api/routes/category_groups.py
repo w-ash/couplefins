@@ -42,7 +42,7 @@ async def get_category_groups() -> list[CategoryGroupResponse]:
 async def post_category_group(
     body: CreateCategoryGroupRequest,
 ) -> CategoryGroupResponse:
-    command = CreateCategoryGroupCommand(name=body.name)
+    command = CreateCategoryGroupCommand(name=body.name, icon=body.icon)
     result = await execute_use_case(
         lambda uow: CreateCategoryGroupUseCase().execute(command, uow)
     )
@@ -53,7 +53,7 @@ async def post_category_group(
 async def put_category_group(
     group_id: UUID, body: UpdateCategoryGroupRequest
 ) -> CategoryGroupResponse:
-    command = UpdateCategoryGroupCommand(id=group_id, name=body.name)
+    command = UpdateCategoryGroupCommand(id=group_id, name=body.name, icon=body.icon)
     result = await execute_use_case(
         lambda uow: UpdateCategoryGroupUseCase().execute(command, uow)
     )

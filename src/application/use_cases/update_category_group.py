@@ -13,6 +13,7 @@ from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 class UpdateCategoryGroupCommand:
     id: UUID
     name: str = field(validator=non_empty_string)
+    icon: str | None = None
 
 
 @define(frozen=True, slots=True)
@@ -30,7 +31,7 @@ class UpdateCategoryGroupUseCase:
             if existing is None:
                 raise NotFoundError(f"Category group {command.id} not found")
 
-            updated = attrs.evolve(existing, name=command.name)
+            updated = attrs.evolve(existing, name=command.name, icon=command.icon)
             saved = await uow.category_groups.save(updated)
             await uow.commit()
             return UpdateCategoryGroupResult(group=saved)

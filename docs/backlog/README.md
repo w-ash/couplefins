@@ -19,7 +19,7 @@
 | v0.4.1 | Month finalization (lock months, prevent changes) | Completed (2026-03-12) | S |
 | v0.5.0 | Transaction split editing (individual + bulk) | Completed (2026-03-12) | M |
 | v0.5.1 | Transaction field editing + audit log | Completed (2026-03-12) | M |
-| v0.5.2 | Solo prep polish & settlement card hero | Planned | S |
+| v0.5.2 | Solo prep polish, settlement card hero & category icons | In Progress | M |
 | v0.5.3 | Plain language & verb+object CTAs | Planned | S |
 | v0.5.4 | Guardrails: empty, loading, error states | Planned | S |
 | v0.5.5 | Transaction search & filtering | Planned | M |

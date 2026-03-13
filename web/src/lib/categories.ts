@@ -5,6 +5,7 @@ import { apiFetch } from "./api";
 export interface CategoryGroup {
   id: string;
   name: string;
+  icon: string | null;
   categories: string[];
 }
 
@@ -27,14 +28,14 @@ export function createCategoryGroup(name: string): Promise<CategoryGroup> {
   });
 }
 
-export function renameCategoryGroup(
+export function updateCategoryGroup(
   groupId: string,
-  name: string,
+  fields: { name?: string; icon?: string | null },
 ): Promise<CategoryGroup> {
   return apiFetch(`/api/v1/category-groups/${groupId}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(fields),
   });
 }
 

@@ -15,6 +15,7 @@ class CategoryGroupRepository(BaseRepository[CategoryGroup, CategoryGroupModel])
         return CategoryGroup(
             id=UUID(model.id),
             name=model.name,
+            icon=model.icon,
         )
 
     @staticmethod
@@ -22,4 +23,5 @@ class CategoryGroupRepository(BaseRepository[CategoryGroup, CategoryGroupModel])
         return CategoryGroupModel(
             id=str(entity.id),
             name=entity.name,
+            icon=entity.icon,
         )

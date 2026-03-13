@@ -255,7 +255,7 @@ export function UploadPage() {
     previewMutation.reset();
     uploadMutation.reset();
     setAcceptedIds(new Set());
-    setPersonId("");
+    setPersonId(currentPersonId ?? "");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -306,27 +306,49 @@ export function UploadPage() {
         {/* Person selector */}
         <div>
           <label
-            htmlFor="person"
+            htmlFor={
+              currentPersonId && personId === currentPersonId
+                ? undefined
+                : "person"
+            }
             className="mb-1.5 flex items-center gap-1.5 font-medium text-sm text-secondary-foreground"
           >
             <Users className="size-4" />
             Who are you?
           </label>
-          <select
-            id="person"
-            value={personId}
-            onChange={(e) => setPersonId(e.target.value)}
-            required
-            disabled={isFormDisabled}
-            className="w-full rounded-lg border border-input bg-card px-3 py-2 text-foreground shadow-sm focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <option value="">Select person...</option>
-            {personsQuery.data?.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          {currentPersonId && personId === currentPersonId ? (
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center rounded-full bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground">
+                {personsQuery.data?.find((p) => p.id === currentPersonId)
+                  ?.name ?? "Unknown"}
+              </span>
+              {!isFormDisabled && (
+                <button
+                  type="button"
+                  onClick={() => setPersonId("")}
+                  className="text-sm text-muted-foreground hover:text-foreground"
+                >
+                  Change
+                </button>
+              )}
+            </div>
+          ) : (
+            <select
+              id="person"
+              value={personId}
+              onChange={(e) => setPersonId(e.target.value)}
+              required
+              disabled={isFormDisabled}
+              className="w-full rounded-lg border border-input bg-card px-3 py-2 text-foreground shadow-sm focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="">Select person...</option>
+              {personsQuery.data?.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* File input */}

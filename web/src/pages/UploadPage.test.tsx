@@ -110,7 +110,7 @@ describe("UploadPage", () => {
   it("renders the upload form without month/year", () => {
     renderWithProviders(<UploadPage />);
     expect(screen.getByText("Upload Transactions")).toBeInTheDocument();
-    expect(screen.getByLabelText("Who are you?")).toBeInTheDocument();
+    expect(screen.getByText("Who are you?")).toBeInTheDocument();
     expect(screen.queryByLabelText("Month")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Year")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Monarch CSV")).toBeInTheDocument();
@@ -134,7 +134,7 @@ describe("UploadPage", () => {
     renderWithProviders(<UploadPage />);
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Who are you?")).toBeInTheDocument();
+      expect(screen.getByText("Who are you?")).toBeInTheDocument();
     });
 
     setFileAndSubmit();
@@ -158,7 +158,7 @@ describe("UploadPage", () => {
     renderWithProviders(<UploadPage />);
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Who are you?")).toBeInTheDocument();
+      expect(screen.getByText("Who are you?")).toBeInTheDocument();
     });
 
     setFileAndSubmit();
@@ -184,7 +184,7 @@ describe("UploadPage", () => {
     renderWithProviders(<UploadPage />);
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Who are you?")).toBeInTheDocument();
+      expect(screen.getByText("Who are you?")).toBeInTheDocument();
     });
 
     setFileAndSubmit();
@@ -217,7 +217,7 @@ describe("UploadPage", () => {
     renderWithProviders(<UploadPage />);
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Who are you?")).toBeInTheDocument();
+      expect(screen.getByText("Who are you?")).toBeInTheDocument();
     });
 
     setFileAndSubmit();
