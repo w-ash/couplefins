@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   Clock,
   LayoutDashboard,
-  Loader2,
   Lock,
   Upload,
 } from "lucide-react";
@@ -12,6 +11,7 @@ import { useMemo } from "react";
 import { Link, useNavigate } from "react-router";
 import { FinalizationBanner } from "@/components/FinalizationBanner";
 import { MonthSelector } from "@/components/MonthSelector";
+import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
 import { SettlementCard } from "@/components/SettlementCard";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import type { DashboardData, MonthHistoryEntry } from "@/lib/dashboard";
@@ -79,7 +79,7 @@ function SummaryStats({
       value: formatCurrency(data.ytd_total_shared_spending),
     },
     {
-      label: "YTD balance",
+      label: "Year-to-date balance",
       value: ytdLabel,
     },
   ];
@@ -211,7 +211,7 @@ export function DashboardPage() {
   const queryClient = useQueryClient();
 
   const dashboardQueryKey = [...DASHBOARD_QUERY_KEY, year, month];
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: dashboardQueryKey,
     queryFn: () => fetchDashboard(year, month),
   });
@@ -256,34 +256,24 @@ export function DashboardPage() {
         <MonthSelector />
       </div>
 
-      {isLoading && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="size-6 animate-spin text-muted-foreground" />
-        </div>
-      )}
+      {isLoading && <PageLoading label="Loading dashboard..." />}
 
-      {error && (
-        <div
-          role="alert"
-          className="rounded-lg border border-destructive-border bg-destructive-muted p-4 text-sm text-destructive-muted-foreground"
-        >
-          {error.message}
-        </div>
-      )}
+      {error && <PageError error={error} onRetry={() => refetch()} />}
 
       {isEmpty && (
-        <div className="py-16 text-center">
-          <p className="text-muted-foreground">
-            No uploads yet for {monthName} {year}.
-          </p>
-          <Link
-            to="/upload"
-            className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-          >
-            <Upload className="size-4" />
-            Upload a CSV to get started
-          </Link>
-        </div>
+        <PageEmpty
+          icon={<Upload />}
+          heading={`No data for ${monthName} ${year}`}
+          description="Upload a CSV to see your shared spending."
+          action={
+            <Link
+              to="/upload"
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              Upload CSV
+            </Link>
+          }
+        />
       )}
 
       {data && !isEmpty && (

@@ -82,7 +82,7 @@ function PersonAccountRow({ person }: { person: Person }) {
             loading={mutation.isPending}
             loadingText="Saving"
           >
-            Save
+            Save Profile
           </Button>
         )}
       </div>

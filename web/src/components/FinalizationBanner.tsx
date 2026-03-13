@@ -30,7 +30,7 @@ export function FinalizationBanner({
         <div className="flex items-center gap-2.5">
           <Lock className="size-4 text-primary-muted-foreground" />
           <span className="text-sm font-medium text-primary-muted-foreground">
-            Finalized
+            Month locked
             {finalizedAt && (
               <span className="ml-1 font-normal text-primary-muted-foreground/70">
                 {formatFinalizedDate(finalizedAt)}
@@ -42,14 +42,14 @@ export function FinalizationBanner({
           type="button"
           onClick={onUnfinalize}
           disabled={isPending}
-          className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-primary-muted-foreground/70 transition-colors hover:bg-primary-muted hover:text-primary-muted-foreground disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 min-h-8 text-xs font-medium text-primary-muted-foreground/70 transition-colors hover:bg-primary-muted hover:text-primary-muted-foreground disabled:opacity-50"
         >
           {isPending ? (
             <Loader2 className="size-3 animate-spin" />
           ) : (
             <LockOpen className="size-3" />
           )}
-          Unlock
+          Unlock Month
         </button>
       </div>
     );
@@ -57,9 +57,14 @@ export function FinalizationBanner({
 
   return (
     <div className="flex items-center justify-between rounded-lg border border-border-muted px-4 py-2.5">
-      <span className="text-sm text-muted-foreground">
-        Month not yet finalized
-      </span>
+      <div>
+        <span className="text-sm text-muted-foreground">
+          This month is still open for changes
+        </span>
+        <p className="text-xs text-muted-foreground/70">
+          Lock it once you've both reviewed and settled up.
+        </p>
+      </div>
       <button
         type="button"
         onClick={onFinalize}
@@ -71,7 +76,7 @@ export function FinalizationBanner({
         ) : (
           <Lock className="size-3" />
         )}
-        Finalize
+        Lock Month
       </button>
     </div>
   );

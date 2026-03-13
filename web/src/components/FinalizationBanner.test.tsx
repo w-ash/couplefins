@@ -5,7 +5,7 @@ import { FinalizationBanner } from "./FinalizationBanner";
 const noop = () => {};
 
 describe("FinalizationBanner", () => {
-  it("renders open state with finalize button", () => {
+  it("renders open state with lock month button", () => {
     renderWithProviders(
       <FinalizationBanner
         isFinalized={false}
@@ -15,13 +15,15 @@ describe("FinalizationBanner", () => {
         isPending={false}
       />,
     );
-    expect(screen.getByText("Month not yet finalized")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /finalize/i }),
+      screen.getByText("This month is still open for changes"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /lock month/i }),
     ).toBeInTheDocument();
   });
 
-  it("renders finalized state with date and unlock button", () => {
+  it("renders locked state with date and unlock button", () => {
     renderWithProviders(
       <FinalizationBanner
         isFinalized={true}
@@ -31,12 +33,14 @@ describe("FinalizationBanner", () => {
         isPending={false}
       />,
     );
-    expect(screen.getByText("Finalized")).toBeInTheDocument();
+    expect(screen.getByText("Month locked")).toBeInTheDocument();
     expect(screen.getByText(/Mar 10, 2026/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /unlock/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /unlock month/i }),
+    ).toBeInTheDocument();
   });
 
-  it("calls onFinalize when finalize button clicked", async () => {
+  it("calls onFinalize when lock month button clicked", async () => {
     const onFinalize = vi.fn();
     const user = userEvent.setup();
     renderWithProviders(
@@ -48,11 +52,11 @@ describe("FinalizationBanner", () => {
         isPending={false}
       />,
     );
-    await user.click(screen.getByRole("button", { name: /finalize/i }));
+    await user.click(screen.getByRole("button", { name: /lock month/i }));
     expect(onFinalize).toHaveBeenCalledOnce();
   });
 
-  it("calls onUnfinalize when unlock button clicked", async () => {
+  it("calls onUnfinalize when unlock month button clicked", async () => {
     const onUnfinalize = vi.fn();
     const user = userEvent.setup();
     renderWithProviders(
@@ -64,7 +68,7 @@ describe("FinalizationBanner", () => {
         isPending={false}
       />,
     );
-    await user.click(screen.getByRole("button", { name: /unlock/i }));
+    await user.click(screen.getByRole("button", { name: /unlock month/i }));
     expect(onUnfinalize).toHaveBeenCalledOnce();
   });
 
@@ -78,6 +82,6 @@ describe("FinalizationBanner", () => {
         isPending={true}
       />,
     );
-    expect(screen.getByRole("button", { name: /finalize/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /lock month/i })).toBeDisabled();
   });
 });

@@ -159,6 +159,10 @@ export function TransactionEditor({
       onKeyDown={handleKeyDown}
       onSubmit={(e) => e.preventDefault()}
     >
+      <p className="mb-2 text-sm text-muted-foreground">
+        {formatDate(tx.date)} &middot; {tx.merchant} &middot;{" "}
+        {formatCurrency(tx.amount)}
+      </p>
       <div className="grid grid-cols-2 gap-x-6 gap-y-2">
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <span className="w-16">Date</span>

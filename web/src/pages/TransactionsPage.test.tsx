@@ -176,7 +176,7 @@ describe("TransactionsPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/No shared transactions for/),
+        screen.getByRole("heading", { name: /No shared transactions for/ }),
       ).toBeInTheDocument();
     });
   });

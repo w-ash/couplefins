@@ -83,9 +83,7 @@ describe("BudgetPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(
-          "No budgets set. Add a budget to start tracking shared spending.",
-        ),
+        screen.getByRole("heading", { name: "No budgets yet" }),
       ).toBeInTheDocument();
     });
   });
@@ -119,7 +117,7 @@ describe("BudgetPage", () => {
       expect(screen.getByText("Auto & Transport")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Unbudgeted spending")).toBeInTheDocument();
+    expect(screen.getByText("Spending without a budget")).toBeInTheDocument();
   });
 
   it("renders summary stats", async () => {
@@ -143,7 +141,7 @@ describe("BudgetPage", () => {
     renderWithProviders(<BudgetPage />);
 
     expect(screen.getByText("Monthly")).toBeInTheDocument();
-    expect(screen.getByText("YTD")).toBeInTheDocument();
+    expect(screen.getByText("Year to date")).toBeInTheDocument();
   });
 
   it("has sort selector", () => {

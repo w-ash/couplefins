@@ -102,7 +102,7 @@ export function SplitEditor({
           loading={saving}
           loadingText="Saving"
         >
-          Save
+          Save Split
         </Button>
       </div>
     </div>

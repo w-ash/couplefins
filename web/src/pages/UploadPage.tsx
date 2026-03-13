@@ -380,7 +380,7 @@ export function UploadPage() {
             icon={<Eye className="size-4" />}
             fullWidth
           >
-            Preview
+            Preview CSV
           </Button>
         )}
       </form>
@@ -398,15 +398,15 @@ export function UploadPage() {
         )}
       </div>
 
-      {/* Nothing to import */}
+      {/* Already up to date */}
       {step === "preview" && preview && nothingToImport && (
         <div className="mt-6 rounded-xl border border-border bg-card p-6 shadow-sm">
           <h2 className="mb-1 flex items-center gap-2 font-medium text-lg text-foreground">
             <Eye className="size-5" />
-            Preview
+            Already Up to Date
           </h2>
           <p className="mt-3 text-sm text-muted-foreground">
-            All transactions already imported. Nothing to do.
+            All transactions already imported — you're up to date.
           </p>
           <Button
             type="button"
@@ -631,7 +631,7 @@ export function UploadPage() {
             fullWidth
             className="mt-6"
           >
-            Upload Another
+            Upload Another CSV
           </Button>
         </div>
       )}

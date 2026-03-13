@@ -1,4 +1,5 @@
 import { AlertTriangle } from "lucide-react";
+import { Link } from "react-router";
 
 export function UnmappedCategoriesWarning({
   categories,
@@ -21,6 +22,12 @@ export function UnmappedCategoriesWarning({
           <li key={cat}>{cat}</li>
         ))}
       </ul>
+      <Link
+        to="/settings"
+        className="mt-2 inline-block text-sm font-medium text-warning hover:underline"
+      >
+        Map these in Settings →
+      </Link>
     </div>
   );
 }

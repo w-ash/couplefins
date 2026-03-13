@@ -37,11 +37,9 @@ describe("CategoryMappingEditor", () => {
     expect(screen.getByText("1")).toBeInTheDocument();
   });
 
-  it("shows skeleton while loading", () => {
+  it("shows loading state", () => {
     renderWithProviders(<CategoryMappingEditor />);
-    expect(
-      screen.getByRole("status", { name: "Loading categories" }),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Loading categories...")).toBeInTheDocument();
   });
 
   it("shows unmapped categories banner", async () => {
@@ -91,7 +89,9 @@ describe("CategoryMappingEditor", () => {
         screen.getByText("Failed to load categories."),
       ).toBeInTheDocument();
     });
-    expect(screen.getByText("Retry")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Try Again" }),
+    ).toBeInTheDocument();
   });
 
   it("shows delete confirmation dialog", async () => {

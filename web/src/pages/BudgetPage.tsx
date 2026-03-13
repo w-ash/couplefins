@@ -4,14 +4,15 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  Loader2,
   PieChart,
   Plus,
   Trash2,
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { Button } from "@/components/Button";
 import { MonthSelector } from "@/components/MonthSelector";
+import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
 import type { BudgetOverviewData, GroupBudgetStatus } from "@/lib/budgets";
 import {
   deleteBudget,
@@ -281,7 +282,7 @@ function BudgetGroupRow({
                     type="submit"
                     className="rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground"
                   >
-                    Save
+                    Save Budget
                   </button>
                   <button
                     type="button"
@@ -292,17 +293,17 @@ function BudgetGroupRow({
                   </button>
                 </form>
               ) : (
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={(e) => {
                     e.stopPropagation();
                     setEditValue(status.monthly_budget?.toString() ?? "");
                     setEditing(true);
                   }}
-                  className="text-xs text-muted-foreground hover:text-foreground"
                 >
                   Edit amount
-                </button>
+                </Button>
               )}
 
               {confirmDelete ? (
@@ -465,7 +466,7 @@ function AddBudgetForm({
           type="submit"
           className="rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
         >
-          Save
+          Save Budget
         </button>
         <button
           type="button"
@@ -529,7 +530,7 @@ export function BudgetPage() {
 
   const queryKey = ["budget-overview", year, month];
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey,
     queryFn: () => fetchBudgetOverview(year, month),
   });
@@ -613,7 +614,7 @@ export function BudgetPage() {
             onClick={() => setViewMode("ytd")}
             className={`px-3 py-1.5 text-sm ${viewMode === "ytd" ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:text-foreground"} rounded-r-lg`}
           >
-            YTD
+            Year to date
           </button>
         </div>
         <select
@@ -628,29 +629,18 @@ export function BudgetPage() {
         </select>
       </div>
 
-      {isLoading && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="size-6 animate-spin text-muted-foreground" />
-        </div>
-      )}
+      {isLoading && <PageLoading label="Loading budgets..." />}
 
-      {error && (
-        <div
-          role="alert"
-          className="rounded-lg border border-destructive-border bg-destructive-muted p-4 text-sm text-destructive-muted-foreground"
-        >
-          {error.message}
-        </div>
-      )}
+      {error && <PageError error={error} onRetry={() => refetch()} />}
 
       {data && (
         <div className="space-y-6">
           {data.group_statuses.length === 0 && data.budgets.length === 0 ? (
-            <div className="py-12 text-center">
-              <p className="text-muted-foreground">
-                No budgets set. Add a budget to start tracking shared spending.
-              </p>
-            </div>
+            <PageEmpty
+              icon={<PieChart />}
+              heading="No budgets yet"
+              description="Add a budget above to start tracking shared spending."
+            />
           ) : (
             <>
               <SummaryStats data={data} viewMode={viewMode} />
@@ -676,8 +666,8 @@ export function BudgetPage() {
               {/* Unbudgeted groups with spending */}
               {unbudgetedGroups.length > 0 && (
                 <div>
-                  <h2 className="mb-4 text-sm font-medium text-muted-foreground">
-                    Unbudgeted spending
+                  <h2 className="mb-4 font-medium text-lg text-foreground">
+                    Spending without a budget
                   </h2>
                   <div className="space-y-3">
                     {unbudgetedGroups.map((status) => (

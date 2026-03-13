@@ -2,7 +2,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ChevronDown,
-  Loader2,
   Pencil,
   Plus,
   Trash2,
@@ -11,6 +10,7 @@ import {
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { Button } from "@/components/Button";
+import { PageError, PageLoading } from "@/components/PageStates";
 import {
   bulkUpdateMappings,
   CATEGORY_GROUPS_QUERY_KEY,
@@ -373,35 +373,19 @@ export function CategoryMappingEditor() {
 
   // Loading
   if (groupsQuery.isLoading || unmappedQuery.isLoading) {
-    return (
-      <output
-        className="flex items-center justify-center py-12"
-        aria-label="Loading categories"
-      >
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
-      </output>
-    );
+    return <PageLoading label="Loading categories..." />;
   }
 
   // Error
   if (groupsQuery.isError || unmappedQuery.isError) {
     return (
-      <div
-        role="alert"
-        className="rounded-lg border border-destructive-border bg-destructive-muted p-4 text-sm text-destructive-muted-foreground"
-      >
-        <p>Failed to load categories.</p>
-        <button
-          type="button"
-          onClick={() => {
-            groupsQuery.refetch();
-            unmappedQuery.refetch();
-          }}
-          className="mt-2 font-medium text-destructive underline underline-offset-2"
-        >
-          Retry
-        </button>
-      </div>
+      <PageError
+        error={new Error("Failed to load categories.")}
+        onRetry={() => {
+          groupsQuery.refetch();
+          unmappedQuery.refetch();
+        }}
+      />
     );
   }
 

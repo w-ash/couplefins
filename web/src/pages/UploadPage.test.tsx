@@ -114,13 +114,15 @@ describe("UploadPage", () => {
     expect(screen.queryByLabelText("Month")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Year")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Monarch CSV")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Preview" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Preview CSV" }),
+    ).toBeInTheDocument();
   });
 
   it("disables preview button when no person selected", () => {
     useIdentityStore.setState({ currentPersonId: null });
     renderWithProviders(<UploadPage />);
-    const button = screen.getByRole("button", { name: "Preview" });
+    const button = screen.getByRole("button", { name: "Preview CSV" });
     expect(button).toBeDisabled();
   });
 
@@ -165,7 +167,7 @@ describe("UploadPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("All transactions already imported. Nothing to do."),
+        screen.getByText(/All transactions already imported/),
       ).toBeInTheDocument();
     });
 

@@ -156,10 +156,8 @@ describe("DashboardPage", () => {
     renderWithProviders(<DashboardPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/No uploads yet/)).toBeInTheDocument();
-      expect(
-        screen.getByText("Upload a CSV to get started"),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/No data for/)).toBeInTheDocument();
+      expect(screen.getByText("Upload CSV")).toBeInTheDocument();
     });
   });
 
@@ -178,7 +176,7 @@ describe("DashboardPage", () => {
     await waitFor(() => {
       expect(screen.getByText("This month")).toBeInTheDocument();
       expect(screen.getByText("Year to date")).toBeInTheDocument();
-      expect(screen.getByText("YTD balance")).toBeInTheDocument();
+      expect(screen.getByText("Year-to-date balance")).toBeInTheDocument();
     });
   });
 

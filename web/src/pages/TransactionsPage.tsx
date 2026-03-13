@@ -4,7 +4,6 @@ import {
   ArrowLeftRight,
   ChevronDown,
   ChevronRight,
-  Loader2,
   Pencil,
   Upload,
 } from "lucide-react";
@@ -14,6 +13,7 @@ import { AdjustmentExportSection } from "@/components/AdjustmentExportSection";
 import { Button } from "@/components/Button";
 import { FinalizationBanner } from "@/components/FinalizationBanner";
 import { MonthSelector } from "@/components/MonthSelector";
+import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
 import { SettlementCard } from "@/components/SettlementCard";
 import { BulkSplitEditor } from "@/components/SplitEditor";
 import { TransactionEditor } from "@/components/TransactionEditor";
@@ -356,7 +356,12 @@ function TransactionTable({
               <th className="pb-2 pr-4 font-medium">Group</th>
               <th className="pb-2 pr-4 font-medium">Paid by</th>
               <th className="pb-2 pr-4 text-right font-medium">Amount</th>
-              <th className="pb-2 pr-4 text-right font-medium">Split</th>
+              <th
+                className="pb-2 pr-4 text-right font-medium"
+                title="How the expense is divided between you"
+              >
+                Split
+              </th>
               {personEntries.map((p) => (
                 <th key={p.id} className="pb-2 text-right font-medium">
                   {p.name}
@@ -540,7 +545,7 @@ export function TransactionsPage() {
     () => ["reconciliation", year, month],
     [year, month],
   );
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: reconciliationQueryKey,
     queryFn: () => fetchReconciliation(year, month),
   });
@@ -614,20 +619,9 @@ export function TransactionsPage() {
         <MonthSelector />
       </div>
 
-      {isLoading && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="size-6 animate-spin text-muted-foreground" />
-        </div>
-      )}
+      {isLoading && <PageLoading label="Loading transactions..." />}
 
-      {error && (
-        <div
-          role="alert"
-          className="rounded-lg border border-destructive-border bg-destructive-muted p-4 text-sm text-destructive-muted-foreground"
-        >
-          {error.message}
-        </div>
-      )}
+      {error && <PageError error={error} onRetry={() => refetch()} />}
 
       {data && (
         <div className="space-y-6">
@@ -651,18 +645,19 @@ export function TransactionsPage() {
           )}
 
           {data.transaction_count === 0 ? (
-            <div className="py-8 text-center">
-              <p className="text-muted-foreground">
-                No shared transactions for {monthName} {year}.
-              </p>
-              <Link
-                to="/upload"
-                className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-              >
-                <Upload className="size-4" />
-                Upload a CSV to get started
-              </Link>
-            </div>
+            <PageEmpty
+              icon={<Upload />}
+              heading={`No shared transactions for ${monthName} ${year}`}
+              description="Upload a CSV to see transactions."
+              action={
+                <Link
+                  to="/upload"
+                  className="text-sm font-medium text-primary hover:underline"
+                >
+                  Upload CSV
+                </Link>
+              }
+            />
           ) : (
             <>
               <SummaryStats data={data} personNames={personNames} />
