@@ -1,5 +1,10 @@
 import { apiFetch } from "@/lib/api";
 
+export interface MonthReference {
+  year: number;
+  month: number;
+}
+
 export interface UploadStatus {
   person_id: string;
   person_name: string;
@@ -67,6 +72,7 @@ export interface ReconciliationData {
   unmapped_categories: string[];
   is_finalized: boolean | null;
   finalized_at: string | null;
+  latest_transaction_month: MonthReference | null;
 }
 
 export interface PeriodStatus {

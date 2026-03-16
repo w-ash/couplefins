@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/api";
 import type { DashboardPerson } from "@/lib/dashboard";
-import type { UploadStatus } from "@/lib/reconciliation";
+import type { MonthReference, UploadStatus } from "@/lib/reconciliation";
 
 export interface Owed {
   amount: number;
@@ -33,6 +33,8 @@ export interface SettleUpData {
   persons: DashboardPerson[];
   is_finalized: boolean;
   finalized_at: string | null;
+  transaction_count: number;
+  latest_transaction_month: MonthReference | null;
 }
 
 export const SETTLE_UP_QUERY_KEY = ["settle-up"] as const;

@@ -1,5 +1,5 @@
-import { useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
 import { apiFetch } from "./api";
 
 export interface CategoryGroup {
@@ -43,6 +43,17 @@ export function deleteCategoryGroup(groupId: string): Promise<void> {
   return apiFetch(`/api/v1/category-groups/${groupId}`, {
     method: "DELETE",
   });
+}
+
+export function useGroupIconMap(): Map<string, string | null> {
+  const { data: categoryGroups } = useQuery({
+    queryKey: [...CATEGORY_GROUPS_QUERY_KEY],
+    queryFn: fetchCategoryGroups,
+  });
+  return useMemo(
+    () => new Map((categoryGroups ?? []).map((g) => [g.id, g.icon])),
+    [categoryGroups],
+  );
 }
 
 export function useInvalidateCategories() {

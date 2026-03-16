@@ -170,6 +170,20 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             return result.rowcount
         return 0
 
+    async def get_latest_shared_transaction_date(self) -> date | None:
+        stmt = (
+            select(TransactionModel.date)
+            .where(
+                TransactionModel.is_shared.is_(True),
+                TransactionModel.is_settlement.is_(False),
+            )
+            .order_by(TransactionModel.date.desc())
+            .limit(1)
+        )
+        result = await self._session.execute(stmt)
+        value = result.scalar_one_or_none()
+        return date.fromisoformat(value) if value else None
+
     async def get_distinct_categories(self) -> list[str]:
         stmt = select(TransactionModel.category).distinct()
         result = await self._session.execute(stmt)

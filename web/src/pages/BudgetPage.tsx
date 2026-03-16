@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/Button";
-import { MonthSelector } from "@/components/MonthSelector";
+import { MonthPicker } from "@/components/MonthPicker";
 import { PageHeader } from "@/components/PageHeader";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
 import { SegmentedControl } from "@/components/SegmentedControl";
@@ -28,10 +28,7 @@ import {
   saveBudget,
   updateBudget,
 } from "@/lib/budgets";
-import {
-  CATEGORY_GROUPS_QUERY_KEY,
-  fetchCategoryGroups,
-} from "@/lib/categories";
+import { useGroupIconMap } from "@/lib/categories";
 import { getCategoryGroupIcon } from "@/lib/category-icons";
 import { formatCurrency, useMonthYear } from "@/lib/format";
 import { baseInputClass, selectInputClass } from "@/lib/input-styles";
@@ -524,15 +521,7 @@ export function BudgetPage() {
     queryFn: () => fetchBudgetOverview(year, month),
   });
 
-  const { data: categoryGroups } = useQuery({
-    queryKey: [...CATEGORY_GROUPS_QUERY_KEY],
-    queryFn: fetchCategoryGroups,
-  });
-
-  const groupIconMap = useMemo(
-    () => new Map((categoryGroups ?? []).map((g) => [g.id, g.icon])),
-    [categoryGroups],
-  );
+  const groupIconMap = useGroupIconMap();
 
   const saveMutation = useMutation({
     mutationFn: (args: {
@@ -581,7 +570,7 @@ export function BudgetPage() {
   return (
     <div className="mx-auto max-w-4xl px-6 py-12">
       <PageHeader icon={<PieChart className="size-6" />} title="Budget">
-        <MonthSelector />
+        <MonthPicker />
       </PageHeader>
 
       {/* Controls */}

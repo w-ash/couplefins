@@ -103,6 +103,7 @@ const reconciliationResponse = {
     },
   ],
   unmapped_categories: [],
+  latest_transaction_month: { year: 2026, month: 1 },
 };
 
 const emptyResponse = {
@@ -138,6 +139,7 @@ const emptyResponse = {
     },
   ],
   unmapped_categories: [],
+  latest_transaction_month: null,
 };
 
 const server = setupServer(
@@ -198,7 +200,7 @@ describe("TransactionsPage", () => {
     });
   });
 
-  it("shows partial upload banner", async () => {
+  it("shows upload status when one person hasn't uploaded", async () => {
     const partialResponse = {
       ...reconciliationResponse,
       upload_statuses: [
@@ -225,7 +227,8 @@ describe("TransactionsPage", () => {
     renderWithProviders(<TransactionsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Bob hasn't uploaded yet/)).toBeInTheDocument();
+      expect(screen.getByText("uploaded")).toBeInTheDocument();
+      expect(screen.getByText("not yet")).toBeInTheDocument();
     });
   });
 });

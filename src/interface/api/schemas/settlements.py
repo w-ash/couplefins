@@ -8,6 +8,7 @@ from src.application.use_cases.get_settle_up_data import GetSettleUpDataResult
 from src.domain.entities.settlement import Settlement, SettlementMethod
 from src.interface.api.schemas.dashboard import PersonResponse
 from src.interface.api.schemas.reconciliation import (
+    MonthReference,
     SettlementResponse as OwedResponse,
     UploadStatusResponse,
 )
@@ -87,6 +88,8 @@ class SettleUpDataResponse(BaseModel):
     persons: list[PersonResponse]
     is_finalized: bool
     finalized_at: datetime.datetime | None
+    transaction_count: int
+    latest_transaction_month: MonthReference | None
 
     @classmethod
     def from_result(cls, result: GetSettleUpDataResult) -> SettleUpDataResponse:
@@ -104,6 +107,10 @@ class SettleUpDataResponse(BaseModel):
             persons=[PersonResponse(id=p.id, name=p.name) for p in result.persons],
             is_finalized=result.is_finalized,
             finalized_at=result.finalized_at,
+            transaction_count=result.transaction_count,
+            latest_transaction_month=MonthReference.from_optional_tuple(
+                result.latest_transaction_month
+            ),
         )
 
 

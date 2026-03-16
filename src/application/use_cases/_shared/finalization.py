@@ -1,5 +1,15 @@
+from datetime import datetime
+
 from src.domain.exceptions import PeriodFinalizedError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
+
+
+async def load_period_status(
+    uow: UnitOfWorkProtocol, year: int, month: int
+) -> tuple[bool, datetime | None]:
+    """Returns (is_finalized, finalized_at) for a period."""
+    period = await uow.reconciliation_periods.get_by_period(year, month)
+    return (period.is_finalized, period.finalized_at) if period else (False, None)
 
 
 async def assert_period_not_finalized(

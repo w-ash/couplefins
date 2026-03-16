@@ -6,10 +6,14 @@ from src.application.use_cases._shared.date_math import (
     detect_single_month,
     month_bounds,
 )
+from src.application.use_cases._shared.finalization import load_period_status
 from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
-from src.application.use_cases._shared.transactions import find_all_unmapped_categories
+from src.application.use_cases._shared.transactions import (
+    find_all_unmapped_categories,
+    get_latest_transaction_month,
+)
 from src.application.use_cases._shared.upload_status import (
     UploadStatus,
     build_upload_statuses,
@@ -52,6 +56,7 @@ class GetReconciliationResult:
     finalized_at: datetime | None
     year: int | None
     month: int | None
+    latest_transaction_month: tuple[int, int] | None
 
 
 @define(slots=True)
@@ -73,10 +78,9 @@ class GetReconciliationUseCase:
             is_finalized: bool | None = None
             finalized_at: datetime | None = None
             if command.single_month:
-                year, month = command.single_month
-                period = await uow.reconciliation_periods.get_by_period(year, month)
-                is_finalized = period.is_finalized if period else False
-                finalized_at = period.finalized_at if period else None
+                is_finalized, finalized_at = await load_period_status(
+                    uow, *command.single_month
+                )
 
             summary = reconcile(
                 transactions,
@@ -93,6 +97,8 @@ class GetReconciliationUseCase:
                 ctx.category_mappings, tx_categories
             )
 
+            latest_month = await get_latest_transaction_month(uow)
+
             return GetReconciliationResult(
                 summary=summary,
                 transactions=transactions,
@@ -103,4 +109,5 @@ class GetReconciliationUseCase:
                 finalized_at=finalized_at,
                 year=command.single_month[0] if command.single_month else None,
                 month=command.single_month[1] if command.single_month else None,
+                latest_transaction_month=latest_month,
             )

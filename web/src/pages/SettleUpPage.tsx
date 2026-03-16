@@ -1,16 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, HandCoins, Loader2, Trash2 } from "lucide-react";
+import { CheckCircle2, HandCoins, Loader2, Trash2, Upload } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Button } from "@/components/Button";
 import { FinalizationBanner } from "@/components/FinalizationBanner";
 import { InlineError } from "@/components/InlineError";
-import { MonthSelector } from "@/components/MonthSelector";
+import { MonthPicker } from "@/components/MonthPicker";
 import { PageHeader } from "@/components/PageHeader";
-import { PageError, PageLoading } from "@/components/PageStates";
+import {
+  EmptyStateActions,
+  PageEmpty,
+  PageError,
+  PageLoading,
+} from "@/components/PageStates";
 import { UploadStatusRow } from "@/components/UploadStatusRow";
 import { useTemporary } from "@/hooks/useTemporary";
 import { DASHBOARD_QUERY_KEY } from "@/lib/dashboard";
-import { formatCurrency, useMonthYear } from "@/lib/format";
+import { formatCurrency, MONTHS, useMonthYear } from "@/lib/format";
 import { baseInputClass } from "@/lib/input-styles";
 import { usePersonMaps } from "@/lib/persons";
 import { finalizePeriod, unfinalizePeriod } from "@/lib/reconciliation";
@@ -415,10 +420,15 @@ export function SettleUpPage() {
 
   const { personNames, personIndexMap } = usePersonMaps(data?.persons);
 
+  const isEmpty =
+    data &&
+    data.transaction_count === 0 &&
+    data.recorded_settlements.length === 0;
+
   return (
     <div className="mx-auto max-w-4xl px-6 py-12">
       <PageHeader icon={<HandCoins className="size-6" />} title="Settle Up">
-        <MonthSelector />
+        <MonthPicker />
       </PageHeader>
 
       {isLoading && <PageLoading label="Loading settle up data..." />}
@@ -426,6 +436,29 @@ export function SettleUpPage() {
       {error && <PageError error={error} onRetry={() => refetch()} />}
 
       {data && (
+        <UploadStatusRow
+          statuses={data.upload_statuses}
+          personIndexMap={personIndexMap}
+        />
+      )}
+
+      {isEmpty && (
+        <PageEmpty
+          icon={<Upload />}
+          heading={`No shared transactions for ${MONTHS[month - 1]} ${year}`}
+          description="Upload a CSV to get started with settlement."
+          action={
+            <EmptyStateActions
+              latestMonth={data.latest_transaction_month}
+              currentYear={year}
+              currentMonth={month}
+              viewPath="settle"
+            />
+          }
+        />
+      )}
+
+      {data && !isEmpty && (
         <div className="space-y-6">
           <FinalizationBanner
             isFinalized={data.is_finalized}
@@ -435,11 +468,6 @@ export function SettleUpPage() {
             isPending={
               finalizeMutation.isPending || unfinalizeMutation.isPending
             }
-          />
-
-          <UploadStatusRow
-            statuses={data.upload_statuses}
-            personIndexMap={personIndexMap}
           />
 
           <HeroCard

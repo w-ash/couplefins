@@ -9,6 +9,19 @@ from src.domain.entities.reconciliation_period import ReconciliationPeriod
 from src.domain.reconciliation import PersonSummary, SettlementResult
 
 
+class MonthReference(BaseModel):
+    year: int
+    month: int
+
+    @classmethod
+    def from_tuple(cls, ym: tuple[int, int]) -> MonthReference:
+        return cls(year=ym[0], month=ym[1])
+
+    @classmethod
+    def from_optional_tuple(cls, ym: tuple[int, int] | None) -> MonthReference | None:
+        return cls(year=ym[0], month=ym[1]) if ym else None
+
+
 class UploadStatusResponse(BaseModel):
     person_id: UUID
     person_name: str
@@ -128,6 +141,7 @@ class ReconciliationResponse(BaseModel):
     unmapped_categories: list[str]
     is_finalized: bool | None
     finalized_at: datetime.datetime | None
+    latest_transaction_month: MonthReference | None
 
     @classmethod
     def from_result(cls, result: GetReconciliationResult) -> ReconciliationResponse:
@@ -196,4 +210,7 @@ class ReconciliationResponse(BaseModel):
             unmapped_categories=result.unmapped_categories,
             is_finalized=result.is_finalized,
             finalized_at=result.finalized_at,
+            latest_transaction_month=MonthReference.from_optional_tuple(
+                result.latest_transaction_month
+            ),
         )

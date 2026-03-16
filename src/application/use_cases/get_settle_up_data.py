@@ -8,12 +8,16 @@ from src.application.use_cases._shared.command_validators import (
     positive_int,
 )
 from src.application.use_cases._shared.date_math import month_bounds
+from src.application.use_cases._shared.finalization import load_period_status
 from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
 from src.application.use_cases._shared.settlement_records import (
     SettlementRecord,
     enrich_with_links,
+)
+from src.application.use_cases._shared.transactions import (
+    get_latest_transaction_month,
 )
 from src.application.use_cases._shared.upload_status import (
     UploadStatus,
@@ -41,6 +45,8 @@ class GetSettleUpDataResult:
     persons: list[Person]
     is_finalized: bool
     finalized_at: datetime | None
+    transaction_count: int
+    latest_transaction_month: tuple[int, int] | None
 
 
 @define(slots=True)
@@ -81,11 +87,10 @@ class GetSettleUpDataUseCase:
             )
             upload_statuses = build_upload_statuses(ctx.persons, uploads)
 
-            period = await uow.reconciliation_periods.get_by_period(
-                command.year, command.month
+            is_finalized, finalized_at = await load_period_status(
+                uow, command.year, command.month
             )
-            is_finalized = period.is_finalized if period else False
-            finalized_at = period.finalized_at if period else None
+            latest_month = await get_latest_transaction_month(uow)
 
             return GetSettleUpDataResult(
                 year=command.year,
@@ -97,4 +102,6 @@ class GetSettleUpDataUseCase:
                 persons=ctx.persons,
                 is_finalized=is_finalized,
                 finalized_at=finalized_at,
+                transaction_count=summary.transaction_count,
+                latest_transaction_month=latest_month,
             )

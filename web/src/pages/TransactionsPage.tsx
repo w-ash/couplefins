@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle,
   ArrowLeftRight,
   Check,
   ChevronDown,
@@ -10,7 +9,6 @@ import {
   Upload,
 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import { Link } from "react-router";
 import { AdjustmentExportSection } from "@/components/AdjustmentExportSection";
 import {
   type BulkChanges,
@@ -20,7 +18,12 @@ import { Button } from "@/components/Button";
 import type { ComboboxOption } from "@/components/Combobox";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { PageHeader } from "@/components/PageHeader";
-import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
+import {
+  EmptyStateActions,
+  PageEmpty,
+  PageError,
+  PageLoading,
+} from "@/components/PageStates";
 import { StatsGrid } from "@/components/StatsGrid";
 import { TransactionEditor } from "@/components/TransactionEditor";
 import {
@@ -32,10 +35,12 @@ import {
 } from "@/components/TransactionFilters";
 import { TransactionSearch } from "@/components/TransactionSearch";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
+import { UploadStatusRow } from "@/components/UploadStatusRow";
 import { useTemporary } from "@/hooks/useTemporary";
 import {
   CATEGORY_GROUPS_QUERY_KEY,
   fetchCategoryGroups,
+  useGroupIconMap,
 } from "@/lib/categories";
 import { getCategoryGroupIcon } from "@/lib/category-icons";
 import { DASHBOARD_QUERY_KEY } from "@/lib/dashboard";
@@ -75,25 +80,6 @@ import {
   getPersonAccentColor,
   PERSONS_QUERY_KEY,
 } from "@/types/person";
-
-function UploadStatusBanner({
-  statuses,
-}: {
-  statuses: ReconciliationData["upload_statuses"];
-}) {
-  const missing = statuses.filter((s) => !s.has_uploaded);
-  if (missing.length === 0) return null;
-
-  return (
-    <div className="flex items-start gap-2 rounded-lg border border-warning-border bg-warning-muted p-3">
-      <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
-      <p className="text-sm text-warning-muted-foreground">
-        {missing.map((s) => s.person_name).join(" and ")}{" "}
-        {missing.length === 1 ? "hasn't" : "haven't"} uploaded yet this month.
-      </p>
-    </div>
-  );
-}
 
 function SummaryStats({
   data,
@@ -731,10 +717,7 @@ export function TransactionsPage() {
         : new Map<string, string>(),
     [data],
   );
-  const groupIconMap = useMemo(
-    () => new Map((categoryGroups ?? []).map((g) => [g.id, g.icon])),
-    [categoryGroups],
-  );
+  const groupIconMap = useGroupIconMap();
 
   const categoryOptions: ComboboxOption[] = useMemo(
     () =>
@@ -781,7 +764,10 @@ export function TransactionsPage() {
 
       {data && (
         <div className="space-y-6">
-          <UploadStatusBanner statuses={data.upload_statuses} />
+          <UploadStatusRow
+            statuses={data.upload_statuses}
+            personIndexMap={personIndexMap}
+          />
 
           {data.transaction_count === 0 ? (
             <PageEmpty
@@ -789,12 +775,14 @@ export function TransactionsPage() {
               heading={`No shared transactions for ${periodLabel}`}
               description="Upload a CSV to see transactions."
               action={
-                <Link
-                  to="/upload"
-                  className="text-sm font-medium text-primary hover:underline"
-                >
-                  Upload CSV
-                </Link>
+                <EmptyStateActions
+                  latestMonth={
+                    singleMonth ? data.latest_transaction_month : null
+                  }
+                  currentYear={singleMonth?.year ?? 0}
+                  currentMonth={singleMonth?.month ?? 0}
+                  viewPath="transactions"
+                />
               }
             />
           ) : (
