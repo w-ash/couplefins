@@ -42,7 +42,7 @@ export function FinalizationBanner({
           type="button"
           onClick={onUnfinalize}
           disabled={isPending}
-          className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 min-h-8 text-xs font-medium text-primary-muted-foreground/70 transition-colors hover:bg-primary-muted hover:text-primary-muted-foreground disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 min-h-8 text-xs font-medium text-primary-muted-foreground/70 transition-colors hover:bg-primary-muted hover:text-primary-muted-foreground disabled:opacity-50"
         >
           {isPending ? (
             <Loader2 className="size-3 animate-spin" />
@@ -69,7 +69,7 @@ export function FinalizationBanner({
         type="button"
         onClick={onFinalize}
         disabled={isPending}
-        className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
       >
         {isPending ? (
           <Loader2 className="size-3 animate-spin" />

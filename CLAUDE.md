@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Couplefins is a shared finance reconciliation tool for couples. Each person uses their own Monarch Money account, tags shared expenses, and exports monthly CSVs. This app replaces their spreadsheet for reconciling who owes whom and tracking shared budgets by category.
 
 Domain details: @docs/domain.md
+User goals and monthly workflow: @docs/user-flows.md
 
 ## Core Principles (YOU MUST FOLLOW)
 

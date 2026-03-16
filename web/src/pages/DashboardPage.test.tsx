@@ -15,6 +15,7 @@ import {
   screen,
   userEvent,
   waitFor,
+  within,
 } from "../test/test-utils";
 import { DashboardPage } from "./DashboardPage";
 
@@ -166,7 +167,10 @@ describe("DashboardPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Month History")).toBeInTheDocument();
-      expect(screen.getByText("January 2026")).toBeInTheDocument();
+      // "January 2026" appears in both settlement card and history row
+      expect(screen.getAllByText("January 2026").length).toBeGreaterThanOrEqual(
+        1,
+      );
     });
   });
 
@@ -215,16 +219,16 @@ describe("DashboardPage", () => {
     renderWithProviders(<DashboardPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("January 2026")).toBeInTheDocument();
+      expect(screen.getByText("Month History")).toBeInTheDocument();
     });
 
-    const row = screen.getByText("January 2026").closest("tr");
+    // Find "January 2026" inside the history table (not the settlement card)
+    const table = screen.getByText("Month History").closest("div");
+    if (!table) throw new Error("Expected history container to exist");
+    const row = within(table).getByText("January 2026").closest("tr");
     if (!row) throw new Error("Expected row to exist");
     await user.click(row);
 
-    // useNavigate was called — verify the URL changed
-    // MemoryRouter doesn't expose location directly, but we can verify
-    // the row has cursor-pointer styling (interactive indicator)
     expect(row).toHaveClass("cursor-pointer");
   });
 });

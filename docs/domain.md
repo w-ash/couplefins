@@ -29,7 +29,7 @@ The couple uses Monarch tags to mark shared expenses:
 
 **Input vs. internal representation**: The `sXX` tag is the *input mechanism* — how the system learns the split from a Monarch CSV. Internally, each transaction stores `payer_person_id` (who paid) and `payer_percentage` (their share, 0-100). The other person's share is always `100 - payer_percentage`. This makes the internal model agnostic to how the split was originally specified.
 
-> **Note**: Today the couple manually enters split percentages in a spreadsheet. In the future, they will use Monarch `sXX` tags. The app's internal model supports either workflow.
+The couple can set splits either way: tag transactions with `sXX` in Monarch before exporting, or edit split percentages directly in the app after uploading. Both workflows produce the same internal representation.
 
 ### Reconciliation Math
 
@@ -37,7 +37,7 @@ For each shared transaction:
 - `payer_share = |amount| × (payer_percentage / 100)`
 - `other_share = |amount| × ((100 - payer_percentage) / 100)`
 
-Sum across all shared transactions for a month → net result: "Person A owes Person B $X"
+Sum across all shared transactions for a period (a single month or an arbitrary date range) → net result: "Person A owes Person B $X"
 
 **Examples**:
 - Alice pays $100 dinner, tagged `shared` (no sXX → 50/50): Alice's share $50, Bob's share $50. Bob owes Alice $50.
@@ -45,7 +45,7 @@ Sum across all shared transactions for a month → net result: "Person A owes Pe
 
 ## User Identity
 
-Two named profiles (no authentication). Users select who they are when uploading a CSV.
+Two named profiles (no authentication). Each person selects their identity once at first launch via a profile picker; the choice persists in localStorage across sessions. Each person uses their own laptop — identity switching is rare.
 
 ## Category Groups
 
@@ -87,8 +87,10 @@ Couplefins vocabulary mapped to standard accounting terms:
 | CategoryGroup | Chart of Accounts (level 1) | Reporting hierarchy |
 | CategoryMapping | Posting Rule | Routes categories to groups |
 | Adjustment (v0.3.x) | Correcting Entry (Reversal pattern) | Offsetting entries for accurate per-person spend |
+| Settlement | Payment Record | Records that Person A paid Person B (amount, method, notes). Linked transactions excluded from reconciliation. |
 | `payer_percentage` | Allocation Rule / Split Ratio | Determines each person's share |
 | `is_finalized` | Period Close | Prevents modification after agreement |
+| TransactionEdit | Audit Log Entry | Records post-upload changes to a transaction (field, old value, new value, timestamp) |
 
 ### Signed-amount convention
 

@@ -1,12 +1,12 @@
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
 
 from attrs import define, field
 
 from src.application.use_cases._shared.command_validators import (
-    month_range,
+    optional_month_range,
     positive_int,
 )
 from src.application.use_cases._shared.date_math import month_bounds
@@ -28,7 +28,7 @@ from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 @define(frozen=True, slots=True)
 class GetDashboardCommand:
     year: int = field(validator=positive_int)
-    month: int = field(validator=month_range)
+    month: int | None = field(default=None, validator=optional_month_range)
 
 
 @define(frozen=True, slots=True)
@@ -107,6 +107,26 @@ def _build_month_history(
     return entries
 
 
+def _resolve_active_month(
+    by_month: dict[int, list[Transaction]],
+    finalized_months: set[int],
+    fallback_month: int,
+) -> int:
+    """Pick the most relevant month for the dashboard.
+
+    Fallback chain: latest unfinalized month with transactions →
+    latest month with transactions → current calendar month.
+    """
+    if not by_month:
+        return fallback_month
+    unfinalized = sorted(
+        (m for m in by_month if m not in finalized_months), reverse=True
+    )
+    if unfinalized:
+        return unfinalized[0]
+    return max(by_month)
+
+
 @define(slots=True)
 class GetDashboardUseCase:
     async def execute(
@@ -118,11 +138,22 @@ class GetDashboardUseCase:
             all_year_txs = await uow.transactions.get_shared_by_year(command.year)
             by_month = _partition_by_month(all_year_txs)
 
-            # Reconcile each month once, reuse for current month + history
+            year_periods = await uow.reconciliation_periods.get_by_year(command.year)
+            finalized_months = {p.month for p in year_periods if p.is_finalized}
+
+            # Resolve active month: explicit param, or auto-detect
+            now = datetime.now(tz=UTC)
+            active_month = (
+                command.month
+                if command.month is not None
+                else _resolve_active_month(by_month, finalized_months, now.month)
+            )
+
+            # Reconcile each month once, reuse for active month + history
             month_summaries = _reconcile_all_months(by_month, ctx, command.year)
-            start, end = month_bounds(command.year, command.month)
+            start, end = month_bounds(command.year, active_month)
             current_month = month_summaries.get(
-                command.month,
+                active_month,
                 reconcile(
                     [],
                     ctx.persons,
@@ -133,9 +164,9 @@ class GetDashboardUseCase:
                 ),
             )
 
-            # YTD (Jan through requested month)
+            # YTD (Jan through active month)
             ytd_summary = reconcile(
-                [tx for tx in all_year_txs if tx.date.month <= command.month],
+                [tx for tx in all_year_txs if tx.date.month <= active_month],
                 ctx.persons,
                 ctx.category_mappings,
                 ctx.category_groups,
@@ -144,16 +175,14 @@ class GetDashboardUseCase:
             )
 
             uploads = await uow.uploads.get_by_person_ids_with_transactions_in_period(
-                ctx.person_ids, command.year, command.month
+                ctx.person_ids, command.year, active_month
             )
 
-            year_periods = await uow.reconciliation_periods.get_by_year(command.year)
-            finalized_months = {p.month for p in year_periods if p.is_finalized}
             current_period = next(
-                (p for p in year_periods if p.month == command.month), None
+                (p for p in year_periods if p.month == active_month), None
             )
 
-            tx_categories = {tx.category for tx in by_month.get(command.month, [])}
+            tx_categories = {tx.category for tx in by_month.get(active_month, [])}
 
             return GetDashboardResult(
                 current_month=current_month,

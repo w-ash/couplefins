@@ -78,7 +78,7 @@ Four things that make this app visually recognizable without a logo.
 
 **The identity toggle.** Both people are visible in the sidebar as compact avatar buttons — colored circles with initials, a pulse dot on the active person. Not a dropdown, not a settings screen. The two-person nature of the app is spatially encoded, always visible, switchable in one click.
 
-**The settlement card.** Who-owes-whom is the first prominent element on the transactions page, styled as a centered statement with the person's name in a colored pill. Settlement is the immediate actionable answer; budget tracking is the longer arc. The settlement card leads because it resolves the session's most time-sensitive question.
+**The settlement card.** Who-owes-whom is the hero element on the dashboard and the transactions page, styled as a centered statement with the person's name in a colored pill. On the dashboard it includes the active month label ("March 2026") since the dashboard is a "now" view that auto-surfaces the most relevant period. Settlement is the immediate actionable answer; budget tracking is the longer arc. The settlement card leads because it resolves the session's most time-sensitive question.
 
 **Teal/coral financial semantics.** Every amount in every table and summary is colored: teal for positive, coral for negative. This consistent color language replaces the conventional green/red and becomes a visual fingerprint across the app.
 
@@ -109,6 +109,7 @@ Where the app deliberately follows standard patterns, and why the convention ser
 | Dark/light mode with system detection | Users expect this. Three-way toggle (system/light/dark) with FOIT prevention covers all preferences. |
 | Icon + text label on nav items | Clarity. Icons alone are ambiguous — a gear could mean settings, configuration, or preferences. |
 | Form → Preview → Confirm upload flow | Trust-building pattern for data import. Users see what will happen before it happens. |
+| Shared component primitives for equivalent interactions | A toggle on the Budget page must look identical to a toggle on the Transactions page. Shared components (SegmentedControl, Button, input style constants) enforce this mechanically — visual consistency is a code constraint, not a code review concern. |
 
 ---
 

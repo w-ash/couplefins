@@ -4,18 +4,23 @@ from decimal import Decimal
 from src.application.use_cases.get_dashboard import (
     GetDashboardCommand,
     GetDashboardUseCase,
+    _resolve_active_month,
 )
 from tests.fixtures.factories import (
     make_category_group,
     make_category_mapping,
     make_person,
+    make_reconciliation_period,
     make_transaction,
     make_upload,
 )
 from tests.fixtures.mocks import make_mock_uow
 
 
-def _make_command(year: int = 2026, month: int = 3) -> GetDashboardCommand:
+def _make_command(
+    year: int = 2026,
+    month: int | None = 3,
+) -> GetDashboardCommand:
     return GetDashboardCommand(year=year, month=month)
 
 
@@ -213,3 +218,88 @@ async def test_settlement_history_entries() -> None:
     assert jan_entry.settlement_amount == Decimal("50.00")
     assert jan_entry.settlement_from_person_id == bob.id
     assert jan_entry.settlement_to_person_id == alice.id
+
+
+# ─── Active month resolution ───
+
+
+def test_resolve_active_month_picks_latest_unfinalized() -> None:
+    by_month: dict[int, list] = {1: [], 2: [], 3: []}
+    finalized = {1, 2}
+    assert _resolve_active_month(by_month, finalized, fallback_month=4) == 3
+
+
+def test_resolve_active_month_falls_back_to_latest_when_all_finalized() -> None:
+    by_month: dict[int, list] = {1: [], 2: [], 3: []}
+    finalized = {1, 2, 3}
+    assert _resolve_active_month(by_month, finalized, fallback_month=4) == 3
+
+
+def test_resolve_active_month_falls_back_to_current_when_no_txs() -> None:
+    assert _resolve_active_month({}, set(), fallback_month=4) == 4
+
+
+async def test_auto_month_picks_latest_unfinalized_with_txs() -> None:
+    """The 'getting started' case: data exists but no reconciliations yet."""
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    _setup_uow_base(uow, alice, bob)
+
+    txs = [
+        make_transaction(
+            date=date(2026, 2, 10),
+            amount=Decimal("-80.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+        make_transaction(
+            date=date(2026, 3, 5),
+            amount=Decimal("-100.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+    ]
+    uow.transactions.get_shared_by_year.return_value = txs
+    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+
+    # No explicit month → auto-detect
+    result = await GetDashboardUseCase().execute(_make_command(month=None), uow)
+
+    # Should pick March (latest unfinalized with txs)
+    assert result.current_month.start_date == date(2026, 3, 1)
+    assert result.current_month.total_shared_spending == Decimal("100.00")
+
+
+async def test_auto_month_skips_finalized_months() -> None:
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    _setup_uow_base(uow, alice, bob)
+
+    txs = [
+        make_transaction(
+            date=date(2026, 2, 10),
+            amount=Decimal("-80.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+        make_transaction(
+            date=date(2026, 3, 5),
+            amount=Decimal("-100.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+    ]
+    uow.transactions.get_shared_by_year.return_value = txs
+    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+    # March is finalized
+    uow.reconciliation_periods.get_by_year.return_value = [
+        make_reconciliation_period(year=2026, month=3, is_finalized=True),
+    ]
+
+    result = await GetDashboardUseCase().execute(_make_command(month=None), uow)
+
+    # Should pick February (latest unfinalized with txs)
+    assert result.current_month.start_date == date(2026, 2, 1)
+    assert result.current_month.total_shared_spending == Decimal("80.00")

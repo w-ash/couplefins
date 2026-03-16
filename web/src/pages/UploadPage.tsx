@@ -18,6 +18,7 @@ import { apiFetch } from "@/lib/api";
 import { useInvalidateCategories } from "@/lib/categories";
 import { formatCurrency, formatDate, formatSplit } from "@/lib/format";
 import { useIdentityStore } from "@/lib/identity";
+import { selectInputClass } from "@/lib/input-styles";
 import { fetchPersons, PERSONS_QUERY_KEY } from "@/types/person";
 
 const PREVIEW_LIMIT = 5;
@@ -129,20 +130,20 @@ function ActionPanel({
       {step === "review" && totalChanged > 0 && (
         <>
           <div className="flex gap-2">
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => onToggleAll(true)}
-              className="rounded-full px-3 py-1 text-sm font-medium bg-primary-muted text-primary-muted-foreground transition-colors hover:bg-primary-muted/80"
             >
               Accept All
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => onToggleAll(false)}
-              className="rounded-full px-3 py-1 text-sm font-medium bg-muted text-muted-foreground transition-colors hover:bg-secondary"
             >
               Reject All
-            </button>
+            </Button>
           </div>
           <p className="text-sm text-muted-foreground">
             {acceptedIds.size} of {totalChanged} accepted
@@ -340,7 +341,7 @@ export function UploadPage() {
               onChange={(e) => setPersonId(e.target.value)}
               required
               disabled={isFormDisabled}
-              className="w-full rounded-lg border border-input bg-card px-3 py-2 text-foreground shadow-sm focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              className={`w-full ${selectInputClass} disabled:cursor-not-allowed disabled:opacity-50`}
             >
               <option value="">Select person...</option>
               {personsQuery.data?.map((p) => (

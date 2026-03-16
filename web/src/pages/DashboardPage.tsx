@@ -8,7 +8,6 @@ import {
   Upload,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router";
-import { MonthSelector } from "@/components/MonthSelector";
 import { PageHeader } from "@/components/PageHeader";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
 import { StatsGrid } from "@/components/StatsGrid";
@@ -16,12 +15,7 @@ import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarnin
 import { UploadStatusRow } from "@/components/UploadStatusRow";
 import type { DashboardData, MonthHistoryEntry } from "@/lib/dashboard";
 import { DASHBOARD_QUERY_KEY, fetchDashboard } from "@/lib/dashboard";
-import {
-  buildSettlementLabel,
-  formatCurrency,
-  MONTHS,
-  useMonthYear,
-} from "@/lib/format";
+import { buildSettlementLabel, formatCurrency, MONTHS } from "@/lib/format";
 import { usePersonMaps } from "@/lib/persons";
 import { getPersonAccentColor } from "@/types/person";
 
@@ -54,7 +48,7 @@ function SummaryStats({
   );
 }
 
-function QuickActions({ year, month }: { year: number; month: number }) {
+function QuickActions() {
   return (
     <div className="flex items-center gap-3">
       <Link
@@ -65,14 +59,14 @@ function QuickActions({ year, month }: { year: number; month: number }) {
         Upload CSV
       </Link>
       <Link
-        to={`/settle?year=${year}&month=${month}`}
+        to="/settle"
         className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground shadow-sm transition-colors duration-150 hover:bg-muted"
       >
         <HandCoins className="size-4" />
         Settle Up
       </Link>
       <Link
-        to={`/transactions?year=${year}&month=${month}`}
+        to="/transactions"
         className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground shadow-sm transition-colors duration-150 hover:bg-muted"
       >
         View Transactions
@@ -156,17 +150,16 @@ function buildHistorySettlementLabel(
 }
 
 export function DashboardPage() {
-  const { year, month } = useMonthYear();
-
-  const dashboardQueryKey = [...DASHBOARD_QUERY_KEY, year, month];
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: dashboardQueryKey,
-    queryFn: () => fetchDashboard(year, month),
+    queryKey: DASHBOARD_QUERY_KEY,
+    queryFn: () => fetchDashboard(),
   });
 
   const { personNames, personIndexMap } = usePersonMaps(data?.persons);
 
-  const monthName = MONTHS[month - 1] ?? "";
+  const monthLabel = data
+    ? `${MONTHS[data.current_month_month - 1] ?? ""} ${data.current_month_year}`
+    : "";
   const isEmpty =
     data &&
     data.current_month_transaction_count === 0 &&
@@ -188,9 +181,7 @@ export function DashboardPage() {
             </span>
           ) : undefined
         }
-      >
-        <MonthSelector />
-      </PageHeader>
+      />
 
       {isLoading && <PageLoading label="Loading dashboard..." />}
 
@@ -199,7 +190,7 @@ export function DashboardPage() {
       {isEmpty && (
         <PageEmpty
           icon={<Upload />}
-          heading={`No data for ${monthName} ${year}`}
+          heading={`No data for ${monthLabel}`}
           description="Upload a CSV to see your shared spending."
           action={
             <Link
@@ -217,9 +208,12 @@ export function DashboardPage() {
           {data.current_month_settlement &&
           data.current_month_settlement.amount > 0 ? (
             <Link
-              to={`/settle?year=${year}&month=${month}`}
+              to="/settle"
               className="block rounded-xl border border-primary/20 bg-card p-6 shadow-md transition-colors hover:bg-muted/50"
             >
+              <p className="mb-1 text-center text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                {monthLabel}
+              </p>
               <p className="text-center text-lg font-semibold text-foreground">
                 <span
                   className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-base font-semibold ${getPersonAccentColor(personIndexMap.get(data.current_month_settlement.from_person_id) ?? -1)}`}
@@ -241,6 +235,9 @@ export function DashboardPage() {
             </Link>
           ) : (
             <div className="rounded-xl border border-primary/20 bg-card p-6 shadow-md">
+              <p className="mb-1 text-center text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                {monthLabel}
+              </p>
               <p className="text-center text-lg font-semibold text-primary">
                 <span className="inline-flex items-center gap-2">
                   <CheckCircle2 className="size-5" />
@@ -254,7 +251,7 @@ export function DashboardPage() {
             personIndexMap={personIndexMap}
           />
           <SummaryStats data={data} personNames={personNames} />
-          <QuickActions year={year} month={month} />
+          <QuickActions />
           <MonthHistory
             entries={data.month_history}
             personNames={personNames}

@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Button } from "@/components/Button";
 import { Combobox, type ComboboxOption } from "@/components/Combobox";
 import { PercentInput } from "@/components/PercentInput";
+import { SegmentedControl } from "@/components/SegmentedControl";
 import { parsePercent, plural } from "@/lib/format";
 import type { TagAction } from "@/lib/transactions";
 
@@ -216,30 +217,15 @@ export function BulkEditToolbar({
             {/* Tags — full width */}
             <div className="col-span-2 flex items-center gap-2 text-sm text-muted-foreground">
               <span className="w-16 shrink-0">Tags</span>
-              <div className="flex shrink-0 rounded-full border border-border bg-muted/50 p-0.5">
-                <button
-                  type="button"
-                  onClick={() => switchTagAction("add")}
-                  className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                    tagAction === "add"
-                      ? "bg-card text-foreground shadow-sm"
-                      : "text-muted-foreground"
-                  }`}
-                >
-                  Add
-                </button>
-                <button
-                  type="button"
-                  onClick={() => switchTagAction("remove")}
-                  className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                    tagAction === "remove"
-                      ? "bg-card text-foreground shadow-sm"
-                      : "text-muted-foreground"
-                  }`}
-                >
-                  Remove
-                </button>
-              </div>
+              <SegmentedControl
+                options={[
+                  { value: "add", label: "Add" },
+                  { value: "remove", label: "Remove" },
+                ]}
+                value={tagAction}
+                onChange={switchTagAction}
+                shape="pill"
+              />
               <Combobox
                 mode="multi"
                 options={tagOptions}

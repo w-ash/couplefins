@@ -3,6 +3,7 @@ import { Heart, UserPlus } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Button } from "@/components/Button";
 import { apiFetch } from "@/lib/api";
+import { baseInputClass } from "@/lib/input-styles";
 import { PERSONS_QUERY_KEY } from "@/types/person";
 
 function setupCouple(name1: string, name2: string) {
@@ -72,7 +73,7 @@ export function SetupPage() {
               required
               disabled={mutation.isPending}
               aria-describedby={mutation.error ? "setup-error" : undefined}
-              className="w-full rounded-lg border border-input bg-card px-3 py-2 text-foreground shadow-sm placeholder:text-placeholder focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              className={`w-full ${baseInputClass} placeholder:text-placeholder disabled:cursor-not-allowed disabled:opacity-50`}
             />
           </div>
 
@@ -93,7 +94,7 @@ export function SetupPage() {
               required
               disabled={mutation.isPending}
               aria-describedby={mutation.error ? "setup-error" : undefined}
-              className="w-full rounded-lg border border-input bg-card px-3 py-2 text-foreground shadow-sm placeholder:text-placeholder focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              className={`w-full ${baseInputClass} placeholder:text-placeholder disabled:cursor-not-allowed disabled:opacity-50`}
             />
           </div>
 

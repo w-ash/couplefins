@@ -3,11 +3,15 @@ import {
   formatRangeLabel,
   isSingleMonth,
   lastMonth,
+  lastThreeMonths,
   lastYear,
+  MONTHS_SHORT,
+  matchesPreset,
+  monthStartEnd,
   parseDate,
   thisMonth,
+  thisYear,
   toDateStr,
-  yearToDate,
 } from "./date-range";
 
 describe("isSingleMonth", () => {
@@ -85,8 +89,14 @@ describe("presets", () => {
     expect(range.endDate).toBe("2026-02-28");
   });
 
-  it("yearToDate returns Jan 1 through today", () => {
-    const range = yearToDate();
+  it("lastThreeMonths returns 3 full months ending with current", () => {
+    const range = lastThreeMonths();
+    expect(range.startDate).toBe("2026-01-01");
+    expect(range.endDate).toBe("2026-03-31");
+  });
+
+  it("thisYear returns Jan 1 through today", () => {
+    const range = thisYear();
     expect(range.startDate).toBe("2026-01-01");
     expect(range.endDate).toBe("2026-03-13");
   });
@@ -115,5 +125,66 @@ describe("toDateStr / parseDate", () => {
     expect(d.getMonth()).toBe(6); // 0-indexed
     expect(d.getDate()).toBe(4);
     expect(d.getHours()).toBe(0);
+  });
+});
+
+describe("monthStartEnd", () => {
+  it("returns full month range", () => {
+    expect(monthStartEnd(2026, 3)).toEqual({
+      startDate: "2026-03-01",
+      endDate: "2026-03-31",
+    });
+  });
+
+  it("handles February in a leap year", () => {
+    expect(monthStartEnd(2024, 2)).toEqual({
+      startDate: "2024-02-01",
+      endDate: "2024-02-29",
+    });
+  });
+
+  it("handles December", () => {
+    expect(monthStartEnd(2026, 12)).toEqual({
+      startDate: "2026-12-01",
+      endDate: "2026-12-31",
+    });
+  });
+});
+
+describe("matchesPreset", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 2, 13));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("matches thisMonth preset", () => {
+    expect(matchesPreset("2026-03-01", "2026-03-31", thisMonth)).toBe(true);
+  });
+
+  it("does not match a different range", () => {
+    expect(matchesPreset("2026-02-01", "2026-02-28", thisMonth)).toBe(false);
+  });
+
+  it("matches lastMonth preset", () => {
+    expect(matchesPreset("2026-02-01", "2026-02-28", lastMonth)).toBe(true);
+  });
+
+  it("matches thisYear preset", () => {
+    expect(matchesPreset("2026-01-01", "2026-03-13", thisYear)).toBe(true);
+  });
+});
+
+describe("MONTHS_SHORT", () => {
+  it("has 12 entries", () => {
+    expect(MONTHS_SHORT).toHaveLength(12);
+  });
+
+  it("starts with Jan and ends with Dec", () => {
+    expect(MONTHS_SHORT[0]).toBe("Jan");
+    expect(MONTHS_SHORT[11]).toBe("Dec");
   });
 });

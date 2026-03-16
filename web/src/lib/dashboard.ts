@@ -41,8 +41,12 @@ export interface DashboardData {
 export const DASHBOARD_QUERY_KEY = ["dashboard"] as const;
 
 export function fetchDashboard(
-  year: number,
-  month: number,
+  year?: number,
+  month?: number,
 ): Promise<DashboardData> {
-  return apiFetch(`/api/v1/dashboard?year=${year}&month=${month}`);
+  const params = new URLSearchParams();
+  if (year !== undefined) params.set("year", String(year));
+  if (month !== undefined) params.set("month", String(month));
+  const qs = params.toString();
+  return apiFetch(`/api/v1/dashboard${qs ? `?${qs}` : ""}`);
 }

@@ -31,3 +31,10 @@ def positive_decimal(
 def month_range(_instance: object, attribute: Attribute[int], value: int) -> None:
     if not 1 <= value <= _MAX_MONTH:
         raise ValueError(f"{attribute.name} must be 1-12, got {value}")
+
+
+def optional_month_range(
+    _instance: object, attribute: Attribute[int | None], value: int | None
+) -> None:
+    if value is not None:
+        month_range(_instance, attribute, value)  # type: ignore[arg-type]

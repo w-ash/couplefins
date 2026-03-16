@@ -17,7 +17,7 @@ async def get_dashboard(
     year: int | None = None, month: int | None = None
 ) -> DashboardResponse:
     now = datetime.now(UTC)
-    command = GetDashboardCommand(year=year or now.year, month=month or now.month)
+    command = GetDashboardCommand(year=year or now.year, month=month)
     result = await execute_use_case(
         lambda uow: GetDashboardUseCase().execute(command, uow)
     )

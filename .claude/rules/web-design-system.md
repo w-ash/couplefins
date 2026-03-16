@@ -44,6 +44,42 @@ Load Satoshi as a variable font from Fontshare. Load Geist Mono from Google Font
 - Card-based layout with gentle shadows (not flat, not heavy)
 - Rounded corners (rounded-lg / rounded-xl) for a soft feel
 
+## Component Primitives (always use these)
+
+New UI must use these shared building blocks. Never hand-roll equivalent styling inline.
+
+### Buttons
+- **All buttons** must use `<Button>` from `@/components/Button` (variants: primary/secondary/destructive, sizes: default/sm)
+- Only exceptions: icon-only affordances inside complex components (table chevrons, close X buttons) where Button's padding/shadow would be wrong
+- Links styled as buttons: compose Button's class strings, don't duplicate them
+
+### Inputs
+- **Text/number inputs**: compose from `baseInputClass` in `@/lib/input-styles`
+- **Select elements**: compose from `selectInputClass`
+- **Percent inputs**: use `<PercentInput>` component
+- Never hand-roll `rounded-lg border border-input bg-card ...` — import the constant
+
+### Cards
+- Top-level content cards: `rounded-xl border border-border bg-card p-6 shadow-sm`
+- Nested/inline elements (toolbars, list items): `rounded-lg` is appropriate
+- Hero/accent cards: `rounded-xl border-primary/20 shadow-md`
+
+### Segmented controls (toggle between modes)
+- Use `<SegmentedControl>` from `@/components/SegmentedControl` — sliding indicator, native radio inputs, arrow-key navigation
+- Default shape `rounded` for top-level controls, `pill` for inline/form controls
+- Size `sm` for compact contexts (popovers), `default` for page-level controls
+
+### Page structure
+- Page header: `<PageHeader>` component — never hand-roll h1 + flex layout
+- Async states: `<PageLoading>`, `<PageError>`, `<PageEmpty>` from `@/components/PageStates`
+- Stats row: `<StatsGrid>` component
+
+### Popovers & dropdowns
+- z-index: `z-50` for all popovers (not z-40)
+- Offset from trigger: `mt-1.5`
+- Single-section dropdowns: `rounded-lg`
+- Multi-section panels (DateRangePicker): `rounded-xl`
+
 ## Depth System
 - Subtle warm-toned shadows (not pure black shadows)
 - 2-3 elevation levels max (flat, raised, modal)
@@ -165,3 +201,7 @@ Every interactive component must handle all applicable states:
 - [ ] Skip-to-content: link present in app shell, works on Tab → Enter?
 - [ ] Heading hierarchy: sequential, no skipped levels?
 - [ ] Label associations: all inputs have `<label>` via `htmlFor`, errors linked via `aria-describedby`?
+- [ ] Component reuse: using `<Button>` for all buttons? `baseInputClass`/`selectInputClass` for inputs?
+- [ ] Segmented controls: using `<SegmentedControl>` for all mode toggles?
+- [ ] Card radius: top-level cards are `rounded-xl`, only nested elements use `rounded-lg`?
+- [ ] No hand-rolled styles: no inline `rounded-lg border border-input bg-card...` when a shared constant exists?

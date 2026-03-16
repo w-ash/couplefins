@@ -14,6 +14,7 @@ import { Button } from "@/components/Button";
 import { MonthSelector } from "@/components/MonthSelector";
 import { PageHeader } from "@/components/PageHeader";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
+import { SegmentedControl } from "@/components/SegmentedControl";
 import { StatsGrid } from "@/components/StatsGrid";
 import type { BudgetOverviewData, GroupBudgetStatus } from "@/lib/budgets";
 import {
@@ -28,7 +29,7 @@ import {
 } from "@/lib/categories";
 import { getCategoryGroupIcon } from "@/lib/category-icons";
 import { formatCurrency, useMonthYear } from "@/lib/format";
-import { selectInputClass } from "@/lib/input-styles";
+import { baseInputClass, selectInputClass } from "@/lib/input-styles";
 
 type ViewMode = "monthly" | "ytd";
 type SortMode = "urgency" | "spending" | "name";
@@ -170,7 +171,7 @@ function BudgetGroupRow({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-card shadow-sm">
+    <div className="rounded-xl border border-border bg-card shadow-sm">
       {/* Main row */}
       <button
         type="button"
@@ -268,15 +269,12 @@ function BudgetGroupRow({
                     min="0.01"
                     value={editValue}
                     onChange={(e) => setEditValue(e.target.value)}
-                    className="w-28 rounded border border-input bg-background px-2 py-1 text-sm tabular-nums"
+                    className={`w-28 tabular-nums ${baseInputClass}`}
                     aria-label="New budget amount"
                   />
-                  <button
-                    type="submit"
-                    className="rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground"
-                  >
+                  <Button type="submit" size="sm">
                     Save Budget
-                  </button>
+                  </Button>
                   <button
                     type="button"
                     onClick={() => setEditing(false)}
@@ -435,7 +433,7 @@ function AddBudgetForm({
                 ? `Avg: ${formatCurrency(selectedGroup.average_monthly_spending)}`
                 : "0.00"
             }
-            className="w-32 rounded border border-input bg-background px-2 py-1.5 text-sm tabular-nums"
+            className={`w-32 tabular-nums ${baseInputClass}`}
             required
           />
         </div>
@@ -451,16 +449,13 @@ function AddBudgetForm({
             type="date"
             value={effectiveFrom}
             onChange={(e) => setEffectiveFrom(e.target.value)}
-            className="rounded border border-input bg-background px-2 py-1.5 text-sm"
+            className={baseInputClass}
             required
           />
         </div>
-        <button
-          type="submit"
-          className="rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
-        >
+        <Button type="submit" size="sm">
           Save Budget
-        </button>
+        </Button>
         <button
           type="button"
           onClick={() => setOpen(false)}
@@ -590,22 +585,14 @@ export function BudgetPage() {
 
       {/* Controls */}
       <div className="mb-6 flex items-center gap-3">
-        <div className="flex rounded-lg border border-input">
-          <button
-            type="button"
-            onClick={() => setViewMode("monthly")}
-            className={`px-3 py-1.5 text-sm ${viewMode === "monthly" ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:text-foreground"} rounded-l-lg`}
-          >
-            Monthly
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("ytd")}
-            className={`px-3 py-1.5 text-sm ${viewMode === "ytd" ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:text-foreground"} rounded-r-lg`}
-          >
-            Year to date
-          </button>
-        </div>
+        <SegmentedControl
+          options={[
+            { value: "monthly", label: "Monthly" },
+            { value: "ytd", label: "Year to date" },
+          ]}
+          value={viewMode}
+          onChange={setViewMode}
+        />
         <select
           aria-label="Sort order"
           value={sortMode}

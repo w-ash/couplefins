@@ -23,7 +23,7 @@ function lastDayOfMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
 }
 
-function monthStartEnd(
+export function monthStartEnd(
   year: number,
   month: number,
 ): { startDate: string; endDate: string } {
@@ -45,7 +45,17 @@ export function lastMonth(): DateRange {
   return monthStartEnd(d.getFullYear(), d.getMonth() + 1);
 }
 
-export function yearToDate(): DateRange {
+export function lastThreeMonths(): DateRange {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+  return {
+    startDate: monthStartEnd(start.getFullYear(), start.getMonth() + 1)
+      .startDate,
+    endDate: monthStartEnd(now.getFullYear(), now.getMonth() + 1).endDate,
+  };
+}
+
+export function thisYear(): DateRange {
   const now = new Date();
   return {
     startDate: `${now.getFullYear()}-01-01`,
@@ -56,6 +66,30 @@ export function yearToDate(): DateRange {
 export function lastYear(): DateRange {
   const y = new Date().getFullYear() - 1;
   return { startDate: `${y}-01-01`, endDate: `${y}-12-31` };
+}
+
+export const MONTHS_SHORT = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+export function matchesPreset(
+  startDate: string,
+  endDate: string,
+  presetFn: () => DateRange,
+): boolean {
+  const preset = presetFn();
+  return startDate === preset.startDate && endDate === preset.endDate;
 }
 
 export function isSingleMonth(
@@ -81,8 +115,8 @@ export function formatRangeLabel(startDate: string, endDate: string): string {
   if (single) {
     return `${MONTHS[single.month - 1]} ${single.year}`;
   }
-  const start = new Date(`${startDate}T00:00:00`);
-  const end = new Date(`${endDate}T00:00:00`);
+  const start = parseDate(startDate);
+  const end = parseDate(endDate);
   return `${shortDateFmt.format(start)} \u2013 ${shortDateFmt.format(end)}`;
 }
 
