@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime
 from decimal import Decimal
 import uuid
 
@@ -11,6 +11,7 @@ from src.application.use_cases._shared.command_validators import (
     positive_int,
 )
 from src.application.use_cases._shared.settlement_records import (
+    build_settlement,
     validate_settlement_persons,
 )
 from src.domain.entities.settlement import Settlement, SettlementMethod
@@ -58,19 +59,16 @@ class RecordSettlementUseCase:
                 if missing:
                     raise NotFoundError(f"Transactions not found: {missing}")
 
-            now = datetime.now(UTC)
-            settlement = Settlement(
-                id=uuid.uuid4(),
+            settlement = build_settlement(
                 year=command.year,
                 month=command.month,
-                amount=command.amount,
                 from_person_id=command.from_person_id,
                 to_person_id=command.to_person_id,
+                amount=command.amount,
                 method=command.method,
                 is_waived=False,
                 notes=command.notes,
-                settled_at=command.settled_at or now,
-                created_at=now,
+                settled_at=command.settled_at,
             )
             saved = await uow.settlements.save(settlement)
 

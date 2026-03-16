@@ -1,11 +1,41 @@
 from collections import defaultdict
-from uuid import UUID
+from datetime import UTC, datetime
+from decimal import Decimal
+from uuid import UUID, uuid4
 
 from attrs import define
 
-from src.domain.entities.settlement import Settlement
+from src.domain.entities.settlement import Settlement, SettlementMethod
 from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
+
+
+def build_settlement(  # noqa: PLR0913
+    *,
+    year: int,
+    month: int,
+    from_person_id: UUID,
+    to_person_id: UUID,
+    amount: Decimal,
+    method: SettlementMethod | None,
+    is_waived: bool,
+    notes: str,
+    settled_at: datetime | None = None,
+) -> Settlement:
+    now = datetime.now(UTC)
+    return Settlement(
+        id=uuid4(),
+        year=year,
+        month=month,
+        amount=amount,
+        from_person_id=from_person_id,
+        to_person_id=to_person_id,
+        method=method,
+        is_waived=is_waived,
+        notes=notes,
+        settled_at=settled_at or now,
+        created_at=now,
+    )
 
 
 @define(frozen=True, slots=True)

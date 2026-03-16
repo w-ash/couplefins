@@ -7,17 +7,21 @@ from src.application.use_cases.bulk_modify_tags import TagAction
 from src.domain.constants import SplitDefaults
 
 
-def _validate_payer_pct(v: int | None) -> int | None:
-    if v is not None and not (0 <= v <= SplitDefaults.MAX_PAYER_PERCENTAGE):
+def _check_payer_pct_range(v: int) -> int:
+    if not (0 <= v <= SplitDefaults.MAX_PAYER_PERCENTAGE):
         raise ValueError(
             f"payer_percentage must be 0-{SplitDefaults.MAX_PAYER_PERCENTAGE}"
         )
     return v
 
 
-def _validate_ids_non_empty(v: list[UUID]) -> list[UUID]:
+def _validate_payer_pct(v: int | None) -> int | None:
+    return _check_payer_pct_range(v) if v is not None else None
+
+
+def _validate_non_empty[T](v: list[T], label: str) -> list[T]:
     if not v:
-        raise ValueError("At least one transaction ID is required")
+        raise ValueError(f"At least one {label} is required")
     return v
 
 
@@ -28,11 +32,7 @@ class SplitEntryRequest(BaseModel):
     @field_validator("payer_percentage")
     @classmethod
     def validate_range(cls, v: int) -> int:
-        if not (0 <= v <= SplitDefaults.MAX_PAYER_PERCENTAGE):
-            raise ValueError(
-                f"payer_percentage must be 0-{SplitDefaults.MAX_PAYER_PERCENTAGE}"
-            )
-        return v
+        return _check_payer_pct_range(v)
 
 
 class UpdateSplitsRequest(BaseModel):
@@ -41,9 +41,7 @@ class UpdateSplitsRequest(BaseModel):
     @field_validator("splits")
     @classmethod
     def validate_non_empty(cls, v: list[SplitEntryRequest]) -> list[SplitEntryRequest]:
-        if not v:
-            raise ValueError("At least one split entry is required")
-        return v
+        return _validate_non_empty(v, "split entry")
 
 
 class UpdateSplitsResponse(BaseModel):
@@ -91,7 +89,7 @@ class BulkUpdateRequest(BaseModel):
     @field_validator("transaction_ids")
     @classmethod
     def validate_non_empty(cls, v: list[UUID]) -> list[UUID]:
-        return _validate_ids_non_empty(v)
+        return _validate_non_empty(v, "transaction ID")
 
     @field_validator("payer_percentage")
     @classmethod
@@ -111,14 +109,12 @@ class BulkModifyTagsRequest(BaseModel):
     @field_validator("transaction_ids")
     @classmethod
     def validate_ids_non_empty(cls, v: list[UUID]) -> list[UUID]:
-        return _validate_ids_non_empty(v)
+        return _validate_non_empty(v, "transaction ID")
 
     @field_validator("tags")
     @classmethod
     def validate_tags_non_empty(cls, v: list[str]) -> list[str]:
-        if not v:
-            raise ValueError("At least one tag is required")
-        return v
+        return _validate_non_empty(v, "tag")
 
 
 class BulkModifyTagsResponse(BaseModel):

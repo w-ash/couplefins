@@ -1,4 +1,5 @@
 import { Settings } from "lucide-react";
+import { Card } from "@/components/Card";
 import { CategoryMappingEditor } from "@/components/CategoryMappingEditor";
 import { PageHeader } from "@/components/PageHeader";
 import { PersonAccountSettings } from "@/components/PersonAccountSettings";
@@ -11,10 +12,7 @@ export function SettingsPage() {
 
       <div className="space-y-6">
         {/* Appearance */}
-        <section
-          aria-labelledby="settings-appearance"
-          className="rounded-xl border border-border bg-card p-6 shadow-sm"
-        >
+        <Card as="section" aria-labelledby="settings-appearance">
           <h2
             id="settings-appearance"
             className="mb-4 font-medium text-lg text-foreground"
@@ -30,13 +28,10 @@ export function SettingsPage() {
             </div>
             <ThemeToggle />
           </div>
-        </section>
+        </Card>
 
         {/* Category Mappings */}
-        <section
-          aria-labelledby="settings-category-mappings"
-          className="rounded-xl border border-border bg-card p-6 shadow-sm"
-        >
+        <Card as="section" aria-labelledby="settings-category-mappings">
           <h2
             id="settings-category-mappings"
             className="mb-4 font-medium text-lg text-foreground"
@@ -44,13 +39,10 @@ export function SettingsPage() {
             Category Groups
           </h2>
           <CategoryMappingEditor />
-        </section>
+        </Card>
 
         {/* People */}
-        <section
-          aria-labelledby="settings-people"
-          className="rounded-xl border border-border bg-card p-6 shadow-sm"
-        >
+        <Card as="section" aria-labelledby="settings-people">
           <h2
             id="settings-people"
             className="mb-4 font-medium text-lg text-foreground"
@@ -58,7 +50,7 @@ export function SettingsPage() {
             People
           </h2>
           <PersonAccountSettings />
-        </section>
+        </Card>
       </div>
     </div>
   );

@@ -9,8 +9,10 @@ import {
   Upload,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router";
+import { Card } from "@/components/Card";
 import { PageHeader } from "@/components/PageHeader";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
+import { PersonBadge } from "@/components/PersonBadge";
 import { StatsGrid } from "@/components/StatsGrid";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { UploadStatusRow } from "@/components/UploadStatusRow";
@@ -93,7 +95,7 @@ function MonthHistory({
   if (entries.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+    <Card>
       <h2 className="mb-4 font-medium text-lg text-foreground">
         Month History
       </h2>
@@ -108,7 +110,17 @@ function MonthHistory({
         <tbody>
           {entries.map((entry) => {
             const monthName = MONTHS[entry.month - 1] ?? "";
-            const label = buildHistorySettlementLabel(entry, personNames);
+            const label = buildSettlementLabel(
+              entry.settlement_from_person_id
+                ? {
+                    amount: entry.settlement_amount,
+                    from_person_id: entry.settlement_from_person_id,
+                    to_person_id: entry.settlement_to_person_id ?? undefined,
+                  }
+                : null,
+              personNames,
+              { settledLabel: "All settled", includeToName: true },
+            );
 
             return (
               <tr
@@ -146,21 +158,8 @@ function MonthHistory({
           })}
         </tbody>
       </table>
-    </div>
+    </Card>
   );
-}
-
-function buildHistorySettlementLabel(
-  entry: MonthHistoryEntry,
-  personNames: Map<string, string>,
-): string {
-  if (entry.settlement_amount === 0 || !entry.settlement_from_person_id) {
-    return "All settled";
-  }
-  const fromName =
-    personNames.get(entry.settlement_from_person_id) ?? "Unknown";
-  const toName = personNames.get(entry.settlement_to_person_id ?? "") ?? "";
-  return `${fromName} owes ${toName} ${formatCurrency(entry.settlement_amount)}`;
 }
 
 export function DashboardPage() {
@@ -229,13 +228,19 @@ export function DashboardPage() {
                 {monthLabel}
               </p>
               <p className="text-center text-lg font-semibold text-foreground">
-                <span
-                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-base font-semibold ${getPersonAccentColor(personIndexMap.get(data.current_month_settlement.from_person_id) ?? -1)}`}
-                >
-                  {personNames.get(
-                    data.current_month_settlement.from_person_id,
-                  ) ?? "Unknown"}
-                </span>{" "}
+                <PersonBadge
+                  name={
+                    personNames.get(
+                      data.current_month_settlement.from_person_id,
+                    ) ?? "Unknown"
+                  }
+                  accentColor={getPersonAccentColor(
+                    personIndexMap.get(
+                      data.current_month_settlement.from_person_id,
+                    ) ?? -1,
+                  )}
+                  size="base"
+                />{" "}
                 owes{" "}
                 {personNames.get(data.current_month_settlement.to_person_id) ??
                   "Unknown"}{" "}

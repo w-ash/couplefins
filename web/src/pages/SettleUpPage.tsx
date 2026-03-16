@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, HandCoins, Loader2, Trash2, Upload } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Button } from "@/components/Button";
+import { Card } from "@/components/Card";
 import { FinalizationBanner } from "@/components/FinalizationBanner";
 import { InlineError } from "@/components/InlineError";
 import { MonthPicker } from "@/components/MonthPicker";
@@ -12,13 +13,18 @@ import {
   PageError,
   PageLoading,
 } from "@/components/PageStates";
+import { PersonBadge } from "@/components/PersonBadge";
 import { UploadStatusRow } from "@/components/UploadStatusRow";
 import { useTemporary } from "@/hooks/useTemporary";
 import { DASHBOARD_QUERY_KEY } from "@/lib/dashboard";
 import { formatCurrency, MONTHS, useMonthYear } from "@/lib/format";
 import { baseInputClass } from "@/lib/input-styles";
 import { usePersonMaps } from "@/lib/persons";
-import { finalizePeriod, unfinalizePeriod } from "@/lib/reconciliation";
+import {
+  finalizePeriod,
+  RECONCILIATION_QUERY_KEY,
+  unfinalizePeriod,
+} from "@/lib/reconciliation";
 import type { SettlementRecord, SettleUpData } from "@/lib/settlements";
 import {
   deleteSettlement,
@@ -65,12 +71,8 @@ function HeroCard({
   return (
     <div className="rounded-xl border border-primary/20 bg-card p-8 shadow-md">
       <p className="text-center text-2xl font-semibold text-foreground">
-        <span
-          className={`inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-lg font-semibold ${fromColor}`}
-        >
-          {fromName}
-        </span>{" "}
-        owes {toName}{" "}
+        <PersonBadge name={fromName} accentColor={fromColor} size="lg" /> owes{" "}
+        {toName}{" "}
         <span className="tabular-nums">{formatCurrency(owed.amount)}</span>
       </p>
       {data.remaining_balance > 0 && data.remaining_balance !== owed.amount && (
@@ -147,7 +149,7 @@ function RecordPaymentForm({
   const toName = personNames.get(owed.to_person_id) ?? "Unknown";
 
   return (
-    <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+    <Card>
       <h2 className="mb-4 font-medium text-lg text-foreground">
         Record Payment
       </h2>
@@ -232,7 +234,7 @@ function RecordPaymentForm({
           </InlineError>
         )}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -315,7 +317,7 @@ function PaymentHistory({
   if (settlements.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+    <Card>
       <h2 className="mb-4 font-medium text-lg text-foreground">
         Payment History
       </h2>
@@ -383,7 +385,7 @@ function PaymentHistory({
           );
         })}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -400,7 +402,7 @@ export function SettleUpPage() {
   const invalidateAll = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: SETTLE_UP_QUERY_KEY });
     queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY });
-    queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
+    queryClient.invalidateQueries({ queryKey: RECONCILIATION_QUERY_KEY });
   }, [queryClient]);
 
   const finalizeMutation = useMutation({

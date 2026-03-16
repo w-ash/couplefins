@@ -15,6 +15,7 @@ import {
   BulkEditToolbar,
 } from "@/components/BulkEditToolbar";
 import { Button } from "@/components/Button";
+import { Card } from "@/components/Card";
 import type { ComboboxOption } from "@/components/Combobox";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { PageHeader } from "@/components/PageHeader";
@@ -24,6 +25,7 @@ import {
   PageError,
   PageLoading,
 } from "@/components/PageStates";
+import { PersonBadge } from "@/components/PersonBadge";
 import { StatsGrid } from "@/components/StatsGrid";
 import { TransactionEditor } from "@/components/TransactionEditor";
 import {
@@ -36,6 +38,7 @@ import {
 import { TransactionSearch } from "@/components/TransactionSearch";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { UploadStatusRow } from "@/components/UploadStatusRow";
+import { useSetToggle } from "@/hooks/useSetToggle";
 import { useTemporary } from "@/hooks/useTemporary";
 import {
   CATEGORY_GROUPS_QUERY_KEY,
@@ -58,7 +61,10 @@ import type {
   ReconciliationData,
   ReconciliationTransaction,
 } from "@/lib/reconciliation";
-import { fetchReconciliationByRange } from "@/lib/reconciliation";
+import {
+  fetchReconciliationByRange,
+  RECONCILIATION_QUERY_KEY,
+} from "@/lib/reconciliation";
 import { fetchTags, TAGS_QUERY_KEY } from "@/lib/tags";
 import type { SortField, SortState } from "@/lib/transaction-filters";
 import {
@@ -173,7 +179,7 @@ function CategoryGroupBreakdownTable({
   if (breakdowns.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+    <Card>
       <h2 className="mb-4 font-medium text-lg text-foreground">
         Category Breakdown
         {hasRefunds && (
@@ -204,7 +210,7 @@ function CategoryGroupBreakdownTable({
           ))}
         </tbody>
       </table>
-    </div>
+    </Card>
   );
 }
 
@@ -296,12 +302,17 @@ function TransactionTable({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [savedId, setSavedId] = useTemporary<string | null>(null);
   const [bulkMode, setBulkMode] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const {
+    selected,
+    toggle: toggleSelected,
+    setAll,
+    clear: clearSelection,
+  } = useSetToggle();
 
   const exitBulkMode = useCallback(() => {
     setBulkMode(false);
-    setSelected(new Set());
-  }, []);
+    clearSelection();
+  }, [clearSelection]);
 
   const [bulkResult, setBulkResult] = useTemporary<BulkResult | null>(
     null,
@@ -311,22 +322,10 @@ function TransactionTable({
 
   const colCount = 7 + personEntries.length + (bulkMode ? 1 : 0);
 
-  const toggleSelected = useCallback((id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
   const toggleAll = useCallback(() => {
-    setSelected((prev) =>
-      prev.size === transactions.length
-        ? new Set()
-        : new Set(transactions.map((tx) => tx.id)),
-    );
-  }, [transactions]);
+    if (selected.size === transactions.length) clearSelection();
+    else setAll(transactions.map((tx) => tx.id));
+  }, [selected.size, transactions, clearSelection, setAll]);
 
   const selectedTagCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -385,7 +384,7 @@ function TransactionTable({
   if (transactions.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+    <Card>
       <div className="mb-4 flex items-center justify-between">
         <h2 className="font-medium text-lg text-foreground">Transactions</h2>
         {!isFinalized && !bulkMode && (
@@ -529,7 +528,7 @@ function TransactionTable({
           </tbody>
         </table>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -607,11 +606,7 @@ function TransactionRow({
         <td className="py-2 pr-4 text-muted-foreground">{tx.category}</td>
         <td className="py-2 pr-4 text-muted-foreground">{categoryGroup}</td>
         <td className="py-2 pr-4">
-          <span
-            className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${payerColor}`}
-          >
-            {payerName}
-          </span>
+          <PersonBadge name={payerName} accentColor={payerColor} size="xs" />
         </td>
         <td
           className={`py-2 pr-4 text-right tabular-nums ${tx.amount < 0 ? "text-negative" : "text-positive"}`}
@@ -674,7 +669,7 @@ export function TransactionsPage() {
   });
 
   const reconciliationQueryKey = useMemo(
-    () => ["reconciliation", startDate, endDate],
+    () => [...RECONCILIATION_QUERY_KEY, startDate, endDate],
     [startDate, endDate],
   );
   const { data, isLoading, error, refetch } = useQuery({

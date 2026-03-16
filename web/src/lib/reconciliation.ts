@@ -1,5 +1,7 @@
 import { apiFetch } from "@/lib/api";
 
+export const RECONCILIATION_QUERY_KEY = ["reconciliation"] as const;
+
 export interface MonthReference {
   year: number;
   month: number;

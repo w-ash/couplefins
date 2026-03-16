@@ -7,15 +7,19 @@ import {
   Download,
   Loader2,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { Button } from "@/components/Button";
+import { Card } from "@/components/Card";
 import { InlineError } from "@/components/InlineError";
+import { PersonBadge } from "@/components/PersonBadge";
+import { useTemporary } from "@/hooks/useTemporary";
 import {
   type AdjustmentPreview,
   downloadAdjustmentCsv,
   fetchAdjustmentPreview,
 } from "@/lib/adjustments";
 import { formatCurrency, formatDate, plural } from "@/lib/format";
+import { usePersonMaps } from "@/lib/persons";
 import { getPersonAccentColor, type Person } from "@/types/person";
 
 function AdjustmentRow({ adjustment }: { adjustment: AdjustmentPreview }) {
@@ -127,34 +131,22 @@ function PersonExportCard({
   month: number;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [download, setDownload] = useState<
-    | { status: "idle" }
-    | { status: "loading" }
-    | { status: "success"; message: string }
-    | { status: "error"; message: string }
-  >({ status: "idle" });
-
-  useEffect(() => {
-    if (download.status !== "success") return;
-    const id = setTimeout(() => setDownload({ status: "idle" }), 2000);
-    return () => clearTimeout(id);
-  }, [download]);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [successMessage, setSuccessMessage] = useTemporary<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleDownload = useCallback(async () => {
-    setDownload({ status: "loading" });
+    setIsDownloading(true);
+    setErrorMessage(null);
     try {
       const { rowCount } = await downloadAdjustmentCsv(person.id, year, month);
-      setDownload({
-        status: "success",
-        message: `Downloaded ${plural("row", rowCount)}`,
-      });
+      setSuccessMessage(`Downloaded ${plural("row", rowCount)}`);
     } catch (err) {
-      setDownload({
-        status: "error",
-        message: err instanceof Error ? err.message : "Download failed",
-      });
+      setErrorMessage(err instanceof Error ? err.message : "Download failed");
+    } finally {
+      setIsDownloading(false);
     }
-  }, [person.id, year, month]);
+  }, [person.id, year, month, setSuccessMessage]);
 
   const hasAccount = person.adjustment_account.trim() !== "";
   const accentColor = getPersonAccentColor(personIndex);
@@ -162,24 +154,20 @@ function PersonExportCard({
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-3">
-        <span
-          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium ${accentColor}`}
-        >
-          {person.name}
-        </span>
+        <PersonBadge name={person.name} accentColor={accentColor} />
 
         <div className="flex items-center gap-2">
-          {download.status === "success" ? (
+          {successMessage ? (
             <span className="inline-flex items-center gap-1 text-sm text-positive">
               <Check className="size-4" />
-              {download.message}
+              {successMessage}
             </span>
           ) : (
             <Button
               variant="secondary"
               size="sm"
-              disabled={!hasAccount || download.status === "loading"}
-              loading={download.status === "loading"}
+              disabled={!hasAccount || isDownloading}
+              loading={isDownloading}
               loadingText="Downloading"
               icon={<Download className="size-4" />}
               onClick={handleDownload}
@@ -210,9 +198,7 @@ function PersonExportCard({
         </p>
       )}
 
-      {download.status === "error" && (
-        <InlineError>{download.message}</InlineError>
-      )}
+      {errorMessage && <InlineError>{errorMessage}</InlineError>}
 
       {hasAccount && (
         <PreviewTable
@@ -235,13 +221,10 @@ export function AdjustmentExportSection({
   year: number;
   month: number;
 }) {
-  const personIndexMap = useMemo(
-    () => new Map(persons.map((p, i) => [p.id, i])),
-    [persons],
-  );
+  const { personIndexMap } = usePersonMaps(persons);
 
   return (
-    <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+    <Card>
       <h2 className="mb-4 font-medium text-lg text-foreground">
         Export Adjustments
       </h2>
@@ -256,6 +239,6 @@ export function AdjustmentExportSection({
           />
         ))}
       </div>
-    </div>
+    </Card>
   );
 }

@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 from decimal import Decimal
 import uuid
 
@@ -9,6 +8,7 @@ from src.application.use_cases._shared.command_validators import (
     positive_int,
 )
 from src.application.use_cases._shared.settlement_records import (
+    build_settlement,
     validate_settlement_persons,
 )
 from src.domain.entities.settlement import Settlement
@@ -39,19 +39,15 @@ class RecordWaivedSettlementUseCase:
                 command.from_person_id, command.to_person_id, uow
             )
 
-            now = datetime.now(UTC)
-            settlement = Settlement(
-                id=uuid.uuid4(),
+            settlement = build_settlement(
                 year=command.year,
                 month=command.month,
-                amount=Decimal(0),
                 from_person_id=command.from_person_id,
                 to_person_id=command.to_person_id,
+                amount=Decimal(0),
                 method=None,
                 is_waived=True,
                 notes=command.notes,
-                settled_at=now,
-                created_at=now,
             )
             saved = await uow.settlements.save(settlement)
             await uow.commit()

@@ -1,5 +1,4 @@
 import { useSearchParams } from "react-router";
-import type { Settlement } from "@/lib/reconciliation";
 
 export const MONTHS = [
   "January",
@@ -66,12 +65,24 @@ export function computeShares(
   };
 }
 
+interface SettlementShape {
+  amount: number;
+  from_person_id: string;
+  to_person_id?: string;
+}
+
 export function buildSettlementLabel(
-  settlement: Settlement | null,
+  settlement: SettlementShape | null,
   personNames: Map<string, string>,
+  opts?: { settledLabel?: string; includeToName?: boolean },
 ): string {
-  if (!settlement || settlement.amount === 0) return "Settled";
+  if (!settlement || settlement.amount === 0)
+    return opts?.settledLabel ?? "Settled";
   const fromName = personNames.get(settlement.from_person_id) ?? "Unknown";
+  if (opts?.includeToName && settlement.to_person_id) {
+    const toName = personNames.get(settlement.to_person_id) ?? "";
+    return `${fromName} owes ${toName} ${formatCurrency(settlement.amount)}`;
+  }
   return `${fromName} owes ${formatCurrency(settlement.amount)}`;
 }
 

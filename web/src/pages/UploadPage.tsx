@@ -12,8 +12,10 @@ import {
 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/Button";
+import { Card } from "@/components/Card";
 import { PageHeader } from "@/components/PageHeader";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
+import { useSetToggle } from "@/hooks/useSetToggle";
 import { apiFetch } from "@/lib/api";
 import { useInvalidateCategories } from "@/lib/categories";
 import { formatCurrency, formatDate, formatSplit } from "@/lib/format";
@@ -187,7 +189,12 @@ export function UploadPage() {
     if (currentPersonId) setPersonId(currentPersonId);
   }, [currentPersonId]);
   const [step, setStep] = useState<Step>("form");
-  const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set());
+  const {
+    selected: acceptedIds,
+    toggle: toggleAccepted,
+    setAll: setAllAccepted,
+    clear: clearAccepted,
+  } = useSetToggle();
 
   const personsQuery = useQuery({
     queryKey: PERSONS_QUERY_KEY,
@@ -198,9 +205,7 @@ export function UploadPage() {
     mutationFn: previewCsv,
     onSuccess: (data) => {
       if (data.changed_transactions.length > 0) {
-        setAcceptedIds(
-          new Set(data.changed_transactions.map((ct) => ct.existing_id)),
-        );
+        setAllAccepted(data.changed_transactions.map((ct) => ct.existing_id));
         setStep("review");
       } else {
         setStep("preview");
@@ -256,27 +261,16 @@ export function UploadPage() {
     setStep("form");
     previewMutation.reset();
     uploadMutation.reset();
-    setAcceptedIds(new Set());
+    clearAccepted();
     setPersonId(currentPersonId ?? "");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  function toggleAccepted(id: string) {
-    setAcceptedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
   function toggleAll(accept: boolean) {
     if (accept && preview) {
-      setAcceptedIds(
-        new Set(preview.changed_transactions.map((ct) => ct.existing_id)),
-      );
+      setAllAccepted(preview.changed_transactions.map((ct) => ct.existing_id));
     } else {
-      setAcceptedIds(new Set());
+      clearAccepted();
     }
   }
 
@@ -301,10 +295,7 @@ export function UploadPage() {
         title="Upload Transactions"
       />
 
-      <form
-        onSubmit={handlePreview}
-        className="space-y-6 rounded-xl border border-border bg-card p-6 shadow-sm"
-      >
+      <Card as="form" onSubmit={handlePreview} className="space-y-6">
         {/* Person selector */}
         <div>
           <label
@@ -385,7 +376,7 @@ export function UploadPage() {
             Preview CSV
           </Button>
         )}
-      </form>
+      </Card>
 
       {/* Error */}
       <div aria-live="polite" aria-atomic="true">
@@ -402,7 +393,7 @@ export function UploadPage() {
 
       {/* Already up to date */}
       {step === "preview" && preview && nothingToImport && (
-        <div className="mt-6 rounded-xl border border-border bg-card p-6 shadow-sm">
+        <Card className="mt-6">
           <h2 className="mb-1 flex items-center gap-2 font-medium text-lg text-foreground">
             <Eye className="size-5" />
             Already Up to Date
@@ -420,7 +411,7 @@ export function UploadPage() {
           >
             Back
           </Button>
-        </div>
+        </Card>
       )}
 
       {/* Preview / Review — two-column grid */}
@@ -441,7 +432,7 @@ export function UploadPage() {
                   preview.new_transactions.length - PREVIEW_LIMIT,
                 );
                 return (
-                  <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+                  <Card>
                     <h2 className="mb-1 flex items-center gap-2 font-medium text-lg text-foreground">
                       <Eye className="size-5" />
                       Preview
@@ -518,13 +509,13 @@ export function UploadPage() {
                         {remainingCount !== 1 && "s"}
                       </p>
                     )}
-                  </div>
+                  </Card>
                 );
               })()}
 
             {/* Review — changed transactions with checkboxes */}
             {step === "review" && hasChanges && (
-              <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+              <Card>
                 <h2 className="mb-4 flex items-center gap-2 font-medium text-lg text-foreground">
                   <Eye className="size-5" />
                   Review Changes
@@ -578,7 +569,7 @@ export function UploadPage() {
                     </label>
                   ))}
                 </div>
-              </div>
+              </Card>
             )}
           </div>
 
@@ -597,10 +588,7 @@ export function UploadPage() {
 
       {/* Confirmed summary */}
       {step === "confirmed" && summary && (
-        <div
-          aria-live="polite"
-          className="mt-6 rounded-xl border border-border bg-card p-6 shadow-sm"
-        >
+        <Card aria-live="polite" className="mt-6">
           <h2 className="mb-4 flex items-center gap-2 font-medium text-lg text-foreground">
             <Check className="size-5 text-primary" />
             Upload Complete
@@ -635,7 +623,7 @@ export function UploadPage() {
           >
             Upload Another CSV
           </Button>
-        </div>
+        </Card>
       )}
     </div>
   );

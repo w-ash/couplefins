@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Heart, UserPlus } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Button } from "@/components/Button";
+import { Card } from "@/components/Card";
 import { InlineError } from "@/components/InlineError";
 import { apiFetch } from "@/lib/api";
 import { baseInputClass } from "@/lib/input-styles";
@@ -53,10 +54,7 @@ export function SetupPage() {
           </p>
         </div>
 
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-5 rounded-xl border border-border bg-card p-6 shadow-sm"
-        >
+        <Card as="form" onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label
               htmlFor="person1"
@@ -119,7 +117,7 @@ export function SetupPage() {
           >
             Get Started
           </Button>
-        </form>
+        </Card>
       </div>
     </div>
   );

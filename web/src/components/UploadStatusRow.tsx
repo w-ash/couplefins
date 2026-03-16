@@ -1,4 +1,5 @@
 import { CheckCircle2, Clock } from "lucide-react";
+import { PersonBadge } from "@/components/PersonBadge";
 import { getPersonAccentColor } from "@/types/person";
 
 export function UploadStatusRow({
@@ -25,11 +26,7 @@ export function UploadStatusRow({
             ) : (
               <Clock className="size-4 text-muted-foreground" />
             )}
-            <span
-              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${color}`}
-            >
-              {s.person_name}
-            </span>
+            <PersonBadge name={s.person_name} accentColor={color} size="xs" />
             <span
               className={
                 s.has_uploaded ? "text-foreground" : "text-muted-foreground"
