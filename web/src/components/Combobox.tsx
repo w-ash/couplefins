@@ -292,7 +292,7 @@ export function Combobox({
   return (
     <div ref={containerRef} className={`relative ${className ?? ""}`}>
       <div
-        className={`flex flex-wrap items-center gap-1 rounded-md border bg-card px-2 py-1 text-sm shadow-sm ${
+        className={`flex flex-wrap items-center gap-1 rounded-lg border bg-card px-3 py-2 text-sm shadow-sm ${
           disabled
             ? "border-input opacity-60"
             : open

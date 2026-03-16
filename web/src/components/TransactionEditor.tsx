@@ -1,9 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
+import { Clock } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/Button";
 import type { ComboboxOption } from "@/components/Combobox";
 import { Combobox } from "@/components/Combobox";
-import { computeShares, formatCurrency, formatDate } from "@/lib/format";
+import { InlineError } from "@/components/InlineError";
+import { PercentInput } from "@/components/PercentInput";
+import {
+  computeShares,
+  formatCurrency,
+  formatDate,
+  parsePercent,
+} from "@/lib/format";
+import { baseInputClass, inputErrorClass } from "@/lib/input-styles";
 import type { ReconciliationTransaction } from "@/lib/reconciliation";
 import type {
   TransactionEdit,
@@ -55,10 +64,11 @@ function EditHistory({ transactionId }: { transactionId: string }) {
 
   return (
     <div className="mt-3 border-t border-border-muted pt-3">
-      <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+      <p className="mb-1.5 flex items-center gap-1 text-sm font-medium text-muted-foreground">
+        <Clock className="size-3" />
         Edit History
       </p>
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         {edits.map((edit: TransactionEdit) => (
           <p key={edit.id} className="text-xs text-muted-foreground">
             <span className="tabular-nums">
@@ -101,15 +111,18 @@ export function TransactionEditor({
   }, []);
 
   const parsedAmount = Number.parseFloat(amount);
-  const parsedSplit = Number.parseInt(split, 10);
-  const isSplitValid =
-    !Number.isNaN(parsedSplit) && parsedSplit >= 0 && parsedSplit <= 100;
+  const parsedSplit = parsePercent(split);
+  const isSplitValid = parsedSplit !== null;
   const isAmountValid = !Number.isNaN(parsedAmount);
+  const splitChanged =
+    split !== "" && split !== String(tx.payer_percentage ?? 50);
+  const amountChanged = amount !== "" && amount !== String(tx.amount);
 
   const absAmount = isAmountValid ? Math.abs(parsedAmount) : 0;
-  const { payerShare, otherShare } = isSplitValid
-    ? computeShares(absAmount, parsedSplit)
-    : { payerShare: 0, otherShare: 0 };
+  const { payerShare, otherShare } =
+    parsedSplit !== null
+      ? computeShares(absAmount, parsedSplit)
+      : { payerShare: 0, otherShare: 0 };
 
   const tagsChanged =
     tags.length !== tx.tags.length || tags.some((t, i) => t !== tx.tags[i]);
@@ -119,7 +132,7 @@ export function TransactionEditor({
     (isAmountValid && parsedAmount !== tx.amount) ||
     category !== tx.category ||
     tagsChanged ||
-    (isSplitValid && parsedSplit !== (tx.payer_percentage ?? 50));
+    (parsedSplit !== null && parsedSplit !== (tx.payer_percentage ?? 50));
 
   const handleSave = useCallback(() => {
     const fields: TransactionUpdateFields = {};
@@ -128,7 +141,7 @@ export function TransactionEditor({
       fields.amount = parsedAmount;
     if (category !== tx.category) fields.category = category;
     if (tagsChanged) fields.tags = tags;
-    if (isSplitValid && parsedSplit !== (tx.payer_percentage ?? 50))
+    if (parsedSplit !== null && parsedSplit !== (tx.payer_percentage ?? 50))
       fields.payer_percentage = parsedSplit;
     onSave(fields);
   }, [
@@ -140,7 +153,6 @@ export function TransactionEditor({
     parsedAmount,
     parsedSplit,
     isAmountValid,
-    isSplitValid,
     onSave,
   ]);
 
@@ -156,8 +168,8 @@ export function TransactionEditor({
     [hasChanges, handleSave, onCancel],
   );
 
-  const inputClass =
-    "rounded-md border border-input bg-card px-2 py-1 text-sm text-foreground shadow-sm focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none";
+  const splitHasError = splitChanged && !isSplitValid;
+  const amountHasError = amountChanged && !isAmountValid;
 
   return (
     <form
@@ -165,59 +177,75 @@ export function TransactionEditor({
       onKeyDown={handleKeyDown}
       onSubmit={(e) => e.preventDefault()}
     >
-      <p className="mb-2 text-sm text-muted-foreground">
-        {formatDate(tx.date)} &middot; {tx.merchant} &middot;{" "}
-        {formatCurrency(tx.amount)}
-      </p>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+      <div className="mb-3 flex items-center gap-2 text-sm">
+        <span className="font-medium text-foreground">{tx.merchant}</span>
+        <span className="text-muted-foreground">&middot;</span>
+        <span className="tabular-nums text-foreground">
+          {formatCurrency(tx.amount)}
+        </span>
+        <span className="text-muted-foreground">&middot;</span>
+        <span className="tabular-nums text-muted-foreground">
+          {formatDate(tx.date)}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-3">
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="w-16">Date</span>
+          <span className="w-16 shrink-0">Date</span>
           <input
             ref={firstInputRef}
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className={`${inputClass} w-40`}
+            className={`${baseInputClass} w-40`}
             disabled={saving}
           />
           {tx.original_date && (
-            <span className="text-xs text-muted-foreground/60">
+            <span className="text-xs italic text-muted-foreground">
               originally {formatDate(tx.original_date)}
             </span>
           )}
         </label>
 
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="w-16">Amount</span>
-          <input
-            type="number"
-            step="0.01"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className={`${inputClass} w-28 tabular-nums`}
-            disabled={saving}
-          />
-          {tx.original_amount != null && (
-            <span className="text-xs text-muted-foreground/60">
-              originally {formatCurrency(tx.original_amount)}
-            </span>
+        <div>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="w-16 shrink-0">Amount</span>
+            <input
+              type="number"
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className={`${baseInputClass} w-28 tabular-nums ${amountHasError ? inputErrorClass : ""}`}
+              disabled={saving}
+              aria-invalid={amountHasError || undefined}
+              aria-describedby={amountHasError ? "amount-error" : undefined}
+            />
+            {tx.original_amount != null && (
+              <span className="text-xs italic text-muted-foreground">
+                originally {formatCurrency(tx.original_amount)}
+              </span>
+            )}
+          </label>
+          {amountHasError && (
+            <div id="amount-error" className="mt-1 pl-18">
+              <InlineError>Enter a valid number</InlineError>
+            </div>
           )}
-        </label>
+        </div>
 
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="w-16">Category</span>
+          <span className="w-16 shrink-0">Category</span>
           <Combobox
             mode="single"
             options={categoryOptions}
             value={category}
             onChange={(v) => setCategory(v as string)}
             disabled={saving}
-            className="w-48"
+            className="flex-1"
           />
         </div>
 
         <div className="flex items-start gap-2 text-sm text-muted-foreground">
-          <span className="mt-1.5 w-16">Tags</span>
+          <span className="mt-2 w-16 shrink-0">Tags</span>
           <Combobox
             mode="multi"
             options={tagOptions}
@@ -230,27 +258,29 @@ export function TransactionEditor({
         </div>
       </div>
 
-      <div className="mt-2 flex items-center gap-4">
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span>Split</span>
-          <input
-            type="number"
-            min={0}
-            max={100}
+      <div className="mt-3 flex flex-wrap items-center gap-4">
+        <label
+          htmlFor="tx-split"
+          className="flex items-center gap-2 text-sm text-muted-foreground"
+        >
+          <span className="w-16 shrink-0">Split</span>
+          <PercentInput
+            id="tx-split"
             value={split}
-            onChange={(e) => setSplit(e.target.value)}
-            className={`${inputClass} w-16 tabular-nums`}
+            onChange={setSplit}
             disabled={saving}
+            error={splitHasError}
           />
-          <span>%</span>
         </label>
 
-        {isSplitValid && (
-          <span className="text-sm text-muted-foreground tabular-nums">
-            {payerName}: {formatCurrency(payerShare)} &middot; {otherName}:{" "}
-            {formatCurrency(otherShare)}
-          </span>
-        )}
+        <div aria-live="polite">
+          {!splitHasError && isSplitValid ? (
+            <span className="text-sm tabular-nums text-muted-foreground">
+              {payerName}: {formatCurrency(payerShare)} &middot; {otherName}:{" "}
+              {formatCurrency(otherShare)}
+            </span>
+          ) : null}
+        </div>
 
         <div className="ml-auto flex gap-2">
           <Button

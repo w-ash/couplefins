@@ -219,8 +219,8 @@ describe("DashboardPage", () => {
     });
 
     const row = screen.getByText("January 2026").closest("tr");
-    expect(row).not.toBeNull();
-    await user.click(row!);
+    if (!row) throw new Error("Expected row to exist");
+    await user.click(row);
 
     // useNavigate was called — verify the URL changed
     // MemoryRouter doesn't expose location directly, but we can verify

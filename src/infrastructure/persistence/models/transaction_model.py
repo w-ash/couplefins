@@ -6,7 +6,7 @@ from src.infrastructure.persistence.models.base import Base
 
 class TransactionModel(Base):
     __tablename__ = "transactions"
-    __table_args__ = (
+    __table_args__: tuple[UniqueConstraint, Index, Index, Index] = (
         UniqueConstraint(
             "date",
             "amount",

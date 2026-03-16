@@ -1,5 +1,6 @@
 import { useSearchParams } from "react-router";
 import { currentYear, MONTHS, useMonthYear } from "@/lib/format";
+import { selectInputClass } from "@/lib/input-styles";
 
 function yearRange(): number[] {
   const now = currentYear();
@@ -24,7 +25,7 @@ export function MonthSelector() {
         aria-label="Month"
         value={month}
         onChange={(e) => setParam("month", Number(e.target.value))}
-        className="rounded-lg border border-input bg-card px-3 py-1.5 text-sm text-foreground shadow-sm focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none"
+        className={selectInputClass}
       >
         {MONTHS.map((name, i) => (
           <option key={name} value={i + 1}>
@@ -36,7 +37,7 @@ export function MonthSelector() {
         aria-label="Year"
         value={year}
         onChange={(e) => setParam("year", Number(e.target.value))}
-        className="rounded-lg border border-input bg-card px-3 py-1.5 text-sm text-foreground shadow-sm focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none"
+        className={selectInputClass}
       >
         {yearRange().map((y) => (
           <option key={y} value={y}>

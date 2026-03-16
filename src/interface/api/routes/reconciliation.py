@@ -1,7 +1,7 @@
 import datetime
 from datetime import UTC
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from src.application.runner import execute_use_case
 from src.application.use_cases.finalize_period import (
@@ -16,6 +16,7 @@ from src.application.use_cases.unfinalize_period import (
     UnfinalizePeriodCommand,
     UnfinalizePeriodUseCase,
 )
+from src.domain.exceptions import ValidationError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 from src.interface.api.schemas.reconciliation import (
     FinalizePeriodRequest,
@@ -51,21 +52,15 @@ def _build_command(
     has_ym = year is not None or month is not None
 
     if has_range and has_ym:
-        raise HTTPException(
-            status_code=422,
-            detail="Provide either start_date/end_date or year/month, not both.",
+        raise ValidationError(
+            "Provide either start_date/end_date or year/month, not both."
         )
 
     if has_range:
         if start_date is None or end_date is None:
-            raise HTTPException(
-                status_code=422,
-                detail="Both start_date and end_date are required.",
-            )
+            raise ValidationError("Both start_date and end_date are required.")
         if start_date > end_date:
-            raise HTTPException(
-                status_code=422, detail="start_date must be <= end_date."
-            )
+            raise ValidationError("start_date must be <= end_date.")
         return GetReconciliationCommand.from_range(start_date, end_date)
 
     now = datetime.datetime.now(UTC).date()

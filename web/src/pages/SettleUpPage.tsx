@@ -1,13 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, HandCoins, Loader2, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { Button } from "@/components/Button";
 import { FinalizationBanner } from "@/components/FinalizationBanner";
+import { InlineError } from "@/components/InlineError";
 import { MonthSelector } from "@/components/MonthSelector";
+import { PageHeader } from "@/components/PageHeader";
 import { PageError, PageLoading } from "@/components/PageStates";
 import { UploadStatusRow } from "@/components/UploadStatusRow";
+import { useTemporary } from "@/hooks/useTemporary";
 import { DASHBOARD_QUERY_KEY } from "@/lib/dashboard";
 import { formatCurrency, useMonthYear } from "@/lib/format";
+import { baseInputClass } from "@/lib/input-styles";
 import { usePersonMaps } from "@/lib/persons";
 import { finalizePeriod, unfinalizePeriod } from "@/lib/reconciliation";
 import type { SettlementRecord, SettleUpData } from "@/lib/settlements";
@@ -20,8 +24,7 @@ import {
 } from "@/lib/settlements";
 import { getPersonAccentColor } from "@/types/person";
 
-const formInputClass =
-  "w-full rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground shadow-sm focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none";
+const formInputClass = `w-full ${baseInputClass}`;
 
 function HeroCard({
   data,
@@ -101,14 +104,10 @@ function RecordPaymentForm({
   const [amount, setAmount] = useState(defaultAmount);
   const [method, setMethod] = useState("venmo");
   const [notes, setNotes] = useState("");
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const successTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
-
-  useEffect(() => {
-    return () => {
-      if (successTimerRef.current) clearTimeout(successTimerRef.current);
-    };
-  }, []);
+  const [successMessage, setSuccessMessage] = useTemporary<string | null>(
+    null,
+    4000,
+  );
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -130,10 +129,6 @@ function RecordPaymentForm({
         const toName = personNames.get(owed.to_person_id) ?? "Unknown";
         setSuccessMessage(
           `Payment recorded — ${fromName} paid ${toName} ${formatCurrency(paidAmount)}`,
-        );
-        successTimerRef.current = setTimeout(
-          () => setSuccessMessage(null),
-          4000,
         );
       }
       setNotes("");
@@ -225,15 +220,11 @@ function RecordPaymentForm({
           </p>
         )}
         {mutation.isError && (
-          <p
-            className="text-sm text-destructive"
-            role="alert"
-            aria-live="polite"
-          >
+          <InlineError>
             {mutation.error instanceof Error
               ? mutation.error.message
               : "Failed to record payment"}
-          </p>
+          </InlineError>
         )}
       </div>
     </div>
@@ -291,15 +282,13 @@ function WaiveAction({
         </Button>
       </div>
       {mutation.isError && (
-        <p
-          className="mt-2 text-sm text-destructive"
-          role="alert"
-          aria-live="polite"
-        >
-          {mutation.error instanceof Error
-            ? mutation.error.message
-            : "Failed to waive balance"}
-        </p>
+        <div className="mt-2">
+          <InlineError>
+            {mutation.error instanceof Error
+              ? mutation.error.message
+              : "Failed to waive balance"}
+          </InlineError>
+        </div>
       )}
     </div>
   );
@@ -428,13 +417,9 @@ export function SettleUpPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-12">
-      <div className="mb-8 flex items-center justify-between">
-        <h1 className="flex items-center gap-2.5 font-semibold text-2xl text-foreground">
-          <HandCoins className="size-6" />
-          Settle Up
-        </h1>
+      <PageHeader icon={<HandCoins className="size-6" />} title="Settle Up">
         <MonthSelector />
-      </div>
+      </PageHeader>
 
       {isLoading && <PageLoading label="Loading settle up data..." />}
 

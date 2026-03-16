@@ -6,7 +6,9 @@ from src.infrastructure.persistence.models.base import Base
 
 class CategoryGroupBudgetModel(Base):
     __tablename__ = "category_group_budgets"
-    __table_args__ = (UniqueConstraint("group_id", "effective_from"),)
+    __table_args__: tuple[UniqueConstraint] = (
+        UniqueConstraint("group_id", "effective_from"),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     group_id: Mapped[str] = mapped_column(

@@ -9,14 +9,20 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { MonthSelector } from "@/components/MonthSelector";
+import { PageHeader } from "@/components/PageHeader";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
+import { StatsGrid } from "@/components/StatsGrid";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { UploadStatusRow } from "@/components/UploadStatusRow";
 import type { DashboardData, MonthHistoryEntry } from "@/lib/dashboard";
 import { DASHBOARD_QUERY_KEY, fetchDashboard } from "@/lib/dashboard";
-import { formatCurrency, MONTHS, useMonthYear } from "@/lib/format";
+import {
+  buildSettlementLabel,
+  formatCurrency,
+  MONTHS,
+  useMonthYear,
+} from "@/lib/format";
 import { usePersonMaps } from "@/lib/persons";
-import type { Settlement } from "@/lib/reconciliation";
 import { getPersonAccentColor } from "@/types/person";
 
 function SummaryStats({
@@ -28,37 +34,23 @@ function SummaryStats({
 }) {
   const ytdLabel = buildSettlementLabel(data.ytd_settlement, personNames);
 
-  const stats = [
-    {
-      label: "This month",
-      value: formatCurrency(data.current_month_net_shared_spending),
-    },
-    {
-      label: "Year to date",
-      value: formatCurrency(data.ytd_total_shared_spending),
-    },
-    {
-      label: "Year-to-date balance",
-      value: ytdLabel,
-    },
-  ];
-
   return (
-    <div className="grid grid-cols-3 gap-3">
-      {stats.map((stat) => (
-        <div
-          key={stat.label}
-          className="rounded-lg border border-border bg-card p-4 shadow-sm"
-        >
-          <p className="text-xs font-medium text-muted-foreground">
-            {stat.label}
-          </p>
-          <p className="mt-1 text-lg font-semibold text-foreground tabular-nums text-right">
-            {stat.value}
-          </p>
-        </div>
-      ))}
-    </div>
+    <StatsGrid
+      stats={[
+        {
+          label: "This month",
+          value: formatCurrency(data.current_month_net_shared_spending),
+        },
+        {
+          label: "Year to date",
+          value: formatCurrency(data.ytd_total_shared_spending),
+        },
+        {
+          label: "Year-to-date balance",
+          value: ytdLabel,
+        },
+      ]}
+    />
   );
 }
 
@@ -150,15 +142,6 @@ function MonthHistory({
   );
 }
 
-function buildSettlementLabel(
-  settlement: Settlement | null,
-  personNames: Map<string, string>,
-): string {
-  if (!settlement || settlement.amount === 0) return "Settled";
-  const fromName = personNames.get(settlement.from_person_id) ?? "Unknown";
-  return `${fromName} owes ${formatCurrency(settlement.amount)}`;
-}
-
 function buildHistorySettlementLabel(
   entry: MonthHistoryEntry,
   personNames: Map<string, string>,
@@ -191,11 +174,11 @@ export function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-12">
-      <div className="mb-8 flex items-center justify-between">
-        <h1 className="flex items-center gap-2.5 font-semibold text-2xl text-foreground">
-          <LayoutDashboard className="size-6" />
-          Dashboard
-          {data?.is_finalized && (
+      <PageHeader
+        icon={<LayoutDashboard className="size-6" />}
+        title="Dashboard"
+        badge={
+          data?.is_finalized ? (
             <span
               className="inline-flex items-center gap-1 rounded-md bg-primary-muted px-2 py-0.5 text-xs font-medium text-primary-muted-foreground"
               title="Month locked"
@@ -203,10 +186,11 @@ export function DashboardPage() {
               <Lock className="size-3" />
               Locked
             </span>
-          )}
-        </h1>
+          ) : undefined
+        }
+      >
         <MonthSelector />
-      </div>
+      </PageHeader>
 
       {isLoading && <PageLoading label="Loading dashboard..." />}
 

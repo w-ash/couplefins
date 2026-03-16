@@ -12,7 +12,9 @@ import {
 import { useMemo, useState } from "react";
 import { Button } from "@/components/Button";
 import { MonthSelector } from "@/components/MonthSelector";
+import { PageHeader } from "@/components/PageHeader";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
+import { StatsGrid } from "@/components/StatsGrid";
 import type { BudgetOverviewData, GroupBudgetStatus } from "@/lib/budgets";
 import {
   deleteBudget,
@@ -26,6 +28,7 @@ import {
 } from "@/lib/categories";
 import { getCategoryGroupIcon } from "@/lib/category-icons";
 import { formatCurrency, useMonthYear } from "@/lib/format";
+import { selectInputClass } from "@/lib/input-styles";
 
 type ViewMode = "monthly" | "ytd";
 type SortMode = "urgency" | "spending" | "name";
@@ -93,30 +96,20 @@ function SummaryStats({
   const remaining = budget - spent;
 
   return (
-    <div className="grid grid-cols-3 gap-3">
-      <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
-        <p className="text-xs font-medium text-muted-foreground">
-          Total budget
-        </p>
-        <p className="mt-1 text-right text-lg font-semibold text-foreground tabular-nums">
-          {formatCurrency(budget)}
-        </p>
-      </div>
-      <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
-        <p className="text-xs font-medium text-muted-foreground">Total spent</p>
-        <p className="mt-1 text-right text-lg font-semibold text-foreground tabular-nums">
-          {formatCurrency(spent)}
-        </p>
-      </div>
-      <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
-        <p className="text-xs font-medium text-muted-foreground">Remaining</p>
-        <p
-          className={`mt-1 text-right text-lg font-semibold tabular-nums ${remaining < 0 ? "text-destructive-muted-foreground" : "text-foreground"}`}
-        >
-          {formatCurrency(remaining)}
-        </p>
-      </div>
-    </div>
+    <StatsGrid
+      stats={[
+        { label: "Total budget", value: formatCurrency(budget) },
+        { label: "Total spent", value: formatCurrency(spent) },
+        {
+          label: "Remaining",
+          value: formatCurrency(remaining),
+          valueClassName:
+            remaining < 0
+              ? "text-destructive-muted-foreground"
+              : "text-foreground",
+        },
+      ]}
+    />
   );
 }
 
@@ -412,7 +405,7 @@ function AddBudgetForm({
             id="budget-group"
             value={groupId}
             onChange={(e) => setGroupId(e.target.value)}
-            className="rounded-lg border border-input bg-background px-3 py-1.5 text-sm"
+            className={selectInputClass}
             required
           >
             <option value="">Select group...</option>
@@ -591,13 +584,9 @@ export function BudgetPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-12">
-      <div className="mb-8 flex items-center justify-between">
-        <h1 className="flex items-center gap-2.5 font-semibold text-2xl text-foreground">
-          <PieChart className="size-6" />
-          Budget
-        </h1>
+      <PageHeader icon={<PieChart className="size-6" />} title="Budget">
         <MonthSelector />
-      </div>
+      </PageHeader>
 
       {/* Controls */}
       <div className="mb-6 flex items-center gap-3">
@@ -621,7 +610,7 @@ export function BudgetPage() {
           aria-label="Sort order"
           value={sortMode}
           onChange={(e) => setSortMode(e.target.value as SortMode)}
-          className="rounded-lg border border-input bg-card px-3 py-1.5 text-sm text-foreground shadow-sm focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none"
+          className={selectInputClass}
         >
           <option value="urgency">Sort: Urgency</option>
           <option value="spending">Sort: Spending</option>

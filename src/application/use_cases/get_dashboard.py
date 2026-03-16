@@ -10,13 +10,15 @@ from src.application.use_cases._shared.command_validators import (
     positive_int,
 )
 from src.application.use_cases._shared.date_math import month_bounds
+from src.application.use_cases._shared.reconciliation_context import (
+    ReconciliationContext,
+    load_reconciliation_context,
+)
 from src.application.use_cases._shared.transactions import find_all_unmapped_categories
 from src.application.use_cases._shared.upload_status import (
     UploadStatus,
     build_upload_statuses,
 )
-from src.domain.entities.category_group import CategoryGroup
-from src.domain.entities.category_mapping import CategoryMapping
 from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
 from src.domain.reconciliation import ReconciliationSummary, SettlementResult, reconcile
@@ -64,9 +66,7 @@ def _partition_by_month(
 
 def _reconcile_all_months(
     by_month: dict[int, list[Transaction]],
-    persons: list[Person],
-    category_mappings: list[CategoryMapping],
-    category_groups: list[CategoryGroup],
+    ctx: ReconciliationContext,
     year: int,
 ) -> dict[int, ReconciliationSummary]:
     results: dict[int, ReconciliationSummary] = {}
@@ -74,9 +74,9 @@ def _reconcile_all_months(
         start, end = month_bounds(year, month)
         results[month] = reconcile(
             txs,
-            persons,
-            category_mappings,
-            category_groups,
+            ctx.persons,
+            ctx.category_mappings,
+            ctx.category_groups,
             start_date=start,
             end_date=end,
         )
@@ -113,25 +113,21 @@ class GetDashboardUseCase:
         self, command: GetDashboardCommand, uow: UnitOfWorkProtocol
     ) -> GetDashboardResult:
         async with uow:
-            persons = await uow.persons.get_all()
-            category_mappings = await uow.category_mappings.get_all()
-            category_groups = await uow.category_groups.get_all()
+            ctx = await load_reconciliation_context(uow)
 
             all_year_txs = await uow.transactions.get_shared_by_year(command.year)
             by_month = _partition_by_month(all_year_txs)
 
             # Reconcile each month once, reuse for current month + history
-            month_summaries = _reconcile_all_months(
-                by_month, persons, category_mappings, category_groups, command.year
-            )
+            month_summaries = _reconcile_all_months(by_month, ctx, command.year)
             start, end = month_bounds(command.year, command.month)
             current_month = month_summaries.get(
                 command.month,
                 reconcile(
                     [],
-                    persons,
-                    category_mappings,
-                    category_groups,
+                    ctx.persons,
+                    ctx.category_mappings,
+                    ctx.category_groups,
                     start_date=start,
                     end_date=end,
                 ),
@@ -140,15 +136,15 @@ class GetDashboardUseCase:
             # YTD (Jan through requested month)
             ytd_summary = reconcile(
                 [tx for tx in all_year_txs if tx.date.month <= command.month],
-                persons,
-                category_mappings,
-                category_groups,
+                ctx.persons,
+                ctx.category_mappings,
+                ctx.category_groups,
                 start_date=date(command.year, 1, 1),
                 end_date=end,
             )
 
             uploads = await uow.uploads.get_by_person_ids_with_transactions_in_period(
-                [p.id for p in persons], command.year, command.month
+                ctx.person_ids, command.year, command.month
             )
 
             year_periods = await uow.reconciliation_periods.get_by_year(command.year)
@@ -161,15 +157,15 @@ class GetDashboardUseCase:
 
             return GetDashboardResult(
                 current_month=current_month,
-                upload_statuses=build_upload_statuses(persons, uploads),
+                upload_statuses=build_upload_statuses(ctx.persons, uploads),
                 ytd_total_shared_spending=ytd_summary.total_shared_spending,
                 ytd_settlement=ytd_summary.settlement,
                 month_history=_build_month_history(
                     month_summaries, command.year, finalized_months
                 ),
-                persons=persons,
+                persons=ctx.persons,
                 unmapped_categories=find_all_unmapped_categories(
-                    category_mappings, tx_categories
+                    ctx.category_mappings, tx_categories
                 ),
                 is_finalized=current_period.is_finalized if current_period else False,
                 finalized_at=current_period.finalized_at if current_period else None,

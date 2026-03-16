@@ -15,11 +15,17 @@ def positive_int(_instance: object, attribute: Attribute[int], value: int) -> No
         raise ValueError(f"{attribute.name} must be positive, got {value}")
 
 
+def assert_positive_decimal(value: Decimal, label: str = "amount") -> Decimal:
+    """Reusable check for both attrs validators and Pydantic field_validators."""
+    if value <= 0:
+        raise ValueError(f"{label} must be positive")
+    return value
+
+
 def positive_decimal(
     _instance: object, attribute: Attribute[Decimal], value: Decimal
 ) -> None:
-    if value <= 0:
-        raise ValueError(f"{attribute.name} must be positive, got {value}")
+    assert_positive_decimal(value, attribute.name)
 
 
 def month_range(_instance: object, attribute: Attribute[int], value: int) -> None:

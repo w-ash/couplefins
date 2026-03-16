@@ -173,3 +173,22 @@
   left: 1rem;
   top: 1rem;
 }
+
+/* Inline editor expand animation */
+@keyframes editor-slide-down {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+  to {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+}
+.editor-enter {
+  display: grid;
+  animation: editor-slide-down 250ms ease-out forwards;
+}
+.editor-enter > * {
+  overflow: hidden;
+}

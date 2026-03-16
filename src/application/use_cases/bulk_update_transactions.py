@@ -1,5 +1,6 @@
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from enum import Enum
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -7,6 +8,7 @@ from attrs import define, evolve, field
 
 from src.domain.entities.transaction_edit import TransactionEdit
 from src.domain.exceptions import ValidationError
+from src.domain.formatting import FieldValue
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 from ._shared.finalization import assert_period_not_finalized
@@ -19,10 +21,9 @@ from ._shared.transaction_pipeline import (
 if TYPE_CHECKING:
     from src.domain.entities.transaction import Transaction
 
-_UNSET = object()
 
-
-type _FieldValue = date | Decimal | str | int | tuple[str, ...] | None
+class _Unset(Enum):
+    UNSET = "UNSET"
 
 
 @define(frozen=True, slots=True)
@@ -32,7 +33,7 @@ class BulkUpdateTransactionsCommand:
     amount: Decimal | None = None
     category: str | None = None
     tags: tuple[str, ...] | None = None
-    payer_percentage: int | object = field(default=_UNSET)
+    payer_percentage: int | _Unset | None = field(default=_Unset.UNSET)
 
 
 @define(frozen=True, slots=True)
@@ -44,8 +45,8 @@ class BulkUpdateTransactionsResult:
 
 def _collect_updates(
     command: BulkUpdateTransactionsCommand,
-) -> dict[str, _FieldValue]:
-    updates: dict[str, _FieldValue] = {}
+) -> dict[str, FieldValue]:
+    updates: dict[str, FieldValue] = {}
     if command.date is not None:
         updates["date"] = command.date
     if command.amount is not None:
@@ -54,12 +55,12 @@ def _collect_updates(
         updates["category"] = command.category
     if command.tags is not None:
         updates["tags"] = command.tags
-    if command.payer_percentage is not _UNSET:
-        updates["payer_percentage"] = command.payer_percentage  # type: ignore[assignment]
+    if not isinstance(command.payer_percentage, _Unset):
+        updates["payer_percentage"] = command.payer_percentage
     return updates
 
 
-def _preserve_originals(updates: dict[str, _FieldValue], tx: Transaction) -> None:
+def _preserve_originals(updates: dict[str, FieldValue], tx: Transaction) -> None:
     if "date" in updates and updates["date"] != tx.date and tx.original_date is None:
         updates["original_date"] = tx.date
     if (
@@ -70,7 +71,26 @@ def _preserve_originals(updates: dict[str, _FieldValue], tx: Transaction) -> Non
         updates["original_amount"] = tx.amount
 
 
-_DIFF_FIELDS = ("date", "amount", "category", "tags", "payer_percentage")
+def _validate_command(
+    command: BulkUpdateTransactionsCommand,
+    updates: dict[str, FieldValue],
+) -> None:
+    if not command.transaction_ids:
+        raise ValidationError("At least one transaction ID is required")
+    if not updates:
+        raise ValidationError("At least one field to update is required")
+    if len(command.transaction_ids) > 1 and ("date" in updates or "amount" in updates):
+        raise ValidationError(
+            "date and amount can only be changed for a single transaction"
+        )
+    if (
+        not isinstance(command.payer_percentage, _Unset)
+        and command.payer_percentage is not None
+    ):
+        validate_payer_percentage(command.payer_percentage)
+
+
+_EDIT_FIELDS = ("date", "amount", "category", "tags", "payer_percentage")
 
 
 @define(slots=True)
@@ -80,32 +100,12 @@ class BulkUpdateTransactionsUseCase:
         command: BulkUpdateTransactionsCommand,
         uow: UnitOfWorkProtocol,
     ) -> BulkUpdateTransactionsResult:
-        if not command.transaction_ids:
-            raise ValidationError("At least one transaction ID is required")
-
         updates = _collect_updates(command)
-        if not updates:
-            raise ValidationError("At least one field to update is required")
-
-        # date/amount only allowed for single-item edits
-        is_single = len(command.transaction_ids) == 1
-        if not is_single and ("date" in updates or "amount" in updates):
-            raise ValidationError(
-                "date and amount can only be changed for a single transaction"
-            )
-
-        if (
-            command.payer_percentage is not _UNSET
-            and command.payer_percentage is not None
-        ):
-            if not isinstance(command.payer_percentage, int):
-                raise ValidationError("payer_percentage must be an integer")
-            validate_payer_percentage(command.payer_percentage)
+        _validate_command(command, updates)
 
         async with uow:
             transactions = await fetch_and_validate(uow, command.transaction_ids)
 
-            # For date changes, also validate the target period
             if "date" in updates:
                 tx = transactions[command.transaction_ids[0]]
                 new_date = updates["date"]
@@ -124,15 +124,18 @@ class BulkUpdateTransactionsUseCase:
                 tx_updates = dict(updates)
                 _preserve_originals(tx_updates, tx)
 
+                field_values: tuple[tuple[str, FieldValue], ...] = (
+                    ("date", tx.date),
+                    ("amount", tx.amount),
+                    ("category", tx.category),
+                    ("tags", tx.tags),
+                    ("payer_percentage", tx.payer_percentage),
+                )
                 edits = [
                     e
-                    for name in _DIFF_FIELDS
+                    for name, old in field_values
                     if name in tx_updates
-                    and (
-                        e := compute_edit(
-                            tx, name, getattr(tx, name), tx_updates[name], now
-                        )
-                    )
+                    and (e := compute_edit(tx, name, old, tx_updates[name], now))
                 ]
                 if not edits:
                     continue

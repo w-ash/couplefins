@@ -6,6 +6,9 @@ from src.application.use_cases._shared.date_math import (
     detect_single_month,
     month_bounds,
 )
+from src.application.use_cases._shared.reconciliation_context import (
+    load_reconciliation_context,
+)
 from src.application.use_cases._shared.transactions import find_all_unmapped_categories
 from src.application.use_cases._shared.upload_status import (
     UploadStatus,
@@ -57,16 +60,13 @@ class GetReconciliationUseCase:
         self, command: GetReconciliationCommand, uow: UnitOfWorkProtocol
     ) -> GetReconciliationResult:
         async with uow:
-            persons = await uow.persons.get_all()
+            ctx = await load_reconciliation_context(uow)
             transactions = await uow.transactions.get_shared_by_date_range(
                 command.start_date, command.end_date
             )
-            category_mappings = await uow.category_mappings.get_all()
-            category_groups = await uow.category_groups.get_all()
-            person_ids = [p.id for p in persons]
             uploads = (
                 await uow.uploads.get_by_person_ids_with_transactions_in_date_range(
-                    person_ids, command.start_date, command.end_date
+                    ctx.person_ids, command.start_date, command.end_date
                 )
             )
 
@@ -80,23 +80,25 @@ class GetReconciliationUseCase:
 
             summary = reconcile(
                 transactions,
-                persons,
-                category_mappings,
-                category_groups,
+                ctx.persons,
+                ctx.category_mappings,
+                ctx.category_groups,
                 start_date=command.start_date,
                 end_date=command.end_date,
             )
 
-            upload_statuses = build_upload_statuses(persons, uploads)
+            upload_statuses = build_upload_statuses(ctx.persons, uploads)
             tx_categories = {tx.category for tx in transactions}
-            unmapped = find_all_unmapped_categories(category_mappings, tx_categories)
+            unmapped = find_all_unmapped_categories(
+                ctx.category_mappings, tx_categories
+            )
 
             return GetReconciliationResult(
                 summary=summary,
                 transactions=transactions,
                 upload_statuses=upload_statuses,
                 unmapped_categories=unmapped,
-                persons=persons,
+                persons=ctx.persons,
                 is_finalized=is_finalized,
                 finalized_at=finalized_at,
                 year=command.single_month[0] if command.single_month else None,

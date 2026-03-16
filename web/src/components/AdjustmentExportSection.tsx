@@ -9,12 +9,13 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/Button";
+import { InlineError } from "@/components/InlineError";
 import {
   type AdjustmentPreview,
   downloadAdjustmentCsv,
   fetchAdjustmentPreview,
 } from "@/lib/adjustments";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, plural } from "@/lib/format";
 import { getPersonAccentColor, type Person } from "@/types/person";
 
 function AdjustmentRow({ adjustment }: { adjustment: AdjustmentPreview }) {
@@ -80,7 +81,7 @@ function PreviewTable({
             </div>
           )}
 
-          {error && <p className="text-sm text-negative">{error.message}</p>}
+          {error && <InlineError>{error.message}</InlineError>}
 
           {data && data.adjustments.length === 0 && (
             <p className="text-sm text-muted-foreground">
@@ -145,7 +146,7 @@ function PersonExportCard({
       const { rowCount } = await downloadAdjustmentCsv(person.id, year, month);
       setDownload({
         status: "success",
-        message: `Downloaded ${rowCount} row${rowCount !== 1 ? "s" : ""}`,
+        message: `Downloaded ${plural("row", rowCount)}`,
       });
     } catch (err) {
       setDownload({
@@ -210,7 +211,7 @@ function PersonExportCard({
       )}
 
       {download.status === "error" && (
-        <p className="text-sm text-negative">{download.message}</p>
+        <InlineError>{download.message}</InlineError>
       )}
 
       {hasAccount && (

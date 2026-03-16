@@ -6,7 +6,7 @@ from src.infrastructure.persistence.models.base import Base
 
 class SettlementModel(Base):
     __tablename__ = "settlements"
-    __table_args__ = (
+    __table_args__: tuple[UniqueConstraint] = (
         UniqueConstraint(
             "year",
             "month",

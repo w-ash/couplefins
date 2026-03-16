@@ -8,6 +8,9 @@ from src.application.use_cases._shared.command_validators import (
     positive_int,
 )
 from src.application.use_cases._shared.date_math import month_bounds
+from src.application.use_cases._shared.reconciliation_context import (
+    load_reconciliation_context,
+)
 from src.application.use_cases._shared.settlement_records import (
     SettlementRecord,
     enrich_with_links,
@@ -42,23 +45,20 @@ class GetSettleUpDataResult:
 
 @define(slots=True)
 class GetSettleUpDataUseCase:
-    async def execute(  # noqa: PLR0914
+    async def execute(
         self, command: GetSettleUpDataCommand, uow: UnitOfWorkProtocol
     ) -> GetSettleUpDataResult:
         async with uow:
-            persons = await uow.persons.get_all()
-            person_ids = [p.id for p in persons]
+            ctx = await load_reconciliation_context(uow)
 
             start, end = month_bounds(command.year, command.month)
             transactions = await uow.transactions.get_shared_by_date_range(start, end)
-            category_mappings = await uow.category_mappings.get_all()
-            category_groups = await uow.category_groups.get_all()
 
             summary = reconcile(
                 transactions,
-                persons,
-                category_mappings,
-                category_groups,
+                ctx.persons,
+                ctx.category_mappings,
+                ctx.category_groups,
                 start_date=start,
                 end_date=end,
             )
@@ -76,10 +76,10 @@ class GetSettleUpDataUseCase:
 
             uploads = (
                 await uow.uploads.get_by_person_ids_with_transactions_in_date_range(
-                    person_ids, start, end
+                    ctx.person_ids, start, end
                 )
             )
-            upload_statuses = build_upload_statuses(persons, uploads)
+            upload_statuses = build_upload_statuses(ctx.persons, uploads)
 
             period = await uow.reconciliation_periods.get_by_period(
                 command.year, command.month
@@ -94,7 +94,7 @@ class GetSettleUpDataUseCase:
                 recorded_settlements=records,
                 remaining_balance=remaining,
                 upload_statuses=upload_statuses,
-                persons=persons,
+                persons=ctx.persons,
                 is_finalized=is_finalized,
                 finalized_at=finalized_at,
             )

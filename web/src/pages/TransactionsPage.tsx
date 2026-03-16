@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowLeftRight,
+  Check,
   ChevronDown,
   ChevronRight,
   ChevronUp,
@@ -11,11 +12,16 @@ import {
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { AdjustmentExportSection } from "@/components/AdjustmentExportSection";
-import { BulkEditToolbar } from "@/components/BulkEditToolbar";
+import {
+  type BulkChanges,
+  BulkEditToolbar,
+} from "@/components/BulkEditToolbar";
 import { Button } from "@/components/Button";
 import type { ComboboxOption } from "@/components/Combobox";
 import { DateRangePicker } from "@/components/DateRangePicker";
+import { PageHeader } from "@/components/PageHeader";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
+import { StatsGrid } from "@/components/StatsGrid";
 import { TransactionEditor } from "@/components/TransactionEditor";
 import {
   ActiveFilterPills,
@@ -26,6 +32,7 @@ import {
 } from "@/components/TransactionFilters";
 import { TransactionSearch } from "@/components/TransactionSearch";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
+import { useTemporary } from "@/hooks/useTemporary";
 import {
   CATEGORY_GROUPS_QUERY_KEY,
   fetchCategoryGroups,
@@ -38,6 +45,7 @@ import {
   formatCurrency,
   formatDate,
   formatSplit,
+  plural,
 } from "@/lib/format";
 import { usePersonMaps } from "@/lib/persons";
 import type {
@@ -61,7 +69,6 @@ import {
   bulkModifyTags,
   bulkUpdateTransactions,
   updateTransaction,
-  updateTransactionSplits,
 } from "@/lib/transactions";
 import {
   fetchPersons,
@@ -95,30 +102,19 @@ function SummaryStats({
   data: ReconciliationData;
   personNames: Map<string, string>;
 }) {
-  const stats = [
-    { label: "Total shared", value: data.net_shared_spending },
-    ...data.person_summaries.map((ps) => ({
-      label: `${personNames.get(ps.person_id) ?? "Unknown"} paid`,
-      value: ps.total_paid,
-    })),
-  ];
-
   return (
-    <div className="grid grid-cols-3 gap-3">
-      {stats.map((stat) => (
-        <div
-          key={stat.label}
-          className="rounded-lg border border-border bg-card p-4 shadow-sm"
-        >
-          <p className="text-xs font-medium text-muted-foreground">
-            {stat.label}
-          </p>
-          <p className="mt-1 text-lg font-semibold text-foreground tabular-nums text-right">
-            {formatCurrency(stat.value)}
-          </p>
-        </div>
-      ))}
-    </div>
+    <StatsGrid
+      stats={[
+        {
+          label: "Total shared",
+          value: formatCurrency(data.net_shared_spending),
+        },
+        ...data.person_summaries.map((ps) => ({
+          label: `${personNames.get(ps.person_id) ?? "Unknown"} paid`,
+          value: formatCurrency(ps.total_paid),
+        })),
+      ]}
+    />
   );
 }
 
@@ -274,6 +270,10 @@ function SortableHeader({
   );
 }
 
+interface BulkResult {
+  message: string;
+}
+
 function TransactionTable({
   transactions,
   personNames,
@@ -286,7 +286,6 @@ function TransactionTable({
   isFinalized,
   sort,
   onSort,
-  onSplitUpdate,
   onBulkUpdate,
   onBulkTags,
   onTransactionUpdate,
@@ -303,17 +302,26 @@ function TransactionTable({
   isFinalized: boolean;
   sort: SortState;
   onSort: (s: SortState) => void;
-  onSplitUpdate: (
-    splits: Array<{ transaction_id: string; payer_percentage: number }>,
-  ) => void;
-  onBulkUpdate: (payload: BulkUpdatePayload) => void;
-  onBulkTags: (payload: BulkModifyTagsPayload) => void;
+  onBulkUpdate: (payload: BulkUpdatePayload) => Promise<unknown>;
+  onBulkTags: (payload: BulkModifyTagsPayload) => Promise<unknown>;
   onTransactionUpdate: (id: string, fields: TransactionUpdateFields) => void;
   isSaving: boolean;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [savedId, setSavedId] = useTemporary<string | null>(null);
   const [bulkMode, setBulkMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const exitBulkMode = useCallback(() => {
+    setBulkMode(false);
+    setSelected(new Set());
+  }, []);
+
+  const [bulkResult, setBulkResult] = useTemporary<BulkResult | null>(
+    null,
+    2000,
+    exitBulkMode,
+  );
 
   const colCount = 7 + personEntries.length + (bulkMode ? 1 : 0);
 
@@ -334,11 +342,6 @@ function TransactionTable({
     );
   }, [transactions]);
 
-  const exitBulkMode = useCallback(() => {
-    setBulkMode(false);
-    setSelected(new Set());
-  }, []);
-
   const selectedTagCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const tx of transactions) {
@@ -349,6 +352,39 @@ function TransactionTable({
     }
     return counts;
   }, [transactions, selected]);
+
+  const handleBulkApply = useCallback(
+    async (ids: string[], changes: BulkChanges) => {
+      const promises: Promise<unknown>[] = [];
+      if (changes.payer_percentage != null || changes.category != null) {
+        const payload: BulkUpdatePayload = { transaction_ids: ids };
+        if (changes.payer_percentage != null)
+          payload.payer_percentage = changes.payer_percentage;
+        if (changes.category != null) payload.category = changes.category;
+        promises.push(onBulkUpdate(payload));
+      }
+      if (changes.tags) {
+        promises.push(
+          onBulkTags({
+            transaction_ids: ids,
+            action: changes.tags.action,
+            tags: changes.tags.tags,
+          }),
+        );
+      }
+
+      await Promise.all(promises);
+
+      const parts: string[] = [];
+      if (changes.payer_percentage != null) parts.push("split");
+      if (changes.category != null) parts.push("category");
+      if (changes.tags) parts.push("tags");
+      setBulkResult({
+        message: `Updated ${parts.join(", ")} on ${plural("transaction", ids.length)}`,
+      });
+    },
+    [onBulkUpdate, onBulkTags, setBulkResult],
+  );
 
   const otherNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -380,26 +416,28 @@ function TransactionTable({
 
       {bulkMode && (
         <div className="mb-4">
-          <BulkEditToolbar
-            selectedIds={selected}
-            selectedTagCounts={selectedTagCounts}
-            categoryOptions={categoryOptions}
-            availableTags={availableTags}
-            saving={isSaving}
-            onApplySplit={(splits) => {
-              onSplitUpdate(splits);
-              exitBulkMode();
-            }}
-            onApplyBulkUpdate={(payload) => {
-              onBulkUpdate(payload);
-              exitBulkMode();
-            }}
-            onApplyBulkTags={(payload) => {
-              onBulkTags(payload);
-              exitBulkMode();
-            }}
-            onCancel={exitBulkMode}
-          />
+          {bulkResult ? (
+            <div
+              className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 shadow-sm"
+              aria-live="polite"
+            >
+              <Check className="size-4 text-positive" />
+              <span className="text-sm font-medium text-foreground">
+                {bulkResult.message}
+              </span>
+            </div>
+          ) : (
+            <BulkEditToolbar
+              selectedIds={selected}
+              totalCount={transactions.length}
+              selectedTagCounts={selectedTagCounts}
+              categoryOptions={categoryOptions}
+              availableTags={availableTags}
+              saving={isSaving}
+              onApply={handleBulkApply}
+              onCancel={exitBulkMode}
+            />
+          )}
         </div>
       )}
 
@@ -408,7 +446,7 @@ function TransactionTable({
           <thead>
             <tr className="border-b border-border text-left text-muted-foreground">
               {bulkMode && (
-                <th className="pb-2 pr-2 w-8">
+                <th className="w-8 pb-2 pr-2 align-middle">
                   <input
                     type="checkbox"
                     checked={
@@ -416,7 +454,7 @@ function TransactionTable({
                       transactions.length > 0
                     }
                     onChange={toggleAll}
-                    className="accent-primary"
+                    className="size-4 accent-primary"
                   />
                 </th>
               )}
@@ -483,6 +521,7 @@ function TransactionTable({
                   tagOptions={tagOptions}
                   personEntries={personEntries}
                   isExpanded={isExpanded}
+                  isSaved={savedId === tx.id}
                   canEdit={canEdit}
                   bulkMode={bulkMode}
                   isSelected={selected.has(tx.id)}
@@ -492,9 +531,11 @@ function TransactionTable({
                     setExpandedId(isExpanded ? null : tx.id)
                   }
                   onToggleSelect={() => toggleSelected(tx.id)}
-                  onTransactionUpdate={(fields) =>
-                    onTransactionUpdate(tx.id, fields)
-                  }
+                  onTransactionUpdate={(fields) => {
+                    onTransactionUpdate(tx.id, fields);
+                    setSavedId(tx.id);
+                    setExpandedId(null);
+                  }}
                   onCancel={() => setExpandedId(null)}
                 />
               );
@@ -518,6 +559,7 @@ function TransactionRow({
   tagOptions,
   personEntries,
   isExpanded,
+  isSaved,
   canEdit,
   bulkMode,
   isSelected,
@@ -539,6 +581,7 @@ function TransactionRow({
   tagOptions: ComboboxOption[];
   personEntries: Array<{ id: string; name: string }>;
   isExpanded: boolean;
+  isSaved: boolean;
   canEdit: boolean;
   bulkMode: boolean;
   isSelected: boolean;
@@ -552,24 +595,29 @@ function TransactionRow({
   return (
     <>
       <tr
-        className={`border-b border-border-muted ${canEdit ? "cursor-pointer hover:bg-muted/50" : ""} ${isExpanded ? "bg-muted/30" : ""}`}
+        className={`border-b border-border-muted transition-colors duration-300 ${canEdit ? "cursor-pointer hover:bg-muted/50" : ""} ${isExpanded ? "bg-muted/30" : ""} ${isSaved ? "bg-positive/10" : ""}`}
         onClick={canEdit ? onToggleExpand : undefined}
       >
         {bulkMode && (
-          <td className="py-2 pr-2">
+          <td className="py-2 pr-2 align-middle">
             <input
               type="checkbox"
               checked={isSelected}
               onChange={onToggleSelect}
               onClick={(e) => e.stopPropagation()}
-              className="accent-primary"
+              className="size-4 accent-primary"
             />
           </td>
         )}
         <td className="py-2 pr-4 text-muted-foreground tabular-nums">
           {formatDate(tx.date)}
         </td>
-        <td className="py-2 pr-4 text-foreground">{tx.merchant}</td>
+        <td className="py-2 pr-4 text-foreground">
+          <span className="flex items-center gap-1.5">
+            {tx.merchant}
+            {isSaved && <Check className="size-3.5 text-positive" />}
+          </span>
+        </td>
         <td className="py-2 pr-4 text-muted-foreground">{tx.category}</td>
         <td className="py-2 pr-4 text-muted-foreground">{categoryGroup}</td>
         <td className="py-2 pr-4">
@@ -601,16 +649,18 @@ function TransactionRow({
       {isExpanded && (
         <tr className="border-b border-border-muted bg-muted/30">
           <td colSpan={colCount} className="px-4">
-            <TransactionEditor
-              tx={tx}
-              payerName={payerName}
-              otherName={otherName}
-              categoryOptions={categoryOptions}
-              tagOptions={tagOptions}
-              saving={isSaving}
-              onSave={onTransactionUpdate}
-              onCancel={onCancel}
-            />
+            <div className="editor-enter">
+              <TransactionEditor
+                tx={tx}
+                payerName={payerName}
+                otherName={otherName}
+                categoryOptions={categoryOptions}
+                tagOptions={tagOptions}
+                saving={isSaving}
+                onSave={onTransactionUpdate}
+                onCancel={onCancel}
+              />
+            </div>
           </td>
         </tr>
       )}
@@ -651,13 +701,6 @@ export function TransactionsPage() {
     queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY });
     queryClient.invalidateQueries({ queryKey: TAGS_QUERY_KEY });
   }, [queryClient, reconciliationQueryKey]);
-
-  const splitMutation = useMutation({
-    mutationFn: (
-      splits: Array<{ transaction_id: string; payer_percentage: number }>,
-    ) => updateTransactionSplits(splits),
-    onSuccess: invalidateReconciliation,
-  });
 
   const editMutation = useMutation({
     mutationFn: ({
@@ -721,17 +764,16 @@ export function TransactionsPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-12">
-      <div className="mb-8 flex items-center justify-between">
-        <h1 className="flex items-center gap-2.5 font-semibold text-2xl text-foreground">
-          <ArrowLeftRight className="size-6" />
-          Transactions
-        </h1>
+      <PageHeader
+        icon={<ArrowLeftRight className="size-6" />}
+        title="Transactions"
+      >
         <DateRangePicker
           startDate={startDate}
           endDate={endDate}
           setDateRange={setDateRange}
         />
-      </div>
+      </PageHeader>
 
       {isLoading && <PageLoading label="Loading transactions..." />}
 
@@ -815,14 +857,14 @@ export function TransactionsPage() {
                 isFinalized={isFinalized}
                 sort={filters.sort}
                 onSort={filters.setSort}
-                onSplitUpdate={(splits) => splitMutation.mutate(splits)}
-                onBulkUpdate={(payload) => bulkUpdateMutation.mutate(payload)}
-                onBulkTags={(payload) => bulkTagsMutation.mutate(payload)}
+                onBulkUpdate={(payload) =>
+                  bulkUpdateMutation.mutateAsync(payload)
+                }
+                onBulkTags={(payload) => bulkTagsMutation.mutateAsync(payload)}
                 onTransactionUpdate={(id, fields) =>
                   editMutation.mutate({ id, fields })
                 }
                 isSaving={
-                  splitMutation.isPending ||
                   editMutation.isPending ||
                   bulkUpdateMutation.isPending ||
                   bulkTagsMutation.isPending

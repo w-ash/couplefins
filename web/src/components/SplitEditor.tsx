@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/Button";
-import { computeShares, formatCurrency } from "@/lib/format";
-
-export const percentInputClass =
-  "w-16 rounded-md border border-input bg-card px-2 py-1 text-sm text-foreground tabular-nums shadow-sm focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none";
+import { PercentInput } from "@/components/PercentInput";
+import { computeShares, formatCurrency, parsePercent } from "@/lib/format";
 
 interface SplitEditorProps {
   /** Current payer percentage (0-100) */
@@ -42,41 +40,42 @@ export function SplitEditor({
     }
   }, [autoFocus]);
 
-  const parsed = Number.parseInt(value, 10);
-  const isValid = !Number.isNaN(parsed) && parsed >= 0 && parsed <= 100;
+  const parsed = parsePercent(value);
+  const isValid = parsed !== null;
   const hasChanged = isValid && parsed !== currentPercentage;
 
-  const { payerShare, otherShare } = isValid
-    ? computeShares(absAmount, parsed)
-    : { payerShare: 0, otherShare: 0 };
+  const { payerShare, otherShare } =
+    parsed !== null
+      ? computeShares(absAmount, parsed)
+      : { payerShare: 0, otherShare: 0 };
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" && isValid && hasChanged) {
+      if (e.key === "Enter" && parsed !== null && hasChanged) {
         onSave(parsed);
       } else if (e.key === "Escape") {
         onCancel();
       }
     },
-    [isValid, hasChanged, parsed, onSave, onCancel],
+    [hasChanged, parsed, onSave, onCancel],
   );
 
   return (
     <div className="flex items-center gap-4 py-2">
-      <label className="flex items-center gap-2 text-sm text-muted-foreground">
+      <label
+        htmlFor="inline-split"
+        className="flex items-center gap-2 text-sm text-muted-foreground"
+      >
         <span>Split</span>
-        <input
-          ref={inputRef}
-          type="number"
-          min={0}
-          max={100}
+        <PercentInput
+          id="inline-split"
+          inputRef={inputRef}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={setValue}
           onKeyDown={handleKeyDown}
-          className={percentInputClass}
           disabled={saving}
+          error={undefined}
         />
-        <span>%</span>
       </label>
 
       {isValid && (
@@ -97,7 +96,9 @@ export function SplitEditor({
         </Button>
         <Button
           size="sm"
-          onClick={() => onSave(parsed)}
+          onClick={() => {
+            if (parsed !== null) onSave(parsed);
+          }}
           disabled={!isValid || !hasChanged || saving}
           loading={saving}
           loadingText="Saving"

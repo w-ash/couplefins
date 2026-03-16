@@ -5,7 +5,7 @@ from src.domain.constants import SplitDefaults
 from src.domain.entities.transaction import Transaction
 from src.domain.entities.transaction_edit import TransactionEdit
 from src.domain.exceptions import NotFoundError, ValidationError
-from src.domain.formatting import field_str
+from src.domain.formatting import FieldValue, field_str
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 from .finalization import assert_periods_not_finalized
@@ -28,8 +28,8 @@ async def fetch_and_validate(
 def compute_edit(
     tx: Transaction,
     field_name: str,
-    old_value: object,
-    new_value: object,
+    old_value: FieldValue,
+    new_value: FieldValue,
     now: datetime | None = None,
 ) -> TransactionEdit | None:
     if old_value == new_value:
@@ -40,8 +40,8 @@ def compute_edit(
         id=uuid4(),
         transaction_id=tx.id,
         field_name=field_name,
-        old_value=field_str(old_value),  # type: ignore[arg-type]
-        new_value=field_str(new_value),  # type: ignore[arg-type]
+        old_value=field_str(old_value),
+        new_value=field_str(new_value),
         edited_at=now,
     )
 

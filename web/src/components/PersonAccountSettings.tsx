@@ -2,6 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/Button";
+import { InlineError } from "@/components/InlineError";
+import { useTemporary } from "@/hooks/useTemporary";
+import { baseInputClass } from "@/lib/input-styles";
 import {
   fetchPersons,
   PERSONS_QUERY_KEY,
@@ -11,18 +14,12 @@ import {
 
 function PersonAccountRow({ person }: { person: Person }) {
   const [value, setValue] = useState(person.adjustment_account);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useTemporary(false);
   const queryClient = useQueryClient();
 
   useEffect(() => {
     setValue(person.adjustment_account);
   }, [person.adjustment_account]);
-
-  useEffect(() => {
-    if (!saved) return;
-    const id = setTimeout(() => setSaved(false), 2000);
-    return () => clearTimeout(id);
-  }, [saved]);
 
   const mutation = useMutation({
     mutationFn: (account: string) =>
@@ -61,10 +58,12 @@ function PersonAccountRow({ person }: { person: Person }) {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder="e.g. Shared Expense Adjustments"
-          className="w-full rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground shadow-sm placeholder:text-muted-foreground focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none"
+          className={`w-full ${baseInputClass} placeholder:text-muted-foreground`}
         />
         {mutation.error && (
-          <p className="mt-1 text-sm text-negative">{mutation.error.message}</p>
+          <div className="mt-1">
+            <InlineError>{mutation.error.message}</InlineError>
+          </div>
         )}
       </div>
       <div className="pt-6">
@@ -101,7 +100,7 @@ export function PersonAccountSettings() {
   }
 
   if (personsQuery.isError) {
-    return <p className="text-sm text-negative">Failed to load profiles.</p>;
+    return <InlineError>Failed to load profiles.</InlineError>;
   }
 
   const persons = personsQuery.data ?? [];

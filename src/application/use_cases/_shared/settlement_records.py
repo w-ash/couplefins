@@ -3,7 +3,6 @@ from uuid import UUID
 
 from attrs import define
 
-from src.domain.entities.person import Person
 from src.domain.entities.settlement import Settlement
 from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
@@ -40,7 +39,7 @@ async def enrich_with_links(
 
 async def validate_settlement_persons(
     from_person_id: UUID, to_person_id: UUID, uow: UnitOfWorkProtocol
-) -> tuple[Person, Person]:
+) -> None:
     if from_person_id == to_person_id:
         raise ValidationError("from_person_id and to_person_id must differ")
 
@@ -51,5 +50,3 @@ async def validate_settlement_persons(
     to_person = await uow.persons.get_by_id(to_person_id)
     if not to_person:
         raise NotFoundError(f"Person {to_person_id} not found")
-
-    return from_person, to_person

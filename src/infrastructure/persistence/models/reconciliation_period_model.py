@@ -6,7 +6,7 @@ from src.infrastructure.persistence.models.base import Base
 
 class ReconciliationPeriodModel(Base):
     __tablename__ = "reconciliation_periods"
-    __table_args__ = (UniqueConstraint("year", "month"),)
+    __table_args__: tuple[UniqueConstraint] = (UniqueConstraint("year", "month"),)
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     year: Mapped[int] = mapped_column(Integer, nullable=False)

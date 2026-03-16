@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/Button";
+import { PageHeader } from "@/components/PageHeader";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { apiFetch } from "@/lib/api";
 import { useInvalidateCategories } from "@/lib/categories";
@@ -294,10 +295,10 @@ export function UploadPage() {
     <div
       className={`mx-auto px-6 py-12 ${showGrid ? "max-w-5xl" : "max-w-3xl"}`}
     >
-      <h1 className="mb-8 flex items-center gap-2.5 font-semibold text-2xl text-foreground">
-        <Upload className="size-6" />
-        Upload Transactions
-      </h1>
+      <PageHeader
+        icon={<Upload className="size-6" />}
+        title="Upload Transactions"
+      />
 
       <form
         onSubmit={handlePreview}

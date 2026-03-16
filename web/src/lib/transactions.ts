@@ -1,23 +1,6 @@
 import { apiFetch } from "@/lib/api";
 
-export interface SplitUpdate {
-  transaction_id: string;
-  payer_percentage: number;
-}
-
-export interface UpdateSplitsResult {
-  updated_count: number;
-}
-
-export function updateTransactionSplits(
-  splits: SplitUpdate[],
-): Promise<UpdateSplitsResult> {
-  return apiFetch("/api/v1/transactions/splits", {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ splits }),
-  });
-}
+export type TagAction = "add" | "remove";
 
 export interface TransactionUpdateFields {
   date?: string;
@@ -84,7 +67,7 @@ export function bulkUpdateTransactions(
 
 export interface BulkModifyTagsPayload {
   transaction_ids: string[];
-  action: "add" | "remove";
+  action: TagAction;
   tags: string[];
 }
 

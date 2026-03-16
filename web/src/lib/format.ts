@@ -1,4 +1,5 @@
 import { useSearchParams } from "react-router";
+import type { Settlement } from "@/lib/reconciliation";
 
 export const MONTHS = [
   "January",
@@ -41,9 +42,18 @@ export function formatCurrency(amount: number): string {
   return currencyFmt.format(amount);
 }
 
+export function plural(word: string, count: number): string {
+  return `${count} ${word}${count !== 1 ? "s" : ""}`;
+}
+
 export function formatSplit(payerPercentage: number | null): string {
   const payer = payerPercentage ?? 50;
   return `${payer}/${100 - payer}`;
+}
+
+export function parsePercent(value: string): number | null {
+  const parsed = Number.parseInt(value, 10);
+  return !Number.isNaN(parsed) && parsed >= 0 && parsed <= 100 ? parsed : null;
 }
 
 export function computeShares(
@@ -54,6 +64,15 @@ export function computeShares(
     payerShare: +((absAmount * payerPct) / 100).toFixed(2),
     otherShare: +((absAmount * (100 - payerPct)) / 100).toFixed(2),
   };
+}
+
+export function buildSettlementLabel(
+  settlement: Settlement | null,
+  personNames: Map<string, string>,
+): string {
+  if (!settlement || settlement.amount === 0) return "Settled";
+  const fromName = personNames.get(settlement.from_person_id) ?? "Unknown";
+  return `${fromName} owes ${formatCurrency(settlement.amount)}`;
 }
 
 export function useMonthYear(): { year: number; month: number } {

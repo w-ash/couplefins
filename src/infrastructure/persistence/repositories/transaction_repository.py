@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 import json
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import CursorResult, delete, select, update
@@ -29,7 +30,7 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             occurrence=model.occurrence,
             notes=model.notes,
             amount=Decimal(model.amount),
-            tags=tuple(json.loads(model.tags_json)),
+            tags=tuple(cast(list[str], json.loads(model.tags_json))),
             payer_person_id=UUID(model.payer_person_id),
             payer_percentage=model.payer_percentage,
             is_settlement=model.is_settlement,
@@ -178,6 +179,6 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         stmt = select(TransactionModel.tags_json).distinct()
         result = await self._session.execute(stmt)
         tags: set[str] = set()
-        for (tags_json,) in result.all():
-            tags.update(json.loads(tags_json))
+        for tags_json in result.scalars():
+            tags.update(cast(list[str], json.loads(tags_json)))
         return sorted(tags)

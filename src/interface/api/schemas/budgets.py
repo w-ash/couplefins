@@ -4,15 +4,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, field_validator
 
+from src.application.use_cases._shared.command_validators import assert_positive_decimal
 from src.application.use_cases.get_budget_overview import GetBudgetOverviewResult
 from src.domain.budget import HealthStatus
 from src.domain.entities.category_group_budget import CategoryGroupBudget
-
-
-def _validate_positive_amount(v: Decimal) -> Decimal:
-    if v <= 0:
-        raise ValueError("monthly_amount must be positive")
-    return v
 
 
 class SaveBudgetRequest(BaseModel):
@@ -23,7 +18,7 @@ class SaveBudgetRequest(BaseModel):
     @field_validator("monthly_amount")
     @classmethod
     def amount_must_be_positive(cls, v: Decimal) -> Decimal:
-        return _validate_positive_amount(v)
+        return assert_positive_decimal(v, "monthly_amount")
 
 
 class UpdateBudgetRequest(BaseModel):
@@ -32,7 +27,7 @@ class UpdateBudgetRequest(BaseModel):
     @field_validator("monthly_amount")
     @classmethod
     def amount_must_be_positive(cls, v: Decimal) -> Decimal:
-        return _validate_positive_amount(v)
+        return assert_positive_decimal(v, "monthly_amount")
 
 
 class BudgetResponse(BaseModel):

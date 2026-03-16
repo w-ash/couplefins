@@ -6,7 +6,9 @@ from src.infrastructure.persistence.models.base import Base
 
 class TransactionEditModel(Base):
     __tablename__ = "transaction_edits"
-    __table_args__ = (Index("ix_transaction_edits_transaction_id", "transaction_id"),)
+    __table_args__: tuple[Index] = (
+        Index("ix_transaction_edits_transaction_id", "transaction_id"),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     transaction_id: Mapped[str] = mapped_column(

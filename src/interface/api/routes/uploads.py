@@ -1,11 +1,12 @@
 import json
 from uuid import UUID
 
-from fastapi import APIRouter, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Form, UploadFile
 
 from src.application.runner import execute_use_case
 from src.application.use_cases.preview_csv import PreviewCsvCommand, PreviewCsvUseCase
 from src.application.use_cases.upload_csv import UploadCsvCommand, UploadCsvUseCase
+from src.domain.exceptions import ValidationError
 from src.interface.api.schemas.uploads import (
     PreviewUploadResponse,
     UploadSummaryResponse,
@@ -42,7 +43,7 @@ async def post_upload(
         raw_ids: list[str] = json.loads(accepted_change_ids)  # pyright: ignore[reportAny]
         change_ids = frozenset(UUID(id_str) for id_str in raw_ids)
     except (json.JSONDecodeError, ValueError) as exc:
-        raise HTTPException(422, "Invalid accepted_change_ids") from exc
+        raise ValidationError("Invalid accepted_change_ids") from exc
 
     command = UploadCsvCommand(
         csv_text=csv_text,

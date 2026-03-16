@@ -8,6 +8,7 @@ from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
 from src.domain.splits import compute_shares
 
+# 12 hex chars = 48 bits → ~1-in-281-trillion collision rate per pair
 _DEDUP_HEX_LENGTH = 12
 
 # Fixed namespace for deterministic UUID5 derivation of dedup IDs.
