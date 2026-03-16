@@ -16,6 +16,11 @@ import { PageHeader } from "@/components/PageHeader";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { StatsGrid } from "@/components/StatsGrid";
+import {
+  type SortMode,
+  useBudgetFilters,
+  type ViewMode,
+} from "@/lib/budget-filters";
 import type { BudgetOverviewData, GroupBudgetStatus } from "@/lib/budgets";
 import {
   deleteBudget,
@@ -30,9 +35,6 @@ import {
 import { getCategoryGroupIcon } from "@/lib/category-icons";
 import { formatCurrency, useMonthYear } from "@/lib/format";
 import { baseInputClass, selectInputClass } from "@/lib/input-styles";
-
-type ViewMode = "monthly" | "ytd";
-type SortMode = "urgency" | "spending" | "name";
 
 function healthColor(health: string | null): string {
   switch (health) {
@@ -513,8 +515,7 @@ function sortStatuses(
 export function BudgetPage() {
   const { year, month } = useMonthYear();
   const queryClient = useQueryClient();
-  const [viewMode, setViewMode] = useState<ViewMode>("monthly");
-  const [sortMode, setSortMode] = useState<SortMode>("urgency");
+  const { viewMode, setViewMode, sortMode, setSortMode } = useBudgetFilters();
 
   const queryKey = ["budget-overview", year, month];
 
