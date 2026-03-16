@@ -32,6 +32,7 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             tags=tuple(json.loads(model.tags_json)),
             payer_person_id=UUID(model.payer_person_id),
             payer_percentage=model.payer_percentage,
+            is_settlement=model.is_settlement,
             original_date=(
                 date.fromisoformat(model.original_date) if model.original_date else None
             ),
@@ -57,6 +58,7 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             "is_shared": entity.is_shared,
             "payer_person_id": str(entity.payer_person_id),
             "payer_percentage": entity.payer_percentage,
+            "is_settlement": entity.is_settlement,
             "original_date": (
                 entity.original_date.isoformat() if entity.original_date else None
             ),
@@ -83,6 +85,7 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         stmt = select(TransactionModel).where(
             TransactionModel.date.startswith(prefix),
             TransactionModel.is_shared.is_(True),
+            TransactionModel.is_settlement.is_(False),
         )
         result = await self._session.execute(stmt)
         return [self._to_domain(row) for row in result.scalars().all()]
@@ -92,6 +95,7 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         stmt = select(TransactionModel).where(
             TransactionModel.date.startswith(prefix),
             TransactionModel.is_shared.is_(True),
+            TransactionModel.is_settlement.is_(False),
         )
         result = await self._session.execute(stmt)
         return [self._to_domain(row) for row in result.scalars().all()]
@@ -103,6 +107,7 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             TransactionModel.date >= start_date.isoformat(),
             TransactionModel.date <= end_date.isoformat(),
             TransactionModel.is_shared.is_(True),
+            TransactionModel.is_settlement.is_(False),
         )
         result = await self._session.execute(stmt)
         return [self._to_domain(row) for row in result.scalars().all()]
@@ -168,3 +173,11 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         stmt = select(TransactionModel.category).distinct()
         result = await self._session.execute(stmt)
         return [row[0] for row in result.all()]
+
+    async def get_distinct_tags(self) -> list[str]:
+        stmt = select(TransactionModel.tags_json).distinct()
+        result = await self._session.execute(stmt)
+        tags: set[str] = set()
+        for (tags_json,) in result.all():
+            tags.update(json.loads(tags_json))
+        return sorted(tags)

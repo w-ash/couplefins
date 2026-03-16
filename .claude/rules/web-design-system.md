@@ -95,8 +95,9 @@ Load Satoshi as a variable font from Fontshare. Load Geist Mono from Google Font
 
 ## Information Architecture
 
-Left sidebar with 5 pages: Dashboard / Transactions / Budget / Upload / Settings.
+Left sidebar with 6 pages: Dashboard / Transactions / Settle Up / Budget / Upload / Settings.
 - "Transactions" (not "Reconciliation") — standard finance-app naming
+- "Settle Up" sits between Transactions and Budget — follows the monthly workflow: view data → settle → review budget
 - "Settings" absorbs person config, category management, and theme toggle
 - "History" is NOT a standalone page — month navigation lives within Dashboard and Transactions
 - Upload is lower in the nav (monthly task, not daily)

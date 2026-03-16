@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeftRight,
+  HandCoins,
   Heart,
   LayoutDashboard,
   PieChart,
@@ -44,6 +45,7 @@ export function Sidebar() {
           label="Transactions"
           icon={ArrowLeftRight}
         />
+        <NavItem to="/settle" label="Settle Up" icon={HandCoins} />
         <NavItem to="/budget" label="Budget" icon={PieChart} />
         <NavItem to="/upload" label="Upload" icon={Upload} />
         <NavItem to="/settings" label="Settings" icon={Settings} />

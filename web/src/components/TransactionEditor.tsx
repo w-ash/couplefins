@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/Button";
+import type { ComboboxOption } from "@/components/Combobox";
+import { Combobox } from "@/components/Combobox";
 import { computeShares, formatCurrency, formatDate } from "@/lib/format";
 import type { ReconciliationTransaction } from "@/lib/reconciliation";
 import type {
@@ -13,6 +15,8 @@ interface TransactionEditorProps {
   tx: ReconciliationTransaction;
   payerName: string;
   otherName: string;
+  categoryOptions: ComboboxOption[];
+  tagOptions: ComboboxOption[];
   saving?: boolean;
   onSave: (fields: TransactionUpdateFields) => void;
   onCancel: () => void;
@@ -79,6 +83,8 @@ export function TransactionEditor({
   tx,
   payerName,
   otherName,
+  categoryOptions,
+  tagOptions,
   saving = false,
   onSave,
   onCancel,
@@ -86,7 +92,7 @@ export function TransactionEditor({
   const [date, setDate] = useState(tx.date);
   const [amount, setAmount] = useState(String(tx.amount));
   const [category, setCategory] = useState(tx.category);
-  const [tags, setTags] = useState(tx.tags.join(", "));
+  const [tags, setTags] = useState<string[]>([...tx.tags]);
   const [split, setSplit] = useState(String(tx.payer_percentage ?? 50));
   const firstInputRef = useRef<HTMLInputElement>(null);
 
@@ -105,11 +111,14 @@ export function TransactionEditor({
     ? computeShares(absAmount, parsedSplit)
     : { payerShare: 0, otherShare: 0 };
 
+  const tagsChanged =
+    tags.length !== tx.tags.length || tags.some((t, i) => t !== tx.tags[i]);
+
   const hasChanges =
     date !== tx.date ||
     (isAmountValid && parsedAmount !== tx.amount) ||
     category !== tx.category ||
-    tags !== tx.tags.join(", ") ||
+    tagsChanged ||
     (isSplitValid && parsedSplit !== (tx.payer_percentage ?? 50));
 
   const handleSave = useCallback(() => {
@@ -118,11 +127,7 @@ export function TransactionEditor({
     if (isAmountValid && parsedAmount !== tx.amount)
       fields.amount = parsedAmount;
     if (category !== tx.category) fields.category = category;
-    const newTags = tags
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-    if (tags !== tx.tags.join(", ")) fields.tags = newTags;
+    if (tagsChanged) fields.tags = tags;
     if (isSplitValid && parsedSplit !== (tx.payer_percentage ?? 50))
       fields.payer_percentage = parsedSplit;
     onSave(fields);
@@ -130,6 +135,7 @@ export function TransactionEditor({
     date,
     category,
     tags,
+    tagsChanged,
     tx,
     parsedAmount,
     parsedSplit,
@@ -198,28 +204,30 @@ export function TransactionEditor({
           )}
         </label>
 
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span className="w-16">Category</span>
-          <input
-            type="text"
+          <Combobox
+            mode="single"
+            options={categoryOptions}
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className={`${inputClass} w-40`}
+            onChange={(v) => setCategory(v as string)}
             disabled={saving}
+            className="w-48"
           />
-        </label>
+        </div>
 
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="w-16">Tags</span>
-          <input
-            type="text"
+        <div className="flex items-start gap-2 text-sm text-muted-foreground">
+          <span className="mt-1.5 w-16">Tags</span>
+          <Combobox
+            mode="multi"
+            options={tagOptions}
             value={tags}
-            onChange={(e) => setTags(e.target.value)}
-            className={`${inputClass} w-40`}
+            onChange={(v) => setTags(v as string[])}
             placeholder="shared, s50"
             disabled={saving}
+            className="min-w-48 flex-1"
           />
-        </label>
+        </div>
       </div>
 
       <div className="mt-2 flex items-center gap-4">

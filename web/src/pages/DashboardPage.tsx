@@ -1,64 +1,23 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
   CheckCircle2,
-  Clock,
+  HandCoins,
   LayoutDashboard,
   Lock,
   Upload,
 } from "lucide-react";
-import { useMemo } from "react";
 import { Link, useNavigate } from "react-router";
-import { FinalizationBanner } from "@/components/FinalizationBanner";
 import { MonthSelector } from "@/components/MonthSelector";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
-import { SettlementCard } from "@/components/SettlementCard";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
+import { UploadStatusRow } from "@/components/UploadStatusRow";
 import type { DashboardData, MonthHistoryEntry } from "@/lib/dashboard";
 import { DASHBOARD_QUERY_KEY, fetchDashboard } from "@/lib/dashboard";
 import { formatCurrency, MONTHS, useMonthYear } from "@/lib/format";
+import { usePersonMaps } from "@/lib/persons";
 import type { Settlement } from "@/lib/reconciliation";
-import { finalizePeriod, unfinalizePeriod } from "@/lib/reconciliation";
 import { getPersonAccentColor } from "@/types/person";
-
-function UploadStatusRow({
-  statuses,
-  personIndexMap,
-}: {
-  statuses: DashboardData["upload_statuses"];
-  personIndexMap: Map<string, number>;
-}) {
-  return (
-    <div className="flex items-center justify-center gap-6">
-      {statuses.map((s) => {
-        const color = getPersonAccentColor(
-          personIndexMap.get(s.person_id) ?? -1,
-        );
-        return (
-          <div key={s.person_id} className="flex items-center gap-2 text-sm">
-            {s.has_uploaded ? (
-              <CheckCircle2 className="size-4 text-positive" />
-            ) : (
-              <Clock className="size-4 text-muted-foreground" />
-            )}
-            <span
-              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${color}`}
-            >
-              {s.person_name}
-            </span>
-            <span
-              className={
-                s.has_uploaded ? "text-foreground" : "text-muted-foreground"
-              }
-            >
-              {s.has_uploaded ? "uploaded" : "not yet"}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 function SummaryStats({
   data,
@@ -112,6 +71,13 @@ function QuickActions({ year, month }: { year: number; month: number }) {
       >
         <Upload className="size-4" />
         Upload CSV
+      </Link>
+      <Link
+        to={`/settle?year=${year}&month=${month}`}
+        className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground shadow-sm transition-colors duration-150 hover:bg-muted"
+      >
+        <HandCoins className="size-4" />
+        Settle Up
       </Link>
       <Link
         to={`/transactions?year=${year}&month=${month}`}
@@ -208,7 +174,6 @@ function buildHistorySettlementLabel(
 
 export function DashboardPage() {
   const { year, month } = useMonthYear();
-  const queryClient = useQueryClient();
 
   const dashboardQueryKey = [...DASHBOARD_QUERY_KEY, year, month];
   const { data, isLoading, error, refetch } = useQuery({
@@ -216,29 +181,7 @@ export function DashboardPage() {
     queryFn: () => fetchDashboard(year, month),
   });
 
-  const finalizeMutation = useMutation({
-    mutationFn: () => finalizePeriod(year, month),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY });
-      queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
-    },
-  });
-
-  const unfinalizeMutation = useMutation({
-    mutationFn: () => unfinalizePeriod(year, month),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY });
-      queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
-    },
-  });
-
-  const { personNames, personIndexMap } = useMemo(() => {
-    const persons = data?.persons ?? [];
-    return {
-      personNames: new Map(persons.map((p) => [p.id, p.name])),
-      personIndexMap: new Map(persons.map((p, i) => [p.id, i])),
-    };
-  }, [data?.persons]);
+  const { personNames, personIndexMap } = usePersonMaps(data?.persons);
 
   const monthName = MONTHS[month - 1] ?? "";
   const isEmpty =
@@ -252,6 +195,15 @@ export function DashboardPage() {
         <h1 className="flex items-center gap-2.5 font-semibold text-2xl text-foreground">
           <LayoutDashboard className="size-6" />
           Dashboard
+          {data?.is_finalized && (
+            <span
+              className="inline-flex items-center gap-1 rounded-md bg-primary-muted px-2 py-0.5 text-xs font-medium text-primary-muted-foreground"
+              title="Month locked"
+            >
+              <Lock className="size-3" />
+              Locked
+            </span>
+          )}
         </h1>
         <MonthSelector />
       </div>
@@ -278,22 +230,40 @@ export function DashboardPage() {
 
       {data && !isEmpty && (
         <div className="space-y-6">
-          <FinalizationBanner
-            isFinalized={data.is_finalized}
-            finalizedAt={data.finalized_at}
-            onFinalize={() => finalizeMutation.mutate()}
-            onUnfinalize={() => unfinalizeMutation.mutate()}
-            isPending={
-              finalizeMutation.isPending || unfinalizeMutation.isPending
-            }
-          />
-          {data.current_month_settlement && (
-            <SettlementCard
-              settlement={data.current_month_settlement}
-              personNames={personNames}
-              personIndexMap={personIndexMap}
-              periodLabel={`${monthName} ${year}`}
-            />
+          {data.current_month_settlement &&
+          data.current_month_settlement.amount > 0 ? (
+            <Link
+              to={`/settle?year=${year}&month=${month}`}
+              className="block rounded-xl border border-primary/20 bg-card p-6 shadow-md transition-colors hover:bg-muted/50"
+            >
+              <p className="text-center text-lg font-semibold text-foreground">
+                <span
+                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-base font-semibold ${getPersonAccentColor(personIndexMap.get(data.current_month_settlement.from_person_id) ?? -1)}`}
+                >
+                  {personNames.get(
+                    data.current_month_settlement.from_person_id,
+                  ) ?? "Unknown"}
+                </span>{" "}
+                owes{" "}
+                {personNames.get(data.current_month_settlement.to_person_id) ??
+                  "Unknown"}{" "}
+                <span className="tabular-nums">
+                  {formatCurrency(data.current_month_settlement.amount)}
+                </span>
+              </p>
+              <p className="mt-1 text-center text-sm text-primary">
+                Settle Up <ArrowRight className="ml-1 inline size-3.5" />
+              </p>
+            </Link>
+          ) : (
+            <div className="rounded-xl border border-primary/20 bg-card p-6 shadow-md">
+              <p className="text-center text-lg font-semibold text-primary">
+                <span className="inline-flex items-center gap-2">
+                  <CheckCircle2 className="size-5" />
+                  All settled!
+                </span>
+              </p>
+            </div>
           )}
           <UploadStatusRow
             statuses={data.upload_statuses}

@@ -4,7 +4,6 @@ Ideas and features without version assignment. Move to a version file when ready
 
 ## Data & Import
 - Automatic CSV format detection (support non-Monarch CSVs)
-- Duplicate transaction detection across uploads
 
 ## Reconciliation
 - Export reconciliation summary as PDF
@@ -18,7 +17,5 @@ Ideas and features without version assignment. Move to a version file when ready
 - Keyboard shortcuts for common actions
 
 ## Infrastructure
-- PostgreSQL migration path for remote deployment
 - User authentication (if sharing with others)
-- Automated backups of SQLite database
-- Docker containerization
+- Database, deployment, and performance work moved to [v1.0.x](v1.0.x.md)

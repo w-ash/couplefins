@@ -7,6 +7,7 @@ import { BudgetPage } from "./pages/BudgetPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ProfilePicker } from "./pages/ProfilePicker";
 import { SettingsPage } from "./pages/SettingsPage";
+import { SettleUpPage } from "./pages/SettleUpPage";
 import { SetupPage } from "./pages/SetupPage";
 import { TransactionsPage } from "./pages/TransactionsPage";
 import { UploadPage } from "./pages/UploadPage";
@@ -18,6 +19,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <DashboardPage /> },
       { path: "transactions", element: <TransactionsPage /> },
+      { path: "settle", element: <SettleUpPage /> },
       { path: "budget", element: <BudgetPage /> },
       { path: "upload", element: <UploadPage /> },
       { path: "settings", element: <SettingsPage /> },

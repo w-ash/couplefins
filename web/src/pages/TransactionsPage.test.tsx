@@ -146,6 +146,7 @@ const server = setupServer(
     HttpResponse.json(reconciliationResponse),
   ),
   http.get("/api/v1/category-groups", () => HttpResponse.json([])),
+  http.get("/api/v1/tags", () => HttpResponse.json([])),
   http.get("/api/v1/persons/:personId/adjustments/:year/:month", () =>
     HttpResponse.json({
       adjustments: [],
@@ -164,12 +165,11 @@ describe("TransactionsPage", () => {
     useIdentityStore.setState({ currentPersonId: "p1" });
   });
 
-  it("renders settlement card with amount", async () => {
+  it("renders summary stats", async () => {
     renderWithProviders(<TransactionsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/owes/)).toBeInTheDocument();
-      expect(screen.getByText("$20.00")).toBeInTheDocument();
+      expect(screen.getByText("Total shared")).toBeInTheDocument();
     });
   });
 

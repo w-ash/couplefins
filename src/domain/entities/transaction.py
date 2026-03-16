@@ -22,6 +22,7 @@ class Transaction:
     tags: tuple[str, ...]
     payer_person_id: UUID
     payer_percentage: int | None
+    is_settlement: bool = False
     original_date: date | None = None
     original_amount: Decimal | None = None
 

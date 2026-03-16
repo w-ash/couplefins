@@ -1,6 +1,6 @@
 [project]
 name = "couplefins"
-version = "0.5.5"
+version = "0.6.0"
 description = "Shared finance reconciliation tool for couples"
 requires-python = ">=3.14,<4.0"
 dependencies = [
@@ -87,6 +87,7 @@ fixable = ["ALL"]
     "ARG002",   # Unused method args (fixtures)
     "PLR2004",  # Magic numbers in tests
     "PLR0913",  # Many args in factory functions
+    "PLR6301",  # Test methods in classes don't use self
     "PLC0415",  # Deferred imports in fixtures
     "PLC2701",  # Private imports (_shared helpers)
     "PT011",    # Broad pytest.raises

@@ -13,6 +13,12 @@ from src.domain.repositories.person_repository import PersonRepositoryProtocol
 from src.domain.repositories.reconciliation_period_repository import (
     ReconciliationPeriodRepositoryProtocol,
 )
+from src.domain.repositories.settlement_repository import (
+    SettlementRepositoryProtocol,
+)
+from src.domain.repositories.settlement_transaction_link_repository import (
+    SettlementTransactionLinkRepositoryProtocol,
+)
 from src.domain.repositories.transaction_edit_repository import (
     TransactionEditRepositoryProtocol,
 )
@@ -44,6 +50,14 @@ class UnitOfWorkProtocol(Protocol):
 
     @property
     def reconciliation_periods(self) -> ReconciliationPeriodRepositoryProtocol: ...
+
+    @property
+    def settlements(self) -> SettlementRepositoryProtocol: ...
+
+    @property
+    def settlement_transaction_links(
+        self,
+    ) -> SettlementTransactionLinkRepositoryProtocol: ...
 
     async def __aenter__(self) -> Self: ...
 

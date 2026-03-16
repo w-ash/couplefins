@@ -6,6 +6,7 @@ from uuid import UUID
 from attrs import define
 
 from src.domain.entities.transaction import Transaction
+from src.domain.formatting import field_str as _field_str
 
 
 @define(frozen=True, slots=True)
@@ -45,12 +46,6 @@ def natural_key(tx: Transaction) -> TransactionNaturalKey:
         occurrence=tx.occurrence,
         payer_person_id=tx.payer_person_id,
     )
-
-
-def _field_str(value: str | int | tuple[str, ...] | None) -> str:
-    if isinstance(value, tuple):
-        return ",".join(value)
-    return "" if value is None else str(value)
 
 
 def _mutable_fields(tx: Transaction) -> dict[str, str | int | tuple[str, ...] | None]:

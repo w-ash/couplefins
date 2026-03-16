@@ -17,6 +17,12 @@ from src.infrastructure.persistence.repositories.person_repository import (
 from src.infrastructure.persistence.repositories.reconciliation_period_repository import (
     ReconciliationPeriodRepository,
 )
+from src.infrastructure.persistence.repositories.settlement_repository import (
+    SettlementRepository,
+)
+from src.infrastructure.persistence.repositories.settlement_transaction_link_repository import (
+    SettlementTransactionLinkRepository,
+)
 from src.infrastructure.persistence.repositories.transaction_edit_repository import (
     TransactionEditRepository,
 )
@@ -39,6 +45,8 @@ class UnitOfWork:
         self.category_mappings = CategoryMappingRepository(session)
         self.category_group_budgets = CategoryGroupBudgetRepository(session)
         self.reconciliation_periods = ReconciliationPeriodRepository(session)
+        self.settlements = SettlementRepository(session)
+        self.settlement_transaction_links = SettlementTransactionLinkRepository(session)
 
     async def __aenter__(self) -> Self:
         return self

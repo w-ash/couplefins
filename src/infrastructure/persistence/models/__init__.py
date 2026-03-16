@@ -12,6 +12,10 @@ from src.infrastructure.persistence.models.person_model import PersonModel
 from src.infrastructure.persistence.models.reconciliation_period_model import (
     ReconciliationPeriodModel,
 )
+from src.infrastructure.persistence.models.settlement_model import SettlementModel
+from src.infrastructure.persistence.models.settlement_transaction_link_model import (
+    SettlementTransactionLinkModel,
+)
 from src.infrastructure.persistence.models.transaction_edit_model import (
     TransactionEditModel,
 )
@@ -25,6 +29,8 @@ __all__ = [
     "CategoryMappingModel",
     "PersonModel",
     "ReconciliationPeriodModel",
+    "SettlementModel",
+    "SettlementTransactionLinkModel",
     "TransactionEditModel",
     "TransactionModel",
     "UploadModel",

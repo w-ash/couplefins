@@ -13,6 +13,12 @@ from src.domain.repositories.person_repository import PersonRepositoryProtocol
 from src.domain.repositories.reconciliation_period_repository import (
     ReconciliationPeriodRepositoryProtocol,
 )
+from src.domain.repositories.settlement_repository import (
+    SettlementRepositoryProtocol,
+)
+from src.domain.repositories.settlement_transaction_link_repository import (
+    SettlementTransactionLinkRepositoryProtocol,
+)
 from src.domain.repositories.transaction_edit_repository import (
     TransactionEditRepositoryProtocol,
 )
@@ -31,6 +37,15 @@ def make_mock_uow() -> AsyncMock:
     uow.category_mappings = AsyncMock(spec=CategoryMappingRepositoryProtocol)
     uow.category_group_budgets = AsyncMock(spec=CategoryGroupBudgetRepositoryProtocol)
     uow.reconciliation_periods = AsyncMock(spec=ReconciliationPeriodRepositoryProtocol)
+    uow.settlements = AsyncMock(spec=SettlementRepositoryProtocol)
+    uow.settlement_transaction_links = AsyncMock(
+        spec=SettlementTransactionLinkRepositoryProtocol
+    )
     uow.reconciliation_periods.get_by_period.return_value = None
     uow.reconciliation_periods.get_by_year.return_value = []
     return uow
+
+
+def set_passthrough_save(uow_mock: AsyncMock) -> None:
+    """Configure settlements.save to return the entity as-is."""
+    uow_mock.settlements.save = AsyncMock(side_effect=lambda entity: entity)

@@ -11,12 +11,11 @@ import {
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { AdjustmentExportSection } from "@/components/AdjustmentExportSection";
+import { BulkEditToolbar } from "@/components/BulkEditToolbar";
 import { Button } from "@/components/Button";
+import type { ComboboxOption } from "@/components/Combobox";
 import { DateRangePicker } from "@/components/DateRangePicker";
-import { FinalizationBanner } from "@/components/FinalizationBanner";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
-import { SettlementCard } from "@/components/SettlementCard";
-import { BulkSplitEditor } from "@/components/SplitEditor";
 import { TransactionEditor } from "@/components/TransactionEditor";
 import {
   ActiveFilterPills,
@@ -40,23 +39,30 @@ import {
   formatDate,
   formatSplit,
 } from "@/lib/format";
+import { usePersonMaps } from "@/lib/persons";
 import type {
   CategoryGroupBreakdown,
   ReconciliationData,
   ReconciliationTransaction,
 } from "@/lib/reconciliation";
-import {
-  fetchReconciliationByRange,
-  finalizePeriod,
-  unfinalizePeriod,
-} from "@/lib/reconciliation";
+import { fetchReconciliationByRange } from "@/lib/reconciliation";
+import { fetchTags, TAGS_QUERY_KEY } from "@/lib/tags";
 import type { SortField, SortState } from "@/lib/transaction-filters";
 import {
   cycleSortState,
   useTransactionFilters,
 } from "@/lib/transaction-filters";
-import type { TransactionUpdateFields } from "@/lib/transactions";
-import { updateTransaction, updateTransactionSplits } from "@/lib/transactions";
+import type {
+  BulkModifyTagsPayload,
+  BulkUpdatePayload,
+  TransactionUpdateFields,
+} from "@/lib/transactions";
+import {
+  bulkModifyTags,
+  bulkUpdateTransactions,
+  updateTransaction,
+  updateTransactionSplits,
+} from "@/lib/transactions";
 import {
   fetchPersons,
   getPersonAccentColor,
@@ -274,10 +280,15 @@ function TransactionTable({
   personEntries,
   personIndexMap,
   categoryGroups,
+  categoryOptions,
+  availableTags,
+  tagOptions,
   isFinalized,
   sort,
   onSort,
   onSplitUpdate,
+  onBulkUpdate,
+  onBulkTags,
   onTransactionUpdate,
   isSaving,
 }: {
@@ -286,12 +297,17 @@ function TransactionTable({
   personEntries: Array<{ id: string; name: string }>;
   personIndexMap: Map<string, number>;
   categoryGroups: Map<string, string>;
+  categoryOptions: ComboboxOption[];
+  availableTags: string[];
+  tagOptions: ComboboxOption[];
   isFinalized: boolean;
   sort: SortState;
   onSort: (s: SortState) => void;
   onSplitUpdate: (
     splits: Array<{ transaction_id: string; payer_percentage: number }>,
   ) => void;
+  onBulkUpdate: (payload: BulkUpdatePayload) => void;
+  onBulkTags: (payload: BulkModifyTagsPayload) => void;
   onTransactionUpdate: (id: string, fields: TransactionUpdateFields) => void;
   isSaving: boolean;
 }) {
@@ -323,18 +339,16 @@ function TransactionTable({
     setSelected(new Set());
   }, []);
 
-  const handleBulkApply = useCallback(
-    (percentage: number) => {
-      onSplitUpdate(
-        [...selected].map((id) => ({
-          transaction_id: id,
-          payer_percentage: percentage,
-        })),
-      );
-      exitBulkMode();
-    },
-    [selected, onSplitUpdate, exitBulkMode],
-  );
+  const selectedTagCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const tx of transactions) {
+      if (!selected.has(tx.id)) continue;
+      for (const tag of tx.tags) {
+        counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [transactions, selected]);
 
   const otherNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -359,17 +373,31 @@ function TransactionTable({
             icon={<Pencil className="size-3.5" />}
             onClick={() => setBulkMode(true)}
           >
-            Edit Splits
+            Bulk Edit
           </Button>
         )}
       </div>
 
       {bulkMode && (
         <div className="mb-4">
-          <BulkSplitEditor
-            selectedCount={selected.size}
+          <BulkEditToolbar
+            selectedIds={selected}
+            selectedTagCounts={selectedTagCounts}
+            categoryOptions={categoryOptions}
+            availableTags={availableTags}
             saving={isSaving}
-            onApply={handleBulkApply}
+            onApplySplit={(splits) => {
+              onSplitUpdate(splits);
+              exitBulkMode();
+            }}
+            onApplyBulkUpdate={(payload) => {
+              onBulkUpdate(payload);
+              exitBulkMode();
+            }}
+            onApplyBulkTags={(payload) => {
+              onBulkTags(payload);
+              exitBulkMode();
+            }}
             onCancel={exitBulkMode}
           />
         </div>
@@ -451,6 +479,8 @@ function TransactionTable({
                   categoryGroup={
                     categoryGroups.get(tx.category) ?? "Uncategorized"
                   }
+                  categoryOptions={categoryOptions}
+                  tagOptions={tagOptions}
                   personEntries={personEntries}
                   isExpanded={isExpanded}
                   canEdit={canEdit}
@@ -484,6 +514,8 @@ function TransactionRow({
   payerColor,
   otherName,
   categoryGroup,
+  categoryOptions,
+  tagOptions,
   personEntries,
   isExpanded,
   canEdit,
@@ -503,6 +535,8 @@ function TransactionRow({
   payerColor: string;
   otherName: string;
   categoryGroup: string;
+  categoryOptions: ComboboxOption[];
+  tagOptions: ComboboxOption[];
   personEntries: Array<{ id: string; name: string }>;
   isExpanded: boolean;
   canEdit: boolean;
@@ -571,6 +605,8 @@ function TransactionRow({
               tx={tx}
               payerName={payerName}
               otherName={otherName}
+              categoryOptions={categoryOptions}
+              tagOptions={tagOptions}
               saving={isSaving}
               onSave={onTransactionUpdate}
               onCancel={onCancel}
@@ -592,8 +628,13 @@ export function TransactionsPage() {
   });
 
   const { data: categoryGroups } = useQuery({
-    queryKey: [...CATEGORY_GROUPS_QUERY_KEY],
+    queryKey: CATEGORY_GROUPS_QUERY_KEY,
     queryFn: fetchCategoryGroups,
+  });
+
+  const { data: availableTags = [] } = useQuery({
+    queryKey: TAGS_QUERY_KEY,
+    queryFn: fetchTags,
   });
 
   const reconciliationQueryKey = useMemo(
@@ -608,23 +649,8 @@ export function TransactionsPage() {
   const invalidateReconciliation = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: reconciliationQueryKey });
     queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY });
+    queryClient.invalidateQueries({ queryKey: TAGS_QUERY_KEY });
   }, [queryClient, reconciliationQueryKey]);
-
-  const finalizeMutation = useMutation({
-    mutationFn: () => {
-      if (!singleMonth) throw new Error("Cannot finalize multi-month range");
-      return finalizePeriod(singleMonth.year, singleMonth.month);
-    },
-    onSuccess: invalidateReconciliation,
-  });
-
-  const unfinalizeMutation = useMutation({
-    mutationFn: () => {
-      if (!singleMonth) throw new Error("Cannot unfinalize multi-month range");
-      return unfinalizePeriod(singleMonth.year, singleMonth.month);
-    },
-    onSuccess: invalidateReconciliation,
-  });
 
   const splitMutation = useMutation({
     mutationFn: (
@@ -644,18 +670,17 @@ export function TransactionsPage() {
     onSuccess: invalidateReconciliation,
   });
 
-  const personNames = useMemo(
-    () => new Map((persons ?? []).map((p) => [p.id, p.name])),
-    [persons],
-  );
-  const personIndexMap = useMemo(() => {
-    const map = new Map<string, number>();
-    let i = 0;
-    for (const id of personNames.keys()) {
-      map.set(id, i++);
-    }
-    return map;
-  }, [personNames]);
+  const bulkUpdateMutation = useMutation({
+    mutationFn: (payload: BulkUpdatePayload) => bulkUpdateTransactions(payload),
+    onSuccess: invalidateReconciliation,
+  });
+
+  const bulkTagsMutation = useMutation({
+    mutationFn: (payload: BulkModifyTagsPayload) => bulkModifyTags(payload),
+    onSuccess: invalidateReconciliation,
+  });
+
+  const { personNames, personIndexMap } = usePersonMaps(persons);
   const categoryGroupLookup = useMemo(
     () =>
       data
@@ -666,6 +691,19 @@ export function TransactionsPage() {
   const groupIconMap = useMemo(
     () => new Map((categoryGroups ?? []).map((g) => [g.id, g.icon])),
     [categoryGroups],
+  );
+
+  const categoryOptions: ComboboxOption[] = useMemo(
+    () =>
+      (categoryGroups ?? []).flatMap((g) =>
+        g.categories.map((cat) => ({ value: cat, label: cat, group: g.name })),
+      ),
+    [categoryGroups],
+  );
+
+  const tagOptions: ComboboxOption[] = useMemo(
+    () => availableTags.map((t) => ({ value: t, label: t })),
+    [availableTags],
   );
 
   const personEntries = useMemo(
@@ -701,26 +739,7 @@ export function TransactionsPage() {
 
       {data && (
         <div className="space-y-6">
-          {singleMonth && (
-            <FinalizationBanner
-              isFinalized={isFinalized}
-              finalizedAt={data.finalized_at}
-              onFinalize={() => finalizeMutation.mutate()}
-              onUnfinalize={() => unfinalizeMutation.mutate()}
-              isPending={
-                finalizeMutation.isPending || unfinalizeMutation.isPending
-              }
-            />
-          )}
           <UploadStatusBanner statuses={data.upload_statuses} />
-          {data.settlement && (
-            <SettlementCard
-              settlement={data.settlement}
-              personNames={personNames}
-              personIndexMap={personIndexMap}
-              periodLabel={periodLabel}
-            />
-          )}
 
           {data.transaction_count === 0 ? (
             <PageEmpty
@@ -790,14 +809,24 @@ export function TransactionsPage() {
                 personEntries={personEntries}
                 personIndexMap={personIndexMap}
                 categoryGroups={categoryGroupLookup}
+                categoryOptions={categoryOptions}
+                availableTags={availableTags}
+                tagOptions={tagOptions}
                 isFinalized={isFinalized}
                 sort={filters.sort}
                 onSort={filters.setSort}
                 onSplitUpdate={(splits) => splitMutation.mutate(splits)}
+                onBulkUpdate={(payload) => bulkUpdateMutation.mutate(payload)}
+                onBulkTags={(payload) => bulkTagsMutation.mutate(payload)}
                 onTransactionUpdate={(id, fields) =>
                   editMutation.mutate({ id, fields })
                 }
-                isSaving={splitMutation.isPending || editMutation.isPending}
+                isSaving={
+                  splitMutation.isPending ||
+                  editMutation.isPending ||
+                  bulkUpdateMutation.isPending ||
+                  bulkTagsMutation.isPending
+                }
               />
               <UnmappedCategoriesWarning
                 categories={data.unmapped_categories}

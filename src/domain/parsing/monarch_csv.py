@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 import io
 import uuid
 
-from src.domain.constants import SharedTags, SplitDefaults
+from src.domain.constants import SettlementTags, SharedTags, SplitDefaults
 from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import ValidationError
 
@@ -43,7 +43,8 @@ def parse_monarch_csv(
     transactions: list[Transaction] = []
     for row in reader:
         tags = _parse_tags(row["Tags"])
-        is_shared = _is_shared(tags)
+        is_settlement = _is_settlement(tags)
+        is_shared = _is_shared(tags) and not is_settlement
         payer_percentage = _extract_split_percentage(tags) if is_shared else None
 
         try:
@@ -79,6 +80,7 @@ def parse_monarch_csv(
                 tags=tags,
                 payer_person_id=payer_person_id,
                 payer_percentage=payer_percentage,
+                is_settlement=is_settlement,
             )
         )
 
@@ -93,6 +95,10 @@ def _parse_tags(tags_str: str) -> tuple[str, ...]:
 
 def _is_shared(tags: tuple[str, ...]) -> bool:
     return any(tag.lower() in SharedTags.TAGS for tag in tags)
+
+
+def _is_settlement(tags: tuple[str, ...]) -> bool:
+    return any(tag.lower() in SettlementTags.TAGS for tag in tags)
 
 
 def _extract_split_percentage(tags: tuple[str, ...]) -> int:

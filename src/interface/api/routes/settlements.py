@@ -1,0 +1,107 @@
+from decimal import Decimal
+from uuid import UUID
+
+from fastapi import APIRouter
+
+from src.application.runner import execute_use_case
+from src.application.use_cases.delete_settlement import (
+    DeleteSettlementCommand,
+    DeleteSettlementUseCase,
+)
+from src.application.use_cases.get_settle_up_data import (
+    GetSettleUpDataCommand,
+    GetSettleUpDataUseCase,
+)
+from src.application.use_cases.mark_transaction_as_settlement import (
+    MarkTransactionAsSettlementCommand,
+    MarkTransactionAsSettlementUseCase,
+)
+from src.application.use_cases.record_settlement import (
+    RecordSettlementCommand,
+    RecordSettlementUseCase,
+)
+from src.application.use_cases.record_waived_settlement import (
+    RecordWaivedSettlementCommand,
+    RecordWaivedSettlementUseCase,
+)
+from src.interface.api.schemas.settlements import (
+    DeleteSettlementResponse,
+    MarkTransactionRequest,
+    MarkTransactionResponse,
+    RecordSettlementRequest,
+    RecordWaivedSettlementRequest,
+    SettlementResponse,
+    SettleUpDataResponse,
+)
+
+router = APIRouter(tags=["settlements"])
+
+
+@router.post("/settlements", status_code=201)
+async def record_settlement(body: RecordSettlementRequest) -> SettlementResponse:
+    command = RecordSettlementCommand(
+        year=body.year,
+        month=body.month,
+        amount=Decimal(str(body.amount)),
+        from_person_id=body.from_person_id,
+        to_person_id=body.to_person_id,
+        method=body.method,
+        notes=body.notes,
+        settled_at=body.settled_at,
+        linked_transaction_ids=body.linked_transaction_ids,
+    )
+    result = await execute_use_case(
+        lambda uow: RecordSettlementUseCase().execute(command, uow)
+    )
+    return SettlementResponse.from_domain(result.settlement)
+
+
+@router.post("/settlements/waive", status_code=201)
+async def waive_settlement(body: RecordWaivedSettlementRequest) -> SettlementResponse:
+    command = RecordWaivedSettlementCommand(
+        year=body.year,
+        month=body.month,
+        from_person_id=body.from_person_id,
+        to_person_id=body.to_person_id,
+        notes=body.notes,
+    )
+    result = await execute_use_case(
+        lambda uow: RecordWaivedSettlementUseCase().execute(command, uow)
+    )
+    return SettlementResponse.from_domain(result.settlement)
+
+
+@router.get("/settle-up")
+async def get_settle_up_data(year: int, month: int) -> SettleUpDataResponse:
+    command = GetSettleUpDataCommand(year=year, month=month)
+    result = await execute_use_case(
+        lambda uow: GetSettleUpDataUseCase().execute(command, uow)
+    )
+    return SettleUpDataResponse.from_result(result)
+
+
+@router.delete("/settlements/{settlement_id}", status_code=200)
+async def delete_settlement(settlement_id: UUID) -> DeleteSettlementResponse:
+    command = DeleteSettlementCommand(settlement_id=settlement_id)
+    result = await execute_use_case(
+        lambda uow: DeleteSettlementUseCase().execute(command, uow)
+    )
+    return DeleteSettlementResponse(deleted=result.deleted)
+
+
+@router.post("/settlements/mark-transaction", status_code=200)
+async def mark_transaction_as_settlement(
+    body: MarkTransactionRequest,
+) -> MarkTransactionResponse:
+    command = MarkTransactionAsSettlementCommand(
+        transaction_id=body.transaction_id,
+        settlement_id=body.settlement_id,
+        is_settlement=body.is_settlement,
+    )
+    result = await execute_use_case(
+        lambda uow: MarkTransactionAsSettlementUseCase().execute(command, uow)
+    )
+    return MarkTransactionResponse(
+        transaction_id=result.transaction_id,
+        is_settlement=result.is_settlement,
+    )

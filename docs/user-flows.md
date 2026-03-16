@@ -14,17 +14,18 @@ Uses Monarch Money daily to track personal spending. Tags shared expenses with `
 
 ## Information Architecture
 
-Five top-level pages in the sidebar, ordered by frequency of use:
+Six top-level pages in the sidebar, ordered by workflow:
 
 | Page | Purpose | Ships in |
 |---|---|---|
 | **Dashboard** | Monthly summary at a glance, who-owes-whom, upload status, month navigation | v0.2.1 |
-| **Transactions** | Shared transaction table, reconciliation summary, category breakdown, finalization | v0.2.0 |
+| **Transactions** | Shared transaction table, reconciliation summary, category breakdown | v0.2.0 |
+| **Settle Up** | Record payments, waive balances, finalization controls, payment history | v0.6.0 |
 | **Budget** | Category group budgets, monthly + YTD views, progress indicators | v0.4.0 |
 | **Upload** | CSV import: select person, pick month, upload file, preview, confirm | v0.1.1 |
 | **Settings** | Person config, category-to-group mappings, theme toggle | v0.1.3 (stub) |
 
-"History" is not a standalone page — month navigation and finalization live within Dashboard and Transactions.
+"History" is not a standalone page — month navigation lives within Dashboard and Transactions. Finalization controls live on the Settle Up page.
 
 ---
 
@@ -297,3 +298,15 @@ Acceptance criteria:
 | 3 | Settings | See "Unmapped: Coffee Shops & Treats" | New category from recent upload |
 | 4 | Settings | Assign to "Food & Dining" group | Mapping saved |
 | 5 | Settings (v0.3.x) | Set adjustment account: "Shared Adjustments" | Saved, enables export |
+
+### Journey 7: Monthly Settlement
+
+| Step | Screen | Action | Result |
+|---|---|---|---|
+| 1 | Dashboard | See "Alice owes Bob $147.50" CTA | — |
+| 2 | Dashboard | Click "Settle Up →" | Navigate to Settle Up page |
+| 3 | Settle Up | See hero card: "Alice owes Bob $147.50" | Upload statuses, finalization banner visible |
+| 4 | Settle Up | Enter amount, select Venmo, click Record Payment | Success message: "Payment recorded — Alice paid Bob $147.50" |
+| 5 | Settle Up | See updated remaining balance | Payment appears in history, amount field resets |
+| 6 | Settle Up | Click Lock Month | Month finalized, lock indicator appears on Dashboard |
+| 7 | Dashboard | Return to Dashboard | Lock badge next to "Dashboard" heading |

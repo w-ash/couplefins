@@ -23,41 +23,50 @@
 | v0.5.3 | Plain language & verb+object CTAs | Completed (2026-03-13) | S |
 | v0.5.4 | Guardrails: empty, loading, error states | Completed (2026-03-13) | S |
 | v0.5.5 | Transaction search, filtering & date range | Completed (2026-03-13) | L |
-| v0.6.0 | Settlement page & recording | Planned | M |
+| v0.6.0 | Settlement page, recording & bulk editing | Completed (2026-03-15) | L |
 | v0.6.1 | Settlement history (Dashboard enrichment) | Planned | S |
 | v0.7.0 | Spending trend charts + Insights page | Planned | L |
 | v0.7.1 | Budget + year-over-year overlays | Planned | M |
 | v0.8.0 | Upload experience (drag-and-drop, upload history) | Planned | M |
 | v0.9.0 | Responsive layout (mobile + touch) | Planned | L |
 | v0.9.1 | Transaction exclusion flag | Planned | S |
+| v1.0.0 | Infrastructure investigation (benchmarks, DB audit, storage evaluation) | Planned | M |
+| v1.0.1 | Query & storage optimization (SQLite-native improvements) | Planned | M |
+| v1.0.2 | Database migration — PostgreSQL or normalized tags (conditional) | Planned | L |
+| v1.0.3 | Production readiness — Docker, backups, observability (conditional) | Planned | M |
 
 ## Infrastructure Readiness
 
-| Capability | v0.1.x | v0.2.x | v0.3.x | v0.4.x | v0.5.x | v0.6.x | v0.7.x | v0.8.x | v0.9.x |
-|---|---|---|---|---|---|---|---|---|---|
-| FastAPI backend | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| SQLite + SQLAlchemy | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| CSV parsing | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| React frontend | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Upload flow | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Category groups | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Design system (fonts, theme) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Dark/light mode | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| App shell / navigation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| User identity (localStorage) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Reconciliation engine | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Dashboard | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Adjustment export (engine + UI) | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Budget tracking | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Month finalization | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Transaction split editing | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Transaction field editing + audit log | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Date range queries + search/filter | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Settlement tracking | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
-| Spending insights + charts | — | — | — | — | — | — | ✅ | ✅ | ✅ |
-| Drag-and-drop upload + history | — | — | — | — | — | — | — | ✅ | ✅ |
-| Mobile responsive layout | — | — | — | — | — | — | — | — | ✅ |
-| Transaction exclusion | — | — | — | — | — | — | — | — | ✅ |
+| Capability | v0.1.x | v0.2.x | v0.3.x | v0.4.x | v0.5.x | v0.6.x | v0.7.x | v0.8.x | v0.9.x | v1.0.x |
+|---|---|---|---|---|---|---|---|---|---|---|
+| FastAPI backend | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| SQLite + SQLAlchemy | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| CSV parsing | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| React frontend | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Upload flow | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Category groups | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Design system (fonts, theme) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Dark/light mode | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| App shell / navigation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| User identity (localStorage) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Reconciliation engine | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Dashboard | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Adjustment export (engine + UI) | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Budget tracking | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Month finalization | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Transaction split editing | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Transaction field editing + audit log | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Date range queries + search/filter | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Settlement tracking | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Bulk transaction editing (category, tags, split) | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Spending insights + charts | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
+| Drag-and-drop upload + history | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Mobile responsive layout | — | — | — | — | — | — | — | — | ✅ | ✅ |
+| Transaction exclusion | — | — | — | — | — | — | — | — | ✅ | ✅ |
+| Performance benchmarks + query optimization | — | — | — | — | — | — | — | — | — | ✅ |
+| Server-side tag filtering | — | — | — | — | — | — | — | — | — | ✅ |
+| PostgreSQL / normalized storage (conditional) | — | — | — | — | — | — | — | — | — | ✅ |
+| Docker + backups + observability (conditional) | — | — | — | — | — | — | — | — | — | ✅ |
 
 ## Key Technical Decisions
 
@@ -66,7 +75,7 @@
 - **Frontend**: React 19 + Tailwind v4 + Tanstack Query, Orval codegen from OpenAPI
 - **Auth**: None — two named profiles, select on upload
 - **User identity**: localStorage via Zustand persist (~1KB). Stores `currentPersonId` (UUID). Setup flow sets it, sidebar toggle switches it. Three app states: needs-setup, needs-identity, has-identity.
-- **Information architecture**: Left sidebar with 5 pages: Dashboard / Transactions / Budget / Upload / Settings. "Transactions" replaces "Reconciliation" (standard finance-app naming). "Settings" absorbs person config + category management. "History" is not a standalone page — month navigation lives within Dashboard and Transactions.
+- **Information architecture**: Left sidebar with 6 pages: Dashboard / Transactions / Settle Up / Budget / Upload / Settings. "Transactions" replaces "Reconciliation" (standard finance-app naming). "Settings" absorbs person config + category management. "History" is not a standalone page — month navigation lives within Dashboard and Transactions. Finalization controls live on the Settle Up page.
 - **Design system**: Satoshi font (Fontshare) + Geist Mono. Warm neutrals (not pure black/white), teal for positive, coral for negative. CSS custom properties via Tailwind v4 `@theme` for light/dark switching. Defined in `.claude/rules/web-design-system.md`.
 - **Theme**: System preference by default (`prefers-color-scheme`), manual override stored in localStorage. Three-way: system/light/dark. Tailwind v4 class strategy with `@custom-variant dark`. Synchronous `<script>` in `<head>` prevents flash of wrong theme.
 - **App shell**: Left sidebar navigation (industry standard for finance apps). React Router v7 `createBrowserRouter` with layout routes.

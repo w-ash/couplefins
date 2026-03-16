@@ -4,13 +4,18 @@ from uuid import UUID
 from fastapi import APIRouter
 
 from src.application.runner import execute_use_case
+from src.application.use_cases.bulk_modify_tags import (
+    BulkModifyTagsCommand,
+    BulkModifyTagsUseCase,
+)
+from src.application.use_cases.bulk_update_transactions import (
+    BulkUpdateTransactionsCommand,
+    BulkUpdateTransactionsUseCase,
+)
+from src.application.use_cases.get_tags import GetTagsUseCase
 from src.application.use_cases.get_transaction_edits import (
     GetTransactionEditsCommand,
     GetTransactionEditsUseCase,
-)
-from src.application.use_cases.update_transaction import (
-    UpdateTransactionCommand,
-    UpdateTransactionUseCase,
 )
 from src.application.use_cases.update_transaction_splits import (
     SplitEntry,
@@ -18,6 +23,10 @@ from src.application.use_cases.update_transaction_splits import (
     UpdateTransactionSplitsUseCase,
 )
 from src.interface.api.schemas.transactions import (
+    BulkModifyTagsRequest,
+    BulkModifyTagsResponse,
+    BulkUpdateRequest,
+    BulkUpdateResponse,
     TransactionEditHistoryResponse,
     TransactionEditResponse,
     UpdateSplitsRequest,
@@ -27,6 +36,12 @@ from src.interface.api.schemas.transactions import (
 )
 
 router = APIRouter(tags=["transactions"])
+
+
+@router.get("/tags")
+async def get_tags() -> list[str]:
+    result = await execute_use_case(lambda uow: GetTagsUseCase().execute(uow))
+    return result.tags
 
 
 @router.patch("/transactions/splits")
@@ -46,12 +61,38 @@ async def update_splits(body: UpdateSplitsRequest) -> UpdateSplitsResponse:
     return UpdateSplitsResponse(updated_count=result.updated_count)
 
 
+@router.patch("/transactions/bulk-update")
+async def bulk_update_transactions(body: BulkUpdateRequest) -> BulkUpdateResponse:
+    command = BulkUpdateTransactionsCommand(
+        transaction_ids=list(body.transaction_ids),
+        category=body.category,
+        payer_percentage=body.payer_percentage,
+    )
+    result = await execute_use_case(
+        lambda uow: BulkUpdateTransactionsUseCase().execute(command, uow)
+    )
+    return BulkUpdateResponse(updated_count=result.updated_count)
+
+
+@router.post("/transactions/bulk-tags")
+async def bulk_modify_tags(body: BulkModifyTagsRequest) -> BulkModifyTagsResponse:
+    command = BulkModifyTagsCommand(
+        transaction_ids=list(body.transaction_ids),
+        action=body.action,
+        tags=list(body.tags),
+    )
+    result = await execute_use_case(
+        lambda uow: BulkModifyTagsUseCase().execute(command, uow)
+    )
+    return BulkModifyTagsResponse(updated_count=result.updated_count)
+
+
 @router.patch("/transactions/{transaction_id}")
 async def update_transaction(
     transaction_id: UUID, body: UpdateTransactionRequest
 ) -> UpdateTransactionResponse:
-    command = UpdateTransactionCommand(
-        transaction_id=transaction_id,
+    command = BulkUpdateTransactionsCommand(
+        transaction_ids=[transaction_id],
         date=body.date,
         amount=Decimal(str(body.amount)) if body.amount is not None else None,
         category=body.category,
@@ -63,10 +104,15 @@ async def update_transaction(
         ),
     )
     result = await execute_use_case(
-        lambda uow: UpdateTransactionUseCase().execute(command, uow)
+        lambda uow: BulkUpdateTransactionsUseCase().execute(command, uow)
+    )
+    tx_id = (
+        result.updated_transactions[0].id
+        if result.updated_transactions
+        else transaction_id
     )
     return UpdateTransactionResponse(
-        id=result.transaction.id,
+        id=tx_id,
         edits=[TransactionEditResponse.model_validate(e) for e in result.edits],
     )
 

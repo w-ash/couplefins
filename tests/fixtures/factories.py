@@ -7,6 +7,8 @@ from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.entities.category_mapping import CategoryMapping
 from src.domain.entities.person import Person
 from src.domain.entities.reconciliation_period import ReconciliationPeriod
+from src.domain.entities.settlement import Settlement, SettlementMethod
+from src.domain.entities.settlement_transaction_link import SettlementTransactionLink
 from src.domain.entities.transaction import Transaction
 from src.domain.entities.transaction_edit import TransactionEdit
 from src.domain.entities.upload import Upload
@@ -38,6 +40,7 @@ def make_transaction(
     tags: tuple[str, ...] = ("shared",),
     payer_person_id: uuid.UUID | None = None,
     payer_percentage: int | None = 50,
+    is_settlement: bool = False,
     original_date: date | None = None,
     original_amount: Decimal | None = None,
 ) -> Transaction:
@@ -55,6 +58,7 @@ def make_transaction(
         tags=tags,
         payer_person_id=payer_person_id or uuid.uuid4(),
         payer_percentage=payer_percentage,
+        is_settlement=is_settlement,
         original_date=original_date,
         original_amount=original_amount,
     )
@@ -150,4 +154,46 @@ def make_transaction_edit(
         old_value=old_value,
         new_value=new_value,
         edited_at=edited_at or datetime.now(UTC),
+    )
+
+
+def make_settlement(
+    *,
+    id: uuid.UUID | None = None,
+    year: int = 2026,
+    month: int = 1,
+    amount: Decimal = Decimal("50.00"),
+    from_person_id: uuid.UUID | None = None,
+    to_person_id: uuid.UUID | None = None,
+    method: SettlementMethod | None = SettlementMethod.VENMO,
+    is_waived: bool = False,
+    notes: str = "",
+    settled_at: datetime | None = None,
+    created_at: datetime | None = None,
+) -> Settlement:
+    return Settlement(
+        id=id or uuid.uuid4(),
+        year=year,
+        month=month,
+        amount=amount,
+        from_person_id=from_person_id or uuid.uuid4(),
+        to_person_id=to_person_id or uuid.uuid4(),
+        method=method,
+        is_waived=is_waived,
+        notes=notes,
+        settled_at=settled_at or datetime.now(UTC),
+        created_at=created_at or datetime.now(UTC),
+    )
+
+
+def make_settlement_transaction_link(
+    *,
+    id: uuid.UUID | None = None,
+    settlement_id: uuid.UUID | None = None,
+    transaction_id: uuid.UUID | None = None,
+) -> SettlementTransactionLink:
+    return SettlementTransactionLink(
+        id=id or uuid.uuid4(),
+        settlement_id=settlement_id or uuid.uuid4(),
+        transaction_id=transaction_id or uuid.uuid4(),
     )

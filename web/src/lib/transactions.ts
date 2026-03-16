@@ -61,3 +61,43 @@ export function fetchTransactionEdits(
 ): Promise<TransactionEditHistory> {
   return apiFetch(`/api/v1/transactions/${id}/edits`);
 }
+
+export interface BulkUpdatePayload {
+  transaction_ids: string[];
+  category?: string;
+  payer_percentage?: number;
+}
+
+export interface BulkUpdateResult {
+  updated_count: number;
+}
+
+export function bulkUpdateTransactions(
+  payload: BulkUpdatePayload,
+): Promise<BulkUpdateResult> {
+  return apiFetch("/api/v1/transactions/bulk-update", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export interface BulkModifyTagsPayload {
+  transaction_ids: string[];
+  action: "add" | "remove";
+  tags: string[];
+}
+
+export interface BulkModifyTagsResult {
+  updated_count: number;
+}
+
+export function bulkModifyTags(
+  payload: BulkModifyTagsPayload,
+): Promise<BulkModifyTagsResult> {
+  return apiFetch("/api/v1/transactions/bulk-tags", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
