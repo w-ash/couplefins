@@ -74,7 +74,6 @@ export function SplitEditor({
           onChange={setValue}
           onKeyDown={handleKeyDown}
           disabled={saving}
-          error={undefined}
         />
       </label>
 

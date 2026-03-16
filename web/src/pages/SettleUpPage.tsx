@@ -102,7 +102,7 @@ function RecordPaymentForm({
       : (owed?.amount.toFixed(2) ?? "0");
 
   const [amount, setAmount] = useState(defaultAmount);
-  const [method, setMethod] = useState("venmo");
+  const [method, setMethod] = useState(METHODS[0].value);
   const [notes, setNotes] = useState("");
   const [successMessage, setSuccessMessage] = useTemporary<string | null>(
     null,

@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Heart, UserPlus } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Button } from "@/components/Button";
+import { InlineError } from "@/components/InlineError";
 import { apiFetch } from "@/lib/api";
 import { baseInputClass } from "@/lib/input-styles";
 import { PERSONS_QUERY_KEY } from "@/types/person";
@@ -72,7 +73,7 @@ export function SetupPage() {
               placeholder="e.g. Alice"
               required
               disabled={mutation.isPending}
-              aria-describedby={mutation.error ? "setup-error" : undefined}
+              aria-invalid={mutation.isError || undefined}
               className={`w-full ${baseInputClass} placeholder:text-placeholder disabled:cursor-not-allowed disabled:opacity-50`}
             />
           </div>
@@ -93,7 +94,7 @@ export function SetupPage() {
               placeholder="e.g. Bob"
               required
               disabled={mutation.isPending}
-              aria-describedby={mutation.error ? "setup-error" : undefined}
+              aria-invalid={mutation.isError || undefined}
               className={`w-full ${baseInputClass} placeholder:text-placeholder disabled:cursor-not-allowed disabled:opacity-50`}
             />
           </div>
@@ -105,13 +106,7 @@ export function SetupPage() {
               </p>
             )}
             {mutation.error && (
-              <p
-                role="alert"
-                id="setup-error"
-                className="text-sm text-destructive"
-              >
-                {mutation.error.message}
-              </p>
+              <InlineError>{mutation.error.message}</InlineError>
             )}
           </div>
 

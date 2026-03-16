@@ -1,4 +1,5 @@
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
@@ -59,21 +60,12 @@ class GetDashboardResult:
     finalized_at: datetime | None
 
 
-def _partition_by_month(
-    transactions: list[Transaction],
-) -> dict[int, list[Transaction]]:
-    by_month: dict[int, list[Transaction]] = defaultdict(list)
-    for tx in transactions:
-        by_month[tx.date.month].append(tx)
-    return by_month
-
-
-def _partition_settlements_by_month(
-    settlements: list[Settlement],
-) -> dict[int, list[Settlement]]:
-    by_month: dict[int, list[Settlement]] = defaultdict(list)
-    for s in settlements:
-        by_month[s.month].append(s)
+def _partition_by_month[T](
+    items: list[T], month_key: Callable[[T], int]
+) -> dict[int, list[T]]:
+    by_month: dict[int, list[T]] = defaultdict(list)
+    for item in items:
+        by_month[month_key(item)].append(item)
     return by_month
 
 
@@ -161,7 +153,7 @@ class GetDashboardUseCase:
             ctx = await load_reconciliation_context(uow)
 
             all_year_txs = await uow.transactions.get_shared_by_year(command.year)
-            by_month = _partition_by_month(all_year_txs)
+            by_month = _partition_by_month(all_year_txs, lambda tx: tx.date.month)
 
             year_periods = await uow.reconciliation_periods.get_by_year(command.year)
             finalized_months = {p.month for p in year_periods if p.is_finalized}
@@ -222,7 +214,7 @@ class GetDashboardUseCase:
                     month_summaries,
                     command.year,
                     finalized_months,
-                    _partition_settlements_by_month(all_year_settlements),
+                    _partition_by_month(all_year_settlements, lambda s: s.month),
                 ),
                 persons=ctx.persons,
                 unmapped_categories=find_all_unmapped_categories(

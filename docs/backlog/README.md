@@ -25,6 +25,7 @@
 | v0.5.5 | Transaction search, filtering & date range | Completed (2026-03-13) | L |
 | v0.6.0 | Settlement page, recording & bulk editing | Completed (2026-03-15) | L |
 | v0.6.1 | Settlement history (Dashboard enrichment) | Completed (2026-03-16) | S |
+| v0.6.2 | Code quality cleanup (DRY, consistency) | Completed (2026-03-16) | S |
 | v0.7.0 | Spending trend charts + Insights page | Planned | L |
 | v0.7.1 | Budget + year-over-year overlays | Planned | M |
 | v0.8.0 | Upload experience (drag-and-drop, upload history) | Planned | M |
