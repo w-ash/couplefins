@@ -24,7 +24,7 @@
 | v0.5.4 | Guardrails: empty, loading, error states | Completed (2026-03-13) | S |
 | v0.5.5 | Transaction search, filtering & date range | Completed (2026-03-13) | L |
 | v0.6.0 | Settlement page, recording & bulk editing | Completed (2026-03-15) | L |
-| v0.6.1 | Settlement history (Dashboard enrichment) | Planned | S |
+| v0.6.1 | Settlement history (Dashboard enrichment) | Completed (2026-03-16) | S |
 | v0.7.0 | Spending trend charts + Insights page | Planned | L |
 | v0.7.1 | Budget + year-over-year overlays | Planned | M |
 | v0.8.0 | Upload experience (drag-and-drop, upload history) | Planned | M |
@@ -58,6 +58,7 @@
 | Transaction field editing + audit log | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Date range queries + search/filter | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Settlement tracking | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Settlement history (dashboard) | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Bulk transaction editing (category, tags, split) | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Spending insights + charts | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
 | Drag-and-drop upload + history | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |

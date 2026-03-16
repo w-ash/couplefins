@@ -19,6 +19,8 @@ class MonthHistoryEntryResponse(BaseModel):
     settlement_from_person_id: UUID | None
     settlement_to_person_id: UUID | None
     is_finalized: bool
+    is_settled: bool
+    settled_at: datetime | None
 
 
 class PersonResponse(BaseModel):
@@ -37,6 +39,7 @@ class DashboardResponse(BaseModel):
     upload_statuses: list[UploadStatusResponse]
     ytd_total_shared_spending: float
     ytd_settlement: SettlementResponse | None
+    ytd_total_settled: float
     month_history: list[MonthHistoryEntryResponse]
     persons: list[PersonResponse]
     unmapped_categories: list[str]
@@ -67,6 +70,7 @@ class DashboardResponse(BaseModel):
                 if result.ytd_settlement
                 else None
             ),
+            ytd_total_settled=float(result.ytd_total_settled),
             month_history=[
                 MonthHistoryEntryResponse(
                     year=mh.year,
@@ -76,6 +80,8 @@ class DashboardResponse(BaseModel):
                     settlement_from_person_id=mh.settlement_from_person_id,
                     settlement_to_person_id=mh.settlement_to_person_id,
                     is_finalized=mh.is_finalized,
+                    is_settled=mh.is_settled,
+                    settled_at=mh.settled_at,
                 )
                 for mh in result.month_history
             ],

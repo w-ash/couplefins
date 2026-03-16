@@ -13,6 +13,8 @@ export interface MonthHistoryEntry {
   settlement_from_person_id: string | null;
   settlement_to_person_id: string | null;
   is_finalized: boolean;
+  is_settled: boolean;
+  settled_at: string | null;
 }
 
 export interface DashboardPerson {
@@ -31,6 +33,7 @@ export interface DashboardData {
   upload_statuses: UploadStatus[];
   ytd_total_shared_spending: number;
   ytd_settlement: Settlement | null;
+  ytd_total_settled: number;
   month_history: MonthHistoryEntry[];
   persons: DashboardPerson[];
   unmapped_categories: string[];

@@ -20,6 +20,7 @@ from src.application.use_cases._shared.upload_status import (
     build_upload_statuses,
 )
 from src.domain.entities.person import Person
+from src.domain.entities.settlement import Settlement
 from src.domain.entities.transaction import Transaction
 from src.domain.reconciliation import ReconciliationSummary, SettlementResult, reconcile
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
@@ -40,6 +41,8 @@ class MonthHistoryEntry:
     settlement_from_person_id: UUID | None
     settlement_to_person_id: UUID | None
     is_finalized: bool
+    is_settled: bool
+    settled_at: datetime | None
 
 
 @define(frozen=True, slots=True)
@@ -48,6 +51,7 @@ class GetDashboardResult:
     upload_statuses: list[UploadStatus]
     ytd_total_shared_spending: Decimal
     ytd_settlement: SettlementResult | None
+    ytd_total_settled: Decimal
     month_history: list[MonthHistoryEntry]
     persons: list[Person]
     unmapped_categories: list[str]
@@ -61,6 +65,15 @@ def _partition_by_month(
     by_month: dict[int, list[Transaction]] = defaultdict(list)
     for tx in transactions:
         by_month[tx.date.month].append(tx)
+    return by_month
+
+
+def _partition_settlements_by_month(
+    settlements: list[Settlement],
+) -> dict[int, list[Settlement]]:
+    by_month: dict[int, list[Settlement]] = defaultdict(list)
+    for s in settlements:
+        by_month[s.month].append(s)
     return by_month
 
 
@@ -87,21 +100,33 @@ def _build_month_history(
     summaries: dict[int, ReconciliationSummary],
     year: int,
     finalized_months: set[int],
+    settlements_by_month: dict[int, list[Settlement]],
 ) -> list[MonthHistoryEntry]:
     entries: list[MonthHistoryEntry] = []
     for month in sorted(summaries, reverse=True):
         settlement = summaries[month].settlement
+        owed = settlement.amount if settlement else Decimal(0)
+        month_settlements = settlements_by_month.get(month, [])
+        total_settled = sum((s.amount for s in month_settlements), Decimal(0))
+        is_settled = total_settled >= owed
+        settled_at = (
+            max(s.settled_at for s in month_settlements)
+            if is_settled and month_settlements
+            else None
+        )
         entries.append(
             MonthHistoryEntry(
                 year=year,
                 month=month,
                 total_shared_spending=summaries[month].total_shared_spending,
-                settlement_amount=settlement.amount if settlement else Decimal(0),
+                settlement_amount=owed,
                 settlement_from_person_id=settlement.from_person_id
                 if settlement
                 else None,
                 settlement_to_person_id=settlement.to_person_id if settlement else None,
                 is_finalized=month in finalized_months,
+                is_settled=is_settled,
+                settled_at=settled_at,
             )
         )
     return entries
@@ -140,6 +165,8 @@ class GetDashboardUseCase:
 
             year_periods = await uow.reconciliation_periods.get_by_year(command.year)
             finalized_months = {p.month for p in year_periods if p.is_finalized}
+
+            all_year_settlements = await uow.settlements.get_by_year(command.year)
 
             # Resolve active month: explicit param, or auto-detect
             now = datetime.now(tz=UTC)
@@ -182,19 +209,25 @@ class GetDashboardUseCase:
                 (p for p in year_periods if p.month == active_month), None
             )
 
-            tx_categories = {tx.category for tx in by_month.get(active_month, [])}
-
             return GetDashboardResult(
                 current_month=current_month,
                 upload_statuses=build_upload_statuses(ctx.persons, uploads),
                 ytd_total_shared_spending=ytd_summary.total_shared_spending,
                 ytd_settlement=ytd_summary.settlement,
+                ytd_total_settled=sum(
+                    (s.amount for s in all_year_settlements if s.month <= active_month),
+                    Decimal(0),
+                ),
                 month_history=_build_month_history(
-                    month_summaries, command.year, finalized_months
+                    month_summaries,
+                    command.year,
+                    finalized_months,
+                    _partition_settlements_by_month(all_year_settlements),
                 ),
                 persons=ctx.persons,
                 unmapped_categories=find_all_unmapped_categories(
-                    ctx.category_mappings, tx_categories
+                    ctx.category_mappings,
+                    {tx.category for tx in by_month.get(active_month, [])},
                 ),
                 is_finalized=current_period.is_finalized if current_period else False,
                 finalized_at=current_period.finalized_at if current_period else None,

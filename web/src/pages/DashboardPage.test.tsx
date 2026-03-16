@@ -59,6 +59,7 @@ const dashboardResponse = {
     from_person_id: "p2",
     to_person_id: "p1",
   },
+  ytd_total_settled: 20.0,
   month_history: [
     {
       year: 2026,
@@ -67,6 +68,9 @@ const dashboardResponse = {
       settlement_amount: 20.0,
       settlement_from_person_id: "p2",
       settlement_to_person_id: "p1",
+      is_finalized: false,
+      is_settled: true,
+      settled_at: "2026-02-01T12:00:00Z",
     },
   ],
   persons: [
@@ -107,6 +111,7 @@ const emptyResponse = {
   ],
   ytd_total_shared_spending: 0.0,
   ytd_settlement: null,
+  ytd_total_settled: 0,
   month_history: [],
   persons: [
     { id: "p1", name: "Alice" },
@@ -230,5 +235,38 @@ describe("DashboardPage", () => {
     await user.click(row);
 
     expect(row).toHaveClass("cursor-pointer");
+  });
+
+  it("shows settled this year stat", async () => {
+    renderWithProviders(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Settled this year")).toBeInTheDocument();
+    });
+  });
+
+  it("shows unsettled month with pending indicator text", async () => {
+    const unsettledResponse = {
+      ...dashboardResponse,
+      month_history: [
+        {
+          ...dashboardResponse.month_history[0],
+          is_settled: false,
+          settled_at: null,
+        },
+      ],
+    };
+    server.use(
+      http.get("/api/v1/dashboard", () => HttpResponse.json(unsettledResponse)),
+    );
+
+    renderWithProviders(<DashboardPage />);
+
+    await waitFor(() => {
+      const table = screen.getByText("Month History").closest("div");
+      if (!table) throw new Error("Expected history container");
+      // Unsettled month still shows the settlement label text
+      expect(within(table).getByText(/owes/)).toBeInTheDocument();
+    });
   });
 });

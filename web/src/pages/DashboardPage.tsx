@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
   CheckCircle2,
+  Clock,
   HandCoins,
   LayoutDashboard,
   Lock,
@@ -42,6 +43,10 @@ function SummaryStats({
         {
           label: "Year-to-date balance",
           value: ytdLabel,
+        },
+        {
+          label: "Settled this year",
+          value: formatCurrency(data.ytd_total_settled),
         },
       ]}
     />
@@ -123,7 +128,16 @@ function MonthHistory({
                     )}
                   </span>
                 </td>
-                <td className="py-2.5 pr-4 text-muted-foreground">{label}</td>
+                <td className="py-2.5 pr-4 text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5">
+                    {entry.is_settled ? (
+                      <CheckCircle2 className="size-3 text-positive" />
+                    ) : entry.settlement_amount > 0 ? (
+                      <Clock className="size-3 text-warning-muted-foreground" />
+                    ) : null}
+                    {label}
+                  </span>
+                </td>
                 <td className="py-2.5 text-right tabular-nums text-foreground">
                   {formatCurrency(entry.total_shared_spending)}
                 </td>

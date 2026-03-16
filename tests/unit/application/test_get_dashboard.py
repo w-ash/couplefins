@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from src.application.use_cases.get_dashboard import (
@@ -11,6 +11,7 @@ from tests.fixtures.factories import (
     make_category_mapping,
     make_person,
     make_reconciliation_period,
+    make_settlement,
     make_transaction,
     make_upload,
 )
@@ -303,3 +304,288 @@ async def test_auto_month_skips_finalized_months() -> None:
     # Should pick February (latest unfinalized with txs)
     assert result.current_month.start_date == date(2026, 2, 1)
     assert result.current_month.total_shared_spending == Decimal("80.00")
+
+
+# ─── Settlement status ───
+
+
+async def test_month_with_full_settlement_is_settled() -> None:
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    _setup_uow_base(uow, alice, bob)
+
+    txs = [
+        make_transaction(
+            date=date(2026, 1, 15),
+            amount=Decimal("-100.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+    ]
+    uow.transactions.get_shared_by_year.return_value = txs
+    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+
+    settled_at = datetime(2026, 2, 1, 12, 0, tzinfo=UTC)
+    uow.settlements.get_by_year.return_value = [
+        make_settlement(
+            year=2026,
+            month=1,
+            amount=Decimal("50.00"),
+            from_person_id=bob.id,
+            to_person_id=alice.id,
+            settled_at=settled_at,
+        ),
+    ]
+
+    result = await GetDashboardUseCase().execute(_make_command(), uow)
+
+    jan = result.month_history[-1]
+    assert jan.is_settled is True
+    assert jan.settled_at == settled_at
+
+
+async def test_month_with_partial_settlement_is_not_settled() -> None:
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    _setup_uow_base(uow, alice, bob)
+
+    txs = [
+        make_transaction(
+            date=date(2026, 1, 15),
+            amount=Decimal("-100.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+    ]
+    uow.transactions.get_shared_by_year.return_value = txs
+    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+
+    uow.settlements.get_by_year.return_value = [
+        make_settlement(
+            year=2026,
+            month=1,
+            amount=Decimal("30.00"),
+            from_person_id=bob.id,
+            to_person_id=alice.id,
+        ),
+    ]
+
+    result = await GetDashboardUseCase().execute(_make_command(), uow)
+
+    jan = result.month_history[-1]
+    assert jan.is_settled is False
+    assert jan.settled_at is None
+
+
+async def test_multiple_settlements_summing_to_full() -> None:
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    _setup_uow_base(uow, alice, bob)
+
+    txs = [
+        make_transaction(
+            date=date(2026, 1, 15),
+            amount=Decimal("-200.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+    ]
+    uow.transactions.get_shared_by_year.return_value = txs
+    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+
+    earlier = datetime(2026, 2, 1, 10, 0, tzinfo=UTC)
+    later = datetime(2026, 2, 5, 14, 0, tzinfo=UTC)
+    uow.settlements.get_by_year.return_value = [
+        make_settlement(
+            year=2026,
+            month=1,
+            amount=Decimal("60.00"),
+            from_person_id=bob.id,
+            to_person_id=alice.id,
+            settled_at=earlier,
+        ),
+        make_settlement(
+            year=2026,
+            month=1,
+            amount=Decimal("40.00"),
+            from_person_id=bob.id,
+            to_person_id=alice.id,
+            settled_at=later,
+        ),
+    ]
+
+    result = await GetDashboardUseCase().execute(_make_command(), uow)
+
+    jan = result.month_history[-1]
+    assert jan.is_settled is True
+    assert jan.settled_at == later
+
+
+async def test_waived_settlement_counts_as_settled() -> None:
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    _setup_uow_base(uow, alice, bob)
+
+    txs = [
+        make_transaction(
+            date=date(2026, 1, 15),
+            amount=Decimal("-10.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+    ]
+    uow.transactions.get_shared_by_year.return_value = txs
+    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+
+    settled_at = datetime(2026, 2, 1, 12, 0, tzinfo=UTC)
+    uow.settlements.get_by_year.return_value = [
+        make_settlement(
+            year=2026,
+            month=1,
+            amount=Decimal("5.00"),
+            from_person_id=bob.id,
+            to_person_id=alice.id,
+            is_waived=True,
+            settled_at=settled_at,
+        ),
+    ]
+
+    result = await GetDashboardUseCase().execute(_make_command(), uow)
+
+    jan = result.month_history[-1]
+    assert jan.is_settled is True
+
+
+async def test_ytd_total_settled_accumulates_across_months() -> None:
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    _setup_uow_base(uow, alice, bob)
+
+    txs = [
+        make_transaction(
+            date=date(2026, 1, 15),
+            amount=Decimal("-100.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+        make_transaction(
+            date=date(2026, 2, 10),
+            amount=Decimal("-80.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+    ]
+    uow.transactions.get_shared_by_year.return_value = txs
+    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+
+    uow.settlements.get_by_year.return_value = [
+        make_settlement(
+            year=2026,
+            month=1,
+            amount=Decimal("50.00"),
+            from_person_id=bob.id,
+            to_person_id=alice.id,
+        ),
+        make_settlement(
+            year=2026,
+            month=2,
+            amount=Decimal("40.00"),
+            from_person_id=bob.id,
+            to_person_id=alice.id,
+        ),
+    ]
+
+    result = await GetDashboardUseCase().execute(_make_command(), uow)
+
+    assert result.ytd_total_settled == Decimal("90.00")
+
+
+async def test_ytd_total_settled_excludes_future_months() -> None:
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    _setup_uow_base(uow, alice, bob)
+
+    txs = [
+        make_transaction(
+            date=date(2026, 1, 15),
+            amount=Decimal("-100.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+    ]
+    uow.transactions.get_shared_by_year.return_value = txs
+    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+
+    uow.settlements.get_by_year.return_value = [
+        make_settlement(
+            year=2026,
+            month=1,
+            amount=Decimal("50.00"),
+            from_person_id=bob.id,
+            to_person_id=alice.id,
+        ),
+        make_settlement(
+            year=2026,
+            month=4,
+            amount=Decimal("80.00"),
+            from_person_id=bob.id,
+            to_person_id=alice.id,
+        ),
+    ]
+
+    result = await GetDashboardUseCase().execute(_make_command(), uow)
+
+    # Only January included (active month=3, April excluded)
+    assert result.ytd_total_settled == Decimal("50.00")
+
+
+async def test_zero_balance_month_is_trivially_settled() -> None:
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    _setup_uow_base(uow, alice, bob)
+
+    # Both pay equally → settlement amount = 0
+    txs = [
+        make_transaction(
+            date=date(2026, 1, 15),
+            amount=Decimal("-100.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+        make_transaction(
+            date=date(2026, 1, 20),
+            amount=Decimal("-100.00"),
+            payer_person_id=bob.id,
+            payer_percentage=50,
+        ),
+    ]
+    uow.transactions.get_shared_by_year.return_value = txs
+    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+
+    result = await GetDashboardUseCase().execute(_make_command(), uow)
+
+    jan = result.month_history[-1]
+    assert jan.settlement_amount == Decimal(0)
+    assert jan.is_settled is True
+    assert jan.settled_at is None
+
+
+async def test_no_settlements_yields_zero_ytd_total() -> None:
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    _setup_uow_base(uow, alice, bob)
+
+    uow.transactions.get_shared_by_year.return_value = []
+    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+
+    result = await GetDashboardUseCase().execute(_make_command(), uow)
+
+    assert result.ytd_total_settled == Decimal(0)
