@@ -1,9 +1,9 @@
 import { Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
+import type { MonthReference } from "@/api/generated/model";
 import { Button } from "@/components/Button";
 import { MONTHS } from "@/lib/format";
-import type { MonthReference } from "@/lib/reconciliation";
 
 export function PageLoading({ label }: { label: string }) {
   return (
@@ -18,17 +18,18 @@ export function PageError({
   error,
   onRetry,
 }: {
-  error: Error;
+  error: unknown;
   onRetry: () => void;
 }) {
+  const message =
+    error instanceof Error ? error.message : "An unexpected error occurred";
+
   return (
     <div
       role="alert"
       className="rounded-lg border border-destructive-border bg-destructive-muted p-4"
     >
-      <p className="text-sm text-destructive-muted-foreground">
-        {error.message}
-      </p>
+      <p className="text-sm text-destructive-muted-foreground">{message}</p>
       <Button variant="secondary" size="sm" onClick={onRetry} className="mt-3">
         Try Again
       </Button>

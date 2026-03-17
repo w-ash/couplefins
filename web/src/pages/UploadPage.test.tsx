@@ -1,16 +1,8 @@
 import { fireEvent } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { setupServer } from "msw/node";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { useIdentityStore } from "@/lib/identity";
+import { server } from "@/test/server";
 import { renderWithProviders, screen, waitFor } from "../test/test-utils";
 import { UploadPage } from "./UploadPage";
 
@@ -84,14 +76,6 @@ const previewResponseWithChanges = {
   unmapped_categories: [],
 };
 
-const server = setupServer(
-  http.get("/api/v1/persons/", () => HttpResponse.json(persons)),
-);
-
-beforeAll(() => server.listen());
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
-
 function setFileAndSubmit() {
   const fileInput = screen.getByLabelText("Monarch CSV") as HTMLInputElement;
   const file = new File(["Date,Merchant\n2026-01-15,Test"], "test.csv", {
@@ -105,6 +89,7 @@ function setFileAndSubmit() {
 describe("UploadPage", () => {
   beforeEach(() => {
     useIdentityStore.setState({ currentPersonId: "p1" });
+    server.use(http.get("/api/v1/persons/", () => HttpResponse.json(persons)));
   });
 
   it("renders the upload form without month/year", () => {

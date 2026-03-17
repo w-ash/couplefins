@@ -1,4 +1,3 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ArrowRight,
@@ -11,73 +10,28 @@ import {
   Users,
 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
+import type {
+  ChangedTransactionResponse,
+  PreviewUploadResponse,
+} from "@/api/generated/model";
+import { useGetPersons } from "@/api/generated/persons/persons";
+import {
+  usePostUpload,
+  usePostUploadPreview,
+} from "@/api/generated/uploads/uploads";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { PageHeader } from "@/components/PageHeader";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { useSetToggle } from "@/hooks/useSetToggle";
-import { apiFetch } from "@/lib/api";
 import { useInvalidateCategories } from "@/lib/categories";
 import { formatCurrency, formatDate, formatSplit } from "@/lib/format";
 import { useIdentityStore } from "@/lib/identity";
 import { selectInputClass } from "@/lib/input-styles";
-import { fetchPersons, PERSONS_QUERY_KEY } from "@/types/person";
 
 const PREVIEW_LIMIT = 5;
 
-interface PreviewTransaction {
-  date: string;
-  merchant: string;
-  category: string;
-  amount: number;
-  is_shared: boolean;
-  payer_percentage: number | null;
-}
-
-interface FieldDiff {
-  field_name: string;
-  old_value: string;
-  new_value: string;
-}
-
-interface ChangedTransaction {
-  existing_id: string;
-  incoming: PreviewTransaction;
-  existing: PreviewTransaction;
-  diffs: FieldDiff[];
-}
-
-interface PreviewData {
-  new_transactions: PreviewTransaction[];
-  unchanged_count: number;
-  changed_transactions: ChangedTransaction[];
-  unmapped_categories: string[];
-}
-
-interface UploadSummary {
-  upload_id: string;
-  filename: string;
-  new_count: number;
-  updated_count: number;
-  skipped_count: number;
-  unmapped_categories: string[];
-}
-
 type Step = "form" | "preview" | "review" | "confirmed";
-
-function previewCsv(formData: FormData): Promise<PreviewData> {
-  return apiFetch("/api/v1/uploads/preview", {
-    method: "POST",
-    body: formData,
-  });
-}
-
-function uploadCsv(formData: FormData): Promise<UploadSummary> {
-  return apiFetch("/api/v1/uploads/", {
-    method: "POST",
-    body: formData,
-  });
-}
 
 function ActionPanel({
   step,
@@ -89,7 +43,7 @@ function ActionPanel({
   isUploading,
 }: {
   step: "preview" | "review";
-  preview: PreviewData;
+  preview: PreviewUploadResponse;
   acceptedIds: Set<string>;
   onConfirm: () => void;
   onBack: () => void;
@@ -180,7 +134,6 @@ function ActionPanel({
 }
 
 export function UploadPage() {
-  const queryClient = useQueryClient();
   const invalidateCategories = useInvalidateCategories();
   const currentPersonId = useIdentityStore((s) => s.currentPersonId);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -196,56 +149,59 @@ export function UploadPage() {
     clear: clearAccepted,
   } = useSetToggle();
 
-  const personsQuery = useQuery({
-    queryKey: PERSONS_QUERY_KEY,
-    queryFn: fetchPersons,
-  });
+  const { data: personsResponse } = useGetPersons();
+  const persons = personsResponse?.data;
 
-  const previewMutation = useMutation({
-    mutationFn: previewCsv,
-    onSuccess: (data) => {
-      if (data.changed_transactions.length > 0) {
-        setAllAccepted(data.changed_transactions.map((ct) => ct.existing_id));
-        setStep("review");
-      } else {
-        setStep("preview");
-      }
+  const previewMutation = usePostUploadPreview({
+    mutation: {
+      onSuccess: (response) => {
+        if (response.status !== 200) return;
+        const data = response.data;
+        if (data.changed_transactions.length > 0) {
+          setAllAccepted(
+            data.changed_transactions.map(
+              (ct: ChangedTransactionResponse) => ct.existing_id,
+            ),
+          );
+          setStep("review");
+        } else {
+          setStep("preview");
+        }
+      },
     },
   });
 
-  const uploadMutation = useMutation({
-    mutationFn: uploadCsv,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["uploads"] });
-      invalidateCategories();
-      setStep("confirmed");
+  const uploadMutation = usePostUpload({
+    mutation: {
+      onSuccess: () => {
+        invalidateCategories();
+        setStep("confirmed");
+      },
     },
   });
 
-  function buildFormData(): FormData | null {
+  function buildFormData(): { file: Blob; person_id: string } | null {
     const file = fileInputRef.current?.files?.[0];
     if (!file || !personId) return null;
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("person_id", personId);
-    return formData;
+    return { file, person_id: personId };
   }
 
   function handlePreview(e: FormEvent) {
     e.preventDefault();
-    const formData = buildFormData();
-    if (!formData) return;
-    previewMutation.mutate(formData);
+    const body = buildFormData();
+    if (!body) return;
+    previewMutation.mutate({ data: body });
   }
 
   function handleConfirm() {
-    const formData = buildFormData();
-    if (!formData) return;
-    formData.append(
-      "accepted_change_ids",
-      JSON.stringify(Array.from(acceptedIds)),
-    );
-    uploadMutation.mutate(formData);
+    const body = buildFormData();
+    if (!body) return;
+    uploadMutation.mutate({
+      data: {
+        ...body,
+        accepted_change_ids: JSON.stringify(Array.from(acceptedIds)),
+      },
+    });
   }
 
   function handleBack() {
@@ -275,8 +231,12 @@ export function UploadPage() {
   }
 
   const isFormDisabled = step !== "form";
-  const preview = previewMutation.data;
-  const summary = uploadMutation.data;
+  const preview =
+    previewMutation.data?.status === 200
+      ? previewMutation.data.data
+      : undefined;
+  const summary =
+    uploadMutation.data?.status === 201 ? uploadMutation.data.data : undefined;
   const error = previewMutation.error || uploadMutation.error;
 
   const hasNewTransactions = preview && preview.new_transactions.length > 0;
@@ -312,8 +272,8 @@ export function UploadPage() {
           {currentPersonId && personId === currentPersonId ? (
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center rounded-full bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground">
-                {personsQuery.data?.find((p) => p.id === currentPersonId)
-                  ?.name ?? "Unknown"}
+                {persons?.find((p) => p.id === currentPersonId)?.name ??
+                  "Unknown"}
               </span>
               {!isFormDisabled && (
                 <button
@@ -335,7 +295,7 @@ export function UploadPage() {
               className={`w-full ${selectInputClass} disabled:cursor-not-allowed disabled:opacity-50`}
             >
               <option value="">Select person...</option>
-              {personsQuery.data?.map((p) => (
+              {persons?.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
@@ -386,7 +346,7 @@ export function UploadPage() {
             className="mt-4 flex items-start gap-2.5 rounded-lg border border-destructive-border bg-destructive-muted p-4 text-sm text-destructive-muted-foreground"
           >
             <CircleAlert className="mt-0.5 size-4 shrink-0" />
-            {error.message}
+            {error instanceof Error ? error.message : "An error occurred"}
           </div>
         )}
       </div>

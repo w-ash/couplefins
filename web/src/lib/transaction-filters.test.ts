@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ReconciliationTransaction } from "@/lib/reconciliation";
+import type { TransactionResponse } from "@/api/generated/model";
 import {
   cycleSortState,
   DEFAULT_SORT,
@@ -48,9 +48,7 @@ describe("cycleSortState", () => {
 
 // ─── sortList ───
 
-function makeTx(
-  overrides: Partial<ReconciliationTransaction>,
-): ReconciliationTransaction {
+function makeTx(overrides: Partial<TransactionResponse>): TransactionResponse {
   return {
     id: "1",
     date: "2025-01-15",

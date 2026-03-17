@@ -1,55 +1,14 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
-import { apiFetch } from "./api";
-
-export interface CategoryGroup {
-  id: string;
-  name: string;
-  icon: string | null;
-  categories: string[];
-}
-
-export const CATEGORY_GROUPS_QUERY_KEY = ["category-groups"] as const;
-export const UNMAPPED_CATEGORIES_QUERY_KEY = ["unmapped-categories"] as const;
-
-export function fetchCategoryGroups(): Promise<CategoryGroup[]> {
-  return apiFetch("/api/v1/category-groups");
-}
-
-export function fetchUnmappedCategories(): Promise<string[]> {
-  return apiFetch("/api/v1/category-mappings/unmapped");
-}
-
-export function createCategoryGroup(name: string): Promise<CategoryGroup> {
-  return apiFetch("/api/v1/category-groups", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
-  });
-}
-
-export function updateCategoryGroup(
-  groupId: string,
-  fields: { name?: string; icon?: string | null },
-): Promise<CategoryGroup> {
-  return apiFetch(`/api/v1/category-groups/${groupId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(fields),
-  });
-}
-
-export function deleteCategoryGroup(groupId: string): Promise<void> {
-  return apiFetch(`/api/v1/category-groups/${groupId}`, {
-    method: "DELETE",
-  });
-}
+import {
+  getGetCategoryGroupsQueryKey,
+  getGetUnmappedCategoriesQueryKey,
+  useGetCategoryGroups,
+} from "@/api/generated/category-groups/category-groups";
 
 export function useGroupIconMap(): Map<string, string | null> {
-  const { data: categoryGroups } = useQuery({
-    queryKey: [...CATEGORY_GROUPS_QUERY_KEY],
-    queryFn: fetchCategoryGroups,
-  });
+  const { data: response } = useGetCategoryGroups();
+  const categoryGroups = response?.data;
   return useMemo(
     () => new Map((categoryGroups ?? []).map((g) => [g.id, g.icon])),
     [categoryGroups],
@@ -59,19 +18,11 @@ export function useGroupIconMap(): Map<string, string | null> {
 export function useInvalidateCategories() {
   const queryClient = useQueryClient();
   return useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: CATEGORY_GROUPS_QUERY_KEY });
     queryClient.invalidateQueries({
-      queryKey: UNMAPPED_CATEGORIES_QUERY_KEY,
+      queryKey: getGetCategoryGroupsQueryKey(),
+    });
+    queryClient.invalidateQueries({
+      queryKey: getGetUnmappedCategoriesQueryKey(),
     });
   }, [queryClient]);
-}
-
-export function bulkUpdateMappings(
-  mappings: { category: string; group_id: string }[],
-): Promise<{ updated: number }> {
-  return apiFetch("/api/v1/category-mappings", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mappings }),
-  });
 }

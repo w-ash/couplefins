@@ -1,6 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
 import { Clock } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type {
+  TransactionEditResponse,
+  TransactionResponse,
+  UpdateTransactionRequest,
+} from "@/api/generated/model";
+import { useGetTransactionEdits } from "@/api/generated/transactions/transactions";
 import { Button } from "@/components/Button";
 import type { ComboboxOption } from "@/components/Combobox";
 import { Combobox } from "@/components/Combobox";
@@ -13,21 +18,15 @@ import {
   parsePercent,
 } from "@/lib/format";
 import { baseInputClass, inputErrorClass } from "@/lib/input-styles";
-import type { ReconciliationTransaction } from "@/lib/reconciliation";
-import type {
-  TransactionEdit,
-  TransactionUpdateFields,
-} from "@/lib/transactions";
-import { fetchTransactionEdits } from "@/lib/transactions";
 
 interface TransactionEditorProps {
-  tx: ReconciliationTransaction;
+  tx: TransactionResponse;
   payerName: string;
   otherName: string;
   categoryOptions: ComboboxOption[];
   tagOptions: ComboboxOption[];
   saving?: boolean;
-  onSave: (fields: TransactionUpdateFields) => void;
+  onSave: (fields: UpdateTransactionRequest) => void;
   onCancel: () => void;
 }
 
@@ -54,12 +53,8 @@ function formatEditValue(fieldName: string, value: string): string {
 }
 
 function EditHistory({ transactionId }: { transactionId: string }) {
-  const { data } = useQuery({
-    queryKey: ["transaction-edits", transactionId],
-    queryFn: () => fetchTransactionEdits(transactionId),
-  });
-
-  const edits = data?.edits ?? [];
+  const { data: response } = useGetTransactionEdits(transactionId);
+  const edits = (response?.status === 200 ? response.data.edits : null) ?? [];
   if (edits.length === 0) return null;
 
   return (
@@ -69,7 +64,7 @@ function EditHistory({ transactionId }: { transactionId: string }) {
         Edit History
       </p>
       <div className="space-y-1.5">
-        {edits.map((edit: TransactionEdit) => (
+        {edits.map((edit: TransactionEditResponse) => (
           <p key={edit.id} className="text-xs text-muted-foreground">
             <span className="tabular-nums">
               {editDateFmt.format(new Date(edit.edited_at))}
@@ -135,7 +130,7 @@ export function TransactionEditor({
     (parsedSplit !== null && parsedSplit !== (tx.payer_percentage ?? 50));
 
   const handleSave = useCallback(() => {
-    const fields: TransactionUpdateFields = {};
+    const fields: UpdateTransactionRequest = {};
     if (date !== tx.date) fields.date = date;
     if (isAmountValid && parsedAmount !== tx.amount)
       fields.amount = parsedAmount;

@@ -1,15 +1,7 @@
 import { HttpResponse, http } from "msw";
-import { setupServer } from "msw/node";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { useIdentityStore } from "@/lib/identity";
+import { server } from "@/test/server";
 import { renderWithProviders, screen, waitFor } from "../test/test-utils";
 import { SettleUpPage } from "./SettleUpPage";
 
@@ -90,18 +82,13 @@ const allSettledResponse = {
   transaction_count: 5,
 };
 
-const server = setupServer(
-  http.get("/api/v1/persons/", () => HttpResponse.json(persons)),
-  http.get("/api/v1/settle-up", () => HttpResponse.json(settleUpResponse)),
-);
-
-beforeAll(() => server.listen());
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
-
 describe("SettleUpPage", () => {
   beforeEach(() => {
     useIdentityStore.setState({ currentPersonId: "p1" });
+    server.use(
+      http.get("/api/v1/persons/", () => HttpResponse.json(persons)),
+      http.get("/api/v1/settle-up", () => HttpResponse.json(settleUpResponse)),
+    );
   });
 
   it("shows owed amount when balance exists", async () => {

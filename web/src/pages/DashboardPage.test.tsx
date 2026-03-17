@@ -1,15 +1,7 @@
 import { HttpResponse, http } from "msw";
-import { setupServer } from "msw/node";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { useIdentityStore } from "@/lib/identity";
+import { server } from "@/test/server";
 import {
   renderWithProviders,
   screen,
@@ -120,18 +112,13 @@ const emptyResponse = {
   unmapped_categories: [],
 };
 
-const server = setupServer(
-  http.get("/api/v1/persons/", () => HttpResponse.json(persons)),
-  http.get("/api/v1/dashboard", () => HttpResponse.json(dashboardResponse)),
-);
-
-beforeAll(() => server.listen());
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
-
 describe("DashboardPage", () => {
   beforeEach(() => {
     useIdentityStore.setState({ currentPersonId: "p1" });
+    server.use(
+      http.get("/api/v1/persons/", () => HttpResponse.json(persons)),
+      http.get("/api/v1/dashboard", () => HttpResponse.json(dashboardResponse)),
+    );
   });
 
   it("renders settlement card with amount", async () => {

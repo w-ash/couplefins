@@ -1,7 +1,7 @@
 {
   "name": "web",
   "private": true,
-  "version": "0.6.2",
+  "version": "0.6.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,10 +13,12 @@
     "test:watch": "vitest",
     "check": "biome check src/ && tsc --noEmit",
     "format": "biome check --write src/",
+    "pregenerate": "cd .. && uv run python scripts/export_openapi.py",
     "generate": "orval"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",
+    "@faker-js/faker": "^10.3.0",
     "@tailwindcss/vite": "^4.2.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

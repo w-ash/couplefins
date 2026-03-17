@@ -1,16 +1,16 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  getGetPersonsQueryKey,
+  useGetPersons,
+  useUpdatePerson,
+} from "@/api/generated/persons/persons";
 import { Button } from "@/components/Button";
 import { InlineError } from "@/components/InlineError";
 import { useTemporary } from "@/hooks/useTemporary";
 import { baseInputClass } from "@/lib/input-styles";
-import {
-  fetchPersons,
-  PERSONS_QUERY_KEY,
-  type Person,
-  updatePerson,
-} from "@/types/person";
+import type { Person } from "@/types/person";
 
 function PersonAccountRow({ person }: { person: Person }) {
   const [value, setValue] = useState(person.adjustment_account);
@@ -21,12 +21,12 @@ function PersonAccountRow({ person }: { person: Person }) {
     setValue(person.adjustment_account);
   }, [person.adjustment_account]);
 
-  const mutation = useMutation({
-    mutationFn: (account: string) =>
-      updatePerson(person.id, { adjustment_account: account }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: PERSONS_QUERY_KEY });
-      setSaved(true);
+  const mutation = useUpdatePerson({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetPersonsQueryKey() });
+        setSaved(true);
+      },
     },
   });
 
@@ -35,9 +35,12 @@ function PersonAccountRow({ person }: { person: Person }) {
       e.preventDefault();
       const trimmed = value.trim();
       if (!trimmed || trimmed === person.adjustment_account) return;
-      mutation.mutate(trimmed);
+      mutation.mutate({
+        personId: person.id,
+        data: { adjustment_account: trimmed },
+      });
     },
-    [value, person.adjustment_account, mutation],
+    [value, person.adjustment_account, person.id, mutation],
   );
 
   const isDirty =
@@ -62,7 +65,11 @@ function PersonAccountRow({ person }: { person: Person }) {
         />
         {mutation.error && (
           <div className="mt-1">
-            <InlineError>{mutation.error.message}</InlineError>
+            <InlineError>
+              {mutation.error instanceof Error
+                ? mutation.error.message
+                : "Failed to save"}
+            </InlineError>
           </div>
         )}
       </div>
@@ -90,20 +97,16 @@ function PersonAccountRow({ person }: { person: Person }) {
 }
 
 export function PersonAccountSettings() {
-  const personsQuery = useQuery({
-    queryKey: PERSONS_QUERY_KEY,
-    queryFn: fetchPersons,
-  });
+  const { data: response, isLoading, isError } = useGetPersons();
+  const persons = response?.data ?? [];
 
-  if (personsQuery.isLoading) {
+  if (isLoading) {
     return <p className="text-sm text-muted-foreground">Loading profiles...</p>;
   }
 
-  if (personsQuery.isError) {
+  if (isError) {
     return <InlineError>Failed to load profiles.</InlineError>;
   }
-
-  const persons = personsQuery.data ?? [];
 
   if (persons.length === 0) {
     return (

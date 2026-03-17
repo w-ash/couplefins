@@ -1,6 +1,24 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, HandCoins, Loader2, Trash2, Upload } from "lucide-react";
 import { useCallback, useState } from "react";
+import { getGetDashboardQueryKey } from "@/api/generated/dashboard/dashboard";
+import type {
+  SettlementResponse,
+  SettleUpDataResponse,
+} from "@/api/generated/model";
+import { SettlementMethod } from "@/api/generated/model";
+import {
+  getGetReconciliationQueryKey,
+  useFinalizePeriod,
+  useUnfinalizePeriod,
+} from "@/api/generated/reconciliation/reconciliation";
+import {
+  getGetSettleUpDataQueryKey,
+  useDeleteSettlement,
+  useGetSettleUpData,
+  useRecordSettlement,
+  useWaiveSettlement,
+} from "@/api/generated/settlements/settlements";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { FinalizationBanner } from "@/components/FinalizationBanner";
@@ -16,35 +34,20 @@ import {
 import { PersonBadge } from "@/components/PersonBadge";
 import { UploadStatusRow } from "@/components/UploadStatusRow";
 import { useTemporary } from "@/hooks/useTemporary";
-import { DASHBOARD_QUERY_KEY } from "@/lib/dashboard";
 import { formatCurrency, MONTHS, useMonthYear } from "@/lib/format";
 import { baseInputClass } from "@/lib/input-styles";
 import { usePersonMaps } from "@/lib/persons";
-import {
-  finalizePeriod,
-  RECONCILIATION_QUERY_KEY,
-  unfinalizePeriod,
-} from "@/lib/reconciliation";
-import type { SettlementRecord, SettleUpData } from "@/lib/settlements";
-import {
-  deleteSettlement,
-  fetchSettleUpData,
-  recordSettlement,
-  SETTLE_UP_QUERY_KEY,
-  waiveSettlement,
-} from "@/lib/settlements";
-import { getPersonAccentColor } from "@/types/person";
 
 const formInputClass = `w-full ${baseInputClass}`;
 
 function HeroCard({
   data,
-  personNames,
-  personIndexMap,
+  getPersonName,
+  getPersonColor,
 }: {
-  data: SettleUpData;
-  personNames: Map<string, string>;
-  personIndexMap: Map<string, number>;
+  data: SettleUpDataResponse;
+  getPersonName: (id: string) => string;
+  getPersonColor: (id: string) => string;
 }) {
   const owed = data.owed;
   const isSettled = !owed || owed.amount === 0;
@@ -62,17 +65,15 @@ function HeroCard({
     );
   }
 
-  const fromName = personNames.get(owed.from_person_id) ?? "Unknown";
-  const toName = personNames.get(owed.to_person_id) ?? "Unknown";
-  const fromColor = getPersonAccentColor(
-    personIndexMap.get(owed.from_person_id) ?? -1,
-  );
-
   return (
     <div className="rounded-xl border border-primary/20 bg-card p-8 shadow-md">
       <p className="text-center text-2xl font-semibold text-foreground">
-        <PersonBadge name={fromName} accentColor={fromColor} size="lg" /> owes{" "}
-        {toName}{" "}
+        <PersonBadge
+          name={getPersonName(owed.from_person_id)}
+          accentColor={getPersonColor(owed.from_person_id)}
+          size="lg"
+        />{" "}
+        owes {getPersonName(owed.to_person_id)}{" "}
         <span className="tabular-nums">{formatCurrency(owed.amount)}</span>
       </p>
       {data.remaining_balance > 0 && data.remaining_balance !== owed.amount && (
@@ -87,19 +88,19 @@ function HeroCard({
   );
 }
 
-const METHODS = [
-  { value: "venmo", label: "Venmo" },
-  { value: "zelle", label: "Zelle" },
-  { value: "other", label: "Other" },
+const METHODS: { value: SettlementMethod; label: string }[] = [
+  { value: SettlementMethod.venmo, label: "Venmo" },
+  { value: SettlementMethod.zelle, label: "Zelle" },
+  { value: SettlementMethod.other, label: "Other" },
 ];
 
 function RecordPaymentForm({
   data,
-  personNames,
+  getPersonName,
   onSuccess,
 }: {
-  data: SettleUpData;
-  personNames: Map<string, string>;
+  data: SettleUpDataResponse;
+  getPersonName: (id: string) => string;
   onSuccess: () => void;
 }) {
   const owed = data.owed;
@@ -109,44 +110,34 @@ function RecordPaymentForm({
       : (owed?.amount.toFixed(2) ?? "0");
 
   const [amount, setAmount] = useState(defaultAmount);
-  const [method, setMethod] = useState(METHODS[0].value);
+  const [method, setMethod] = useState<SettlementMethod>(METHODS[0].value);
   const [notes, setNotes] = useState("");
   const [successMessage, setSuccessMessage] = useTemporary<string | null>(
     null,
     4000,
   );
 
-  const mutation = useMutation({
-    mutationFn: () => {
-      if (!owed) throw new Error("No balance owed");
-      return recordSettlement({
-        year: data.year,
-        month: data.month,
-        amount: Number.parseFloat(amount),
-        from_person_id: owed.from_person_id,
-        to_person_id: owed.to_person_id,
-        method,
-        notes,
-      });
-    },
-    onSuccess: () => {
-      const paidAmount = Number.parseFloat(amount);
-      if (owed) {
-        const fromName = personNames.get(owed.from_person_id) ?? "Unknown";
-        const toName = personNames.get(owed.to_person_id) ?? "Unknown";
-        setSuccessMessage(
-          `Payment recorded — ${fromName} paid ${toName} ${formatCurrency(paidAmount)}`,
-        );
-      }
-      setNotes("");
-      onSuccess();
+  const mutation = useRecordSettlement({
+    mutation: {
+      onSuccess: () => {
+        const paidAmount = Number.parseFloat(amount);
+        if (owed) {
+          const fromName = getPersonName(owed.from_person_id);
+          const toName = getPersonName(owed.to_person_id);
+          setSuccessMessage(
+            `Payment recorded — ${fromName} paid ${toName} ${formatCurrency(paidAmount)}`,
+          );
+        }
+        setNotes("");
+        onSuccess();
+      },
     },
   });
 
   if (!owed || owed.amount === 0) return null;
 
-  const fromName = personNames.get(owed.from_person_id) ?? "Unknown";
-  const toName = personNames.get(owed.to_person_id) ?? "Unknown";
+  const fromName = getPersonName(owed.from_person_id);
+  const toName = getPersonName(owed.to_person_id);
 
   return (
     <Card>
@@ -185,7 +176,7 @@ function RecordPaymentForm({
             <select
               id="settlement-method"
               value={method}
-              onChange={(e) => setMethod(e.target.value)}
+              onChange={(e) => setMethod(e.target.value as SettlementMethod)}
               className={formInputClass}
             >
               {METHODS.map((m) => (
@@ -213,7 +204,20 @@ function RecordPaymentForm({
           />
         </div>
         <Button
-          onClick={() => mutation.mutate()}
+          onClick={() => {
+            if (!owed) return;
+            mutation.mutate({
+              data: {
+                year: data.year,
+                month: data.month,
+                amount: Number.parseFloat(amount),
+                from_person_id: owed.from_person_id,
+                to_person_id: owed.to_person_id,
+                method,
+                notes,
+              },
+            });
+          }}
           loading={mutation.isPending}
           loadingText="Recording..."
           disabled={!amount || Number.parseFloat(amount) <= 0}
@@ -240,39 +244,27 @@ function RecordPaymentForm({
 
 function WaiveAction({
   data,
-  personNames,
+  getPersonName,
   onSuccess,
 }: {
-  data: SettleUpData;
-  personNames: Map<string, string>;
+  data: SettleUpDataResponse;
+  getPersonName: (id: string) => string;
   onSuccess: () => void;
 }) {
   const owed = data.owed;
 
-  const mutation = useMutation({
-    mutationFn: () => {
-      if (!owed) throw new Error("No balance owed");
-      return waiveSettlement({
-        year: data.year,
-        month: data.month,
-        from_person_id: owed.from_person_id,
-        to_person_id: owed.to_person_id,
-        notes: "Balance waived",
-      });
-    },
-    onSuccess,
+  const mutation = useWaiveSettlement({
+    mutation: { onSuccess },
   });
 
   if (!owed || owed.amount === 0) return null;
-
-  const fromName = personNames.get(owed.from_person_id) ?? "Unknown";
 
   return (
     <div className="rounded-lg border border-border-muted px-4 py-3">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-muted-foreground">
-            Waive {fromName}'s balance for this month
+            Waive {getPersonName(owed.from_person_id)}'s balance for this month
           </p>
           <p className="text-xs text-muted-foreground/70">
             The full balance will be forgiven. This can be undone by deleting
@@ -282,7 +274,18 @@ function WaiveAction({
         <Button
           variant="secondary"
           size="sm"
-          onClick={() => mutation.mutate()}
+          onClick={() => {
+            if (!owed) return;
+            mutation.mutate({
+              data: {
+                year: data.year,
+                month: data.month,
+                from_person_id: owed.from_person_id,
+                to_person_id: owed.to_person_id,
+                notes: "Balance waived",
+              },
+            });
+          }}
           loading={mutation.isPending}
         >
           Waive Balance
@@ -303,13 +306,13 @@ function WaiveAction({
 
 function PaymentHistory({
   settlements,
-  personNames,
+  getPersonName,
   onDelete,
   isDeleting,
   isFinalized,
 }: {
-  settlements: SettlementRecord[];
-  personNames: Map<string, string>;
+  settlements: SettlementResponse[];
+  getPersonName: (id: string) => string;
   onDelete: (id: string) => void;
   isDeleting: boolean;
   isFinalized: boolean;
@@ -323,8 +326,8 @@ function PaymentHistory({
       </h2>
       <div className="space-y-3">
         {settlements.map((s) => {
-          const fromName = personNames.get(s.from_person_id) ?? "Unknown";
-          const toName = personNames.get(s.to_person_id) ?? "Unknown";
+          const fromName = getPersonName(s.from_person_id);
+          const toName = getPersonName(s.to_person_id);
           const settledDate = new Date(s.settled_at).toLocaleDateString(
             "en-US",
             { month: "short", day: "numeric" },
@@ -393,34 +396,38 @@ export function SettleUpPage() {
   const { year, month } = useMonthYear();
   const queryClient = useQueryClient();
 
-  const settleUpQueryKey = [...SETTLE_UP_QUERY_KEY, year, month];
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: settleUpQueryKey,
-    queryFn: () => fetchSettleUpData(year, month),
-  });
+  const {
+    data: settleUpResponse,
+    isLoading,
+    error,
+    refetch,
+  } = useGetSettleUpData({ year, month });
+  const data =
+    settleUpResponse?.status === 200 ? settleUpResponse.data : undefined;
 
   const invalidateAll = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: SETTLE_UP_QUERY_KEY });
-    queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY });
-    queryClient.invalidateQueries({ queryKey: RECONCILIATION_QUERY_KEY });
+    queryClient.invalidateQueries({
+      queryKey: getGetSettleUpDataQueryKey(),
+    });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+    queryClient.invalidateQueries({
+      queryKey: getGetReconciliationQueryKey(),
+    });
   }, [queryClient]);
 
-  const finalizeMutation = useMutation({
-    mutationFn: () => finalizePeriod(year, month),
-    onSuccess: invalidateAll,
+  const finalizeMutation = useFinalizePeriod({
+    mutation: { onSuccess: invalidateAll },
   });
 
-  const unfinalizeMutation = useMutation({
-    mutationFn: () => unfinalizePeriod(year, month),
-    onSuccess: invalidateAll,
+  const unfinalizeMutation = useUnfinalizePeriod({
+    mutation: { onSuccess: invalidateAll },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteSettlement(id),
-    onSuccess: invalidateAll,
+  const deleteMutation = useDeleteSettlement({
+    mutation: { onSuccess: invalidateAll },
   });
 
-  const { personNames, personIndexMap } = usePersonMaps(data?.persons);
+  const { getPersonName, getPersonColor } = usePersonMaps(data?.persons);
 
   const isEmpty =
     data &&
@@ -440,7 +447,7 @@ export function SettleUpPage() {
       {data && (
         <UploadStatusRow
           statuses={data.upload_statuses}
-          personIndexMap={personIndexMap}
+          getPersonColor={getPersonColor}
         />
       )}
 
@@ -465,8 +472,16 @@ export function SettleUpPage() {
           <FinalizationBanner
             isFinalized={data.is_finalized}
             finalizedAt={data.finalized_at}
-            onFinalize={() => finalizeMutation.mutate()}
-            onUnfinalize={() => unfinalizeMutation.mutate()}
+            onFinalize={() =>
+              finalizeMutation.mutate({
+                data: { year, month, notes: "" },
+              })
+            }
+            onUnfinalize={() =>
+              unfinalizeMutation.mutate({
+                data: { year, month },
+              })
+            }
             isPending={
               finalizeMutation.isPending || unfinalizeMutation.isPending
             }
@@ -474,27 +489,27 @@ export function SettleUpPage() {
 
           <HeroCard
             data={data}
-            personNames={personNames}
-            personIndexMap={personIndexMap}
+            getPersonName={getPersonName}
+            getPersonColor={getPersonColor}
           />
 
           <RecordPaymentForm
             key={`${data.remaining_balance}-${data.recorded_settlements.length}`}
             data={data}
-            personNames={personNames}
+            getPersonName={getPersonName}
             onSuccess={invalidateAll}
           />
 
           <WaiveAction
             data={data}
-            personNames={personNames}
+            getPersonName={getPersonName}
             onSuccess={invalidateAll}
           />
 
           <PaymentHistory
             settlements={data.recorded_settlements}
-            personNames={personNames}
-            onDelete={(id) => deleteMutation.mutate(id)}
+            getPersonName={getPersonName}
+            onDelete={(id) => deleteMutation.mutate({ settlementId: id })}
             isDeleting={deleteMutation.isPending}
             isFinalized={data.is_finalized}
           />

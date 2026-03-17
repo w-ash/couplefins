@@ -1,6 +1,6 @@
 import { HttpResponse, http } from "msw";
-import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { server } from "@/test/server";
 import { renderWithProviders, screen, waitFor } from "@/test/test-utils";
 import { SettingsPage } from "./SettingsPage";
 
@@ -9,17 +9,16 @@ const persons = [
   { id: "p2", name: "Bob", adjustment_account: "" },
 ];
 
-const server = setupServer(
-  http.get("/api/v1/category-groups", () => HttpResponse.json([])),
-  http.get("/api/v1/category-mappings/unmapped", () => HttpResponse.json([])),
-  http.get("/api/v1/persons/", () => HttpResponse.json(persons)),
-);
-
-beforeAll(() => server.listen());
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
-
 describe("SettingsPage", () => {
+  beforeEach(() => {
+    server.use(
+      http.get("/api/v1/category-groups", () => HttpResponse.json([])),
+      http.get("/api/v1/category-mappings/unmapped", () =>
+        HttpResponse.json([]),
+      ),
+      http.get("/api/v1/persons/", () => HttpResponse.json(persons)),
+    );
+  });
   it("renders the settings heading", () => {
     renderWithProviders(<SettingsPage />);
     expect(

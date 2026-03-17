@@ -16,7 +16,7 @@ import {
   thisYear,
   toDateStr,
 } from "@/lib/date-range";
-import { selectInputClass } from "@/lib/input-styles";
+import { selectInputClass, triggerButtonClass } from "@/lib/input-styles";
 
 import { useClickOutside } from "@/lib/use-click-outside";
 
@@ -279,7 +279,7 @@ export function DateRangePicker({
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className="inline-flex items-center gap-2 rounded-lg border border-input bg-card px-3 py-1.5 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted"
+        className={triggerButtonClass}
       >
         <Calendar className="size-4 text-muted-foreground" />
         {label}

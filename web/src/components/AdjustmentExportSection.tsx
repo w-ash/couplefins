@@ -1,4 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -8,21 +7,19 @@ import {
   Loader2,
 } from "lucide-react";
 import { useCallback, useState } from "react";
+import type { AdjustmentResponse } from "@/api/generated/model";
+import { usePreviewAdjustments } from "@/api/generated/persons/persons";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { InlineError } from "@/components/InlineError";
 import { PersonBadge } from "@/components/PersonBadge";
 import { useTemporary } from "@/hooks/useTemporary";
-import {
-  type AdjustmentPreview,
-  downloadAdjustmentCsv,
-  fetchAdjustmentPreview,
-} from "@/lib/adjustments";
+import { downloadAdjustmentCsv } from "@/lib/adjustments";
 import { formatCurrency, formatDate, plural } from "@/lib/format";
 import { usePersonMaps } from "@/lib/persons";
-import { getPersonAccentColor, type Person } from "@/types/person";
+import type { Person } from "@/types/person";
 
-function AdjustmentRow({ adjustment }: { adjustment: AdjustmentPreview }) {
+function AdjustmentRow({ adjustment }: { adjustment: AdjustmentResponse }) {
   const isCredit = adjustment.amount >= 0;
 
   return (
@@ -66,11 +63,14 @@ function PreviewTable({
   month: number;
   expanded: boolean;
 }) {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["adjustments", personId, year, month],
-    queryFn: () => fetchAdjustmentPreview(personId, year, month),
-    enabled: expanded,
+  const {
+    data: response,
+    isLoading,
+    error,
+  } = usePreviewAdjustments(personId, year, month, {
+    query: { enabled: expanded },
   });
+  const data = response?.status === 200 ? response.data : undefined;
 
   return (
     <div
@@ -85,7 +85,11 @@ function PreviewTable({
             </div>
           )}
 
-          {error && <InlineError>{error.message}</InlineError>}
+          {error && (
+            <InlineError>
+              {error instanceof Error ? error.message : "Failed to load"}
+            </InlineError>
+          )}
 
           {data && data.adjustments.length === 0 && (
             <p className="text-sm text-muted-foreground">
@@ -121,12 +125,12 @@ function PreviewTable({
 
 function PersonExportCard({
   person,
-  personIndex,
+  accentColor,
   year,
   month,
 }: {
   person: Person;
-  personIndex: number;
+  accentColor: string;
   year: number;
   month: number;
 }) {
@@ -149,7 +153,6 @@ function PersonExportCard({
   }, [person.id, year, month, setSuccessMessage]);
 
   const hasAccount = person.adjustment_account.trim() !== "";
-  const accentColor = getPersonAccentColor(personIndex);
 
   return (
     <div className="space-y-1">
@@ -221,7 +224,7 @@ export function AdjustmentExportSection({
   year: number;
   month: number;
 }) {
-  const { personIndexMap } = usePersonMaps(persons);
+  const { getPersonColor } = usePersonMaps(persons);
 
   return (
     <Card>
@@ -233,7 +236,7 @@ export function AdjustmentExportSection({
           <PersonExportCard
             key={person.id}
             person={person}
-            personIndex={personIndexMap.get(person.id) ?? 0}
+            accentColor={getPersonColor(person.id)}
             year={year}
             month={month}
           />

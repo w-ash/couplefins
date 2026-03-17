@@ -5,6 +5,7 @@ import { MonthGrid } from "@/components/MonthGrid";
 import type { DateRange } from "@/lib/date-range";
 import { isSingleMonth, monthStartEnd } from "@/lib/date-range";
 import { MONTHS, useMonthYear } from "@/lib/format";
+import { triggerButtonClass } from "@/lib/input-styles";
 import { useClickOutside } from "@/lib/use-click-outside";
 
 export function MonthPicker() {
@@ -47,7 +48,7 @@ export function MonthPicker() {
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label="Select month"
-        className="inline-flex items-center gap-2 rounded-lg border border-input bg-card px-3 py-1.5 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted"
+        className={triggerButtonClass}
       >
         <Calendar className="size-4 text-muted-foreground" />
         {label}

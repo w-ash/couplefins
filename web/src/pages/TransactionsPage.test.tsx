@@ -1,15 +1,7 @@
 import { HttpResponse, http } from "msw";
-import { setupServer } from "msw/node";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { useIdentityStore } from "@/lib/identity";
+import { server } from "@/test/server";
 import { renderWithProviders, screen, waitFor } from "../test/test-utils";
 import { TransactionsPage } from "./TransactionsPage";
 
@@ -142,29 +134,24 @@ const emptyResponse = {
   latest_transaction_month: null,
 };
 
-const server = setupServer(
-  http.get("/api/v1/persons/", () => HttpResponse.json(persons)),
-  http.get("/api/v1/reconciliation", () =>
-    HttpResponse.json(reconciliationResponse),
-  ),
-  http.get("/api/v1/category-groups", () => HttpResponse.json([])),
-  http.get("/api/v1/tags", () => HttpResponse.json([])),
-  http.get("/api/v1/persons/:personId/adjustments/:year/:month", () =>
-    HttpResponse.json({
-      adjustments: [],
-      person_name: "Alice",
-      adjustment_count: 0,
-    }),
-  ),
-);
-
-beforeAll(() => server.listen());
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
-
 describe("TransactionsPage", () => {
   beforeEach(() => {
     useIdentityStore.setState({ currentPersonId: "p1" });
+    server.use(
+      http.get("/api/v1/persons/", () => HttpResponse.json(persons)),
+      http.get("/api/v1/reconciliation", () =>
+        HttpResponse.json(reconciliationResponse),
+      ),
+      http.get("/api/v1/category-groups", () => HttpResponse.json([])),
+      http.get("/api/v1/tags", () => HttpResponse.json([])),
+      http.get("/api/v1/persons/:personId/adjustments/:year/:month", () =>
+        HttpResponse.json({
+          adjustments: [],
+          person_name: "Alice",
+          adjustment_count: 0,
+        }),
+      ),
+    );
   });
 
   it("renders summary stats", async () => {

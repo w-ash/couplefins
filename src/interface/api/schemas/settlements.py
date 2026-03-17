@@ -6,10 +6,10 @@ from pydantic import BaseModel
 from src.application.use_cases._shared.settlement_records import SettlementRecord
 from src.application.use_cases.get_settle_up_data import GetSettleUpDataResult
 from src.domain.entities.settlement import Settlement, SettlementMethod
-from src.interface.api.schemas.dashboard import PersonResponse
+from src.interface.api.schemas.dashboard import DashboardPersonResponse
 from src.interface.api.schemas.reconciliation import (
     MonthReference,
-    SettlementResponse as OwedResponse,
+    OwedAmountResponse,
     UploadStatusResponse,
 )
 
@@ -81,11 +81,11 @@ class SettlementResponse(BaseModel):
 class SettleUpDataResponse(BaseModel):
     year: int
     month: int
-    owed: OwedResponse | None
+    owed: OwedAmountResponse | None
     recorded_settlements: list[SettlementResponse]
     remaining_balance: float
     upload_statuses: list[UploadStatusResponse]
-    persons: list[PersonResponse]
+    persons: list[DashboardPersonResponse]
     is_finalized: bool
     finalized_at: datetime.datetime | None
     transaction_count: int
@@ -96,7 +96,7 @@ class SettleUpDataResponse(BaseModel):
         return cls(
             year=result.year,
             month=result.month,
-            owed=OwedResponse.from_domain(result.owed) if result.owed else None,
+            owed=OwedAmountResponse.from_domain(result.owed) if result.owed else None,
             recorded_settlements=[
                 SettlementResponse.from_record(r) for r in result.recorded_settlements
             ],
@@ -104,7 +104,9 @@ class SettleUpDataResponse(BaseModel):
             upload_statuses=[
                 UploadStatusResponse.from_domain(us) for us in result.upload_statuses
             ],
-            persons=[PersonResponse(id=p.id, name=p.name) for p in result.persons],
+            persons=[
+                DashboardPersonResponse(id=p.id, name=p.name) for p in result.persons
+            ],
             is_finalized=result.is_finalized,
             finalized_at=result.finalized_at,
             transaction_count=result.transaction_count,

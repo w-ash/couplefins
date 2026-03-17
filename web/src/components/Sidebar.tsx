@@ -1,4 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeftRight,
   HandCoins,
@@ -8,19 +7,14 @@ import {
   Settings,
   Upload,
 } from "lucide-react";
+import { useGetPersons } from "@/api/generated/persons/persons";
 import { useIdentityStore } from "@/lib/identity";
-import {
-  fetchPersons,
-  getPersonAccentColor,
-  PERSONS_QUERY_KEY,
-} from "@/types/person";
+import { getPersonAccentColor } from "@/types/person";
 import { NavItem } from "./NavItem";
 
 export function Sidebar() {
-  const { data: persons } = useQuery({
-    queryKey: PERSONS_QUERY_KEY,
-    queryFn: fetchPersons,
-  });
+  const { data: response } = useGetPersons();
+  const persons = response?.data;
   const currentPersonId = useIdentityStore((s) => s.currentPersonId);
   const setCurrentPersonId = useIdentityStore((s) => s.setCurrentPersonId);
 

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftRight,
   Check,
@@ -9,6 +9,28 @@ import {
   Upload,
 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
+import { useGetCategoryGroups } from "@/api/generated/category-groups/category-groups";
+import { getGetDashboardQueryKey } from "@/api/generated/dashboard/dashboard";
+import type {
+  BulkModifyTagsRequest,
+  BulkUpdateRequest,
+  CategoryGroupBreakdownResponse,
+  ReconciliationResponse,
+  TransactionResponse,
+  UpdateTransactionRequest,
+} from "@/api/generated/model";
+import { useGetPersons } from "@/api/generated/persons/persons";
+import {
+  getGetReconciliationQueryKey,
+  useGetReconciliation,
+} from "@/api/generated/reconciliation/reconciliation";
+import {
+  getGetTagsQueryKey,
+  useBulkModifyTags,
+  useBulkUpdateTransactions,
+  useGetTags,
+  useUpdateTransaction,
+} from "@/api/generated/transactions/transactions";
 import { AdjustmentExportSection } from "@/components/AdjustmentExportSection";
 import {
   type BulkChanges,
@@ -40,13 +62,8 @@ import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarnin
 import { UploadStatusRow } from "@/components/UploadStatusRow";
 import { useSetToggle } from "@/hooks/useSetToggle";
 import { useTemporary } from "@/hooks/useTemporary";
-import {
-  CATEGORY_GROUPS_QUERY_KEY,
-  fetchCategoryGroups,
-  useGroupIconMap,
-} from "@/lib/categories";
+import { useGroupIconMap } from "@/lib/categories";
 import { getCategoryGroupIcon } from "@/lib/category-icons";
-import { DASHBOARD_QUERY_KEY } from "@/lib/dashboard";
 import { formatRangeLabel, useDateRange } from "@/lib/date-range";
 import {
   computeShares,
@@ -56,43 +73,18 @@ import {
   plural,
 } from "@/lib/format";
 import { usePersonMaps } from "@/lib/persons";
-import type {
-  CategoryGroupBreakdown,
-  ReconciliationData,
-  ReconciliationTransaction,
-} from "@/lib/reconciliation";
-import {
-  fetchReconciliationByRange,
-  RECONCILIATION_QUERY_KEY,
-} from "@/lib/reconciliation";
-import { fetchTags, TAGS_QUERY_KEY } from "@/lib/tags";
 import type { SortField, SortState } from "@/lib/transaction-filters";
 import {
   cycleSortState,
   useTransactionFilters,
 } from "@/lib/transaction-filters";
-import type {
-  BulkModifyTagsPayload,
-  BulkUpdatePayload,
-  TransactionUpdateFields,
-} from "@/lib/transactions";
-import {
-  bulkModifyTags,
-  bulkUpdateTransactions,
-  updateTransaction,
-} from "@/lib/transactions";
-import {
-  fetchPersons,
-  getPersonAccentColor,
-  PERSONS_QUERY_KEY,
-} from "@/types/person";
 
 function SummaryStats({
   data,
-  personNames,
+  getPersonName,
 }: {
-  data: ReconciliationData;
-  personNames: Map<string, string>;
+  data: ReconciliationResponse;
+  getPersonName: (id: string) => string;
 }) {
   return (
     <StatsGrid
@@ -102,7 +94,7 @@ function SummaryStats({
           value: formatCurrency(data.net_shared_spending),
         },
         ...data.person_summaries.map((ps) => ({
-          label: `${personNames.get(ps.person_id) ?? "Unknown"} paid`,
+          label: `${getPersonName(ps.person_id)} paid`,
           value: formatCurrency(ps.total_paid),
         })),
       ]}
@@ -114,7 +106,7 @@ function CategoryGroupRow({
   group,
   icon,
 }: {
-  group: CategoryGroupBreakdown;
+  group: CategoryGroupBreakdownResponse;
   icon: string | null;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -172,7 +164,7 @@ function CategoryGroupBreakdownTable({
   hasRefunds,
   groupIconMap,
 }: {
-  breakdowns: CategoryGroupBreakdown[];
+  breakdowns: CategoryGroupBreakdownResponse[];
   hasRefunds: boolean;
   groupIconMap: Map<string, string | null>;
 }) {
@@ -215,7 +207,7 @@ function CategoryGroupBreakdownTable({
 }
 
 function buildCategoryGroupLookup(
-  breakdowns: CategoryGroupBreakdown[],
+  breakdowns: CategoryGroupBreakdownResponse[],
 ): Map<string, string> {
   const lookup = new Map<string, string>();
   for (const group of breakdowns) {
@@ -270,7 +262,7 @@ function TransactionTable({
   transactions,
   personNames,
   personEntries,
-  personIndexMap,
+  getPersonColor,
   categoryGroups,
   categoryOptions,
   availableTags,
@@ -283,10 +275,10 @@ function TransactionTable({
   onTransactionUpdate,
   isSaving,
 }: {
-  transactions: ReconciliationTransaction[];
+  transactions: TransactionResponse[];
   personNames: Map<string, string>;
   personEntries: Array<{ id: string; name: string }>;
-  personIndexMap: Map<string, number>;
+  getPersonColor: (id: string) => string;
   categoryGroups: Map<string, string>;
   categoryOptions: ComboboxOption[];
   availableTags: string[];
@@ -294,9 +286,9 @@ function TransactionTable({
   isFinalized: boolean;
   sort: SortState;
   onSort: (s: SortState) => void;
-  onBulkUpdate: (payload: BulkUpdatePayload) => Promise<unknown>;
-  onBulkTags: (payload: BulkModifyTagsPayload) => Promise<unknown>;
-  onTransactionUpdate: (id: string, fields: TransactionUpdateFields) => void;
+  onBulkUpdate: (payload: BulkUpdateRequest) => Promise<unknown>;
+  onBulkTags: (payload: BulkModifyTagsRequest) => Promise<unknown>;
+  onTransactionUpdate: (id: string, fields: UpdateTransactionRequest) => void;
   isSaving: boolean;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -342,7 +334,7 @@ function TransactionTable({
     async (ids: string[], changes: BulkChanges) => {
       const promises: Promise<unknown>[] = [];
       if (changes.payer_percentage != null || changes.category != null) {
-        const payload: BulkUpdatePayload = { transaction_ids: ids };
+        const payload: BulkUpdateRequest = { transaction_ids: ids };
         if (changes.payer_percentage != null)
           payload.payer_percentage = changes.payer_percentage;
         if (changes.category != null) payload.category = changes.category;
@@ -484,9 +476,7 @@ function TransactionTable({
               );
               const payerName =
                 personNames.get(tx.payer_person_id) ?? "Unknown";
-              const payerColor = getPersonAccentColor(
-                personIndexMap.get(tx.payer_person_id) ?? -1,
-              );
+              const payerColor = getPersonColor(tx.payer_person_id);
               const isExpanded = expandedId === tx.id;
               const canEdit = !isFinalized && !bulkMode;
 
@@ -555,7 +545,7 @@ function TransactionRow({
   onTransactionUpdate,
   onCancel,
 }: {
-  tx: ReconciliationTransaction;
+  tx: TransactionResponse;
   payerShare: number;
   otherShare: number;
   payerName: string;
@@ -574,7 +564,7 @@ function TransactionRow({
   colCount: number;
   onToggleExpand: () => void;
   onToggleSelect: () => void;
-  onTransactionUpdate: (fields: TransactionUpdateFields) => void;
+  onTransactionUpdate: (fields: UpdateTransactionRequest) => void;
   onCancel: () => void;
 }) {
   return (
@@ -653,58 +643,51 @@ export function TransactionsPage() {
   const { startDate, endDate, setDateRange, singleMonth } = useDateRange();
   const queryClient = useQueryClient();
 
-  const { data: persons } = useQuery({
-    queryKey: PERSONS_QUERY_KEY,
-    queryFn: fetchPersons,
-  });
+  const { data: personsResponse } = useGetPersons();
+  const persons = personsResponse?.data;
 
-  const { data: categoryGroups } = useQuery({
-    queryKey: CATEGORY_GROUPS_QUERY_KEY,
-    queryFn: fetchCategoryGroups,
-  });
+  const { data: categoryGroupsResponse } = useGetCategoryGroups();
+  const categoryGroups = categoryGroupsResponse?.data;
 
-  const { data: availableTags = [] } = useQuery({
-    queryKey: TAGS_QUERY_KEY,
-    queryFn: fetchTags,
-  });
+  const { data: tagsResponse } = useGetTags();
+  const availableTags = tagsResponse?.data ?? [];
 
-  const reconciliationQueryKey = useMemo(
-    () => [...RECONCILIATION_QUERY_KEY, startDate, endDate],
+  const reconciliationParams = useMemo(
+    () => ({ start_date: startDate, end_date: endDate }),
     [startDate, endDate],
   );
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: reconciliationQueryKey,
-    queryFn: () => fetchReconciliationByRange(startDate, endDate),
-  });
+  const {
+    data: reconciliationResponse,
+    isLoading,
+    error,
+    refetch,
+  } = useGetReconciliation(reconciliationParams);
+  const data =
+    reconciliationResponse?.status === 200
+      ? reconciliationResponse.data
+      : undefined;
 
   const invalidateReconciliation = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: reconciliationQueryKey });
-    queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY });
-    queryClient.invalidateQueries({ queryKey: TAGS_QUERY_KEY });
-  }, [queryClient, reconciliationQueryKey]);
+    queryClient.invalidateQueries({
+      queryKey: getGetReconciliationQueryKey(reconciliationParams),
+    });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetTagsQueryKey() });
+  }, [queryClient, reconciliationParams]);
 
-  const editMutation = useMutation({
-    mutationFn: ({
-      id,
-      fields,
-    }: {
-      id: string;
-      fields: TransactionUpdateFields;
-    }) => updateTransaction(id, fields),
-    onSuccess: invalidateReconciliation,
+  const editMutation = useUpdateTransaction({
+    mutation: { onSuccess: invalidateReconciliation },
   });
 
-  const bulkUpdateMutation = useMutation({
-    mutationFn: (payload: BulkUpdatePayload) => bulkUpdateTransactions(payload),
-    onSuccess: invalidateReconciliation,
+  const bulkUpdateMutation = useBulkUpdateTransactions({
+    mutation: { onSuccess: invalidateReconciliation },
   });
 
-  const bulkTagsMutation = useMutation({
-    mutationFn: (payload: BulkModifyTagsPayload) => bulkModifyTags(payload),
-    onSuccess: invalidateReconciliation,
+  const bulkTagsMutation = useBulkModifyTags({
+    mutation: { onSuccess: invalidateReconciliation },
   });
 
-  const { personNames, personIndexMap } = usePersonMaps(persons);
+  const { personNames, getPersonName, getPersonColor } = usePersonMaps(persons);
   const categoryGroupLookup = useMemo(
     () =>
       data
@@ -761,7 +744,7 @@ export function TransactionsPage() {
         <div className="space-y-6">
           <UploadStatusRow
             statuses={data.upload_statuses}
-            personIndexMap={personIndexMap}
+            getPersonColor={getPersonColor}
           />
 
           {data.transaction_count === 0 ? (
@@ -782,7 +765,7 @@ export function TransactionsPage() {
             />
           ) : (
             <>
-              <SummaryStats data={data} personNames={personNames} />
+              <SummaryStats data={data} getPersonName={getPersonName} />
               <CategoryGroupBreakdownTable
                 breakdowns={data.category_group_breakdowns}
                 hasRefunds={data.total_shared_refunds > 0}
@@ -832,7 +815,7 @@ export function TransactionsPage() {
                 transactions={filters.filtered}
                 personNames={personNames}
                 personEntries={personEntries}
-                personIndexMap={personIndexMap}
+                getPersonColor={getPersonColor}
                 categoryGroups={categoryGroupLookup}
                 categoryOptions={categoryOptions}
                 availableTags={availableTags}
@@ -841,11 +824,13 @@ export function TransactionsPage() {
                 sort={filters.sort}
                 onSort={filters.setSort}
                 onBulkUpdate={(payload) =>
-                  bulkUpdateMutation.mutateAsync(payload)
+                  bulkUpdateMutation.mutateAsync({ data: payload })
                 }
-                onBulkTags={(payload) => bulkTagsMutation.mutateAsync(payload)}
+                onBulkTags={(payload) =>
+                  bulkTagsMutation.mutateAsync({ data: payload })
+                }
                 onTransactionUpdate={(id, fields) =>
-                  editMutation.mutate({ id, fields })
+                  editMutation.mutate({ transactionId: id, data: fields })
                 }
                 isSaving={
                   editMutation.isPending ||

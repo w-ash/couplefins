@@ -1,6 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
+import { useGetPersons } from "./api/generated/persons/persons";
 import { AppLayout } from "./layouts/AppLayout";
 import { useIdentityHydrated, useIdentityStore } from "./lib/identity";
 import { BudgetPage } from "./pages/BudgetPage";
@@ -11,7 +11,6 @@ import { SettleUpPage } from "./pages/SettleUpPage";
 import { SetupPage } from "./pages/SetupPage";
 import { TransactionsPage } from "./pages/TransactionsPage";
 import { UploadPage } from "./pages/UploadPage";
-import { fetchPersons, PERSONS_QUERY_KEY } from "./types/person";
 
 const router = createBrowserRouter([
   {
@@ -29,10 +28,8 @@ const router = createBrowserRouter([
 ]);
 
 export function App() {
-  const { data: persons, isLoading } = useQuery({
-    queryKey: PERSONS_QUERY_KEY,
-    queryFn: fetchPersons,
-  });
+  const { data: response, isLoading } = useGetPersons();
+  const persons = response?.data;
   const currentPersonId = useIdentityStore((s) => s.currentPersonId);
   const hasHydrated = useIdentityHydrated();
 

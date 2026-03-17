@@ -1,0 +1,92 @@
+# Couplefins
+
+Shared finance reconciliation tool for couples. Each person uses their own Monarch Money account, tags shared expenses, and exports monthly CSVs. Couplefins replaces the spreadsheet for reconciling who owes whom and tracking shared budgets by category.
+
+## The Problem
+
+Two people share expenses but track finances separately in Monarch Money. Each month they need to figure out who owes whom, check budget progress, and settle up. The spreadsheet they used was manual, error-prone, and nobody looked forward to updating it.
+
+## The Solution
+
+Each person exports their Monarch CSV, uploads it, and reviews their shared transactions. Then they sit down together for ~15 minutes to settle the balance, review the budget, and lock the month. The app handles the math, tracks history, and exports adjustment CSVs back to Monarch so each person's account reflects their true share.
+
+## Prerequisites
+
+- Python 3.14+
+- [uv](https://docs.astral.sh/uv/) for dependency management
+- Node.js 22+ and [pnpm](https://pnpm.io/) for the web UI
+
+## Quick Start
+
+```bash
+# Clone and install
+git clone https://github.com/w-ash/couplefins.git
+cd couplefins
+uv sync
+
+# Set up environment
+cp .env.example .env
+# Edit .env with your values
+
+# Run database migrations
+uv run alembic upgrade head
+
+# Install frontend dependencies
+pnpm --prefix web install
+
+# Start both servers (API on 8001, UI on 5174)
+pnpm --prefix web start
+```
+
+## Development
+
+```bash
+# Backend
+uv run pytest                           # Fast tests (skips slow/diagnostic)
+uv run pytest -m ""                     # All tests
+uv run pytest tests/unit/ -x            # Unit tests, stop on first failure
+uv run ruff check . --fix               # Lint + autofix
+uv run ruff format .                    # Format
+uv run basedpyright src/                # Type check
+
+# Frontend
+pnpm --prefix web dev                   # Vite dev server (port 5174)
+pnpm --prefix web test                  # Vitest
+pnpm --prefix web check                 # Biome lint + tsc
+pnpm --prefix web generate             # Orval codegen from OpenAPI spec
+
+# Quality gate (run before committing)
+uv run ruff check . --fix && uv run ruff format . && uv run basedpyright src/ && uv run pytest
+pnpm --prefix web check && pnpm --prefix web test
+```
+
+## Project Structure
+
+```
+src/
+├── domain/          # Pure business logic, entities, repository protocols
+├── application/     # Use case orchestration (Command/Result/UseCase pattern)
+├── infrastructure/  # SQLAlchemy repos (SQLite/aiosqlite), CSV parsing
+├── interface/       # FastAPI route handlers
+└── config/          # Settings, constants, logging
+
+web/src/
+├── api/             # Fetch client, query client, generated hooks
+├── components/      # Shared UI components
+├── layouts/         # App shell, sidebar
+├── lib/             # Utilities, formatting, constants
+├── pages/           # Route-level page components
+├── stores/          # Zustand stores (identity, theme)
+└── test/            # Test setup, utilities, providers
+
+tests/
+├── unit/            # Domain + use case tests (mocked)
+├── integration/     # Repository + API route tests (real DB)
+└── fixtures/        # Factory functions, mock UoW
+```
+
+## Documentation
+
+- [Domain concepts](docs/domain.md) — Monarch Money conventions, reconciliation math, accounting model
+- [User flows](docs/user-flows.md) — Personas, monthly workflow, user stories with acceptance criteria
+- [Project roadmap](docs/backlog/README.md) — Version matrix, infrastructure readiness, technical decisions

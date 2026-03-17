@@ -48,15 +48,17 @@ HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
   this.dispatchEvent(new Event("close"));
 };
 
-// MSW server will be configured once Orval generates mock handlers
-// For now, set up basic test lifecycle
+// Global MSW server with Orval-generated mock handlers as defaults.
+// Individual tests override with server.use() for specific data.
+import { server } from "./server";
+
 beforeAll(() => {
-  // server.listen({ onUnhandledRequest: "warn" });
+  server.listen({ onUnhandledRequest: "warn" });
 });
 afterEach(() => {
-  // server.resetHandlers();
+  server.resetHandlers();
   cleanup();
 });
 afterAll(() => {
-  // server.close();
+  server.close();
 });

@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router";
-import type { ReconciliationTransaction } from "@/lib/reconciliation";
+import type { TransactionResponse } from "@/api/generated/model";
 
 export type SortField = "date" | "merchant" | "amount" | "group";
 export type SortDir = "asc" | "desc";
@@ -53,7 +53,7 @@ function serializeSort(s: SortState): string | null {
 }
 
 export function useTransactionFilters(
-  transactions: ReconciliationTransaction[],
+  transactions: TransactionResponse[],
   categoryGroups: Map<string, string>,
 ) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -249,10 +249,10 @@ export function useTransactionFilters(
 export type TransactionFilters = ReturnType<typeof useTransactionFilters>;
 
 export function sortList(
-  transactions: ReconciliationTransaction[],
+  transactions: TransactionResponse[],
   sort: SortState,
   categoryGroups: Map<string, string>,
-): ReconciliationTransaction[] {
+): TransactionResponse[] {
   const arr = [...transactions];
   const { field, dir } = sort;
   const mult = dir === "asc" ? 1 : -1;

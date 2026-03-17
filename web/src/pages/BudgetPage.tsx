@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   CheckCircle2,
@@ -9,7 +9,18 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import {
+  getGetBudgetOverviewQueryKey,
+  useDeleteBudget,
+  useGetBudgetOverview,
+  usePostBudget,
+  usePutBudget,
+} from "@/api/generated/budgets/budgets";
+import type {
+  BudgetOverviewResponse,
+  GroupBudgetStatusResponse,
+} from "@/api/generated/model";
 import { Button } from "@/components/Button";
 import { MonthPicker } from "@/components/MonthPicker";
 import { PageHeader } from "@/components/PageHeader";
@@ -21,72 +32,58 @@ import {
   useBudgetFilters,
   type ViewMode,
 } from "@/lib/budget-filters";
-import type { BudgetOverviewData, GroupBudgetStatus } from "@/lib/budgets";
-import {
-  deleteBudget,
-  fetchBudgetOverview,
-  saveBudget,
-  updateBudget,
-} from "@/lib/budgets";
 import { useGroupIconMap } from "@/lib/categories";
 import { getCategoryGroupIcon } from "@/lib/category-icons";
 import { formatCurrency, useMonthYear } from "@/lib/format";
 import { baseInputClass, selectInputClass } from "@/lib/input-styles";
 
-function healthColor(health: string | null): string {
-  switch (health) {
-    case "over_budget":
-      return "text-destructive-muted-foreground";
-    case "near_limit":
-      return "text-warning-muted-foreground";
-    case "on_track":
-      return "text-positive";
-    default:
-      return "text-muted-foreground";
-  }
-}
+const HEALTH_STYLES: Record<
+  string,
+  { color: string; barColor: string; label: string; iconColor: string }
+> = {
+  on_track: {
+    color: "text-positive",
+    barColor: "bg-primary",
+    label: "On track",
+    iconColor: "text-positive",
+  },
+  near_limit: {
+    color: "text-warning-muted-foreground",
+    barColor: "bg-warning",
+    label: "Near limit",
+    iconColor: "text-warning",
+  },
+  over_budget: {
+    color: "text-destructive-muted-foreground",
+    barColor: "bg-destructive",
+    label: "Over budget",
+    iconColor: "text-destructive",
+  },
+};
 
-function healthBarColor(health: string | null): string {
-  switch (health) {
-    case "over_budget":
-      return "bg-destructive";
-    case "near_limit":
-      return "bg-warning";
-    case "on_track":
-      return "bg-primary";
-    default:
-      return "bg-muted";
-  }
-}
+const DEFAULT_HEALTH = {
+  color: "text-muted-foreground",
+  barColor: "bg-muted",
+  label: "",
+  iconColor: "",
+};
 
-function healthLabel(health: string | null): string {
-  switch (health) {
-    case "over_budget":
-      return "Over budget";
-    case "near_limit":
-      return "Near limit";
-    case "on_track":
-      return "On track";
-    default:
-      return "";
-  }
+function getHealthStyle(health: string | null) {
+  return health ? (HEALTH_STYLES[health] ?? DEFAULT_HEALTH) : DEFAULT_HEALTH;
 }
 
 function HealthIcon({ health }: { health: string | null }) {
-  if (health === "on_track")
-    return <CheckCircle2 className="size-4 text-positive" />;
-  if (health === "near_limit")
-    return <AlertCircle className="size-4 text-warning" />;
-  if (health === "over_budget")
-    return <AlertCircle className="size-4 text-destructive" />;
-  return null;
+  const style = getHealthStyle(health);
+  if (!style.iconColor) return null;
+  const Icon = health === "on_track" ? CheckCircle2 : AlertCircle;
+  return <Icon className={`size-4 ${style.iconColor}`} />;
 }
 
 function SummaryStats({
   data,
   viewMode,
 }: {
-  data: BudgetOverviewData;
+  data: BudgetOverviewResponse;
   viewMode: ViewMode;
 }) {
   const budget =
@@ -116,17 +113,17 @@ function SummaryStats({
 function ProgressBar({
   spent,
   budget,
-  health,
+  barColor,
 }: {
   spent: number;
   budget: number;
-  health: string | null;
+  barColor: string;
 }) {
   const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
   return (
     <div className="h-2 w-full rounded-full bg-muted">
       <div
-        className={`h-2 rounded-full transition-[width,background-color] duration-200 ${healthBarColor(health)}`}
+        className={`h-2 rounded-full transition-[width,background-color] duration-200 ${barColor}`}
         style={{ width: `${pct}%` }}
       />
     </div>
@@ -140,7 +137,7 @@ function BudgetGroupRow({
   onUpdate,
   onDelete,
 }: {
-  status: GroupBudgetStatus;
+  status: GroupBudgetStatusResponse;
   viewMode: ViewMode;
   icon: string | null;
   onUpdate: (budgetId: string, amount: number) => void;
@@ -158,6 +155,7 @@ function BudgetGroupRow({
     viewMode === "monthly" ? status.monthly_spent : status.ytd_spent;
   const health =
     viewMode === "monthly" ? status.monthly_health : status.ytd_health;
+  const healthStyle = getHealthStyle(health);
   const remaining = budget != null ? budget - spent : null;
   const hasBudget = status.monthly_budget != null;
 
@@ -195,15 +193,19 @@ function BudgetGroupRow({
             </span>
             {hasBudget && (
               <span
-                className={`flex items-center gap-1 text-xs ${healthColor(health)}`}
+                className={`flex items-center gap-1 text-xs ${healthStyle.color}`}
               >
                 <HealthIcon health={health} />
-                {healthLabel(health)}
+                {healthStyle.label}
               </span>
             )}
           </div>
           {hasBudget && budget != null && (
-            <ProgressBar spent={spent} budget={budget} health={health} />
+            <ProgressBar
+              spent={spent}
+              budget={budget}
+              barColor={healthStyle.barColor}
+            />
           )}
         </div>
 
@@ -351,7 +353,7 @@ function AddBudgetForm({
   unbudgetedGroups,
   onSave,
 }: {
-  unbudgetedGroups: GroupBudgetStatus[];
+  unbudgetedGroups: GroupBudgetStatusResponse[];
   onSave: (groupId: string, amount: number, effectiveFrom: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -474,10 +476,10 @@ function AddBudgetForm({
 }
 
 function sortStatuses(
-  statuses: GroupBudgetStatus[],
+  statuses: GroupBudgetStatusResponse[],
   mode: SortMode,
   viewMode: ViewMode,
-): GroupBudgetStatus[] {
+): GroupBudgetStatusResponse[] {
   const sorted = [...statuses];
   switch (mode) {
     case "urgency": {
@@ -514,34 +516,47 @@ export function BudgetPage() {
   const queryClient = useQueryClient();
   const { viewMode, setViewMode, sortMode, setSortMode } = useBudgetFilters();
 
-  const queryKey = ["budget-overview", year, month];
+  const budgetOverviewParams = useMemo(() => ({ year, month }), [year, month]);
+  const queryKey = getGetBudgetOverviewQueryKey(budgetOverviewParams);
 
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey,
-    queryFn: () => fetchBudgetOverview(year, month),
-  });
+  const {
+    data: budgetResponse,
+    isLoading,
+    error,
+    refetch,
+  } = useGetBudgetOverview(budgetOverviewParams);
+  const data = budgetResponse?.status === 200 ? budgetResponse.data : undefined;
 
   const groupIconMap = useGroupIconMap();
 
-  const saveMutation = useMutation({
-    mutationFn: (args: {
-      group_id: string;
-      monthly_amount: number;
-      effective_from: string;
-    }) => saveBudget(args),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+  const saveMutation = usePostBudget({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    },
   });
 
-  const updateMutation = useMutation({
-    mutationFn: (args: { budgetId: string; amount: number }) =>
-      updateBudget(args.budgetId, { monthly_amount: args.amount }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+  const updateMutation = usePutBudget({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (budgetId: string) => deleteBudget(budgetId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+  const deleteMutation = useDeleteBudget({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    },
   });
+
+  const handleUpdate = useCallback(
+    (budgetId: string, amount: number) =>
+      updateMutation.mutate({ budgetId, data: { monthly_amount: amount } }),
+    [updateMutation.mutate],
+  );
+
+  const handleDelete = useCallback(
+    (budgetId: string) => deleteMutation.mutate({ budgetId }),
+    [deleteMutation.mutate],
+  );
 
   const { budgetedGroups, unbudgetedGroups, allGroupsForAdd } = useMemo(() => {
     if (!data)
@@ -620,10 +635,8 @@ export function BudgetPage() {
                       status={status}
                       viewMode={viewMode}
                       icon={groupIconMap.get(status.group_id) ?? null}
-                      onUpdate={(budgetId, amount) =>
-                        updateMutation.mutate({ budgetId, amount })
-                      }
-                      onDelete={(budgetId) => deleteMutation.mutate(budgetId)}
+                      onUpdate={handleUpdate}
+                      onDelete={handleDelete}
                     />
                   ))}
                 </div>
@@ -642,10 +655,8 @@ export function BudgetPage() {
                         status={status}
                         viewMode={viewMode}
                         icon={groupIconMap.get(status.group_id) ?? null}
-                        onUpdate={(budgetId, amount) =>
-                          updateMutation.mutate({ budgetId, amount })
-                        }
-                        onDelete={(budgetId) => deleteMutation.mutate(budgetId)}
+                        onUpdate={handleUpdate}
+                        onDelete={handleDelete}
                       />
                     ))}
                   </div>
@@ -659,9 +670,11 @@ export function BudgetPage() {
             unbudgetedGroups={allGroupsForAdd}
             onSave={(groupId, amount, effectiveFrom) =>
               saveMutation.mutate({
-                group_id: groupId,
-                monthly_amount: amount,
-                effective_from: effectiveFrom,
+                data: {
+                  group_id: groupId,
+                  monthly_amount: amount,
+                  effective_from: effectiveFrom,
+                },
               })
             }
           />

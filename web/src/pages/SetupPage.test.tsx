@@ -1,6 +1,6 @@
 import { HttpResponse, http } from "msw";
-import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import { server } from "@/test/server";
 import {
   renderWithProviders,
   screen,
@@ -8,12 +8,6 @@ import {
   waitFor,
 } from "../test/test-utils";
 import { SetupPage } from "./SetupPage";
-
-const server = setupServer();
-
-beforeAll(() => server.listen());
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
 
 describe("SetupPage", () => {
   it("renders the setup form with two name inputs", () => {

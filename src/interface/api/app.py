@@ -43,6 +43,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
         docs_url="/api/docs",
         openapi_url="/api/openapi.json",
+        generate_unique_id_function=lambda route: route.name,
     )
 
     settings = get_settings()

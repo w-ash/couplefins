@@ -1,11 +1,11 @@
 import { ArrowLeft, ChevronRight, Pencil } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
+import type { TagAction } from "@/api/generated/model";
 import { Button } from "@/components/Button";
 import { Combobox, type ComboboxOption } from "@/components/Combobox";
 import { PercentInput } from "@/components/PercentInput";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { parsePercent, plural } from "@/lib/format";
-import type { TagAction } from "@/lib/transactions";
 
 export interface BulkChanges {
   payer_percentage?: number;

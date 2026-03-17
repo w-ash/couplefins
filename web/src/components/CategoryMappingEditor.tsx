@@ -1,4 +1,3 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ChevronDown,
@@ -15,21 +14,20 @@ import {
   useState,
 } from "react";
 import { Link } from "react-router";
+import {
+  useDeleteCategoryGroup,
+  useGetCategoryGroups,
+  useGetUnmappedCategories,
+  usePostCategoryGroup,
+  usePutCategoryGroup,
+  usePutCategoryMappings,
+} from "@/api/generated/category-groups/category-groups";
+import type { CategoryGroupResponse } from "@/api/generated/model";
 import { Button } from "@/components/Button";
 import { PageError, PageLoading } from "@/components/PageStates";
-import {
-  bulkUpdateMappings,
-  CATEGORY_GROUPS_QUERY_KEY,
-  type CategoryGroup,
-  createCategoryGroup,
-  deleteCategoryGroup,
-  fetchCategoryGroups,
-  fetchUnmappedCategories,
-  UNMAPPED_CATEGORIES_QUERY_KEY,
-  updateCategoryGroup,
-  useInvalidateCategories,
-} from "@/lib/categories";
+import { useInvalidateCategories } from "@/lib/categories";
 import { getCategoryGroupIcon, ICON_OPTIONS } from "@/lib/category-icons";
+import { baseInputClass, selectInputClass } from "@/lib/input-styles";
 import { useClickOutside } from "@/lib/use-click-outside";
 
 // -- Unmapped category row --
@@ -39,13 +37,11 @@ function UnmappedRow({
   groups,
 }: {
   category: string;
-  groups: CategoryGroup[];
+  groups: CategoryGroupResponse[];
 }) {
   const invalidate = useInvalidateCategories();
-  const assignMutation = useMutation({
-    mutationFn: (groupId: string) =>
-      bulkUpdateMappings([{ category, group_id: groupId }]),
-    onSuccess: invalidate,
+  const assignMutation = usePutCategoryMappings({
+    mutation: { onSuccess: invalidate },
   });
 
   return (
@@ -56,9 +52,13 @@ function UnmappedRow({
       <select
         aria-label={`Assign ${category} to group`}
         value=""
-        onChange={(e) => assignMutation.mutate(e.target.value)}
+        onChange={(e) =>
+          assignMutation.mutate({
+            data: { mappings: [{ category, group_id: e.target.value }] },
+          })
+        }
         disabled={assignMutation.isPending}
-        className="w-48 rounded-lg border border-input bg-card px-2.5 py-1.5 text-sm text-foreground shadow-sm focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none disabled:opacity-50"
+        className={`w-48 ${selectInputClass} disabled:opacity-50`}
       >
         <option value="" disabled>
           Assign to group...
@@ -129,7 +129,7 @@ function IconPicker({
   );
 }
 
-function GroupCard({ group }: { group: CategoryGroup }) {
+function GroupCard({ group }: { group: CategoryGroupResponse }) {
   const invalidate = useInvalidateCategories();
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -145,30 +145,31 @@ function GroupCard({ group }: { group: CategoryGroup }) {
     else if (!confirmDelete && dialog.open) dialog.close();
   }, [confirmDelete]);
 
-  const updateMutation = useMutation({
-    mutationFn: (fields: { name?: string; icon?: string | null }) =>
-      updateCategoryGroup(group.id, {
-        name: fields.name ?? group.name,
-        icon: "icon" in fields ? fields.icon : group.icon,
-      }),
-    onSuccess: () => {
-      setEditing(false);
-      invalidate();
+  const updateMutation = usePutCategoryGroup({
+    mutation: {
+      onSuccess: () => {
+        setEditing(false);
+        invalidate();
+      },
     },
   });
 
-  const deleteGroupMutation = useMutation({
-    mutationFn: () => deleteCategoryGroup(group.id),
-    onSuccess: () => {
-      setConfirmDelete(false);
-      invalidate();
+  const deleteGroupMutation = useDeleteCategoryGroup({
+    mutation: {
+      onSuccess: () => {
+        setConfirmDelete(false);
+        invalidate();
+      },
     },
   });
 
   function handleSaveRename() {
     const trimmed = editName.trim();
     if (trimmed && trimmed !== group.name) {
-      updateMutation.mutate({ name: trimmed });
+      updateMutation.mutate({
+        groupId: group.id,
+        data: { name: trimmed, icon: group.icon },
+      });
     } else {
       setEditing(false);
       setEditName(group.name);
@@ -227,7 +228,10 @@ function GroupCard({ group }: { group: CategoryGroup }) {
           <IconPicker
             currentIcon={group.icon}
             onSelect={(icon) =>
-              updateMutation.mutate({ name: group.name, icon })
+              updateMutation.mutate({
+                groupId: group.id,
+                data: { name: group.name, icon },
+              })
             }
           />
           <button
@@ -303,7 +307,7 @@ function GroupCard({ group }: { group: CategoryGroup }) {
             type="button"
             variant="destructive"
             size="sm"
-            onClick={() => deleteGroupMutation.mutate()}
+            onClick={() => deleteGroupMutation.mutate({ groupId: group.id })}
             loading={deleteGroupMutation.isPending}
             className="flex-1"
           >
@@ -321,18 +325,19 @@ function AddGroupForm() {
   const invalidate = useInvalidateCategories();
   const [name, setName] = useState("");
 
-  const createMutation = useMutation({
-    mutationFn: createCategoryGroup,
-    onSuccess: () => {
-      setName("");
-      invalidate();
+  const createMutation = usePostCategoryGroup({
+    mutation: {
+      onSuccess: () => {
+        setName("");
+        invalidate();
+      },
     },
   });
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = name.trim();
-    if (trimmed) createMutation.mutate(trimmed);
+    if (trimmed) createMutation.mutate({ data: { name: trimmed } });
   }
 
   return (
@@ -342,7 +347,7 @@ function AddGroupForm() {
         onChange={(e) => setName(e.target.value)}
         placeholder="New group name..."
         aria-label="New group name"
-        className="min-w-0 flex-1 rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground shadow-sm placeholder:text-placeholder focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none"
+        className={`min-w-0 flex-1 ${baseInputClass} placeholder:text-placeholder`}
       />
       <Button
         type="submit"
@@ -360,36 +365,39 @@ function AddGroupForm() {
 // -- Main editor --
 
 export function CategoryMappingEditor() {
-  const groupsQuery = useQuery({
-    queryKey: [...CATEGORY_GROUPS_QUERY_KEY],
-    queryFn: fetchCategoryGroups,
-  });
+  const {
+    data: groupsResponse,
+    isLoading: groupsLoading,
+    isError: groupsError,
+    refetch: refetchGroups,
+  } = useGetCategoryGroups();
+  const groups = groupsResponse?.data ?? [];
 
-  const unmappedQuery = useQuery({
-    queryKey: [...UNMAPPED_CATEGORIES_QUERY_KEY],
-    queryFn: fetchUnmappedCategories,
-  });
+  const {
+    data: unmappedResponse,
+    isLoading: unmappedLoading,
+    isError: unmappedError,
+    refetch: refetchUnmapped,
+  } = useGetUnmappedCategories();
+  const unmapped = unmappedResponse?.data ?? [];
 
   // Loading
-  if (groupsQuery.isLoading || unmappedQuery.isLoading) {
+  if (groupsLoading || unmappedLoading) {
     return <PageLoading label="Loading categories..." />;
   }
 
   // Error
-  if (groupsQuery.isError || unmappedQuery.isError) {
+  if (groupsError || unmappedError) {
     return (
       <PageError
         error={new Error("Failed to load categories.")}
         onRetry={() => {
-          groupsQuery.refetch();
-          unmappedQuery.refetch();
+          refetchGroups();
+          refetchUnmapped();
         }}
       />
     );
   }
-
-  const groups = groupsQuery.data ?? [];
-  const unmapped = unmappedQuery.data ?? [];
 
   // Empty — no groups and no unmapped
   if (groups.length === 0 && unmapped.length === 0) {

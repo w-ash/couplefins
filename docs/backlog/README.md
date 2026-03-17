@@ -27,6 +27,7 @@
 | v0.6.1 | Settlement history (Dashboard enrichment) | Completed (2026-03-16) | S |
 | v0.6.2 | Code quality cleanup (DRY, consistency) | Completed (2026-03-16) | S |
 | v0.6.3 | DRY enforcement & month navigation | Completed (2026-03-16) | M |
+| v0.6.4 | Orval codegen activation + MSW test infrastructure | Completed (2026-03-16) | M |
 | v0.7.0 | Spending trend charts + Insights page | Planned | L |
 | v0.7.1 | Budget + year-over-year overlays | Planned | M |
 | v0.8.0 | Upload experience (drag-and-drop, upload history) | Planned | M |
@@ -62,6 +63,7 @@
 | Settlement tracking | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Settlement history (dashboard) | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Bulk transaction editing (category, tags, split) | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Orval codegen + MSW test mocks | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Spending insights + charts | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
 | Drag-and-drop upload + history | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
 | Mobile responsive layout | — | — | — | — | — | — | — | — | ✅ | ✅ |

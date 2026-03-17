@@ -1,7 +1,7 @@
 import { HttpResponse, http } from "msw";
-import { setupServer } from "msw/node";
 import { act } from "react";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { server } from "@/test/server";
 import {
   renderWithProviders,
   screen,
@@ -15,16 +15,16 @@ const groups = [
   { id: "g2", name: "Home Expenses", categories: ["Rent"] },
 ];
 
-const server = setupServer(
-  http.get("/api/v1/category-groups", () => HttpResponse.json(groups)),
-  http.get("/api/v1/category-mappings/unmapped", () => HttpResponse.json([])),
-);
-
-beforeAll(() => server.listen());
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
-
 describe("CategoryMappingEditor", () => {
+  beforeEach(() => {
+    server.use(
+      http.get("/api/v1/category-groups", () => HttpResponse.json(groups)),
+      http.get("/api/v1/category-mappings/unmapped", () =>
+        HttpResponse.json([]),
+      ),
+    );
+  });
+
   it("renders group cards after loading", async () => {
     renderWithProviders(<CategoryMappingEditor />);
 

@@ -1,4 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
   CheckCircle2,
@@ -9,6 +8,11 @@ import {
   Upload,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router";
+import { useGetDashboard } from "@/api/generated/dashboard/dashboard";
+import type {
+  DashboardResponse,
+  MonthHistoryEntryResponse,
+} from "@/api/generated/model";
 import { Card } from "@/components/Card";
 import { PageHeader } from "@/components/PageHeader";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
@@ -16,17 +20,15 @@ import { PersonBadge } from "@/components/PersonBadge";
 import { StatsGrid } from "@/components/StatsGrid";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { UploadStatusRow } from "@/components/UploadStatusRow";
-import type { DashboardData, MonthHistoryEntry } from "@/lib/dashboard";
-import { DASHBOARD_QUERY_KEY, fetchDashboard } from "@/lib/dashboard";
 import { buildSettlementLabel, formatCurrency, MONTHS } from "@/lib/format";
+import { actionLinkClass } from "@/lib/input-styles";
 import { usePersonMaps } from "@/lib/persons";
-import { getPersonAccentColor } from "@/types/person";
 
 function SummaryStats({
   data,
   personNames,
 }: {
-  data: DashboardData;
+  data: DashboardResponse;
   personNames: Map<string, string>;
 }) {
   const ytdLabel = buildSettlementLabel(data.ytd_settlement, personNames);
@@ -58,24 +60,15 @@ function SummaryStats({
 function QuickActions() {
   return (
     <div className="flex items-center gap-3">
-      <Link
-        to="/upload"
-        className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground shadow-sm transition-colors duration-150 hover:bg-muted"
-      >
+      <Link to="/upload" className={actionLinkClass}>
         <Upload className="size-4" />
         Upload CSV
       </Link>
-      <Link
-        to="/settle"
-        className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground shadow-sm transition-colors duration-150 hover:bg-muted"
-      >
+      <Link to="/settle" className={actionLinkClass}>
         <HandCoins className="size-4" />
         Settle Up
       </Link>
-      <Link
-        to="/transactions"
-        className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground shadow-sm transition-colors duration-150 hover:bg-muted"
-      >
+      <Link to="/transactions" className={actionLinkClass}>
         View Transactions
         <ArrowRight className="size-4" />
       </Link>
@@ -87,7 +80,7 @@ function MonthHistory({
   entries,
   personNames,
 }: {
-  entries: MonthHistoryEntry[];
+  entries: MonthHistoryEntryResponse[];
   personNames: Map<string, string>;
 }) {
   const navigate = useNavigate();
@@ -163,12 +156,12 @@ function MonthHistory({
 }
 
 export function DashboardPage() {
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: DASHBOARD_QUERY_KEY,
-    queryFn: () => fetchDashboard(),
-  });
+  const { data: response, isLoading, error, refetch } = useGetDashboard();
+  const data = response?.status === 200 ? response.data : undefined;
 
-  const { personNames, personIndexMap } = usePersonMaps(data?.persons);
+  const { personNames, getPersonName, getPersonColor } = usePersonMaps(
+    data?.persons,
+  );
 
   const monthLabel = data
     ? `${MONTHS[data.current_month_month - 1] ?? ""} ${data.current_month_year}`
@@ -229,21 +222,15 @@ export function DashboardPage() {
               </p>
               <p className="text-center text-lg font-semibold text-foreground">
                 <PersonBadge
-                  name={
-                    personNames.get(
-                      data.current_month_settlement.from_person_id,
-                    ) ?? "Unknown"
-                  }
-                  accentColor={getPersonAccentColor(
-                    personIndexMap.get(
-                      data.current_month_settlement.from_person_id,
-                    ) ?? -1,
+                  name={getPersonName(
+                    data.current_month_settlement.from_person_id,
+                  )}
+                  accentColor={getPersonColor(
+                    data.current_month_settlement.from_person_id,
                   )}
                   size="base"
                 />{" "}
-                owes{" "}
-                {personNames.get(data.current_month_settlement.to_person_id) ??
-                  "Unknown"}{" "}
+                owes {getPersonName(data.current_month_settlement.to_person_id)}{" "}
                 <span className="tabular-nums">
                   {formatCurrency(data.current_month_settlement.amount)}
                 </span>
@@ -267,7 +254,7 @@ export function DashboardPage() {
           )}
           <UploadStatusRow
             statuses={data.upload_statuses}
-            personIndexMap={personIndexMap}
+            getPersonColor={getPersonColor}
           />
           <SummaryStats data={data} personNames={personNames} />
           <QuickActions />

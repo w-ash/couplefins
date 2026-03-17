@@ -1,27 +1,4 @@
 import { ApiError } from "@/api/client";
-import { apiFetch } from "@/lib/api";
-
-export interface AdjustmentPreview {
-  dedup_id: string;
-  date: string;
-  merchant: string;
-  category: string;
-  amount: number;
-}
-
-export interface AdjustmentPreviewData {
-  adjustments: AdjustmentPreview[];
-  person_name: string;
-  adjustment_count: number;
-}
-
-export function fetchAdjustmentPreview(
-  personId: string,
-  year: number,
-  month: number,
-): Promise<AdjustmentPreviewData> {
-  return apiFetch(`/api/v1/persons/${personId}/adjustments/${year}/${month}`);
-}
 
 export async function downloadAdjustmentCsv(
   personId: string,

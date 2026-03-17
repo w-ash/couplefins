@@ -1,6 +1,6 @@
 import { HttpResponse, http } from "msw";
-import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { server } from "@/test/server";
 import type { Person } from "@/types/person";
 import {
   renderWithProviders,
@@ -36,16 +36,6 @@ const previewResponse = {
   adjustment_count: 2,
 };
 
-const server = setupServer(
-  http.get("/api/v1/persons/:personId/adjustments/:year/:month", () =>
-    HttpResponse.json(previewResponse),
-  ),
-);
-
-beforeAll(() => server.listen());
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
-
 function renderSection(overrides?: { persons?: Person[] }) {
   return renderWithProviders(
     <AdjustmentExportSection
@@ -57,6 +47,14 @@ function renderSection(overrides?: { persons?: Person[] }) {
 }
 
 describe("AdjustmentExportSection", () => {
+  beforeEach(() => {
+    server.use(
+      http.get("/api/v1/persons/:personId/adjustments/:year/:month", () =>
+        HttpResponse.json(previewResponse),
+      ),
+    );
+  });
+
   it("renders export buttons for both persons", () => {
     renderSection();
     expect(screen.getByText("Alice")).toBeInTheDocument();

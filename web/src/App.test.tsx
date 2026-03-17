@@ -1,30 +1,16 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { setupServer } from "msw/node";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { useIdentityStore } from "@/lib/identity";
+import { server } from "@/test/server";
 import { App } from "./App";
 
 const persons = [
   { id: "p1", name: "Alice", adjustment_account: "adj-1" },
   { id: "p2", name: "Bob", adjustment_account: "adj-2" },
 ];
-
-const server = setupServer();
-
-beforeAll(() => server.listen());
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
 
 function renderApp() {
   const queryClient = new QueryClient({

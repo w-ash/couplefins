@@ -38,13 +38,13 @@ class UploadStatusResponse(BaseModel):
         )
 
 
-class SettlementResponse(BaseModel):
+class OwedAmountResponse(BaseModel):
     amount: float
     from_person_id: UUID
     to_person_id: UUID
 
     @classmethod
-    def from_domain(cls, sr: SettlementResult) -> SettlementResponse:
+    def from_domain(cls, sr: SettlementResult) -> OwedAmountResponse:
         return cls(
             amount=float(sr.amount),
             from_person_id=sr.from_person_id,
@@ -133,7 +133,7 @@ class ReconciliationResponse(BaseModel):
     total_shared_refunds: float
     net_shared_spending: float
     person_summaries: list[PersonSummaryResponse]
-    settlement: SettlementResponse | None
+    settlement: OwedAmountResponse | None
     category_group_breakdowns: list[CategoryGroupBreakdownResponse]
     transaction_count: int
     transactions: list[TransactionResponse]
@@ -159,7 +159,7 @@ class ReconciliationResponse(BaseModel):
                 PersonSummaryResponse.from_domain(ps) for ps in summary.person_summaries
             ],
             settlement=(
-                SettlementResponse.from_domain(summary.settlement)
+                OwedAmountResponse.from_domain(summary.settlement)
                 if summary.settlement
                 else None
             ),

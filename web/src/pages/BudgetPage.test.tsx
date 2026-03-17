@@ -1,11 +1,11 @@
 import { HttpResponse, http } from "msw";
-import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { BudgetOverviewData } from "@/lib/budgets";
+import { beforeEach, describe, expect, it } from "vitest";
+import type { BudgetOverviewResponse } from "@/api/generated/model";
+import { server } from "@/test/server";
 import { renderWithProviders, screen, waitFor } from "@/test/test-utils";
 import { BudgetPage } from "./BudgetPage";
 
-const emptyOverview: BudgetOverviewData = {
+const emptyOverview: BudgetOverviewResponse = {
   year: 2026,
   month: 3,
   group_statuses: [],
@@ -16,7 +16,7 @@ const emptyOverview: BudgetOverviewData = {
   budgets: [],
 };
 
-const overviewWithData: BudgetOverviewData = {
+const overviewWithData: BudgetOverviewResponse = {
   year: 2026,
   month: 3,
   group_statuses: [
@@ -64,15 +64,15 @@ const overviewWithData: BudgetOverviewData = {
   ],
 };
 
-const server = setupServer(
-  http.get("/api/v1/budgets/overview", () => HttpResponse.json(emptyOverview)),
-);
-
-beforeAll(() => server.listen());
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
-
 describe("BudgetPage", () => {
+  beforeEach(() => {
+    server.use(
+      http.get("/api/v1/budgets/overview", () =>
+        HttpResponse.json(emptyOverview),
+      ),
+    );
+  });
+
   it("renders the budget heading", () => {
     renderWithProviders(<BudgetPage />);
     expect(screen.getByRole("heading", { name: "Budget" })).toBeInTheDocument();

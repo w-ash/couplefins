@@ -1,6 +1,6 @@
 import { ChevronDown, Search, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CategoryGroupBreakdown } from "@/lib/reconciliation";
+import type { CategoryGroupBreakdownResponse } from "@/api/generated/model";
 import type { TransactionFilters as TransactionFiltersType } from "@/lib/transaction-filters";
 import { useClickOutside } from "@/lib/use-click-outside";
 import { getPersonAccentColor } from "@/types/person";
@@ -106,7 +106,7 @@ export function CategoryFilter({
   activeCategories,
   onChange,
 }: {
-  breakdowns: CategoryGroupBreakdown[];
+  breakdowns: CategoryGroupBreakdownResponse[];
   activeCategories: string[];
   onChange: (categories: string[]) => void;
 }) {
@@ -127,7 +127,7 @@ export function CategoryFilter({
   );
 
   const toggleGroup = useCallback(
-    (group: CategoryGroupBreakdown) => {
+    (group: CategoryGroupBreakdownResponse) => {
       const cats = group.categories.map((c) => c.category);
       const allSelected = cats.every((c) => activeSet.has(c));
       const next = new Set(activeSet);

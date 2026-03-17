@@ -1,38 +1,32 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Heart, UserPlus } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import {
+  getGetPersonsQueryKey,
+  useSetupCouple,
+} from "@/api/generated/persons/persons";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { InlineError } from "@/components/InlineError";
-import { apiFetch } from "@/lib/api";
 import { baseInputClass } from "@/lib/input-styles";
-import { PERSONS_QUERY_KEY } from "@/types/person";
-
-function setupCouple(name1: string, name2: string) {
-  return apiFetch("/api/v1/persons/setup", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name1, name2 }),
-  });
-}
 
 export function SetupPage() {
   const queryClient = useQueryClient();
   const [name1, setName1] = useState("");
   const [name2, setName2] = useState("");
 
-  const mutation = useMutation({
-    mutationFn: ({ name1, name2 }: { name1: string; name2: string }) =>
-      setupCouple(name1.trim(), name2.trim()),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: PERSONS_QUERY_KEY });
+  const mutation = useSetupCouple({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetPersonsQueryKey() });
+      },
     },
   });
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!name1.trim() || !name2.trim()) return;
-    mutation.mutate({ name1, name2 });
+    mutation.mutate({ data: { name1: name1.trim(), name2: name2.trim() } });
   }
 
   const namesMatch =
@@ -104,7 +98,11 @@ export function SetupPage() {
               </p>
             )}
             {mutation.error && (
-              <InlineError>{mutation.error.message}</InlineError>
+              <InlineError>
+                {mutation.error instanceof Error
+                  ? mutation.error.message
+                  : "Setup failed"}
+              </InlineError>
             )}
           </div>
 

@@ -5,8 +5,8 @@ from pydantic import BaseModel
 
 from src.application.use_cases.get_dashboard import GetDashboardResult
 from src.interface.api.schemas.reconciliation import (
+    OwedAmountResponse,
     PersonSummaryResponse,
-    SettlementResponse,
     UploadStatusResponse,
 )
 
@@ -23,7 +23,7 @@ class MonthHistoryEntryResponse(BaseModel):
     settled_at: datetime | None
 
 
-class PersonResponse(BaseModel):
+class DashboardPersonResponse(BaseModel):
     id: UUID
     name: str
 
@@ -35,13 +35,13 @@ class DashboardResponse(BaseModel):
     current_month_net_shared_spending: float
     current_month_transaction_count: int
     current_month_person_summaries: list[PersonSummaryResponse]
-    current_month_settlement: SettlementResponse | None
+    current_month_settlement: OwedAmountResponse | None
     upload_statuses: list[UploadStatusResponse]
     ytd_total_shared_spending: float
-    ytd_settlement: SettlementResponse | None
+    ytd_settlement: OwedAmountResponse | None
     ytd_total_settled: float
     month_history: list[MonthHistoryEntryResponse]
-    persons: list[PersonResponse]
+    persons: list[DashboardPersonResponse]
     unmapped_categories: list[str]
     is_finalized: bool
     finalized_at: datetime | None
@@ -59,14 +59,14 @@ class DashboardResponse(BaseModel):
                 PersonSummaryResponse.from_domain(ps) for ps in cm.person_summaries
             ],
             current_month_settlement=(
-                SettlementResponse.from_domain(cm.settlement) if cm.settlement else None
+                OwedAmountResponse.from_domain(cm.settlement) if cm.settlement else None
             ),
             upload_statuses=[
                 UploadStatusResponse.from_domain(us) for us in result.upload_statuses
             ],
             ytd_total_shared_spending=float(result.ytd_total_shared_spending),
             ytd_settlement=(
-                SettlementResponse.from_domain(result.ytd_settlement)
+                OwedAmountResponse.from_domain(result.ytd_settlement)
                 if result.ytd_settlement
                 else None
             ),
@@ -85,7 +85,9 @@ class DashboardResponse(BaseModel):
                 )
                 for mh in result.month_history
             ],
-            persons=[PersonResponse(id=p.id, name=p.name) for p in result.persons],
+            persons=[
+                DashboardPersonResponse(id=p.id, name=p.name) for p in result.persons
+            ],
             unmapped_categories=result.unmapped_categories,
             is_finalized=result.is_finalized,
             finalized_at=result.finalized_at,

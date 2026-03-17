@@ -50,6 +50,7 @@ data/
 # Frontend
 web/node_modules/
 web/dist/
+web/openapi.json
 
 # IDE
 .idea/
