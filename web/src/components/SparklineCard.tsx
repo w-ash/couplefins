@@ -1,6 +1,7 @@
 import {
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -8,7 +9,7 @@ import {
 } from "recharts";
 import { Card } from "@/components/Card";
 import { getCategoryGroupIcon } from "@/lib/category-icons";
-import { formatCurrency, MONTHS } from "@/lib/format";
+import { formatCurrency, MONTHS, SHORT_MONTHS } from "@/lib/format";
 
 interface DataPoint {
   month: number;
@@ -21,9 +22,8 @@ interface SparklineCardProps {
   data: DataPoint[];
   ytdTotal: number;
   color: string;
+  budgetLine?: number | null;
 }
-
-const SHORT_MONTHS = MONTHS.map((m) => m.slice(0, 3));
 
 function SparklineTooltip({
   active,
@@ -50,8 +50,10 @@ export function SparklineCard({
   data,
   ytdTotal,
   color,
+  budgetLine,
 }: SparklineCardProps) {
   const Icon = getCategoryGroupIcon(groupIcon);
+  const budget = budgetLine ?? 0;
 
   return (
     <Card className="p-4">
@@ -81,8 +83,28 @@ export function SparklineCard({
             }
             interval={0}
           />
-          <YAxis domain={[0, "auto"]} hide />
+          <YAxis
+            domain={[
+              0,
+              (dataMax: number) => Math.max(dataMax, budget) * 1.05 || 1,
+            ]}
+            hide
+          />
           <Tooltip content={<SparklineTooltip />} cursor={false} />
+          {budgetLine != null && (
+            <ReferenceLine
+              y={budgetLine}
+              stroke="var(--color-muted-foreground)"
+              strokeDasharray="4 4"
+              strokeWidth={1}
+              label={{
+                value: formatCurrency(budgetLine),
+                position: "right",
+                fontSize: 9,
+                fill: "var(--color-muted-foreground)",
+              }}
+            />
+          )}
           <Line
             type="monotone"
             dataKey="amount"

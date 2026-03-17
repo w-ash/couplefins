@@ -5,7 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type GetSpendingTrendsParams = {
-year?: number | null;
-month?: number | null;
-};
+export interface BudgetLineItem {
+  group_id: string;
+  monthly_budget: number;
+}

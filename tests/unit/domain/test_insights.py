@@ -2,7 +2,11 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from src.domain.insights import compute_spending_trends
+from src.domain.insights import (
+    compute_comparison_cards,
+    compute_spending_trends,
+    compute_trailing_average,
+)
 from tests.fixtures.factories import (
     make_transaction,
 )
@@ -167,3 +171,203 @@ class TestComputeSpendingTrends:
 
         assert result.group_summaries[0].group_id == food_id
         assert result.group_summaries[1].group_id == travel_id
+
+
+class TestComputeTrailingAverage:
+    def test_normal_three_month_window(self) -> None:
+        food_id, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                date=date(2026, 1, 10), category="Dining Out", amount=Decimal("-100.00")
+            ),
+            make_transaction(
+                date=date(2026, 2, 10), category="Dining Out", amount=Decimal("-200.00")
+            ),
+            make_transaction(
+                date=date(2026, 3, 10), category="Dining Out", amount=Decimal("-150.00")
+            ),
+            make_transaction(
+                date=date(2026, 4, 10), category="Dining Out", amount=Decimal("-300.00")
+            ),
+        ]
+
+        result = compute_trailing_average(txs, lookup, target_month=4, window=3)
+
+        assert food_id in result
+        # Average of months 1-3: (100 + 200 + 150) / 3 = 150
+        assert result[food_id] == Decimal("150.00")
+
+    def test_fewer_months_than_window(self) -> None:
+        food_id, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                date=date(2026, 1, 10), category="Dining Out", amount=Decimal("-100.00")
+            ),
+            make_transaction(
+                date=date(2026, 3, 10), category="Dining Out", amount=Decimal("-50.00")
+            ),
+        ]
+
+        result = compute_trailing_average(txs, lookup, target_month=3, window=3)
+
+        # Only month 1 is before target month 3
+        assert result[food_id] == Decimal("100.00")
+
+    def test_target_month_one_returns_empty(self) -> None:
+        _, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                date=date(2026, 1, 10), category="Dining Out", amount=Decimal("-100.00")
+            ),
+        ]
+
+        result = compute_trailing_average(txs, lookup, target_month=1)
+
+        assert result == {}
+
+    def test_month_gaps(self) -> None:
+        food_id, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                date=date(2026, 1, 10), category="Dining Out", amount=Decimal("-100.00")
+            ),
+            make_transaction(
+                date=date(2026, 3, 10), category="Dining Out", amount=Decimal("-200.00")
+            ),
+            # Month 2 has no data
+        ]
+
+        result = compute_trailing_average(txs, lookup, target_month=4, window=3)
+
+        # Months 1 and 3 have data, window=3 but only 2 available: (100+200)/2
+        assert result[food_id] == Decimal("150.00")
+
+    def test_multiple_groups(self) -> None:
+        food_id, travel_id, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                date=date(2026, 1, 10), category="Dining Out", amount=Decimal("-100.00")
+            ),
+            make_transaction(
+                date=date(2026, 1, 15), category="Flights", amount=Decimal("-300.00")
+            ),
+            make_transaction(
+                date=date(2026, 2, 10), category="Dining Out", amount=Decimal("-200.00")
+            ),
+        ]
+
+        result = compute_trailing_average(txs, lookup, target_month=3, window=3)
+
+        assert result[food_id] == Decimal("150.00")  # (100+200)/2
+        assert result[travel_id] == Decimal(
+            "150.00"
+        )  # 300/2 (present in month 1, window covers months 1+2)
+
+    def test_empty_input(self) -> None:
+        result = compute_trailing_average([], {}, target_month=3)
+        assert result == {}
+
+
+class TestComputeComparisonCards:
+    def test_above_average(self) -> None:
+        food_id, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                date=date(2026, 1, 10), category="Dining Out", amount=Decimal("-100.00")
+            ),
+            make_transaction(
+                date=date(2026, 2, 10), category="Dining Out", amount=Decimal("-100.00")
+            ),
+            make_transaction(
+                date=date(2026, 3, 10), category="Dining Out", amount=Decimal("-200.00")
+            ),
+        ]
+
+        cards = compute_comparison_cards(txs, lookup, target_month=3)
+
+        assert len(cards) == 1
+        card = cards[0]
+        assert card.group_id == food_id
+        assert card.current_month_amount == Decimal("200.00")
+        assert card.trailing_average == Decimal("100.00")
+        assert card.delta_amount == Decimal("100.00")
+        assert card.delta_percentage == Decimal(100)
+
+    def test_below_average(self) -> None:
+        _food_id, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                date=date(2026, 1, 10), category="Dining Out", amount=Decimal("-200.00")
+            ),
+            make_transaction(
+                date=date(2026, 2, 10), category="Dining Out", amount=Decimal("-200.00")
+            ),
+            make_transaction(
+                date=date(2026, 3, 10), category="Dining Out", amount=Decimal("-100.00")
+            ),
+        ]
+
+        cards = compute_comparison_cards(txs, lookup, target_month=3)
+
+        card = cards[0]
+        assert card.delta_amount == Decimal("-100.00")
+        assert card.delta_percentage == Decimal(-50)
+
+    def test_current_month_only_no_trailing(self) -> None:
+        _food_id, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                date=date(2026, 1, 10), category="Dining Out", amount=Decimal("-100.00")
+            ),
+        ]
+
+        cards = compute_comparison_cards(txs, lookup, target_month=1)
+
+        assert len(cards) == 1
+        card = cards[0]
+        assert card.current_month_amount == Decimal("100.00")
+        assert card.trailing_average == Decimal(0)
+        assert card.delta_percentage == Decimal(0)
+
+    def test_trailing_only_no_current(self) -> None:
+        _food_id, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                date=date(2026, 1, 10), category="Dining Out", amount=Decimal("-100.00")
+            ),
+        ]
+
+        cards = compute_comparison_cards(txs, lookup, target_month=2)
+
+        assert len(cards) == 1
+        card = cards[0]
+        assert card.current_month_amount == Decimal(0)
+        assert card.trailing_average == Decimal("100.00")
+
+    def test_empty_returns_empty(self) -> None:
+        cards = compute_comparison_cards([], {}, target_month=3)
+        assert cards == []
+
+    def test_sorted_by_abs_delta_percentage(self) -> None:
+        food_id, travel_id, lookup = _setup_groups()
+        txs = [
+            # Food: avg 100, current 110 → +10%
+            make_transaction(
+                date=date(2026, 1, 10), category="Dining Out", amount=Decimal("-100.00")
+            ),
+            make_transaction(
+                date=date(2026, 2, 10), category="Dining Out", amount=Decimal("-110.00")
+            ),
+            # Travel: avg 200, current 300 → +50%
+            make_transaction(
+                date=date(2026, 1, 15), category="Flights", amount=Decimal("-200.00")
+            ),
+            make_transaction(
+                date=date(2026, 2, 15), category="Flights", amount=Decimal("-300.00")
+            ),
+        ]
+
+        cards = compute_comparison_cards(txs, lookup, target_month=2)
+
+        assert cards[0].group_id == travel_id  # 50% delta > 10%
+        assert cards[1].group_id == food_id

@@ -15,6 +15,8 @@ export const MONTHS = [
   "December",
 ];
 
+export const SHORT_MONTHS = MONTHS.map((m) => m.slice(0, 3));
+
 export function currentYear(): number {
   return new Date().getFullYear();
 }

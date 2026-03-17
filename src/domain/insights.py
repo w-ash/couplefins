@@ -8,6 +8,45 @@ from src.domain.categories import compute_category_breakdowns
 from src.domain.entities.transaction import Transaction
 
 
+def _shared_expenses(txs: list[Transaction]) -> list[Transaction]:
+    return [tx for tx in txs if tx.is_shared and tx.amount < 0]
+
+
+def _group_by_month(txs: list[Transaction]) -> dict[int, list[Transaction]]:
+    by_month: dict[int, list[Transaction]] = defaultdict(list)
+    for tx in txs:
+        by_month[tx.date.month].append(tx)
+    return by_month
+
+
+def _build_group_name_lookup(
+    category_lookup: dict[str, tuple[UUID, str]],
+) -> dict[UUID | None, str]:
+    names: dict[UUID | None, str] = dict(category_lookup.values())
+    names[None] = "Uncategorized"
+    return names
+
+
+@define(frozen=True, slots=True)
+class GroupComparison:
+    group_id: UUID | None
+    group_name: str
+    current_month_amount: Decimal
+    trailing_average: Decimal
+    delta_amount: Decimal
+    delta_percentage: Decimal
+
+
+@define(frozen=True, slots=True)
+class MonthlySettlement:
+    year: int
+    month: int
+    amount: Decimal
+    from_person_id: UUID
+    to_person_id: UUID
+    is_settled: bool
+
+
 @define(frozen=True, slots=True)
 class MonthlyGroupSpending:
     year: int
@@ -44,11 +83,7 @@ def compute_spending_trends(
     category_lookup: dict[str, tuple[UUID, str]],
     year: int,
 ) -> SpendingTrends:
-    shared_expenses = [tx for tx in year_txs if tx.is_shared and tx.amount < 0]
-
-    by_month: dict[int, list[Transaction]] = defaultdict(list)
-    for tx in shared_expenses:
-        by_month[tx.date.month].append(tx)
+    by_month = _group_by_month(_shared_expenses(year_txs))
 
     monthly_group_spending: list[MonthlyGroupSpending] = []
     monthly_totals: list[MonthlyTotal] = []
@@ -97,3 +132,70 @@ def compute_spending_trends(
         monthly_totals=monthly_totals,
         group_summaries=group_summaries,
     )
+
+
+def compute_trailing_average(
+    year_txs: list[Transaction],
+    category_lookup: dict[str, tuple[UUID, str]],
+    target_month: int,
+    window: int = 3,
+) -> dict[UUID | None, Decimal]:
+    by_month = _group_by_month(_shared_expenses(year_txs))
+
+    prior_months = sorted(m for m in by_month if m < target_month)
+    trailing_months = prior_months[-window:]
+    if not trailing_months:
+        return {}
+
+    group_totals: dict[UUID | None, Decimal] = defaultdict(Decimal)
+    for month in trailing_months:
+        for bd in compute_category_breakdowns(by_month[month], category_lookup):
+            group_totals[bd.group_id] += bd.total_amount
+
+    num_months = len(trailing_months)
+    return {gid: total / num_months for gid, total in group_totals.items()}
+
+
+def compute_comparison_cards(
+    year_txs: list[Transaction],
+    category_lookup: dict[str, tuple[UUID, str]],
+    target_month: int,
+    window: int = 3,
+) -> list[GroupComparison]:
+    expenses = _shared_expenses(year_txs)
+    target_txs = [tx for tx in expenses if tx.date.month == target_month]
+
+    current_by_group: dict[UUID | None, tuple[str, Decimal]] = {}
+    for bd in compute_category_breakdowns(target_txs, category_lookup):
+        current_by_group[bd.group_id] = (bd.group_name, bd.total_amount)
+
+    trailing_avg = compute_trailing_average(
+        year_txs, category_lookup, target_month, window
+    )
+
+    group_names = _build_group_name_lookup(category_lookup)
+    all_group_ids = set(current_by_group) | set(trailing_avg)
+    cards: list[GroupComparison] = []
+    for gid in all_group_ids:
+        current_name, current_amount = current_by_group.get(gid, ("", Decimal(0)))
+        avg = trailing_avg.get(gid, Decimal(0))
+
+        if not current_name:
+            current_name = group_names.get(gid, "Unknown")
+
+        delta = current_amount - avg
+        pct = (delta / avg * 100) if avg > 0 else Decimal(0)
+
+        cards.append(
+            GroupComparison(
+                group_id=gid,
+                group_name=current_name,
+                current_month_amount=current_amount,
+                trailing_average=avg,
+                delta_amount=delta,
+                delta_percentage=pct,
+            )
+        )
+
+    cards.sort(key=lambda c: abs(c.delta_percentage), reverse=True)
+    return cards

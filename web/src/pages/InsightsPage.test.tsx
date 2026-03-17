@@ -5,11 +5,23 @@ import { server } from "@/test/server";
 import { renderWithProviders, screen, waitFor } from "@/test/test-utils";
 import { InsightsPage } from "./InsightsPage";
 
+const baseFields = {
+  month: 2,
+  comparison_cards: [] as SpendingTrendsResponse["comparison_cards"],
+  budget_lines: [] as SpendingTrendsResponse["budget_lines"],
+  settlement_trend: [] as SpendingTrendsResponse["settlement_trend"],
+  persons: [
+    { id: "p1", name: "Alice", adjustment_account: "" },
+    { id: "p2", name: "Bob", adjustment_account: "" },
+  ],
+};
+
 const emptyResponse: SpendingTrendsResponse = {
   year: 2026,
   monthly_group_spending: [],
   monthly_totals: [],
   group_summaries: [],
+  ...baseFields,
 };
 
 const populatedResponse: SpendingTrendsResponse = {
@@ -48,6 +60,36 @@ const populatedResponse: SpendingTrendsResponse = {
       group_name: "Travel",
       ytd_total: 500,
       transaction_count: 5,
+    },
+  ],
+  ...baseFields,
+  comparison_cards: [
+    {
+      group_id: "g1",
+      group_name: "Food & Dining",
+      current_month_amount: 450,
+      trailing_average: 400,
+      delta_amount: 50,
+      delta_percentage: 12.5,
+    },
+  ],
+  budget_lines: [{ group_id: "g1", monthly_budget: 500 }],
+  settlement_trend: [
+    {
+      year: 2026,
+      month: 1,
+      amount: 50,
+      from_person_id: "p1",
+      to_person_id: "p2",
+      is_settled: true,
+    },
+    {
+      year: 2026,
+      month: 2,
+      amount: 75,
+      from_person_id: "p1",
+      to_person_id: "p2",
+      is_settled: false,
     },
   ],
 };
@@ -91,7 +133,6 @@ describe("InsightsPage", () => {
       expect(screen.getAllByText("Food & Dining").length).toBeGreaterThan(0);
     });
     expect(screen.getByText("Travel")).toBeInTheDocument();
-    // Verify YTD totals are shown on the sparkline cards
     expect(screen.getByText("YTD: $850.00")).toBeInTheDocument();
     expect(screen.getByText("YTD: $500.00")).toBeInTheDocument();
   });
@@ -116,6 +157,58 @@ describe("InsightsPage", () => {
   it("shows year selector", () => {
     renderWithProviders(<InsightsPage />);
     expect(screen.getByLabelText("Select year")).toBeInTheDocument();
+  });
+
+  it("shows month picker", () => {
+    renderWithProviders(<InsightsPage />);
+    expect(screen.getByLabelText("Select month")).toBeInTheDocument();
+  });
+
+  it("renders comparison cards", async () => {
+    server.use(
+      http.get("/api/v1/insights/spending-trends", () =>
+        HttpResponse.json(populatedResponse),
+      ),
+    );
+
+    renderWithProviders(<InsightsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("3-mo avg: $400.00")).toBeInTheDocument();
+    });
+  });
+
+  it("renders settlement trend heading", async () => {
+    server.use(
+      http.get("/api/v1/insights/spending-trends", () =>
+        HttpResponse.json(populatedResponse),
+      ),
+    );
+
+    renderWithProviders(<InsightsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Settlement Balance")).toBeInTheDocument();
+    });
+  });
+
+  it("hides comparison cards when empty", async () => {
+    const noComparisons = {
+      ...populatedResponse,
+      comparison_cards: [],
+    };
+    server.use(
+      http.get("/api/v1/insights/spending-trends", () =>
+        HttpResponse.json(noComparisons),
+      ),
+    );
+
+    renderWithProviders(<InsightsPage />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Food & Dining").length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByText("vs 3-month average")).not.toBeInTheDocument();
   });
 
   it("shows error state", async () => {

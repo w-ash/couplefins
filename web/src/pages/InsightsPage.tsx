@@ -3,19 +3,29 @@ import { useMemo } from "react";
 import { useSearchParams } from "react-router";
 import { useGetSpendingTrends } from "@/api/generated/insights/insights";
 import type {
+  BudgetLineItem,
   GroupSummaryItem,
   MonthlyGroupSpendingItem,
   MonthlyTotalItem,
   SpendingTrendsResponse,
 } from "@/api/generated/model";
+import { ComparisonCard } from "@/components/ComparisonCard";
+import { MonthPicker } from "@/components/MonthPicker";
 import { PageHeader } from "@/components/PageHeader";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
+import { SettlementTrendChart } from "@/components/SettlementTrendChart";
 import { SparklineCard } from "@/components/SparklineCard";
 import { StatsGrid } from "@/components/StatsGrid";
 import { useGroupIconMap } from "@/lib/categories";
 import { getChartColor } from "@/lib/chart-colors";
-import { currentYear, formatCurrency, MONTHS } from "@/lib/format";
+import {
+  currentYear,
+  formatCurrency,
+  MONTHS,
+  useMonthYear,
+} from "@/lib/format";
 import { selectInputClass } from "@/lib/input-styles";
+import { usePersonMaps } from "@/lib/persons";
 
 function YearSelector() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -61,13 +71,16 @@ function buildGroupCharts(
     byGroup.get(key)?.push({ month: item.month, amount: item.amount });
   }
 
-  // Sort groups by YTD total descending (same order as summaries)
   return summaries.map((gs) => ({
     groupId: gs.group_id,
     groupName: gs.group_name,
     data: (byGroup.get(gs.group_id) ?? []).sort((a, b) => a.month - b.month),
     ytdTotal: gs.ytd_total,
   }));
+}
+
+function buildBudgetMap(budgetLines: BudgetLineItem[]): Map<string, number> {
+  return new Map(budgetLines.map((bl) => [bl.group_id, bl.monthly_budget]));
 }
 
 function buildStats(data: SpendingTrendsResponse) {
@@ -95,7 +108,6 @@ function buildStats(data: SpendingTrendsResponse) {
     },
   ];
 
-  // Month-over-month trend (latest vs previous)
   if (totals.length >= 2) {
     const sorted = [...totals].sort((a, b) => a.month - b.month);
     const latest = sorted[sorted.length - 1];
@@ -116,8 +128,7 @@ function buildStats(data: SpendingTrendsResponse) {
 }
 
 export function InsightsPage() {
-  const [searchParams] = useSearchParams();
-  const year = Number(searchParams.get("year")) || currentYear();
+  const { year, month } = useMonthYear();
   const groupIconMap = useGroupIconMap();
 
   const {
@@ -125,7 +136,7 @@ export function InsightsPage() {
     isLoading,
     error,
     refetch,
-  } = useGetSpendingTrends({ year });
+  } = useGetSpendingTrends({ year, month });
   const data = response?.status === 200 ? response.data : undefined;
 
   const groupCharts = useMemo(
@@ -136,12 +147,26 @@ export function InsightsPage() {
     [data],
   );
 
+  const budgetMap = useMemo(
+    () =>
+      data ? buildBudgetMap(data.budget_lines) : new Map<string, number>(),
+    [data],
+  );
+
   const stats = useMemo(() => (data ? buildStats(data) : []), [data]);
+
+  const { personNames } = usePersonMaps(data?.persons);
+
+  const comparisonCards = data?.comparison_cards ?? [];
+  const settlementTrend = data?.settlement_trend ?? [];
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-12">
       <PageHeader icon={<TrendingUp className="size-6" />} title="Insights">
-        <YearSelector />
+        <div className="flex items-center gap-2">
+          <MonthPicker />
+          <YearSelector />
+        </div>
       </PageHeader>
 
       {isLoading && <PageLoading label="Loading spending trends..." />}
@@ -159,6 +184,28 @@ export function InsightsPage() {
       {data && groupCharts.length > 0 && (
         <div className="space-y-6">
           <StatsGrid stats={stats} />
+
+          {comparisonCards.length > 0 && (
+            <section>
+              <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+                {MONTHS[month - 1]} vs 3-month average
+              </h2>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {comparisonCards.map((card) => (
+                  <ComparisonCard
+                    key={card.group_id ?? "uncategorized"}
+                    groupName={card.group_name}
+                    groupIcon={groupIconMap.get(card.group_id ?? "") ?? null}
+                    currentAmount={card.current_month_amount}
+                    trailingAverage={card.trailing_average}
+                    deltaAmount={card.delta_amount}
+                    deltaPercentage={card.delta_percentage}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {groupCharts.map((group, index) => (
               <SparklineCard
@@ -168,9 +215,15 @@ export function InsightsPage() {
                 data={group.data}
                 ytdTotal={group.ytdTotal}
                 color={getChartColor(index)}
+                budgetLine={budgetMap.get(group.groupId ?? "") ?? null}
               />
             ))}
           </div>
+
+          <SettlementTrendChart
+            data={settlementTrend}
+            personNames={personNames}
+          />
         </div>
       )}
     </div>
