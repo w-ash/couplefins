@@ -20,6 +20,9 @@ export function SetupPage() {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getGetPersonsQueryKey() });
       },
+      onError: () => {
+        queryClient.invalidateQueries({ queryKey: getGetPersonsQueryKey() });
+      },
     },
   });
 

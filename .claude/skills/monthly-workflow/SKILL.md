@@ -1,6 +1,6 @@
 ---
 name: monthly-workflow
-description: Couplefins monthly reconciliation workflow — solo prep and together session phases, domain concepts for shared expense splitting
+description: Couplefins monthly reconciliation workflow and domain concepts. Use when implementing features related to uploads, settlements, reconciliation, shared expenses, or the monthly ritual.
 user-invocable: false
 ---
 

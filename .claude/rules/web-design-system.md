@@ -29,4 +29,4 @@ Calm, personal, trustworthy — like a well-organized notebook, not a corporate 
 - No interactive elements without visible focus state
 - No missing loading/error states on async operations
 
-Full reference (spacing, motion, identity, dark mode, accessibility, audit checklist): see `web-design-reference` skill.
+Full reference (tokens, components, patterns, utilities, data fetching, state management): see `web-design-reference` skill.

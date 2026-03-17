@@ -19,6 +19,7 @@ from src.interface.api.routes.budgets import router as budgets_router
 from src.interface.api.routes.category_groups import router as category_groups_router
 from src.interface.api.routes.dashboard import router as dashboard_router
 from src.interface.api.routes.health import router as health_router
+from src.interface.api.routes.insights import router as insights_router
 from src.interface.api.routes.persons import router as persons_router
 from src.interface.api.routes.reconciliation import router as reconciliation_router
 from src.interface.api.routes.settlements import router as settlements_router
@@ -65,6 +66,7 @@ def create_app() -> FastAPI:
     app.include_router(budgets_router, prefix=AppConfig.API_V1_PREFIX)
     app.include_router(transactions_router, prefix=AppConfig.API_V1_PREFIX)
     app.include_router(settlements_router, prefix=AppConfig.API_V1_PREFIX)
+    app.include_router(insights_router, prefix=AppConfig.API_V1_PREFIX)
 
     return app
 

@@ -28,8 +28,9 @@
 | v0.6.2 | Code quality cleanup (DRY, consistency) | Completed (2026-03-16) | S |
 | v0.6.3 | DRY enforcement & month navigation | Completed (2026-03-16) | M |
 | v0.6.4 | Orval codegen activation + MSW test infrastructure | Completed (2026-03-16) | M |
-| v0.7.0 | Spending trend charts + Insights page | Planned | L |
-| v0.7.1 | Budget + year-over-year overlays | Planned | M |
+| v0.7.0 | Spending trends — small multiples charts + Insights page | Completed (2026-03-17) | L |
+| v0.7.1 | Comparison cards, budget lines & settlement balance trend | Planned | M |
+| v0.7.2 | Year-over-year overlay, dark mode charts & drill-down | Planned | M |
 | v0.8.0 | Upload experience (drag-and-drop, upload history) | Planned | M |
 | v0.9.0 | Responsive layout (mobile + touch) | Planned | L |
 | v0.9.1 | Transaction exclusion flag | Planned | S |
@@ -65,6 +66,7 @@
 | Bulk transaction editing (category, tags, split) | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Orval codegen + MSW test mocks | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Spending insights + charts | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
+| YoY comparison + dark mode charts | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
 | Drag-and-drop upload + history | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
 | Mobile responsive layout | — | — | — | — | — | — | — | — | ✅ | ✅ |
 | Transaction exclusion | — | — | — | — | — | — | — | — | ✅ | ✅ |
@@ -80,7 +82,7 @@
 - **Frontend**: React 19 + Tailwind v4 + Tanstack Query, Orval codegen from OpenAPI
 - **Auth**: None — two named profiles, select on upload
 - **User identity**: localStorage via Zustand persist (~1KB). Stores `currentPersonId` (UUID). Setup flow sets it, sidebar toggle switches it. Three app states: needs-setup, needs-identity, has-identity.
-- **Information architecture**: Left sidebar with 6 pages: Dashboard / Transactions / Settle Up / Budget / Upload / Settings. "Transactions" replaces "Reconciliation" (standard finance-app naming). "Settings" absorbs person config + category management. "History" is not a standalone page — month navigation lives within Dashboard and Transactions. Finalization controls live on the Settle Up page.
+- **Information architecture**: Left sidebar with 7 pages: Dashboard / Transactions / Settle Up / Budget / Insights / Upload / Settings. "Transactions" replaces "Reconciliation" (standard finance-app naming). "Settings" absorbs person config + category management. "History" is not a standalone page — month navigation lives within Dashboard and Transactions. Finalization controls live on the Settle Up page. Insights (v0.7.0) is the together-session spending analysis page — small multiples, comparison cards, settlement trends.
 - **Design system**: Satoshi font (Fontshare) + Geist Mono. Warm neutrals (not pure black/white), teal for positive, coral for negative. CSS custom properties via Tailwind v4 `@theme` for light/dark switching. Defined in `.claude/rules/web-design-system.md`.
 - **Theme**: System preference by default (`prefers-color-scheme`), manual override stored in localStorage. Three-way: system/light/dark. Tailwind v4 class strategy with `@custom-variant dark`. Synchronous `<script>` in `<head>` prevents flash of wrong theme.
 - **App shell**: Left sidebar navigation (industry standard for finance apps). React Router v7 `createBrowserRouter` with layout routes.

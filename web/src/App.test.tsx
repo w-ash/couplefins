@@ -99,6 +99,24 @@ describe("App three-state gate", () => {
     expect(link).toHaveAttribute("href", "#main-content");
   });
 
+  it("shows error state when persons API fails", async () => {
+    server.use(
+      http.get("/api/v1/persons/", () =>
+        HttpResponse.json(
+          {
+            error: { code: "INTERNAL_ERROR", message: "Database unavailable" },
+          },
+          { status: 500 },
+        ),
+      ),
+    );
+    renderApp();
+    await waitFor(() => {
+      expect(screen.getByText("Database unavailable")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Try Again")).toBeInTheDocument();
+  });
+
   it("shows accessible loading state", () => {
     server.use(
       http.get("/api/v1/persons/", async () => {

@@ -1,100 +1,108 @@
 ---
 name: web-design-reference
-description: Full design system reference for Couplefins web UI — spacing, motion, identity, dark mode, accessibility, finance patterns, and audit checklist
+description: Design system reference for Couplefins web UI. Use when building or modifying frontend components, pages, or layouts — covers design intent, color tokens, component library, and UI patterns.
 user-invocable: false
 ---
 
 # Web Design System Reference
 
-## Spacing & Layout
-- Generous whitespace — breathing room between sections
-- Vary rhythm between sections (don't uniform-space everything)
-- Card-based layout with gentle shadows (not flat, not heavy)
-- Rounded corners (rounded-lg / rounded-xl) for a soft feel
+## Design Intent
 
-## Depth System
-- Subtle warm-toned shadows (not pure black shadows)
-- 2-3 elevation levels max (flat, raised, modal)
-- Borders: subtle, warm gray — not harsh dividers
+Couplefins is a monthly-use tool for a couple reconciling shared expenses — opened briefly, together, over coffee. The interface should feel like a well-organized notebook: **calm, personal, trustworthy**. Financial data should inform, not stress.
+
+Four principles guide every decision:
+
+**Warm over clinical.** Financial apps default to cold precision. This app is about a relationship. Cream backgrounds, teal/coral semantics, Satoshi's humanist geometry, rounded surfaces — every material choice favors warmth over sterility. The warm hue shift (`oklch(... 85)` angle) carries through every neutral, including dark mode.
+
+**Informative, not alarming.** Teal and coral replace green and red. Green/red triggers traffic-light associations (good/bad, go/stop) that turn every expense into a small judgment. Teal and coral communicate direction without the emotional weight. The settlement card states a fact ("Alice owes Bob $127.50"), not an alert.
+
+**Clarity over density.** Two users, once a month. The interface can afford generous whitespace and progressive disclosure. Who-owes-whom is the hero element. Category breakdowns expand on demand. Tables show essential columns, not every field the API returns.
+
+**Presence over authentication.** Both partners are always visible in the sidebar, switchable in one click. No login wall — this is a trusted-device, two-person tool. The sidebar makes the couple nature spatially obvious even when only one person is using it.
+
+Full design rationale: `docs/ui-identity.md`. Enforcement rules (anti-patterns): `.claude/rules/web-design-system.md`.
+
+---
+
+## Typography
+
+**Satoshi** (variable, from Fontshare) handles all UI text — geometric precision with humanist personality. **Inter is banned.** **Geist Mono** only for technical identifiers (IDs, codes), never amounts or body text. Financial figures: Satoshi with `tabular-nums`.
+
+- `--font-sans: "Satoshi", ui-sans-serif, system-ui, sans-serif`
+- `--font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace`
+
+## Color
+
+OKLCH throughout. **Warm neutrals** (hue-85 shift, never pure black/white). **Teal** = primary + positive. **Coral** = destructive + negative. **Amber** = warning.
+
+| Token | Light | Dark | Tailwind |
+|---|---|---|---|
+| `--background` | `oklch(0.985 0.003 85)` | `oklch(0.175 0.006 58)` | `bg-background` |
+| `--foreground` | `oklch(0.268 0.006 58)` | `oklch(0.93 0.004 85)` | `text-foreground` |
+| `--primary` | `oklch(0.525 0.105 175)` | `oklch(0.575 0.1 175)` | `bg-primary`, `text-primary` |
+| `--destructive` | `oklch(0.577 0.15 27)` | `oklch(0.63 0.17 27)` | `bg-destructive` |
+| `--warning` | `oklch(0.666 0.14 55)` | `oklch(0.72 0.14 55)` | `bg-warning` |
+| `--positive` | = primary teal | `oklch(0.65 0.1 175)` | `text-positive` |
+| `--negative` | = destructive coral | `oklch(0.65 0.14 27)` | `text-negative` |
+
+Muted variants: `*-muted` (background), `*-muted-foreground` (text), `*-border`. Structure: `--border`, `--border-muted`, `--input`, `--ring`, `--placeholder`, `--icon-muted`. Person accents: `getPersonAccentColor(index)` from `types/person.ts`.
+
+All tokens in `web/src/app.css` `:root` (light) and `.dark` (dark), mapped via `@theme`.
+
+## Page Layout
+
+Content floats centered, reinforcing the notebook metaphor. Generous whitespace signals "take your time."
+
+- Standard: `mx-auto max-w-4xl px-6 py-12`
+- Settings: `max-w-3xl`. Upload: toggles `max-w-3xl`/`max-w-5xl`. Full-screen flows: `max-w-md`
+- Page skeleton: `PageHeader` → `PageLoading`/`PageError`/`PageEmpty` → `space-y-6` content
+- Rhythm: `space-y-6` between sections, `space-y-4` within cards, `space-y-1` for tight lists
+- Varied spacing — uniform grids signal template, not craft
+
+## Depth & Borders
+
+Cards are paper in a notebook. Shallow depth: flat → raised → popover.
+
+- Cards: `rounded-xl border border-border bg-card p-6 shadow-sm`
+- Nested: `rounded-lg`
+- `shadow-sm` only. `border-border` structural, `border-border-muted` subtle. No glassmorphism.
 
 ## Motion
-- 150ms for interactions (hover, focus, press)
-- 200-300ms for layout transitions (expand, appear)
-- Ease-out for entrances, ease-in for exits
-- No gratuitous animation — motion should confirm actions
 
-## User Identity
-- Current person ID stored in localStorage via Zustand persist (`couplefins:currentPersonId`)
-- Three app states:
-  1. **needs-setup**: `GET /api/v1/persons/` returns < 2 people → full-screen SetupPage
-  2. **needs-identity**: persons exist but `currentPersonId` is null or stale → full-screen ProfilePicker
-  3. **has-identity**: persons exist and identity is valid → main app with shell
-- ProfilePicker is a lightweight "click your name" screen (2 person cards) — NOT the SetupPage
-- Sidebar shows user identity toggle: both names, active emphasized, click inactive to switch (1-click toggle, NOT a dropdown — only 2 users)
-- Upload page auto-selects person from identity store — no "Who are you?" re-identification
+Motion confirms actions, doesn't decorate. Animation novelty wears off fast in a monthly tool.
 
-## Dark/Light Mode
-- `@custom-variant dark (&:where(.dark, .dark *))` in app.css for class-based control
-- Semantic color tokens via `@theme` (NOT `@theme inline` for colors — inline bakes values at build time, breaking dark mode)
-- Three-way preference: system / light / dark, stored in localStorage as `couplefins:theme`
-- FOIT prevention: synchronous `<script>` in `<head>` (not `type="module"`, not `defer`) reads localStorage + matchMedia, sets `.dark` class on `<html>` before first paint
-- `color-scheme` property on `:root` (light) and `.dark` (dark) for native browser elements
-- Prefer CSS variable swaps over `dark:` utility prefixes
-- Listen for `matchMedia` change events when in "system" mode
+- 150ms for color transitions. 200-300ms for layout shifts. Ease-out in, ease-in out.
+- `.editor-enter` keyframe (250ms grid expand) for detail panels.
+
+## Finance Display
+
+Every amount colored: `text-positive` (teal) / `text-negative` (coral) — the app's visual fingerprint.
+
+- Numbers: right-aligned, `tabular-nums`, bold key metrics
+- Currency: `formatCurrency()` from `lib/format.ts`
+- Status: always color + icon, never color alone
+- Budget health: `on_track` → teal, `near_limit` → amber, `over_budget` → coral
+- Settlement card is the hero element, never buried. Person names, not "you/them."
+
+## Voice & Microcopy
+
+Plain language, factual, no celebration. "Import Complete" with a summary, not "Great job!"
+
+- CTAs: verb + object ("Upload CSV", "Record Payment"). Never "Submit" or "OK".
+- Neutral framing: "$847 of $900" not "almost over budget!" Financial data informs; it doesn't scold.
+- Empty states: state what's missing, then say what to do. Never blank.
+- Domain terms stay in code; UI says "shared," "personal," "split."
 
 ## Information Architecture
-Left sidebar with 6 pages: Dashboard / Transactions / Settle Up / Budget / Upload / Settings.
-- "Transactions" (not "Reconciliation")
-- "Settle Up" between Transactions and Budget (monthly workflow: view → settle → review)
-- "Settings" absorbs person config, category management, theme toggle
-- "History" is NOT a standalone page — month navigation within Dashboard and Transactions
-- Upload is lower in nav (monthly task, not daily)
 
-## Self-Evidence & Microcopy
-- Progressive disclosure: show information contextually, not all at once
-- Affordances: interactive elements must look interactive (shadow, border, hover state)
-- Action-oriented CTAs: verb + object ("Upload CSV", "Confirm Import"), never generic
-- Plain language: "Alice's share" not "payer allocation percentage"
-- Empty states: meaningful heading + one sentence of context + clear CTA
-- Error messages: actionable, next to the field, no technical jargon
-- Contextual help: tooltips for domain terms (payer percentage, split ratio)
+7-page sidebar: Dashboard / Transactions / Settle Up / Budget / Insights / Upload / Settings. Ordered by workflow frequency. "History" is NOT a standalone page.
 
-## Component States
-Every interactive component must handle all applicable states:
-- **Empty**: guidance text + CTA (never blank)
-- **Loading**: spinner or skeleton with contextual label
-- **Error**: inline, actionable, adjacent to field, `aria-live="polite"`
-- **Success**: explicit confirmation with summary
-- **Hover/Focus**: visible on all interactive elements
-- **Disabled**: `opacity-50 cursor-not-allowed`, visually distinct
+---
 
-## Accessibility Baseline (WCAG 2.2)
-- Semantic HTML: `<button>`, `<nav>`, `<main>`, `<aside>`, `<section>`
-- Focus rings: all interactive elements via base CSS rule in `app.css`
-- Touch targets: primary actions min 44px (`min-h-11`)
-- `aria-live="polite"` for async feedback
-- Heading hierarchy: sequential, never skip levels
-- Form inputs: `<label>` via `htmlFor` + `aria-describedby` for errors
-- Skip-to-content link in app shell layout
-- `aria-label` on landmark elements
+## Detailed References
 
-## Finance Display Patterns
-- Numbers: right-aligned, `tabular-nums`, bold key metrics
-- Currency: `Intl.NumberFormat("en-US", { style: "currency", currency: "USD" })` everywhere
-- Positive amounts: `text-positive` (teal). Negative: `text-negative` (coral)
-- Status: always color + icon, never color alone
+These files load on-demand — read them when you need specifics:
 
-## UI Audit Checklist
-- [ ] Typography: Satoshi loaded? No Inter/system font fallback visible?
-- [ ] Numbers: `tabular-nums` on all financial figures?
-- [ ] Color: warm neutrals only, no pure black/white, semantic teal/coral?
-- [ ] Spacing: varied rhythm, not uniform padding?
-- [ ] Depth: warm shadows, 2-3 elevation levels?
-- [ ] States: empty, loading, error for every list/table?
-- [ ] Dark mode: renders correctly in both modes? Native elements styled?
-- [ ] Accessibility: contrast passes, focus visible, keyboard nav works?
-- [ ] Finance: numbers right-aligned, currency consistent, amounts colored?
-- [ ] Copy: no generic placeholder text, helpful error messages?
-- [ ] No AI slop: no uniform grids, no identical spacing, no purple gradients?
-- [ ] Component reuse: `<Button>`, `baseInputClass`, `<SegmentedControl>` used consistently?
-- [ ] Card radius: top-level `rounded-xl`, nested `rounded-lg`?
+- **[Component library](components.md)** — All shared components with props, input styles, icon library
+- **[Utilities & state management](utilities.md)** — URL-driven state hooks, data fetching pattern, Tanstack Query, utility module reference
+- **[Implementation details](implementation.md)** — User identity states, dark mode implementation, accessibility baseline, UI audit checklist

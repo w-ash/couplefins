@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   PieChart,
   Settings,
+  TrendingUp,
   Upload,
 } from "lucide-react";
 import { useGetPersons } from "@/api/generated/persons/persons";
@@ -41,6 +42,7 @@ export function Sidebar() {
         />
         <NavItem to="/settle" label="Settle Up" icon={HandCoins} />
         <NavItem to="/budget" label="Budget" icon={PieChart} />
+        <NavItem to="/insights" label="Insights" icon={TrendingUp} />
         <NavItem to="/upload" label="Upload" icon={Upload} />
         <NavItem to="/settings" label="Settings" icon={Settings} />
       </nav>

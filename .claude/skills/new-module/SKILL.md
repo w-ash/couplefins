@@ -1,6 +1,6 @@
 ---
 name: new-module
-description: Step-by-step guide for adding a new vertical-slice module (domain → infrastructure → application → interface → tests)
+description: Step-by-step guide for adding a new vertical-slice module. Use when creating a new domain entity, repository, use case, or API endpoint from scratch.
 argument-hint: module name (e.g., "settlement", "budget")
 ---
 

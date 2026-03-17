@@ -2,6 +2,15 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll } from "vitest";
 
+// Polyfill ResizeObserver for jsdom (needed by Recharts ResponsiveContainer)
+if (typeof window.ResizeObserver === "undefined") {
+  window.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+}
+
 // Polyfill matchMedia for jsdom
 Object.defineProperty(window, "matchMedia", {
   writable: true,

@@ -50,7 +50,7 @@ The couple sits down to:
 
 ## Information Architecture
 
-Six top-level pages in the sidebar, ordered by workflow:
+Seven top-level pages in the sidebar, ordered by workflow:
 
 | Page | Purpose | Ships in |
 |---|---|---|
@@ -58,6 +58,7 @@ Six top-level pages in the sidebar, ordered by workflow:
 | **Transactions** | Shared transaction table with search, filtering, bulk editing, category breakdown | v0.2.0 |
 | **Settle Up** | Record payments, waive balances, link settlement transactions, finalization controls | v0.6.0 |
 | **Budget** | Category group budgets, monthly + YTD views, progress indicators, spending charts | v0.4.0 |
+| **Insights** | Spending trend sparklines per category group, comparison cards, budget overlays, settlement balance trend, YoY comparison | v0.7.0 |
 | **Upload** | CSV import: preview, confirm, re-upload. Drag-and-drop in v0.8.x | v0.1.1 |
 | **Settings** | Person config, category-to-group mappings, adjustment accounts, theme | v0.1.3 |
 

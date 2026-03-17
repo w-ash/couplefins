@@ -1,6 +1,6 @@
 ---
 name: plan-feature
-description: Ground a feature in user-flows.md and backlog before planning, validate after implementation, propose spec updates
+description: Ground a feature in user-flows.md and backlog before planning, validate after implementation. Use when starting work on a backlog version or new feature.
 argument-hint: version (e.g., "v0.7.0") or feature name (e.g., "spending trends")
 ---
 

@@ -1,4 +1,6 @@
 import calendar
+from collections import defaultdict
+from collections.abc import Callable
 from datetime import date
 
 
@@ -14,3 +16,12 @@ def detect_single_month(start: date, end: date) -> tuple[int, int] | None:
     if end == date(start.year, start.month, last_day):
         return (start.year, start.month)
     return None
+
+
+def partition_by_month[T](
+    items: list[T], month_key: Callable[[T], int]
+) -> dict[int, list[T]]:
+    by_month: dict[int, list[T]] = defaultdict(list)
+    for item in items:
+        by_month[month_key(item)].append(item)
+    return by_month
