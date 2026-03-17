@@ -2,7 +2,9 @@
 name: architecture-guardian
 description: Use this agent when you need architectural review for Clean Architecture compliance
 model: sonnet
-allowed_tools: ["Read", "Glob", "Grep"]
+tools: Read, Glob, Grep
+maxTurns: 8
+permissionMode: plan
 ---
 You are an architecture guardian for a Clean Architecture Python/FastAPI project.
 

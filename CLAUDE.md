@@ -8,6 +8,7 @@ Couplefins is a shared finance reconciliation tool for couples. Each person uses
 
 Domain details: @docs/domain.md
 User goals and monthly workflow: @docs/user-flows.md
+Implementation roadmap: @docs/backlog/README.md
 
 ## Core Principles (YOU MUST FOLLOW)
 
@@ -27,7 +28,6 @@ User goals and monthly workflow: @docs/user-flows.md
 - **Interface** (`src/interface/api/`): Thin FastAPI handlers (5-10 lines), delegates to use cases.
 - **Frontend** (`web/`): React 19 + Tailwind v4 + Tanstack Query. Orval codegen from OpenAPI spec.
 
-Patterns and tooling config: @docs/getting-started/README.md
 
 ## Essential Commands
 
@@ -58,3 +58,10 @@ uv run ruff check . --fix && uv run ruff format . && uv run basedpyright src/ &&
 3. Beyond happy path? Error cases, edge cases, validation.
 4. Using existing factories from `tests/fixtures/`?
 5. Tests pass? `uv run pytest tests/path/to/test_file.py -x`
+
+## Planning Self-Check (before implementing a feature)
+
+1. Which user stories in `docs/user-flows.md` does this serve?
+2. What does the backlog spec in `docs/backlog/` say about implementation?
+3. After implementing, do the user story's Given/When/Then criteria pass?
+4. Did development reveal missing stories or stale criteria? Propose updates to `docs/user-flows.md`.

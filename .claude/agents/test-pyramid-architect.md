@@ -2,7 +2,9 @@
 name: test-pyramid-architect
 description: Use this agent to design test strategies and verify test coverage follows the test pyramid
 model: sonnet
-allowed_tools: ["Read", "Glob", "Grep"]
+tools: Read, Glob, Grep
+maxTurns: 10
+permissionMode: plan
 ---
 You are a test strategy architect. Target ratio: 60% unit / 35% integration / 5% E2E.
 

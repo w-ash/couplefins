@@ -3,205 +3,30 @@ paths:
   - "web/src/components/**"
   - "web/src/pages/**"
   - "web/src/layouts/**"
-  - "web/src/stores/**"
 ---
 # Web Design System — Warm Personal Finance
 
-Couplefins is a shared finance tool used monthly by a couple. The interface should feel
-calm, personal, and trustworthy — like a well-organized notebook, not a corporate dashboard.
-Prioritize clarity and scannability for financial data.
+Calm, personal, trustworthy — like a well-organized notebook, not a corporate dashboard.
 
-## Typography (enforce strictly)
+## Typography
+- **NEVER use Inter. It is banned.** Use Satoshi (variable, from Fontshare) for all UI text.
+- Financial figures: `font-variant-numeric: tabular-nums`
+- Mono (Geist Mono): only for IDs/codes/technical identifiers
 
-**NEVER use Inter. It is banned from this project.**
-
-- **UI font (Satoshi)**: all headings, labels, body text, buttons, navigation
-- **Numbers (Satoshi tabular)**: financial figures use `font-variant-numeric: tabular-nums` for alignment
-- **Mono font (Geist Mono)**: only for IDs, codes, technical identifiers — never for body text or numbers
-
-Load Satoshi as a variable font from Fontshare. Load Geist Mono from Google Fonts or npm.
-
-## Color Palette
-
-### Base (warm neutrals)
-- Background: warm off-white/cream (not pure white, not gray)
-- Surface: slightly lighter or darker warm neutral for cards/sections
-- Text: warm dark gray (not pure black)
-- Muted text: medium warm gray
-
-### Semantic (teal/coral)
-- Positive/income/under-budget: teal (not green)
-- Negative/expense/over-budget: coral (not red)
-- Use muted variants for backgrounds, saturated for text/icons
-
-### Accent
-- One warm accent color for primary actions (buttons, links, focus states)
-- Derive from teal or choose a complementary warm tone
-
-## Spacing & Layout
-- Generous whitespace — breathing room between sections
-- Vary rhythm between sections (don't uniform-space everything)
-- Card-based layout with gentle shadows (not flat, not heavy)
-- Rounded corners (rounded-lg / rounded-xl) for a soft feel
-
-## Component Primitives (always use these)
-
-New UI must use these shared building blocks. Never hand-roll equivalent styling inline.
-
-### Buttons
-- **All buttons** must use `<Button>` from `@/components/Button` (variants: primary/secondary/destructive, sizes: default/sm)
-- Only exceptions: icon-only affordances inside complex components (table chevrons, close X buttons) where Button's padding/shadow would be wrong
-- Links styled as buttons: compose Button's class strings, don't duplicate them
-
-### Inputs
-- **Text/number inputs**: compose from `baseInputClass` in `@/lib/input-styles`
-- **Select elements**: compose from `selectInputClass`
-- **Percent inputs**: use `<PercentInput>` component
-- Never hand-roll `rounded-lg border border-input bg-card ...` — import the constant
-
-### Cards
-- Top-level content cards: `rounded-xl border border-border bg-card p-6 shadow-sm`
-- Nested/inline elements (toolbars, list items): `rounded-lg` is appropriate
-- Hero/accent cards: `rounded-xl border-primary/20 shadow-md`
-
-### Segmented controls (toggle between modes)
-- Use `<SegmentedControl>` from `@/components/SegmentedControl` — sliding indicator, native radio inputs, arrow-key navigation
-- Default shape `rounded` for top-level controls, `pill` for inline/form controls
-- Size `sm` for compact contexts (popovers), `default` for page-level controls
-
-### Page structure
-- Page header: `<PageHeader>` component — never hand-roll h1 + flex layout
-- Async states: `<PageLoading>`, `<PageError>`, `<PageEmpty>` from `@/components/PageStates`
-- Stats row: `<StatsGrid>` component
-
-### Popovers & dropdowns
-- z-index: `z-50` for all popovers (not z-40)
-- Offset from trigger: `mt-1.5`
-- Single-section dropdowns: `rounded-lg`
-- Multi-section panels (DateRangePicker): `rounded-xl`
-
-## Depth System
-- Subtle warm-toned shadows (not pure black shadows)
-- 2-3 elevation levels max (flat, raised, modal)
-- Borders: subtle, warm gray — not harsh dividers
-
-## Motion
-- 150ms for interactions (hover, focus, press)
-- 200-300ms for layout transitions (expand, appear)
-- Ease-out for entrances, ease-in for exits
-- No gratuitous animation — motion should confirm actions
+## Color
+- Backgrounds/surfaces: warm off-white/cream (never pure white or gray)
+- Text: warm dark gray (never pure black)
+- Positive/income/under-budget: teal (not green). Negative/expense/over-budget: coral (not red)
+- Warm accent for primary actions (derived from teal or complementary warm tone)
 
 ## Anti-Patterns (never do these)
-- Never use Inter, Roboto, or Open Sans
-- No indigo/blue/purple gradients
-- No glassmorphism or frosted glass
+- No Inter, Roboto, or Open Sans
+- No indigo/blue/purple gradients or glassmorphism
+- No pure black (#000) or pure white (#fff)
 - No uniform card grids with identical spacing
-- No pure black (#000) or pure white (#fff) — always warm-shifted
-- No animate-pulse skeleton loaders
-- No native browser form controls unstyled in the design
-- No decorative elements that serve no purpose
-- No generic CTAs ("Submit", "OK", "Click Here")
-- No blank empty states
-- No jargon in user-facing text
+- No blank empty states or generic CTAs ("Submit", "OK")
 - No color-only status indicators
-- No missing loading/error states on async operations
 - No interactive elements without visible focus state
+- No missing loading/error states on async operations
 
-## User Identity
-
-- Current person ID stored in localStorage via Zustand persist (`couplefins:currentPersonId`)
-- Three app states:
-  1. **needs-setup**: `GET /api/v1/persons/` returns < 2 people → full-screen SetupPage
-  2. **needs-identity**: persons exist but `currentPersonId` is null or stale → full-screen ProfilePicker
-  3. **has-identity**: persons exist and identity is valid → main app with shell
-- ProfilePicker is a lightweight "click your name" screen (2 person cards) — NOT the SetupPage
-- Sidebar shows user identity toggle: both names, active emphasized, click inactive to switch (1-click toggle, NOT a dropdown — only 2 users)
-- Upload page auto-selects person from identity store — no "Who are you?" re-identification
-- Never require re-identification on every page visit
-
-## Dark/Light Mode
-
-- `@custom-variant dark (&:where(.dark, .dark *))` in app.css for class-based control
-- Semantic color tokens via `@theme` (NOT `@theme inline` for colors — inline bakes values at build time, breaking dark mode)
-- Three-way preference: system / light / dark, stored in localStorage as `couplefins:theme`
-- FOIT prevention: synchronous `<script>` in `<head>` (not `type="module"`, not `defer`) reads localStorage + matchMedia, sets `.dark` class on `<html>` before first paint
-- `color-scheme` property on `:root` (light) and `.dark` (dark) for native browser elements (scrollbars, selects, form controls)
-- Prefer CSS variable swaps over `dark:` utility prefixes — markup should rarely need `dark:` classes
-- Listen for `matchMedia` change events when in "system" mode (user toggles OS while app is open)
-
-## Information Architecture
-
-Left sidebar with 6 pages: Dashboard / Transactions / Settle Up / Budget / Upload / Settings.
-- "Transactions" (not "Reconciliation") — standard finance-app naming
-- "Settle Up" sits between Transactions and Budget — follows the monthly workflow: view data → settle → review budget
-- "Settings" absorbs person config, category management, and theme toggle
-- "History" is NOT a standalone page — month navigation lives within Dashboard and Transactions
-- Upload is lower in the nav (monthly task, not daily)
-
-## Self-Evidence & Microcopy
-
-Every screen must be understandable without a guide.
-
-- **Progressive disclosure**: show information contextually, not all at once
-- **Affordances**: interactive elements must look interactive (shadow, border, hover state)
-- **Action-oriented CTAs**: verb + object ("Upload CSV", "Confirm Import"), never generic ("Submit", "OK")
-- **Plain language**: "Alice's share" not "payer allocation percentage" — no jargon in UI
-- **Empty states**: meaningful heading + one sentence of context + clear CTA. "Two parts instruction, one part delight"
-- **Error messages**: actionable, next to the field, no error codes or technical jargon
-- **Contextual help**: tooltips for domain terms users might not know (payer percentage, split ratio)
-
-## Component States
-
-Every interactive component must handle all applicable states:
-
-- **Empty**: guidance text + CTA (never blank)
-- **Loading**: spinner or skeleton with contextual label ("Analyzing transactions...")
-- **Error**: inline, actionable, adjacent to field, `aria-live="polite"`
-- **Success**: explicit confirmation with summary of what happened
-- **Hover/Focus**: visible on all interactive elements
-- **Disabled**: `opacity-50 cursor-not-allowed`, visually distinct
-
-## Accessibility Baseline (WCAG 2.2)
-
-- Semantic HTML: `<button>`, `<nav>`, `<main>`, `<aside>`, `<section>`
-- Focus rings: all interactive elements get visible focus via base CSS rule in `app.css`
-- Touch targets: primary actions min 44px (`min-h-11`)
-- `aria-live="polite"` for async feedback (errors, success, loading changes)
-- Heading hierarchy: sequential, never skip levels
-- Form inputs: always `<label>` via `htmlFor` + `aria-describedby` for errors
-- Skip-to-content link in app shell layout
-- `aria-label` on landmark elements (`<aside>`, `<nav>`)
-
-## Finance Display Patterns
-
-- Numbers: right-aligned, `tabular-nums`, bold key metrics
-- Currency: `Intl.NumberFormat("en-US", { style: "currency", currency: "USD" })` everywhere
-- Positive amounts: `text-positive` (teal). Negative: `text-negative` (coral)
-- Status: always color + icon, never color alone
-
-## UI Audit Checklist (run before marking any UI story as complete)
-
-- [ ] Typography: Satoshi loaded and applied? No Inter/system font fallback visible?
-- [ ] Numbers: `tabular-nums` on all financial figures?
-- [ ] Color: warm neutrals only, no pure black/white, semantic teal/coral?
-- [ ] Spacing: varied rhythm between sections, not uniform padding?
-- [ ] Depth: warm shadows, 2-3 elevation levels, not all flat?
-- [ ] States: empty, loading, error states for every list/table?
-- [ ] Dark mode: renders correctly in both modes? Native elements styled?
-- [ ] Accessibility: contrast ratios pass, focus indicators visible, keyboard nav works?
-- [ ] Metadata: custom page title, custom favicon (not Vite default)?
-- [ ] Finance: numbers right-aligned in tables, currency consistent, amounts colored?
-- [ ] Copy: no generic placeholder text ("Welcome to..."), helpful error messages?
-- [ ] No AI slop: no uniform card grids, no identical spacing, no purple gradients?
-- [ ] Self-evidence: every screen understandable without a guide? Action-oriented CTAs?
-- [ ] Component states: empty, loading, error, success, hover, focus, disabled all handled?
-- [ ] Focus rings: visible `focus-visible` outline on all interactive elements?
-- [ ] Touch targets: primary action buttons at least 44px (`min-h-11`)?
-- [ ] `aria-live`: async feedback (errors, success, loading) announced to screen readers?
-- [ ] Skip-to-content: link present in app shell, works on Tab → Enter?
-- [ ] Heading hierarchy: sequential, no skipped levels?
-- [ ] Label associations: all inputs have `<label>` via `htmlFor`, errors linked via `aria-describedby`?
-- [ ] Component reuse: using `<Button>` for all buttons? `baseInputClass`/`selectInputClass` for inputs?
-- [ ] Segmented controls: using `<SegmentedControl>` for all mode toggles?
-- [ ] Card radius: top-level cards are `rounded-xl`, only nested elements use `rounded-lg`?
-- [ ] No hand-rolled styles: no inline `rounded-lg border border-input bg-card...` when a shared constant exists?
+Full reference (spacing, motion, identity, dark mode, accessibility, audit checklist): see `web-design-reference` skill.
