@@ -5,7 +5,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
-    alias: { "@": "/src" },
+    tsconfigPaths: true,
   },
   server: {
     port: 5174,
