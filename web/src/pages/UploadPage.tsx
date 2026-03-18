@@ -9,7 +9,7 @@ import {
   Upload,
   Users,
 } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import type {
   ChangedTransactionResponse,
   PreviewUploadResponse,
@@ -21,6 +21,7 @@ import {
 } from "@/api/generated/uploads/uploads";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { FileDropZone } from "@/components/FileDropZone";
 import { PageHeader } from "@/components/PageHeader";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { useSetToggle } from "@/hooks/useSetToggle";
@@ -263,7 +264,7 @@ function PreviewCard({ preview }: { preview: PreviewUploadResponse }) {
 export function UploadPage() {
   const invalidateCategories = useInvalidateCategories();
   const currentPersonId = useIdentityStore((s) => s.currentPersonId);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [personId, setPersonId] = useState(currentPersonId ?? "");
   useEffect(() => {
     if (currentPersonId) setPersonId(currentPersonId);
@@ -308,9 +309,8 @@ export function UploadPage() {
   });
 
   function buildFormData(): { file: Blob; person_id: string } | null {
-    const file = fileInputRef.current?.files?.[0];
-    if (!file || !personId) return null;
-    return { file, person_id: personId };
+    if (!selectedFile || !personId) return null;
+    return { file: selectedFile, person_id: personId };
   }
 
   function handlePreview(e: FormEvent) {
@@ -346,7 +346,7 @@ export function UploadPage() {
     uploadMutation.reset();
     clearAccepted();
     setPersonId(currentPersonId ?? "");
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    setSelectedFile(null);
   }
 
   function toggleAll(accept: boolean) {
@@ -431,22 +431,16 @@ export function UploadPage() {
           )}
         </div>
 
-        {/* File input */}
+        {/* File drop zone */}
         <div>
-          <label
-            htmlFor="csv-file"
-            className="mb-1.5 block font-medium text-sm text-secondary-foreground"
-          >
+          <span className="mb-1.5 block font-medium text-sm text-secondary-foreground">
             Monarch CSV
-          </label>
-          <input
-            id="csv-file"
-            ref={fileInputRef}
-            type="file"
+          </span>
+          <FileDropZone
             accept=".csv"
-            required
+            onFile={setSelectedFile}
             disabled={isFormDisabled}
-            className="w-full min-h-11 rounded-lg border border-input bg-card px-3 py-2 text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-accent file:px-3 file:py-1 file:font-medium file:text-sm file:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            currentFile={selectedFile}
           />
         </div>
 
@@ -454,7 +448,7 @@ export function UploadPage() {
         {step === "form" && (
           <Button
             type="submit"
-            disabled={!personId}
+            disabled={!personId || !selectedFile}
             loading={previewMutation.isPending}
             loadingText="Parsing..."
             icon={<Eye className="size-4" />}

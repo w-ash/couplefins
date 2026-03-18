@@ -77,7 +77,9 @@ const previewResponseWithChanges = {
 };
 
 function setFileAndSubmit() {
-  const fileInput = screen.getByLabelText("Monarch CSV") as HTMLInputElement;
+  const fileInput = document.querySelector(
+    'input[type="file"]',
+  ) as HTMLInputElement;
   const file = new File(["Date,Merchant\n2026-01-15,Test"], "test.csv", {
     type: "text/csv",
   });
@@ -98,7 +100,9 @@ describe("UploadPage", () => {
     expect(screen.getByText("Who are you?")).toBeInTheDocument();
     expect(screen.queryByLabelText("Month")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Year")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Monarch CSV")).toBeInTheDocument();
+    expect(
+      screen.getByText("Drop your CSV here, or click to browse"),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Preview CSV" }),
     ).toBeInTheDocument();
