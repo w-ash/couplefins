@@ -35,7 +35,7 @@
 | v0.8.1 | Drag-and-drop file zone | Completed (2026-03-17) | S |
 | v0.8.2 | Upload history (endpoint + UI) | Completed (2026-03-17) | M |
 | v0.8.3 | CSV validation & error quality (client + server) | Completed (2026-03-18) | M |
-| v0.8.4 | Confirmation & flow polish | Planned | S |
+| v0.8.4 | Confirmation & flow polish | Completed (2026-03-18) | S |
 | v0.9.0 | Responsive layout (mobile + touch) | Planned | L |
 | v0.9.1 | Transaction exclusion flag | Planned | S |
 | v1.0.0 | Infrastructure investigation (benchmarks, DB audit, storage evaluation) | Planned | M |

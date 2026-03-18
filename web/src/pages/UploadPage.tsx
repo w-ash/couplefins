@@ -5,26 +5,34 @@ import {
   Check,
   CircleAlert,
   Eye,
+  ListChecks,
   Minus,
   Plus,
   Upload,
   Users,
 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
+import { Link } from "react-router";
 import type {
   ChangedTransactionResponse,
+  PersonResponse,
   PreviewUploadResponse,
+  UploadHistoryEntryResponse,
+  UploadSummaryResponse,
 } from "@/api/generated/model";
 import { useGetPersons } from "@/api/generated/persons/persons";
 import {
   getGetUploadHistoryQueryKey,
+  useGetUploadHistory,
   usePostUpload,
   usePostUploadPreview,
 } from "@/api/generated/uploads/uploads";
+import { AnimatedCheck } from "@/components/AnimatedCheck";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { FileDropZone } from "@/components/FileDropZone";
 import { PageHeader } from "@/components/PageHeader";
+import { StepIndicator } from "@/components/StepIndicator";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { UploadError } from "@/components/UploadError";
 import { UploadHistory } from "@/components/UploadHistory";
@@ -36,6 +44,8 @@ import {
   formatCurrency,
   formatDate,
   formatSplit,
+  MONTHS,
+  plural,
 } from "@/lib/format";
 import { useIdentityStore } from "@/lib/identity";
 import { selectInputClass } from "@/lib/input-styles";
@@ -44,6 +54,23 @@ const PREVIEW_LIMIT = 5;
 const MAX_CSV_SIZE = 10 * 1024 * 1024;
 
 type Step = "form" | "preview" | "review" | "confirmed";
+
+function stepToIndex(step: Step): number {
+  if (step === "form") return 0;
+  if (step === "preview" || step === "review") return 1;
+  return 2;
+}
+
+function deriveUploadMonth(
+  preview: PreviewUploadResponse | undefined,
+): { year: number; month: number } | null {
+  const dateStr =
+    preview?.new_transactions[0]?.date ??
+    preview?.changed_transactions[0]?.incoming.date;
+  if (!dateStr) return null;
+  const [yearStr, monthStr] = dateStr.split("-");
+  return { year: Number(yearStr), month: Number(monthStr) };
+}
 
 function ActionPanel({
   step,
@@ -159,8 +186,7 @@ function PreviewCard({ preview }: { preview: PreviewUploadResponse }) {
         Preview
       </h2>
       <p className="mb-4 text-sm text-muted-foreground">
-        {preview.new_transactions.length} new transaction
-        {preview.new_transactions.length !== 1 && "s"}
+        {plural("new transaction", preview.new_transactions.length)}
         {preview.unchanged_count > 0 &&
           `, ${preview.unchanged_count} unchanged`}
       </p>
@@ -259,10 +285,138 @@ function PreviewCard({ preview }: { preview: PreviewUploadResponse }) {
 
       {remainingCount > 0 && (
         <p className="mt-3 text-center text-sm text-muted-foreground">
-          and {remainingCount} more transaction
-          {remainingCount !== 1 && "s"}
+          and {plural("more transaction", remainingCount)}
         </p>
       )}
+    </Card>
+  );
+}
+
+function ConfirmedCard({
+  summary,
+  preview,
+  personId,
+  persons,
+  historyEntries,
+  onReset,
+}: {
+  summary: UploadSummaryResponse;
+  preview: PreviewUploadResponse | undefined;
+  personId: string;
+  persons: PersonResponse[] | undefined;
+  historyEntries: UploadHistoryEntryResponse[];
+  onReset: () => void;
+}) {
+  const uploadMonth = deriveUploadMonth(preview);
+  const monthLabel = uploadMonth
+    ? `${MONTHS[uploadMonth.month - 1]} ${uploadMonth.year}`
+    : null;
+
+  const sharedCount = preview
+    ? preview.new_transactions.filter((tx) => tx.is_shared).length +
+      preview.changed_transactions.filter((ct) => ct.incoming.is_shared).length
+    : summary.new_count + summary.updated_count;
+
+  const partner = persons?.find((p) => p.id !== personId);
+  const partnerHasUploaded =
+    !partner || !uploadMonth
+      ? true
+      : historyEntries.some((e) => {
+          if (e.person_id === personId) return false;
+          if (!e.date_range_start) return false;
+          const [y, m] = e.date_range_start.split("-");
+          return (
+            Number(y) === uploadMonth.year && Number(m) === uploadMonth.month
+          );
+        });
+
+  // Partner prompt requires uploadMonth too, so this simplifies to just uploadMonth
+  const hasNextSteps = uploadMonth !== null;
+
+  return (
+    <Card aria-live="polite" className="step-enter mt-6">
+      {/* Success header */}
+      <div className="flex items-center gap-3">
+        <AnimatedCheck size={40} />
+        <div>
+          <h2 className="font-medium text-lg text-foreground">
+            Upload Complete
+          </h2>
+          {monthLabel && (
+            <p className="text-sm text-muted-foreground">
+              {plural("shared transaction", sharedCount)} for {monthLabel}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Stats grid */}
+      <dl className="mt-5 grid grid-cols-3 gap-4 text-sm">
+        <div className="flex flex-col-reverse text-center">
+          <dt className="text-muted-foreground">New</dt>
+          <dd className="text-lg font-semibold text-foreground tabular-nums">
+            {summary.new_count}
+          </dd>
+        </div>
+        <div className="flex flex-col-reverse text-center">
+          <dt className="text-muted-foreground">Updated</dt>
+          <dd className="text-lg font-semibold text-accent-foreground tabular-nums">
+            {summary.updated_count}
+          </dd>
+        </div>
+        <div className="flex flex-col-reverse text-center">
+          <dt className="text-muted-foreground">Skipped</dt>
+          <dd className="text-lg font-semibold text-muted-foreground tabular-nums">
+            {summary.skipped_count}
+          </dd>
+        </div>
+      </dl>
+
+      <UnmappedCategoriesWarning
+        categories={summary.unmapped_categories}
+        className="mt-4"
+      />
+
+      {/* Next steps */}
+      {hasNextSteps && (
+        <div className="mt-5 space-y-1 border-t border-border pt-5">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Next steps
+          </p>
+          {uploadMonth && (
+            <Link
+              to={`/transactions?year=${uploadMonth.year}&month=${uploadMonth.month}`}
+              className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-foreground transition-colors hover:bg-muted/50"
+            >
+              <ListChecks className="size-4 text-muted-foreground" />
+              <span className="flex-1">Review transactions</span>
+              <ArrowRight className="size-4 text-muted-foreground" />
+            </Link>
+          )}
+          {!partnerHasUploaded && partner && (
+            <button
+              type="button"
+              onClick={onReset}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-muted/50"
+            >
+              <Upload className="size-4 text-muted-foreground" />
+              <span className="flex-1">Upload {partner.name}'s CSV</span>
+              <ArrowRight className="size-4 text-muted-foreground" />
+            </button>
+          )}
+        </div>
+      )}
+
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={onReset}
+        icon={<Plus className="size-4" />}
+        fullWidth
+        className="mt-5"
+      >
+        Upload Another CSV
+      </Button>
     </Card>
   );
 }
@@ -287,6 +441,7 @@ export function UploadPage() {
 
   const { data: personsResponse } = useGetPersons();
   const persons = personsResponse?.data;
+  const { data: historyResponse } = useGetUploadHistory();
 
   const previewMutation = usePostUploadPreview({
     mutation: {
@@ -407,6 +562,8 @@ export function UploadPage() {
         title="Upload Transactions"
       />
 
+      <StepIndicator currentStepIndex={stepToIndex(step)} />
+
       <Card as="form" onSubmit={handlePreview} className="space-y-6">
         {/* Person selector */}
         <div>
@@ -501,7 +658,7 @@ export function UploadPage() {
 
       {/* Already up to date */}
       {step === "preview" && preview && nothingToImport && (
-        <Card className="mt-6">
+        <Card className="step-enter mt-6">
           <h2 className="mb-1 flex items-center gap-2 font-medium text-lg text-foreground">
             <Eye className="size-5" />
             Already Up to Date
@@ -524,7 +681,10 @@ export function UploadPage() {
 
       {/* Preview / Review — two-column grid */}
       {showGrid && (
-        <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-[1fr_16rem]">
+        <div
+          key={step}
+          className="step-enter mt-6 grid grid-cols-1 gap-6 md:grid-cols-[1fr_16rem]"
+        >
           {/* Left column — content */}
           <div className="space-y-6">
             {/* Preview summary + capped transaction table */}
@@ -607,42 +767,16 @@ export function UploadPage() {
 
       {/* Confirmed summary */}
       {step === "confirmed" && summary && (
-        <Card aria-live="polite" className="mt-6">
-          <h2 className="mb-4 flex items-center gap-2 font-medium text-lg text-foreground">
-            <Check className="size-5 text-primary" />
-            Upload Complete
-          </h2>
-          <dl className="grid grid-cols-2 gap-3 text-sm">
-            <dt className="text-muted-foreground">New</dt>
-            <dd className="font-medium text-foreground tabular-nums">
-              {summary.new_count}
-            </dd>
-            <dt className="text-muted-foreground">Updated</dt>
-            <dd className="font-medium text-accent-foreground tabular-nums">
-              {summary.updated_count}
-            </dd>
-            <dt className="text-muted-foreground">Skipped</dt>
-            <dd className="font-medium text-muted-foreground tabular-nums">
-              {summary.skipped_count}
-            </dd>
-          </dl>
-
-          <UnmappedCategoriesWarning
-            categories={summary.unmapped_categories}
-            className="mt-4"
-          />
-
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={handleReset}
-            icon={<Plus className="size-4" />}
-            fullWidth
-            className="mt-6"
-          >
-            Upload Another CSV
-          </Button>
-        </Card>
+        <ConfirmedCard
+          summary={summary}
+          preview={preview}
+          personId={personId}
+          persons={persons}
+          historyEntries={
+            historyResponse?.status === 200 ? historyResponse.data.entries : []
+          }
+          onReset={handleReset}
+        />
       )}
 
       <UploadHistory />

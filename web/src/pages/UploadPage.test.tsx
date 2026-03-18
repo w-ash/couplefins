@@ -332,6 +332,205 @@ describe("UploadPage", () => {
     expect(previewButton).toBeEnabled();
   });
 
+  it("renders step indicator on initial load", () => {
+    renderWithProviders(<UploadPage />);
+    expect(
+      screen.getByRole("navigation", { name: "Upload progress" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Select file")).toBeInTheDocument();
+    expect(screen.getByText("Preview")).toBeInTheDocument();
+    expect(screen.getByText("Done")).toBeInTheDocument();
+  });
+
+  it("shows confirmed card with stats and animated check after upload", async () => {
+    server.use(
+      http.post("/api/v1/uploads/preview", () =>
+        HttpResponse.json(previewResponseAllNew),
+      ),
+      http.post("/api/v1/uploads/", () =>
+        HttpResponse.json(
+          {
+            upload_id: "u1",
+            filename: "test.csv",
+            new_count: 2,
+            updated_count: 0,
+            skipped_count: 0,
+            unmapped_categories: [],
+          },
+          { status: 201 },
+        ),
+      ),
+    );
+
+    renderWithProviders(<UploadPage />);
+    await waitFor(() => {
+      expect(screen.getByText("Who are you?")).toBeInTheDocument();
+    });
+
+    setFileAndSubmit();
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Confirm Import" }),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Import" }));
+    await waitFor(() => {
+      expect(screen.getByText("Upload Complete")).toBeInTheDocument();
+    });
+
+    // Animated check SVG should be present
+    expect(document.querySelector(".animated-check")).toBeInTheDocument();
+    // Stats should show
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText("New")).toBeInTheDocument();
+  });
+
+  it("shows Review transactions link with correct month", async () => {
+    server.use(
+      http.post("/api/v1/uploads/preview", () =>
+        HttpResponse.json(previewResponseAllNew),
+      ),
+      http.post("/api/v1/uploads/", () =>
+        HttpResponse.json(
+          {
+            upload_id: "u1",
+            filename: "test.csv",
+            new_count: 2,
+            updated_count: 0,
+            skipped_count: 0,
+            unmapped_categories: [],
+          },
+          { status: 201 },
+        ),
+      ),
+    );
+
+    renderWithProviders(<UploadPage />);
+    await waitFor(() => {
+      expect(screen.getByText("Who are you?")).toBeInTheDocument();
+    });
+
+    setFileAndSubmit();
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Confirm Import" }),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Import" }));
+    await waitFor(() => {
+      expect(screen.getByText("Review transactions")).toBeInTheDocument();
+    });
+
+    const link = screen.getByText("Review transactions").closest("a");
+    expect(link).toHaveAttribute("href", "/transactions?year=2026&month=1");
+  });
+
+  it("shows partner upload prompt when partner hasn't uploaded", async () => {
+    server.use(
+      http.post("/api/v1/uploads/preview", () =>
+        HttpResponse.json(previewResponseAllNew),
+      ),
+      http.post("/api/v1/uploads/", () =>
+        HttpResponse.json(
+          {
+            upload_id: "u1",
+            filename: "test.csv",
+            new_count: 2,
+            updated_count: 0,
+            skipped_count: 0,
+            unmapped_categories: [],
+          },
+          { status: 201 },
+        ),
+      ),
+    );
+
+    renderWithProviders(<UploadPage />);
+    await waitFor(() => {
+      expect(screen.getByText("Who are you?")).toBeInTheDocument();
+    });
+
+    setFileAndSubmit();
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Confirm Import" }),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Import" }));
+    await waitFor(() => {
+      expect(screen.getByText("Upload Complete")).toBeInTheDocument();
+    });
+
+    // With empty upload history, partner hasn't uploaded
+    expect(
+      screen.getByRole("button", { name: /Upload Bob's CSV/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides partner prompt when partner has uploaded for same month", async () => {
+    // Upload history shows Bob uploaded for January 2026
+    server.use(
+      http.get("/api/v1/uploads/history", () =>
+        HttpResponse.json({
+          entries: [
+            {
+              upload_id: "u2",
+              person_id: "p2",
+              person_name: "Bob",
+              filename: "jan-2026.csv",
+              uploaded_at: new Date().toISOString(),
+              transaction_count: 30,
+              shared_count: 15,
+              date_range_start: "2026-01-01",
+              date_range_end: "2026-01-31",
+            },
+          ],
+        }),
+      ),
+      http.post("/api/v1/uploads/preview", () =>
+        HttpResponse.json(previewResponseAllNew),
+      ),
+      http.post("/api/v1/uploads/", () =>
+        HttpResponse.json(
+          {
+            upload_id: "u1",
+            filename: "test.csv",
+            new_count: 2,
+            updated_count: 0,
+            skipped_count: 0,
+            unmapped_categories: [],
+          },
+          { status: 201 },
+        ),
+      ),
+    );
+
+    renderWithProviders(<UploadPage />);
+    await waitFor(() => {
+      expect(screen.getByText("Who are you?")).toBeInTheDocument();
+    });
+
+    setFileAndSubmit();
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Confirm Import" }),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Import" }));
+    await waitFor(() => {
+      expect(screen.getByText("Upload Complete")).toBeInTheDocument();
+    });
+
+    // Partner has uploaded for the same month — no prompt
+    expect(
+      screen.queryByRole("button", { name: /Upload Bob's CSV/ }),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders multi-line server errors as a list", async () => {
     server.use(
       http.post("/api/v1/uploads/preview", () =>
