@@ -91,7 +91,12 @@ function setFileAndSubmit() {
 describe("UploadPage", () => {
   beforeEach(() => {
     useIdentityStore.setState({ currentPersonId: "p1" });
-    server.use(http.get("/api/v1/persons/", () => HttpResponse.json(persons)));
+    server.use(
+      http.get("/api/v1/persons/", () => HttpResponse.json(persons)),
+      http.get("/api/v1/uploads/history", () =>
+        HttpResponse.json({ entries: [] }),
+      ),
+    );
   });
 
   it("renders the upload form without month/year", () => {
@@ -193,6 +198,45 @@ describe("UploadPage", () => {
     // Checkbox should be checked by default
     const checkbox = screen.getByRole("checkbox");
     expect(checkbox).toBeChecked();
+  });
+
+  it("shows upload history entries", async () => {
+    server.use(
+      http.get("/api/v1/uploads/history", () =>
+        HttpResponse.json({
+          entries: [
+            {
+              upload_id: "u1",
+              person_id: "p1",
+              person_name: "Alice",
+              filename: "march-2026.csv",
+              uploaded_at: new Date().toISOString(),
+              transaction_count: 47,
+              shared_count: 23,
+              date_range_start: "2026-03-01",
+              date_range_end: "2026-03-31",
+            },
+          ],
+        }),
+      ),
+    );
+
+    renderWithProviders(<UploadPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Past Uploads")).toBeInTheDocument();
+    });
+    expect(screen.getByText("march-2026.csv")).toBeInTheDocument();
+    expect(screen.getByText("47 transactions")).toBeInTheDocument();
+    expect(screen.getByText("23 shared")).toBeInTheDocument();
+  });
+
+  it("shows empty state when no upload history", async () => {
+    renderWithProviders(<UploadPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("No uploads yet")).toBeInTheDocument();
+    });
   });
 
   it("shows error with role=alert on preview failure", async () => {

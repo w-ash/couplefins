@@ -126,3 +126,35 @@ async def test_preview_csv_unknown_person_returns_404(client: AsyncClient) -> No
         files={"file": ("test.csv", io.BytesIO(VALID_CSV.encode()), "text/csv")},
     )
     assert response.status_code == 404
+
+
+async def test_upload_history(client: AsyncClient) -> None:
+    persons = await setup_couple(client)
+    person_id = persons[0]["id"]
+
+    # Upload a CSV
+    await client.post(
+        "/api/v1/uploads/",
+        data={"person_id": person_id},
+        files={"file": ("march.csv", io.BytesIO(VALID_CSV.encode()), "text/csv")},
+    )
+
+    # Fetch history
+    response = await client.get("/api/v1/uploads/history")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["entries"]) == 1
+
+    entry = data["entries"][0]
+    assert entry["filename"] == "march.csv"
+    assert entry["person_name"] == "Alice"
+    assert entry["transaction_count"] == 2
+    assert entry["shared_count"] == 1
+    assert entry["date_range_start"] is not None
+
+
+async def test_upload_history_empty(client: AsyncClient) -> None:
+    await setup_couple(client)
+    response = await client.get("/api/v1/uploads/history")
+    assert response.status_code == 200
+    assert response.json()["entries"] == []

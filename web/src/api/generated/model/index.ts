@@ -77,6 +77,8 @@ export * from './updateSplitsRequest';
 export * from './updateSplitsResponse';
 export * from './updateTransactionRequest';
 export * from './updateTransactionResponse';
+export * from './uploadHistoryEntryResponse';
+export * from './uploadHistoryResponse';
 export * from './uploadStatusResponse';
 export * from './uploadSummaryResponse';
 export * from './validationError';

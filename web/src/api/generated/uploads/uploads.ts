@@ -5,13 +5,22 @@
  * OpenAPI spec version: 0.1.0
  */
 import {
-  useMutation
+  useMutation,
+  useQuery
 } from '@tanstack/react-query';
 import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
   MutationFunction,
   QueryClient,
+  QueryFunction,
+  QueryKey,
+  UndefinedInitialDataOptions,
   UseMutationOptions,
-  UseMutationResult
+  UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult
 } from '@tanstack/react-query';
 
 import type {
@@ -19,6 +28,7 @@ import type {
   BodyPostUploadPreview,
   HTTPValidationError,
   PreviewUploadResponse,
+  UploadHistoryResponse,
   UploadSummaryResponse
 } from '../model';
 
@@ -26,6 +36,116 @@ import { customFetch } from '../../client';
 
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+
+
+/**
+ * @summary Get Upload History
+ */
+export type getUploadHistoryResponse200 = {
+  data: UploadHistoryResponse
+  status: 200
+}
+
+export type getUploadHistoryResponseSuccess = (getUploadHistoryResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getUploadHistoryResponse = (getUploadHistoryResponseSuccess)
+
+export const getGetUploadHistoryUrl = () => {
+
+
+
+
+  return `/api/v1/uploads/history`
+}
+
+export const getUploadHistory = async ( options?: RequestInit): Promise<getUploadHistoryResponse> => {
+
+  return customFetch<getUploadHistoryResponse>(getGetUploadHistoryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUploadHistoryQueryKey = () => {
+    return [
+    `/api/v1/uploads/history`
+    ] as const;
+    }
+
+
+export const getGetUploadHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getUploadHistory>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUploadHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUploadHistoryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUploadHistory>>> = ({ signal }) => getUploadHistory({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUploadHistory>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetUploadHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getUploadHistory>>>
+export type GetUploadHistoryQueryError = unknown
+
+
+export function useGetUploadHistory<TData = Awaited<ReturnType<typeof getUploadHistory>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUploadHistory>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getUploadHistory>>,
+          TError,
+          Awaited<ReturnType<typeof getUploadHistory>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetUploadHistory<TData = Awaited<ReturnType<typeof getUploadHistory>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUploadHistory>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getUploadHistory>>,
+          TError,
+          Awaited<ReturnType<typeof getUploadHistory>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetUploadHistory<TData = Awaited<ReturnType<typeof getUploadHistory>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUploadHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Upload History
+ */
+
+export function useGetUploadHistory<TData = Awaited<ReturnType<typeof getUploadHistory>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUploadHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetUploadHistoryQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
 
 
 

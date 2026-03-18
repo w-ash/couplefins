@@ -4,15 +4,23 @@ from uuid import UUID
 from fastapi import APIRouter, Form, UploadFile
 
 from src.application.runner import execute_use_case
+from src.application.use_cases.get_upload_history import get_upload_history
 from src.application.use_cases.preview_csv import PreviewCsvCommand, PreviewCsvUseCase
 from src.application.use_cases.upload_csv import UploadCsvCommand, UploadCsvUseCase
 from src.domain.exceptions import ValidationError
 from src.interface.api.schemas.uploads import (
     PreviewUploadResponse,
+    UploadHistoryResponse,
     UploadSummaryResponse,
 )
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
+
+
+@router.get("/history")
+async def upload_history() -> UploadHistoryResponse:
+    result = await execute_use_case(get_upload_history)
+    return UploadHistoryResponse.from_result(result)
 
 
 @router.post("/preview")

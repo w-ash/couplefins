@@ -1,10 +1,50 @@
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel
 
+from src.application.use_cases.get_upload_history import (
+    GetUploadHistoryResult,
+    UploadHistoryEntry,
+)
 from src.application.use_cases.preview_csv import PreviewCsvResult, PreviewTransaction
 from src.application.use_cases.upload_csv import UploadCsvResult
+
+
+class UploadHistoryEntryResponse(BaseModel):
+    upload_id: UUID
+    person_id: UUID
+    person_name: str
+    filename: str
+    uploaded_at: datetime
+    transaction_count: int
+    shared_count: int
+    date_range_start: date | None
+    date_range_end: date | None
+
+    @classmethod
+    def from_entry(cls, entry: UploadHistoryEntry) -> UploadHistoryEntryResponse:
+        return cls(
+            upload_id=entry.upload_id,
+            person_id=entry.person_id,
+            person_name=entry.person_name,
+            filename=entry.filename,
+            uploaded_at=entry.uploaded_at,
+            transaction_count=entry.transaction_count,
+            shared_count=entry.shared_count,
+            date_range_start=entry.date_range_start,
+            date_range_end=entry.date_range_end,
+        )
+
+
+class UploadHistoryResponse(BaseModel):
+    entries: list[UploadHistoryEntryResponse]
+
+    @classmethod
+    def from_result(cls, result: GetUploadHistoryResult) -> UploadHistoryResponse:
+        return cls(
+            entries=[UploadHistoryEntryResponse.from_entry(e) for e in result.entries],
+        )
 
 
 class PreviewTransactionResponse(BaseModel):

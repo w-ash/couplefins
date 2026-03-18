@@ -1,9 +1,9 @@
 from datetime import date, datetime
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, select
+from sqlalchemy import ColumnElement, case, func, select
 
-from src.domain.entities.upload import Upload
+from src.domain.entities.upload import Upload, UploadWithCounts
 from src.infrastructure.persistence.models.transaction_model import TransactionModel
 from src.infrastructure.persistence.models.upload_model import UploadModel
 from src.infrastructure.persistence.repositories.base import (
@@ -67,3 +67,42 @@ class UploadRepository(BaseRepository[Upload, UploadModel]):
             TransactionModel.date >= start_date.isoformat(),
             TransactionModel.date <= end_date.isoformat(),
         )
+
+    async def get_all_with_transaction_counts(self) -> list[UploadWithCounts]:
+
+        tx = TransactionModel
+        stmt = (
+            select(
+                UploadModel.id,
+                UploadModel.person_id,
+                UploadModel.filename,
+                UploadModel.uploaded_at,
+                func.count(tx.id).label("transaction_count"),
+                func.sum(case((tx.is_shared.is_(True), 1), else_=0)).label(
+                    "shared_count"
+                ),
+                func.min(tx.date).label("date_range_start"),
+                func.max(tx.date).label("date_range_end"),
+            )
+            .outerjoin(tx, UploadModel.id == tx.upload_id)
+            .group_by(UploadModel.id)
+            .order_by(UploadModel.uploaded_at.desc())
+        )
+        result = await self._session.execute(stmt)
+        return [
+            UploadWithCounts(
+                id=UUID(row.id),
+                person_id=UUID(row.person_id),
+                filename=row.filename,
+                uploaded_at=datetime.fromisoformat(row.uploaded_at),
+                transaction_count=row.transaction_count,
+                shared_count=row.shared_count or 0,
+                date_range_start=date.fromisoformat(row.date_range_start)
+                if row.date_range_start
+                else None,
+                date_range_end=date.fromisoformat(row.date_range_end)
+                if row.date_range_end
+                else None,
+            )
+            for row in result.all()
+        ]

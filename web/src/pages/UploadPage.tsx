@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ArrowRight,
@@ -16,6 +17,7 @@ import type {
 } from "@/api/generated/model";
 import { useGetPersons } from "@/api/generated/persons/persons";
 import {
+  getGetUploadHistoryQueryKey,
   usePostUpload,
   usePostUploadPreview,
 } from "@/api/generated/uploads/uploads";
@@ -24,6 +26,7 @@ import { Card } from "@/components/Card";
 import { FileDropZone } from "@/components/FileDropZone";
 import { PageHeader } from "@/components/PageHeader";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
+import { UploadHistory } from "@/components/UploadHistory";
 import { useSetToggle } from "@/hooks/useSetToggle";
 import { useInvalidateCategories } from "@/lib/categories";
 import {
@@ -262,6 +265,7 @@ function PreviewCard({ preview }: { preview: PreviewUploadResponse }) {
 }
 
 export function UploadPage() {
+  const queryClient = useQueryClient();
   const invalidateCategories = useInvalidateCategories();
   const currentPersonId = useIdentityStore((s) => s.currentPersonId);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -303,6 +307,9 @@ export function UploadPage() {
     mutation: {
       onSuccess: () => {
         invalidateCategories();
+        queryClient.invalidateQueries({
+          queryKey: getGetUploadHistoryQueryKey(),
+        });
         setStep("confirmed");
       },
     },
@@ -617,6 +624,8 @@ export function UploadPage() {
           </Button>
         </Card>
       )}
+
+      <UploadHistory />
     </div>
   );
 }

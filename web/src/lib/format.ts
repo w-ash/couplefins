@@ -98,6 +98,38 @@ export function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+const relFmt = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+
+export function formatRelativeTime(isoString: string): string {
+  const thenDate = new Date(isoString);
+  const diffSeconds = Math.round((thenDate.getTime() - Date.now()) / 1000);
+  const absDiff = Math.abs(diffSeconds);
+
+  if (absDiff < 60) return "just now";
+  if (absDiff < 3600)
+    return relFmt.format(Math.round(diffSeconds / 60), "minute");
+  if (absDiff < 86400)
+    return relFmt.format(Math.round(diffSeconds / 3600), "hour");
+  if (absDiff < 2592000)
+    return relFmt.format(Math.round(diffSeconds / 86400), "day");
+
+  return dateFmt.format(thenDate);
+}
+
+export function formatDateRange(
+  start: string | null,
+  end: string | null,
+): string | null {
+  if (!start || !end) return null;
+  const s = new Date(`${start}T00:00:00`);
+  const e = new Date(`${end}T00:00:00`);
+  const sMonth = SHORT_MONTHS[s.getMonth()];
+  const eMonth = SHORT_MONTHS[e.getMonth()];
+  if (sMonth === eMonth)
+    return `${sMonth} ${s.getDate()}\u2009\u2013\u2009${e.getDate()}`;
+  return `${sMonth} ${s.getDate()}\u2009\u2013\u2009${eMonth} ${e.getDate()}`;
+}
+
 export function useMonthYear(): { year: number; month: number } {
   const [searchParams] = useSearchParams();
   return {

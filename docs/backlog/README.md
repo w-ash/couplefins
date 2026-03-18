@@ -33,7 +33,7 @@
 | v0.7.2 | Year-over-year overlay, dark mode charts & drill-down | Completed (2026-03-17) | M |
 | v0.8.0 | Responsive upload layout (mobile + desktop) | Completed (2026-03-17) | M |
 | v0.8.1 | Drag-and-drop file zone | Completed (2026-03-17) | S |
-| v0.8.2 | Upload history (endpoint + UI) | Planned | M |
+| v0.8.2 | Upload history (endpoint + UI) | Completed (2026-03-17) | M |
 | v0.8.3 | CSV validation & error quality (client + server) | Planned | M |
 | v0.8.4 | Confirmation & flow polish | Planned | S |
 | v0.9.0 | Responsive layout (mobile + touch) | Planned | L |
