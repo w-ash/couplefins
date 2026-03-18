@@ -1,9 +1,10 @@
 import { TrendingUp } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useGetSpendingTrends } from "@/api/generated/insights/insights";
 import type {
   BudgetLineItem,
+  CategorySpendingItem,
   GroupSummaryItem,
   MonthlyGroupSpendingItem,
   MonthlyTotalItem,
@@ -13,6 +14,7 @@ import { ComparisonCard } from "@/components/ComparisonCard";
 import { MonthPicker } from "@/components/MonthPicker";
 import { PageHeader } from "@/components/PageHeader";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
+import { SegmentedControl } from "@/components/SegmentedControl";
 import { SettlementTrendChart } from "@/components/SettlementTrendChart";
 import { SparklineCard } from "@/components/SparklineCard";
 import { StatsGrid } from "@/components/StatsGrid";
@@ -60,16 +62,23 @@ interface GroupChartData {
   ytdTotal: number;
 }
 
-function buildGroupCharts(
+function groupSpendingByGroupId(
   spending: MonthlyGroupSpendingItem[],
-  summaries: GroupSummaryItem[],
-): GroupChartData[] {
+): Map<string | null, { month: number; amount: number }[]> {
   const byGroup = new Map<string | null, { month: number; amount: number }[]>();
   for (const item of spending) {
     const key = item.group_id;
     if (!byGroup.has(key)) byGroup.set(key, []);
     byGroup.get(key)?.push({ month: item.month, amount: item.amount });
   }
+  return byGroup;
+}
+
+function buildGroupCharts(
+  spending: MonthlyGroupSpendingItem[],
+  summaries: GroupSummaryItem[],
+): GroupChartData[] {
+  const byGroup = groupSpendingByGroupId(spending);
 
   return summaries.map((gs) => ({
     groupId: gs.group_id,
@@ -77,6 +86,19 @@ function buildGroupCharts(
     data: (byGroup.get(gs.group_id) ?? []).sort((a, b) => a.month - b.month),
     ytdTotal: gs.ytd_total,
   }));
+}
+
+function buildCategoryMap(
+  spending: MonthlyGroupSpendingItem[],
+  month: number,
+): Map<string | null, CategorySpendingItem[]> {
+  const result = new Map<string | null, CategorySpendingItem[]>();
+  for (const item of spending) {
+    if (item.month === month) {
+      result.set(item.group_id, item.categories);
+    }
+  }
+  return result;
 }
 
 function buildBudgetMap(budgetLines: BudgetLineItem[]): Map<string, number> {
@@ -127,16 +149,27 @@ function buildStats(data: SpendingTrendsResponse) {
   return stats;
 }
 
+const COMPARE_OPTIONS = [
+  { value: "current" as const, label: "This year" },
+  { value: "yoy" as const, label: "vs Last year" },
+];
+
 export function InsightsPage() {
   const { year, month } = useMonthYear();
   const groupIconMap = useGroupIconMap();
+  const [compareMode, setCompareMode] = useState<"current" | "yoy">("current");
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
 
   const {
     data: response,
     isLoading,
     error,
     refetch,
-  } = useGetSpendingTrends({ year, month });
+  } = useGetSpendingTrends({
+    year,
+    month,
+    comparison_year: compareMode === "yoy" ? year - 1 : undefined,
+  });
   const data = response?.status === 200 ? response.data : undefined;
 
   const groupCharts = useMemo(
@@ -145,6 +178,20 @@ export function InsightsPage() {
         ? buildGroupCharts(data.monthly_group_spending, data.group_summaries)
         : [],
     [data],
+  );
+
+  const comparisonMap = useMemo(
+    () =>
+      data?.comparison_monthly_group_spending
+        ? groupSpendingByGroupId(data.comparison_monthly_group_spending)
+        : new Map(),
+    [data],
+  );
+
+  const categoryMap = useMemo(
+    () =>
+      data ? buildCategoryMap(data.monthly_group_spending, month) : new Map(),
+    [data, month],
   );
 
   const budgetMap = useMemo(
@@ -164,6 +211,12 @@ export function InsightsPage() {
     <div className="mx-auto max-w-4xl px-6 py-12">
       <PageHeader icon={<TrendingUp className="size-6" />} title="Insights">
         <div className="flex items-center gap-2">
+          <SegmentedControl
+            options={COMPARE_OPTIONS}
+            value={compareMode}
+            onChange={setCompareMode}
+            size="sm"
+          />
           <MonthPicker />
           <YearSelector />
         </div>
@@ -216,6 +269,25 @@ export function InsightsPage() {
                 ytdTotal={group.ytdTotal}
                 color={getChartColor(index)}
                 budgetLine={budgetMap.get(group.groupId ?? "") ?? null}
+                comparisonData={
+                  compareMode === "yoy"
+                    ? (comparisonMap.get(group.groupId) ?? undefined)
+                    : undefined
+                }
+                comparisonYear={compareMode === "yoy" ? year - 1 : undefined}
+                year={year}
+                isExpanded={
+                  expandedGroupId === (group.groupId ?? "uncategorized")
+                }
+                onToggle={() =>
+                  setExpandedGroupId(
+                    expandedGroupId === (group.groupId ?? "uncategorized")
+                      ? null
+                      : (group.groupId ?? "uncategorized"),
+                  )
+                }
+                categories={categoryMap.get(group.groupId) ?? undefined}
+                selectedMonth={month}
               />
             ))}
           </div>

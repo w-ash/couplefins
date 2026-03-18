@@ -223,3 +223,81 @@ async def test_persons_included() -> None:
     assert len(result.persons) == 2
     names = {p.name for p in result.persons}
     assert names == {"Alice", "Bob"}
+
+
+async def test_comparison_year_returns_both_years() -> None:
+    uow, alice, _, _food_group = _setup_uow()
+
+    current_txs = [
+        make_transaction(
+            date=date(2026, 1, 10),
+            category="Dining Out",
+            amount=Decimal("-80.00"),
+            payer_person_id=alice.id,
+        ),
+    ]
+    comparison_txs = [
+        make_transaction(
+            date=date(2025, 1, 10),
+            category="Dining Out",
+            amount=Decimal("-60.00"),
+            payer_person_id=alice.id,
+        ),
+    ]
+
+    uow.transactions.get_shared_by_year.side_effect = lambda year: (
+        current_txs if year == 2026 else comparison_txs
+    )
+
+    command = GetSpendingTrendsCommand(year=2026, comparison_year=2025)
+    result = await GetSpendingTrendsUseCase().execute(command, uow)
+
+    assert len(result.trends.monthly_group_spending) == 1
+    assert result.trends.monthly_group_spending[0].amount == Decimal("80.00")
+
+    assert len(result.comparison_monthly_group_spending) == 1
+    assert result.comparison_monthly_group_spending[0].year == 2025
+    assert result.comparison_monthly_group_spending[0].amount == Decimal("60.00")
+
+
+async def test_comparison_year_none_returns_empty() -> None:
+    uow, alice, _, _ = _setup_uow()
+    uow.transactions.get_shared_by_year.return_value = [
+        make_transaction(
+            date=date(2026, 1, 10),
+            category="Dining Out",
+            amount=Decimal("-50.00"),
+            payer_person_id=alice.id,
+        ),
+    ]
+
+    command = GetSpendingTrendsCommand(year=2026)
+    result = await GetSpendingTrendsUseCase().execute(command, uow)
+
+    assert result.comparison_monthly_group_spending == []
+
+
+async def test_comparison_year_no_data() -> None:
+    uow, alice, _, _ = _setup_uow()
+    uow.transactions.get_shared_by_year.side_effect = lambda year: (
+        [
+            make_transaction(
+                date=date(2026, 1, 10),
+                category="Dining Out",
+                amount=Decimal("-50.00"),
+                payer_person_id=alice.id,
+            ),
+        ]
+        if year == 2026
+        else []
+    )
+
+    command = GetSpendingTrendsCommand(year=2026, comparison_year=2025)
+    result = await GetSpendingTrendsUseCase().execute(command, uow)
+
+    assert result.comparison_monthly_group_spending == []
+
+
+def test_invalid_comparison_year() -> None:
+    with pytest.raises(ValueError, match="must be positive"):
+        GetSpendingTrendsCommand(year=2026, comparison_year=0)

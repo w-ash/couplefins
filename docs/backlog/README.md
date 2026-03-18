@@ -30,7 +30,7 @@
 | v0.6.4 | Orval codegen activation + MSW test infrastructure | Completed (2026-03-16) | M |
 | v0.7.0 | Spending trends — small multiples charts + Insights page | Completed (2026-03-17) | L |
 | v0.7.1 | Comparison cards, budget lines & settlement balance trend | Completed (2026-03-17) | M |
-| v0.7.2 | Year-over-year overlay, dark mode charts & drill-down | Planned | M |
+| v0.7.2 | Year-over-year overlay, dark mode charts & drill-down | Completed (2026-03-17) | M |
 | v0.8.0 | Upload experience (drag-and-drop, upload history) | Planned | M |
 | v0.9.0 | Responsive layout (mobile + touch) | Planned | L |
 | v0.9.1 | Transaction exclusion flag | Planned | S |

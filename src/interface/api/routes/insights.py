@@ -16,11 +16,13 @@ router = APIRouter(tags=["insights"])
 async def get_spending_trends(
     year: int | None = None,
     month: int | None = None,
+    comparison_year: int | None = None,
 ) -> SpendingTrendsResponse:
     now = datetime.now(UTC)
     command = GetSpendingTrendsCommand(
         year=year or now.year,
         month=month,
+        comparison_year=comparison_year,
     )
     result = await execute_use_case(
         lambda uow: GetSpendingTrendsUseCase().execute(command, uow)

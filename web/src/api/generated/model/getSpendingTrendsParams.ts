@@ -8,4 +8,5 @@
 export type GetSpendingTrendsParams = {
 year?: number | null;
 month?: number | null;
+comparison_year?: number | null;
 };

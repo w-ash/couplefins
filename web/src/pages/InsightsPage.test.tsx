@@ -10,6 +10,8 @@ const baseFields = {
   comparison_cards: [] as SpendingTrendsResponse["comparison_cards"],
   budget_lines: [] as SpendingTrendsResponse["budget_lines"],
   settlement_trend: [] as SpendingTrendsResponse["settlement_trend"],
+  comparison_monthly_group_spending:
+    [] as SpendingTrendsResponse["comparison_monthly_group_spending"],
   persons: [
     { id: "p1", name: "Alice", adjustment_account: "" },
     { id: "p2", name: "Bob", adjustment_account: "" },
@@ -33,6 +35,10 @@ const populatedResponse: SpendingTrendsResponse = {
       group_id: "g1",
       group_name: "Food & Dining",
       amount: 400,
+      categories: [
+        { category: "Dining Out", amount: 250 },
+        { category: "Groceries", amount: 150 },
+      ],
     },
     {
       year: 2026,
@@ -40,9 +46,27 @@ const populatedResponse: SpendingTrendsResponse = {
       group_id: "g1",
       group_name: "Food & Dining",
       amount: 450,
+      categories: [
+        { category: "Dining Out", amount: 300 },
+        { category: "Groceries", amount: 150 },
+      ],
     },
-    { year: 2026, month: 1, group_id: "g2", group_name: "Travel", amount: 300 },
-    { year: 2026, month: 2, group_id: "g2", group_name: "Travel", amount: 200 },
+    {
+      year: 2026,
+      month: 1,
+      group_id: "g2",
+      group_name: "Travel",
+      amount: 300,
+      categories: [{ category: "Flights", amount: 300 }],
+    },
+    {
+      year: 2026,
+      month: 2,
+      group_id: "g2",
+      group_name: "Travel",
+      amount: 200,
+      categories: [{ category: "Flights", amount: 200 }],
+    },
   ],
   monthly_totals: [
     { year: 2026, month: 1, total_amount: 700 },
@@ -226,5 +250,44 @@ describe("InsightsPage", () => {
     await waitFor(() => {
       expect(screen.getByRole("alert")).toBeInTheDocument();
     });
+  });
+
+  it("renders YoY toggle", () => {
+    renderWithProviders(<InsightsPage />);
+    expect(screen.getByText("This year")).toBeInTheDocument();
+    expect(screen.getByText("vs Last year")).toBeInTheDocument();
+  });
+
+  it("expands sparkline card on click", async () => {
+    server.use(
+      http.get("/api/v1/insights/spending-trends", () =>
+        HttpResponse.json(populatedResponse),
+      ),
+    );
+
+    renderWithProviders(<InsightsPage />, {
+      routerProps: { initialEntries: ["/?year=2026&month=2"] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Food & Dining").length).toBeGreaterThan(0);
+    });
+
+    // Sparkline cards should have expand buttons
+    const expandButtons = screen.getAllByRole("button", { expanded: false });
+    const sparklineButton = expandButtons.find((btn) =>
+      btn.textContent?.includes("Food & Dining"),
+    );
+    expect(sparklineButton).toBeDefined();
+
+    // Click to expand
+    sparklineButton?.click();
+
+    // Should show category breakdown for month 2
+    await waitFor(() => {
+      expect(screen.getByText("Dining Out")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Groceries")).toBeInTheDocument();
+    expect(screen.getByText("View transactions")).toBeInTheDocument();
   });
 });

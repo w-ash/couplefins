@@ -172,6 +172,28 @@ class TestComputeSpendingTrends:
         assert result.group_summaries[0].group_id == food_id
         assert result.group_summaries[1].group_id == travel_id
 
+    def test_categories_populated(self) -> None:
+        food_id, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                date=date(2026, 1, 10), category="Dining Out", amount=Decimal("-40.00")
+            ),
+            make_transaction(
+                date=date(2026, 1, 20), category="Groceries", amount=Decimal("-60.00")
+            ),
+        ]
+
+        result = compute_spending_trends(txs, lookup, 2026)
+
+        mgs = result.monthly_group_spending[0]
+        assert mgs.group_id == food_id
+        assert len(mgs.categories) == 2
+        cat_names = {c.category for c in mgs.categories}
+        assert cat_names == {"Dining Out", "Groceries"}
+        cat_amounts = {c.category: c.amount for c in mgs.categories}
+        assert cat_amounts["Dining Out"] == Decimal("40.00")
+        assert cat_amounts["Groceries"] == Decimal("60.00")
+
 
 class TestComputeTrailingAverage:
     def test_normal_three_month_window(self) -> None:

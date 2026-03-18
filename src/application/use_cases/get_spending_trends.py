@@ -7,6 +7,7 @@ from attrs import define, field
 
 from src.application.use_cases._shared.command_validators import (
     optional_month_range,
+    optional_positive_int,
     positive_int,
 )
 from src.application.use_cases._shared.date_math import partition_by_month
@@ -25,6 +26,7 @@ from src.domain.entities.settlement import Settlement
 from src.domain.entities.transaction import Transaction
 from src.domain.insights import (
     GroupComparison,
+    MonthlyGroupSpending,
     MonthlySettlement,
     SpendingTrends,
     compute_comparison_cards,
@@ -37,6 +39,7 @@ from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 class GetSpendingTrendsCommand:
     year: int = field(validator=positive_int)
     month: int | None = field(default=None, validator=optional_month_range)
+    comparison_year: int | None = field(default=None, validator=optional_positive_int)
 
 
 @define(frozen=True, slots=True)
@@ -48,6 +51,7 @@ class GetSpendingTrendsResult:
     budget_lines: dict[UUID, Decimal]
     settlement_trend: list[MonthlySettlement]
     persons: list[Person]
+    comparison_monthly_group_spending: list[MonthlyGroupSpending] = field(factory=list)
 
 
 def _build_budget_lines(
@@ -125,6 +129,16 @@ class GetSpendingTrendsUseCase:
                 year_txs, ctx, command.year, all_year_settlements
             )
 
+            comparison_monthly_group_spending: list[MonthlyGroupSpending] = []
+            if command.comparison_year is not None:
+                comp_txs = await uow.transactions.get_shared_by_year(
+                    command.comparison_year
+                )
+                comp_trends = compute_spending_trends(
+                    comp_txs, category_lookup, command.comparison_year
+                )
+                comparison_monthly_group_spending = comp_trends.monthly_group_spending
+
             return GetSpendingTrendsResult(
                 year=command.year,
                 month=target_month,
@@ -133,4 +147,5 @@ class GetSpendingTrendsUseCase:
                 budget_lines=budget_lines,
                 settlement_trend=settlement_trend,
                 persons=ctx.persons,
+                comparison_monthly_group_spending=comparison_monthly_group_spending,
             )

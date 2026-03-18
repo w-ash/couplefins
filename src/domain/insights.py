@@ -48,12 +48,19 @@ class MonthlySettlement:
 
 
 @define(frozen=True, slots=True)
+class CategorySpending:
+    category: str
+    amount: Decimal
+
+
+@define(frozen=True, slots=True)
 class MonthlyGroupSpending:
     year: int
     month: int
     group_id: UUID | None
     group_name: str
     amount: Decimal
+    categories: list[CategorySpending]
 
 
 @define(frozen=True, slots=True)
@@ -102,6 +109,10 @@ def compute_spending_trends(
                     group_id=bd.group_id,
                     group_name=bd.group_name,
                     amount=bd.total_amount,
+                    categories=[
+                        CategorySpending(category=cat.category, amount=cat.total_amount)
+                        for cat in bd.categories
+                    ],
                 )
             )
             month_total += bd.total_amount

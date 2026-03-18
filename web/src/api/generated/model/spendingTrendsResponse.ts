@@ -22,4 +22,5 @@ export interface SpendingTrendsResponse {
   budget_lines: BudgetLineItem[];
   settlement_trend: MonthlySettlementItem[];
   persons: PersonResponse[];
+  comparison_monthly_group_spending: MonthlyGroupSpendingItem[];
 }

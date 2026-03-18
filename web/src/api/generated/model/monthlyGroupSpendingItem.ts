@@ -4,6 +4,7 @@
  * Couplefins
  * OpenAPI spec version: 0.1.0
  */
+import type { CategorySpendingItem } from './categorySpendingItem';
 
 export interface MonthlyGroupSpendingItem {
   year: number;
@@ -11,4 +12,5 @@ export interface MonthlyGroupSpendingItem {
   group_id: string | null;
   group_name: string;
   amount: number;
+  categories: CategorySpendingItem[];
 }

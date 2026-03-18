@@ -3,7 +3,13 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from src.application.use_cases.get_spending_trends import GetSpendingTrendsResult
+from src.domain.insights import MonthlyGroupSpending
 from src.interface.api.schemas.persons import PersonResponse
+
+
+class CategorySpendingItem(BaseModel):
+    category: str
+    amount: float
 
 
 class MonthlyGroupSpendingItem(BaseModel):
@@ -12,6 +18,7 @@ class MonthlyGroupSpendingItem(BaseModel):
     group_id: UUID | None
     group_name: str
     amount: float
+    categories: list[CategorySpendingItem]
 
 
 class MonthlyTotalItem(BaseModel):
@@ -60,22 +67,34 @@ class SpendingTrendsResponse(BaseModel):
     budget_lines: list[BudgetLineItem]
     settlement_trend: list[MonthlySettlementItem]
     persons: list[PersonResponse]
+    comparison_monthly_group_spending: list[MonthlyGroupSpendingItem]
 
     @classmethod
     def from_result(cls, result: GetSpendingTrendsResult) -> SpendingTrendsResponse:
-        return cls(
-            year=result.year,
-            month=result.month,
-            monthly_group_spending=[
+        def _map_spending(
+            mgs_list: list[MonthlyGroupSpending],
+        ) -> list[MonthlyGroupSpendingItem]:
+            return [
                 MonthlyGroupSpendingItem(
                     year=mgs.year,
                     month=mgs.month,
                     group_id=mgs.group_id,
                     group_name=mgs.group_name,
                     amount=float(mgs.amount),
+                    categories=[
+                        CategorySpendingItem(
+                            category=cs.category, amount=float(cs.amount)
+                        )
+                        for cs in mgs.categories
+                    ],
                 )
-                for mgs in result.trends.monthly_group_spending
-            ],
+                for mgs in mgs_list
+            ]
+
+        return cls(
+            year=result.year,
+            month=result.month,
+            monthly_group_spending=_map_spending(result.trends.monthly_group_spending),
             monthly_totals=[
                 MonthlyTotalItem(
                     year=mt.year,
@@ -130,4 +149,7 @@ class SpendingTrendsResponse(BaseModel):
                 )
                 for p in result.persons
             ],
+            comparison_monthly_group_spending=_map_spending(
+                result.comparison_monthly_group_spending
+            ),
         )

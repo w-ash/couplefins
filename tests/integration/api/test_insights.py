@@ -8,6 +8,10 @@ ALICE_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Ta
 2026-02-05,Pizza Joint,Dining Out,Chase,PIZZA JOINT,,-30.00,"shared"
 """
 
+ALICE_2025_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags
+2025-01-15,Taco Truck,Dining Out,Chase,TACO TRUCK,,-25.00,"shared"
+"""
+
 BOB_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags
 2026-01-15,Gas Station,Gas,Chase,GAS STATION,,-50.00,"shared"
 2026-02-10,Coffee Shop,Coffee Shops & Treats,Chase,COFFEE SHOP,,-15.00,"shared"
@@ -87,3 +91,48 @@ async def test_spending_trends_includes_persons(client: AsyncClient) -> None:
     assert len(persons) == 2
     names = {p["name"] for p in persons}
     assert names == {"Alice", "Bob"}
+
+
+async def test_spending_trends_with_comparison_year(client: AsyncClient) -> None:
+    persons = await setup_couple(client)
+    await upload_csv(client, persons[0]["id"], ALICE_CSV)
+    await upload_csv(client, persons[0]["id"], ALICE_2025_CSV)
+
+    resp = await client.get(
+        "/api/v1/insights/spending-trends",
+        params={"year": 2026, "comparison_year": 2025},
+    )
+    assert resp.status_code == 200
+
+    data = resp.json()
+    assert len(data["monthly_group_spending"]) > 0
+    assert len(data["comparison_monthly_group_spending"]) > 0
+    assert data["comparison_monthly_group_spending"][0]["year"] == 2025
+
+
+async def test_spending_trends_comparison_year_no_data(client: AsyncClient) -> None:
+    persons = await setup_couple(client)
+    await upload_csv(client, persons[0]["id"], ALICE_CSV)
+
+    resp = await client.get(
+        "/api/v1/insights/spending-trends",
+        params={"year": 2026, "comparison_year": 2020},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["comparison_monthly_group_spending"] == []
+
+
+async def test_spending_trends_categories_present(client: AsyncClient) -> None:
+    persons = await setup_couple(client)
+    await upload_csv(client, persons[0]["id"], ALICE_CSV)
+
+    resp = await client.get("/api/v1/insights/spending-trends", params={"year": 2026})
+    assert resp.status_code == 200
+
+    data = resp.json()
+    mgs = data["monthly_group_spending"]
+    assert len(mgs) > 0
+    # Each item should have categories
+    for item in mgs:
+        assert "categories" in item
+        assert isinstance(item["categories"], list)

@@ -38,3 +38,10 @@ def optional_month_range(
 ) -> None:
     if value is not None:
         month_range(_instance, attribute, value)  # type: ignore[arg-type]
+
+
+def optional_positive_int(
+    _instance: object, attribute: Attribute[int | None], value: int | None
+) -> None:
+    if value is not None:
+        positive_int(_instance, attribute, value)  # type: ignore[arg-type]

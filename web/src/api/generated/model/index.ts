@@ -20,6 +20,7 @@ export * from './bulkUpdateResponse';
 export * from './categoryBreakdownResponse';
 export * from './categoryGroupBreakdownResponse';
 export * from './categoryGroupResponse';
+export * from './categorySpendingItem';
 export * from './categorySpendResponse';
 export * from './changedTransactionResponse';
 export * from './createCategoryGroupRequest';
