@@ -10,7 +10,7 @@ import {
   Upload,
   Users,
 } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import type {
   ChangedTransactionResponse,
   PreviewUploadResponse,
@@ -26,9 +26,11 @@ import { Card } from "@/components/Card";
 import { FileDropZone } from "@/components/FileDropZone";
 import { PageHeader } from "@/components/PageHeader";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
+import { UploadError } from "@/components/UploadError";
 import { UploadHistory } from "@/components/UploadHistory";
 import { useSetToggle } from "@/hooks/useSetToggle";
 import { useInvalidateCategories } from "@/lib/categories";
+import { validateCsvHeaders } from "@/lib/csv-validation";
 import {
   amountColorClass,
   formatCurrency,
@@ -39,6 +41,7 @@ import { useIdentityStore } from "@/lib/identity";
 import { selectInputClass } from "@/lib/input-styles";
 
 const PREVIEW_LIMIT = 5;
+const MAX_CSV_SIZE = 10 * 1024 * 1024;
 
 type Step = "form" | "preview" | "review" | "confirmed";
 
@@ -269,6 +272,7 @@ export function UploadPage() {
   const invalidateCategories = useInvalidateCategories();
   const currentPersonId = useIdentityStore((s) => s.currentPersonId);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [headerError, setHeaderError] = useState<string | null>(null);
   const [personId, setPersonId] = useState(currentPersonId ?? "");
   useEffect(() => {
     if (currentPersonId) setPersonId(currentPersonId);
@@ -347,6 +351,19 @@ export function UploadPage() {
     }
   }
 
+  const validatingFileRef = useRef<File | null>(null);
+
+  function handleFileSelected(file: File) {
+    setSelectedFile(file);
+    setHeaderError(null);
+    previewMutation.reset();
+    validatingFileRef.current = file;
+    validateCsvHeaders(file).then((error) => {
+      if (validatingFileRef.current !== file) return;
+      if (error) setHeaderError(error);
+    });
+  }
+
   function handleReset() {
     setStep("form");
     previewMutation.reset();
@@ -354,6 +371,7 @@ export function UploadPage() {
     clearAccepted();
     setPersonId(currentPersonId ?? "");
     setSelectedFile(null);
+    setHeaderError(null);
   }
 
   function toggleAll(accept: boolean) {
@@ -445,17 +463,27 @@ export function UploadPage() {
           </span>
           <FileDropZone
             accept=".csv"
-            onFile={setSelectedFile}
+            onFile={handleFileSelected}
             disabled={isFormDisabled}
             currentFile={selectedFile}
+            maxSizeBytes={MAX_CSV_SIZE}
           />
+          {headerError && (
+            <div
+              role="alert"
+              className="mt-2 flex items-start gap-2 rounded-lg border border-destructive-border bg-destructive-muted p-3 text-sm text-destructive-muted-foreground"
+            >
+              <CircleAlert className="mt-0.5 size-4 shrink-0" />
+              {headerError}
+            </div>
+          )}
         </div>
 
         {/* Submit */}
         {step === "form" && (
           <Button
             type="submit"
-            disabled={!personId || !selectedFile}
+            disabled={!personId || !selectedFile || !!headerError}
             loading={previewMutation.isPending}
             loadingText="Parsing..."
             icon={<Eye className="size-4" />}
@@ -468,15 +496,7 @@ export function UploadPage() {
 
       {/* Error */}
       <div aria-live="polite" aria-atomic="true">
-        {error && (
-          <div
-            role="alert"
-            className="mt-4 flex items-start gap-2.5 rounded-lg border border-destructive-border bg-destructive-muted p-4 text-sm text-destructive-muted-foreground"
-          >
-            <CircleAlert className="mt-0.5 size-4 shrink-0" />
-            {error instanceof Error ? error.message : "An error occurred"}
-          </div>
-        )}
+        {error && <UploadError error={error} />}
       </div>
 
       {/* Already up to date */}

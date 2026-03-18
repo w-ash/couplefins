@@ -200,3 +200,57 @@ def test_unique_rows_all_get_occurrence_zero() -> None:
     result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
 
     assert all(tx.occurrence == 0 for tx in result)
+
+
+def test_single_invalid_amount_includes_row_number() -> None:
+    csv = _make_csv({"Amount": "abc", "Merchant": "Starbucks"})
+    with pytest.raises(ValidationError, match=r"Row 2 \(Starbucks\).*invalid amount"):
+        parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+
+
+def test_single_invalid_date_includes_row_number() -> None:
+    csv = _make_csv({"Date": "not-a-date", "Merchant": "Target"})
+    with pytest.raises(ValidationError, match=r"Row 2 \(Target\).*invalid date"):
+        parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+
+
+def test_multiple_invalid_rows_collects_all_errors() -> None:
+    csv = _make_csv(
+        {"Amount": "12.3.4", "Merchant": "Starbucks"},
+        {"Amount": "-25.00"},  # valid row
+        {"Date": "2026-13-01", "Merchant": "Amazon"},
+    )
+    with pytest.raises(ValidationError) as exc_info:
+        parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+
+    message = str(exc_info.value)
+    assert "Row 2 (Starbucks)" in message
+    assert "Row 4 (Amazon)" in message
+    assert "invalid amount" in message
+    assert "invalid date" in message
+    # Two error lines
+    assert len(message.split("\n")) == 2
+
+
+def test_error_cap_at_max_row_errors() -> None:
+    from src.domain.parsing.monarch_csv import MAX_ROW_ERRORS
+
+    rows = [{"Amount": "bad", "Merchant": f"Store{i}"} for i in range(30)]
+    csv = _make_csv(*rows)
+    with pytest.raises(ValidationError) as exc_info:
+        parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+
+    message = str(exc_info.value)
+    lines = message.split("\n")
+    # 25 error lines + 1 "...and N more" line
+    assert len(lines) == MAX_ROW_ERRORS + 1
+    assert "...and 5 more" in lines[-1]
+
+
+def test_no_partial_import_when_errors_exist() -> None:
+    csv = _make_csv(
+        {"Amount": "-25.00", "Merchant": "Valid"},
+        {"Amount": "bad", "Merchant": "Invalid"},
+    )
+    with pytest.raises(ValidationError):
+        parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)

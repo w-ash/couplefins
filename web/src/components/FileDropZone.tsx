@@ -3,6 +3,7 @@ import {
   type ChangeEvent,
   type DragEvent,
   type KeyboardEvent,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -14,6 +15,7 @@ interface FileDropZoneProps {
   onFile: (file: File) => void;
   disabled?: boolean;
   currentFile: File | null;
+  maxSizeBytes?: number;
 }
 
 export function FileDropZone({
@@ -21,9 +23,26 @@ export function FileDropZone({
   onFile,
   disabled = false,
   currentFile,
+  maxSizeBytes,
 }: FileDropZoneProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const validateFile = useCallback(
+    (file: File): string | null => {
+      if (!file.name.toLowerCase().endsWith(accept)) {
+        return `Only ${accept} files are accepted`;
+      }
+      if (file.size === 0) {
+        return "File is empty";
+      }
+      if (maxSizeBytes !== undefined && file.size > maxSizeBytes) {
+        return `File is too large (${formatFileSize(file.size)}). Maximum size is ${formatFileSize(maxSizeBytes)}.`;
+      }
+      return null;
+    },
+    [accept, maxSizeBytes],
+  );
 
   useEffect(() => {
     if (currentFile === null) setError(null);
@@ -59,8 +78,9 @@ export function FileDropZone({
     if (disabled) return;
     const file = e.dataTransfer.files[0];
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith(accept)) {
-      setError(`Only ${accept} files are accepted`);
+    const validationError = validateFile(file);
+    if (validationError) {
+      setError(validationError);
       return;
     }
     setError(null);
@@ -70,6 +90,12 @@ export function FileDropZone({
   function handleChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
+      const validationError = validateFile(file);
+      if (validationError) {
+        setError(validationError);
+        e.target.value = "";
+        return;
+      }
       setError(null);
       onFile(file);
     }
@@ -156,7 +182,7 @@ export function FileDropZone({
       {error && (
         <div
           role="alert"
-          className="mt-2 flex items-center gap-1.5 text-sm text-negative"
+          className="mt-2 flex items-center gap-1.5 rounded-lg border border-destructive-border bg-destructive-muted px-3 py-2 text-sm text-destructive-muted-foreground"
         >
           <AlertTriangle className="size-4 shrink-0" />
           {error}

@@ -158,3 +158,27 @@ async def test_upload_history_empty(client: AsyncClient) -> None:
     response = await client.get("/api/v1/uploads/history")
     assert response.status_code == 200
     assert response.json()["entries"] == []
+
+
+async def test_preview_binary_file_returns_422(client: AsyncClient) -> None:
+    persons = await setup_couple(client)
+    person_id = persons[0]["id"]
+    response = await client.post(
+        "/api/v1/uploads/preview",
+        data={"person_id": person_id},
+        files={"file": ("bad.csv", io.BytesIO(b"\x80\x81\x82"), "text/csv")},
+    )
+    assert response.status_code == 422
+    assert "UTF-8" in response.json()["error"]["message"]
+
+
+async def test_upload_binary_file_returns_422(client: AsyncClient) -> None:
+    persons = await setup_couple(client)
+    person_id = persons[0]["id"]
+    response = await client.post(
+        "/api/v1/uploads/",
+        data={"person_id": person_id},
+        files={"file": ("bad.csv", io.BytesIO(b"\x80\x81\x82"), "text/csv")},
+    )
+    assert response.status_code == 422
+    assert "UTF-8" in response.json()["error"]["message"]

@@ -17,6 +17,16 @@ from src.interface.api.schemas.uploads import (
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
 
+async def _decode_csv(file: UploadFile) -> str:
+    csv_bytes = await file.read()
+    try:
+        return csv_bytes.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ValidationError(
+            "File is not valid UTF-8 text. Monarch exports use UTF-8 — try re-exporting."
+        ) from exc
+
+
 @router.get("/history")
 async def upload_history() -> UploadHistoryResponse:
     result = await execute_use_case(get_upload_history)
@@ -28,8 +38,7 @@ async def post_upload_preview(
     file: UploadFile,
     person_id: UUID = Form(),
 ) -> PreviewUploadResponse:
-    csv_bytes = await file.read()
-    csv_text = csv_bytes.decode("utf-8-sig")
+    csv_text = await _decode_csv(file)
 
     command = PreviewCsvCommand(csv_text=csv_text, person_id=person_id)
     result = await execute_use_case(
@@ -44,8 +53,7 @@ async def post_upload(
     person_id: UUID = Form(),
     accepted_change_ids: str = Form(default="[]"),
 ) -> UploadSummaryResponse:
-    csv_bytes = await file.read()
-    csv_text = csv_bytes.decode("utf-8-sig")
+    csv_text = await _decode_csv(file)
 
     try:
         raw_ids: list[str] = json.loads(accepted_change_ids)  # pyright: ignore[reportAny]

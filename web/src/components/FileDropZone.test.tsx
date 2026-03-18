@@ -8,6 +8,7 @@ function renderDropZone(
     onFile: (file: File) => void;
     disabled: boolean;
     currentFile: File | null;
+    maxSizeBytes: number;
   }> = {},
 ) {
   const onFile = overrides.onFile ?? vi.fn();
@@ -17,6 +18,7 @@ function renderDropZone(
       onFile={onFile}
       disabled={overrides.disabled ?? false}
       currentFile={overrides.currentFile ?? null}
+      maxSizeBytes={overrides.maxSizeBytes}
     />,
   );
   return { onFile, ...result };
@@ -181,5 +183,64 @@ describe("FileDropZone", () => {
     fireEvent.keyDown(zone, { key: " " });
     expect(clickSpy).toHaveBeenCalled();
     clickSpy.mockRestore();
+  });
+
+  it("rejects empty files with an error on drop", () => {
+    const { onFile } = renderDropZone();
+    const zone = getZone();
+    const emptyFile = new File([], "empty.csv", { type: "text/csv" });
+
+    fireEvent.drop(zone, { dataTransfer: { files: [emptyFile] } });
+    expect(onFile).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent("File is empty");
+  });
+
+  it("rejects empty files on input change", () => {
+    const { onFile, container } = renderDropZone();
+    const input = container.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    const emptyFile = new File([], "empty.csv", { type: "text/csv" });
+
+    fireEvent.change(input, { target: { files: [emptyFile] } });
+    expect(onFile).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent("File is empty");
+  });
+
+  it("rejects oversized files with a size message", () => {
+    const { onFile } = renderDropZone({ maxSizeBytes: 1024 });
+    const zone = getZone();
+    const bigFile = new File(["x".repeat(2048)], "big.csv", {
+      type: "text/csv",
+    });
+
+    fireEvent.drop(zone, { dataTransfer: { files: [bigFile] } });
+    expect(onFile).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent("too large");
+  });
+
+  it("accepts files at the exact size limit", () => {
+    const { onFile } = renderDropZone({ maxSizeBytes: 100 });
+    const zone = getZone();
+    const file = new File(["x".repeat(100)], "exact.csv", {
+      type: "text/csv",
+    });
+
+    fireEvent.drop(zone, { dataTransfer: { files: [file] } });
+    expect(onFile).toHaveBeenCalledWith(file);
+  });
+
+  it("rejects non-CSV files on input change", () => {
+    const { onFile, container } = renderDropZone();
+    const input = container.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    const txtFile = new File(["hello"], "readme.txt", { type: "text/plain" });
+
+    fireEvent.change(input, { target: { files: [txtFile] } });
+    expect(onFile).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Only .csv files are accepted",
+    );
   });
 });

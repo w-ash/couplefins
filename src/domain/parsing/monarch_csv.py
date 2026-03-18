@@ -20,6 +20,8 @@ REQUIRED_COLUMNS = {
     "Tags",
 }
 
+MAX_ROW_ERRORS = 25
+
 
 def parse_monarch_csv(
     csv_text: str,
@@ -41,7 +43,8 @@ def parse_monarch_csv(
         collections.Counter()
     )
     transactions: list[Transaction] = []
-    for row in reader:
+    errors: list[str] = []
+    for row_num, row in enumerate(reader, start=2):
         tags = _parse_tags(row["Tags"])
         is_settlement = _is_settlement(tags)
         is_shared = _is_shared(tags) and not is_settlement
@@ -49,17 +52,19 @@ def parse_monarch_csv(
 
         try:
             amount = Decimal(row["Amount"])
-        except (InvalidOperation, ValueError) as e:
-            raise ValidationError(
-                f"Invalid amount '{row['Amount']}' for merchant '{row['Merchant']}'"
-            ) from e
+        except InvalidOperation, ValueError:
+            errors.append(
+                f'Row {row_num} ({row["Merchant"]}): invalid amount "{row["Amount"]}"'
+            )
+            continue
 
         try:
             tx_date = date.fromisoformat(row["Date"])
-        except ValueError as e:
-            raise ValidationError(
-                f"Invalid date '{row['Date']}' for merchant '{row['Merchant']}'"
-            ) from e
+        except ValueError:
+            errors.append(
+                f'Row {row_num} ({row["Merchant"]}): invalid date "{row["Date"]}"'
+            )
+            continue
 
         base_key = (tx_date, amount, row["Account"], row["Original Statement"])
         occurrence = occurrence_counter[base_key]
@@ -83,6 +88,12 @@ def parse_monarch_csv(
                 is_settlement=is_settlement,
             )
         )
+
+    if errors:
+        displayed = errors[:MAX_ROW_ERRORS]
+        if len(errors) > MAX_ROW_ERRORS:
+            displayed.append(f"...and {len(errors) - MAX_ROW_ERRORS} more")
+        raise ValidationError("\n".join(displayed))
 
     return transactions
 

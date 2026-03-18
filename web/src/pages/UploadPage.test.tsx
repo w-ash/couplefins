@@ -76,11 +76,14 @@ const previewResponseWithChanges = {
   unmapped_categories: [],
 };
 
+const VALID_CSV_CONTENT =
+  "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n2026-01-15,Test,Cat,Chase,TEST,,-50,shared\n";
+
 function setFileAndSubmit() {
   const fileInput = document.querySelector(
     'input[type="file"]',
   ) as HTMLInputElement;
-  const file = new File(["Date,Merchant\n2026-01-15,Test"], "test.csv", {
+  const file = new File([VALID_CSV_CONTENT], "test.csv", {
     type: "text/csv",
   });
   fireEvent.change(fileInput, { target: { files: [file] } });
@@ -261,5 +264,105 @@ describe("UploadPage", () => {
       const alert = screen.getByRole("alert");
       expect(alert).toHaveTextContent("Invalid CSV format");
     });
+  });
+
+  it("disables Preview button when CSV headers are invalid", async () => {
+    renderWithProviders(<UploadPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Who are you?")).toBeInTheDocument();
+    });
+
+    const fileInput = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    const badCsv = new File(["Name,Email\nJohn,john@test.com"], "bad.csv", {
+      type: "text/csv",
+    });
+    fireEvent.change(fileInput, { target: { files: [badCsv] } });
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Missing required columns",
+      );
+    });
+
+    const previewButton = screen.getByRole("button", { name: "Preview CSV" });
+    expect(previewButton).toBeDisabled();
+  });
+
+  it("clears header error when valid file is selected", async () => {
+    renderWithProviders(<UploadPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Who are you?")).toBeInTheDocument();
+    });
+
+    const fileInput = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+
+    // Select invalid file
+    const badCsv = new File(["Name,Email\n"], "bad.csv", {
+      type: "text/csv",
+    });
+    fireEvent.change(fileInput, { target: { files: [badCsv] } });
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Missing required columns",
+      );
+    });
+
+    // Select valid file
+    const goodCsv = new File(
+      [
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n2026-01-15,Test,Cat,Chase,TEST,,-50,shared\n",
+      ],
+      "good.csv",
+      { type: "text/csv" },
+    );
+    fireEvent.change(fileInput, { target: { files: [goodCsv] } });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    const previewButton = screen.getByRole("button", { name: "Preview CSV" });
+    expect(previewButton).toBeEnabled();
+  });
+
+  it("renders multi-line server errors as a list", async () => {
+    server.use(
+      http.post("/api/v1/uploads/preview", () =>
+        HttpResponse.json(
+          {
+            error: {
+              message:
+                'Row 2 (Starbucks): invalid amount "abc"\nRow 5 (Amazon): invalid date "2026-13-01"',
+            },
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+
+    renderWithProviders(<UploadPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Who are you?")).toBeInTheDocument();
+    });
+
+    setFileAndSubmit();
+
+    await waitFor(() => {
+      const alert = screen.getByRole("alert");
+      expect(alert).toHaveTextContent("Row 2 (Starbucks)");
+      expect(alert).toHaveTextContent("Row 5 (Amazon)");
+    });
+
+    // Should render as list items
+    const listItems = screen.getByRole("alert").querySelectorAll("li");
+    expect(listItems).toHaveLength(2);
   });
 });
