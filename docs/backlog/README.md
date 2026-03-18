@@ -31,7 +31,11 @@
 | v0.7.0 | Spending trends — small multiples charts + Insights page | Completed (2026-03-17) | L |
 | v0.7.1 | Comparison cards, budget lines & settlement balance trend | Completed (2026-03-17) | M |
 | v0.7.2 | Year-over-year overlay, dark mode charts & drill-down | Completed (2026-03-17) | M |
-| v0.8.0 | Upload experience (drag-and-drop, upload history) | Planned | M |
+| v0.8.0 | Responsive upload layout (mobile + desktop) | Completed (2026-03-17) | M |
+| v0.8.1 | Drag-and-drop file zone | Planned | S |
+| v0.8.2 | Upload history (endpoint + UI) | Planned | M |
+| v0.8.3 | CSV validation & error quality (client + server) | Planned | M |
+| v0.8.4 | Confirmation & flow polish | Planned | S |
 | v0.9.0 | Responsive layout (mobile + touch) | Planned | L |
 | v0.9.1 | Transaction exclusion flag | Planned | S |
 | v1.0.0 | Infrastructure investigation (benchmarks, DB audit, storage evaluation) | Planned | M |
@@ -67,8 +71,11 @@
 | Orval codegen + MSW test mocks | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Spending insights + charts | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
 | YoY comparison + dark mode charts | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
-| Drag-and-drop upload + history | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
-| Mobile responsive layout | — | — | — | — | — | — | — | — | ✅ | ✅ |
+| Responsive upload page (mobile) | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Drag-and-drop upload | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Upload history | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Client + server CSV validation | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Mobile responsive layout (app-wide) | — | — | — | — | — | — | — | — | ✅ | ✅ |
 | Transaction exclusion | — | — | — | — | — | — | — | — | ✅ | ✅ |
 | Performance benchmarks + query optimization | — | — | — | — | — | — | — | — | — | ✅ |
 | Server-side tag filtering | — | — | — | — | — | — | — | — | — | ✅ |

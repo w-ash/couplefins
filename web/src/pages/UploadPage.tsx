@@ -25,7 +25,12 @@ import { PageHeader } from "@/components/PageHeader";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { useSetToggle } from "@/hooks/useSetToggle";
 import { useInvalidateCategories } from "@/lib/categories";
-import { formatCurrency, formatDate, formatSplit } from "@/lib/format";
+import {
+  amountColorClass,
+  formatCurrency,
+  formatDate,
+  formatSplit,
+} from "@/lib/format";
 import { useIdentityStore } from "@/lib/identity";
 import { selectInputClass } from "@/lib/input-styles";
 
@@ -53,7 +58,7 @@ function ActionPanel({
   const totalChanged = preview.changed_transactions.length;
 
   return (
-    <aside className="sticky top-6 self-start space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm">
+    <aside className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm md:sticky md:top-6 md:self-start">
       <dl className="grid grid-cols-2 gap-y-2 text-sm">
         {preview.new_transactions.length > 0 && (
           <>
@@ -130,6 +135,128 @@ function ActionPanel({
         </Button>
       </div>
     </aside>
+  );
+}
+
+function PreviewCard({ preview }: { preview: PreviewUploadResponse }) {
+  const visibleNew = preview.new_transactions.slice(0, PREVIEW_LIMIT);
+  const remainingCount = Math.max(
+    0,
+    preview.new_transactions.length - PREVIEW_LIMIT,
+  );
+
+  return (
+    <Card>
+      <h2 className="mb-1 flex items-center gap-2 font-medium text-lg text-foreground">
+        <Eye className="size-5" />
+        Preview
+      </h2>
+      <p className="mb-4 text-sm text-muted-foreground">
+        {preview.new_transactions.length} new transaction
+        {preview.new_transactions.length !== 1 && "s"}
+        {preview.unchanged_count > 0 &&
+          `, ${preview.unchanged_count} unchanged`}
+      </p>
+
+      {/* Mobile: card layout */}
+      <div className="space-y-3 sm:hidden">
+        {visibleNew.map((tx, i) => (
+          <div
+            // biome-ignore lint/suspicious/noArrayIndexKey: static preview rows, never reordered
+            key={i}
+            className="rounded-lg border border-border-muted p-3"
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-foreground">{tx.merchant}</span>
+              <span className={`tabular-nums ${amountColorClass(tx.amount)}`}>
+                {formatCurrency(tx.amount)}
+              </span>
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <span className="tabular-nums">{formatDate(tx.date)}</span>
+              <span>{tx.category}</span>
+              {tx.is_shared ? (
+                <span className="inline-block rounded-full bg-primary-muted px-2 py-0.5 text-xs font-medium text-primary-muted-foreground">
+                  Shared
+                </span>
+              ) : (
+                <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                  Personal
+                </span>
+              )}
+              {tx.is_shared && (
+                <span className="tabular-nums">
+                  {formatSplit(tx.payer_percentage)}
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop: table layout */}
+      <div className="hidden overflow-x-auto sm:block">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border text-left text-muted-foreground">
+              <th className="pb-2 pr-4 font-medium">Date</th>
+              <th className="pb-2 pr-4 font-medium">Merchant</th>
+              <th className="pb-2 pr-4 font-medium">Category</th>
+              <th className="pb-2 pr-4 text-right font-medium">Amount</th>
+              <th className="pb-2 pr-4 font-medium">Type</th>
+              <th className="pb-2 font-medium">Split</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visibleNew.map((tx, i) => (
+              <tr
+                // biome-ignore lint/suspicious/noArrayIndexKey: static preview rows, never reordered
+                key={i}
+                className="border-b border-border-muted"
+              >
+                <td className="py-2 pr-4 text-muted-foreground tabular-nums">
+                  {formatDate(tx.date)}
+                </td>
+                <td className="py-2 pr-4 text-foreground">{tx.merchant}</td>
+                <td className="py-2 pr-4 text-muted-foreground">
+                  {tx.category}
+                </td>
+                <td
+                  className={`py-2 pr-4 text-right tabular-nums ${amountColorClass(tx.amount)}`}
+                >
+                  {formatCurrency(tx.amount)}
+                </td>
+                <td className="py-2 pr-4">
+                  {tx.is_shared ? (
+                    <span className="inline-block rounded-full bg-primary-muted px-2 py-0.5 text-xs font-medium text-primary-muted-foreground">
+                      Shared
+                    </span>
+                  ) : (
+                    <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                      Personal
+                    </span>
+                  )}
+                </td>
+                <td className="py-2 text-muted-foreground tabular-nums">
+                  {tx.is_shared ? (
+                    formatSplit(tx.payer_percentage)
+                  ) : (
+                    <Minus className="size-4 text-icon-muted" />
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {remainingCount > 0 && (
+        <p className="mt-3 text-center text-sm text-muted-foreground">
+          and {remainingCount} more transaction
+          {remainingCount !== 1 && "s"}
+        </p>
+      )}
+    </Card>
   );
 }
 
@@ -248,7 +375,7 @@ export function UploadPage() {
 
   return (
     <div
-      className={`mx-auto px-6 py-12 ${showGrid ? "max-w-5xl" : "max-w-3xl"}`}
+      className={`mx-auto px-6 py-12 ${showGrid ? "max-w-3xl md:max-w-5xl" : "max-w-3xl"}`}
     >
       <PageHeader
         icon={<Upload className="size-6" />}
@@ -292,7 +419,7 @@ export function UploadPage() {
               onChange={(e) => setPersonId(e.target.value)}
               required
               disabled={isFormDisabled}
-              className={`w-full ${selectInputClass} disabled:cursor-not-allowed disabled:opacity-50`}
+              className={`w-full min-h-11 ${selectInputClass} disabled:cursor-not-allowed disabled:opacity-50`}
             >
               <option value="">Select person...</option>
               {persons?.map((p) => (
@@ -319,7 +446,7 @@ export function UploadPage() {
             accept=".csv"
             required
             disabled={isFormDisabled}
-            className="w-full rounded-lg border border-input bg-card px-3 py-2 text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-accent file:px-3 file:py-1 file:font-medium file:text-sm file:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full min-h-11 rounded-lg border border-input bg-card px-3 py-2 text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-accent file:px-3 file:py-1 file:font-medium file:text-sm file:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50"
           />
         </div>
 
@@ -376,102 +503,13 @@ export function UploadPage() {
 
       {/* Preview / Review — two-column grid */}
       {showGrid && (
-        <div className="mt-6 grid grid-cols-[1fr_16rem] gap-6">
+        <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-[1fr_16rem]">
           {/* Left column — content */}
           <div className="space-y-6">
             {/* Preview summary + capped transaction table */}
-            {step === "preview" &&
-              hasNewTransactions &&
-              (() => {
-                const visibleNew = preview.new_transactions.slice(
-                  0,
-                  PREVIEW_LIMIT,
-                );
-                const remainingCount = Math.max(
-                  0,
-                  preview.new_transactions.length - PREVIEW_LIMIT,
-                );
-                return (
-                  <Card>
-                    <h2 className="mb-1 flex items-center gap-2 font-medium text-lg text-foreground">
-                      <Eye className="size-5" />
-                      Preview
-                    </h2>
-                    <p className="mb-4 text-sm text-muted-foreground">
-                      {preview.new_transactions.length} new transaction
-                      {preview.new_transactions.length !== 1 && "s"}
-                      {preview.unchanged_count > 0 &&
-                        `, ${preview.unchanged_count} unchanged`}
-                    </p>
-
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-border text-left text-muted-foreground">
-                            <th className="pb-2 pr-4 font-medium">Date</th>
-                            <th className="pb-2 pr-4 font-medium">Merchant</th>
-                            <th className="pb-2 pr-4 font-medium">Category</th>
-                            <th className="pb-2 pr-4 text-right font-medium">
-                              Amount
-                            </th>
-                            <th className="pb-2 pr-4 font-medium">Type</th>
-                            <th className="pb-2 font-medium">Split</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {visibleNew.map((tx, i) => (
-                            <tr
-                              // biome-ignore lint/suspicious/noArrayIndexKey: static preview rows, never reordered
-                              key={i}
-                              className="border-b border-border-muted"
-                            >
-                              <td className="py-2 pr-4 text-muted-foreground tabular-nums">
-                                {formatDate(tx.date)}
-                              </td>
-                              <td className="py-2 pr-4 text-foreground">
-                                {tx.merchant}
-                              </td>
-                              <td className="py-2 pr-4 text-muted-foreground">
-                                {tx.category}
-                              </td>
-                              <td
-                                className={`py-2 pr-4 text-right tabular-nums ${tx.amount < 0 ? "text-negative" : "text-positive"}`}
-                              >
-                                {formatCurrency(tx.amount)}
-                              </td>
-                              <td className="py-2 pr-4">
-                                {tx.is_shared ? (
-                                  <span className="inline-block rounded-full bg-primary-muted px-2 py-0.5 text-xs font-medium text-primary-muted-foreground">
-                                    Shared
-                                  </span>
-                                ) : (
-                                  <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                                    Personal
-                                  </span>
-                                )}
-                              </td>
-                              <td className="py-2 text-muted-foreground tabular-nums">
-                                {tx.is_shared ? (
-                                  formatSplit(tx.payer_percentage)
-                                ) : (
-                                  <Minus className="size-4 text-icon-muted" />
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {remainingCount > 0 && (
-                      <p className="mt-3 text-center text-sm text-muted-foreground">
-                        and {remainingCount} more transaction
-                        {remainingCount !== 1 && "s"}
-                      </p>
-                    )}
-                  </Card>
-                );
-              })()}
+            {step === "preview" && hasNewTransactions && (
+              <PreviewCard preview={preview} />
+            )}
 
             {/* Review — changed transactions with checkboxes */}
             {step === "review" && hasChanges && (
@@ -493,7 +531,7 @@ export function UploadPage() {
                         className="mt-0.5 size-4 rounded border-input accent-primary"
                       />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 text-sm">
+                        <div className="flex flex-wrap items-center gap-2 text-sm">
                           <span className="font-medium text-foreground">
                             {ct.incoming.merchant}
                           </span>
@@ -501,7 +539,7 @@ export function UploadPage() {
                             {formatDate(ct.incoming.date)}
                           </span>
                           <span
-                            className={`tabular-nums ${ct.incoming.amount < 0 ? "text-negative" : "text-positive"}`}
+                            className={`tabular-nums ${amountColorClass(ct.incoming.amount)}`}
                           >
                             {formatCurrency(ct.incoming.amount)}
                           </span>
@@ -510,7 +548,7 @@ export function UploadPage() {
                           {ct.diffs.map((d) => (
                             <div
                               key={d.field_name}
-                              className="flex gap-2 text-xs text-muted-foreground"
+                              className="flex flex-wrap gap-2 text-xs text-muted-foreground"
                             >
                               <span className="font-medium min-w-[5rem]">
                                 {d.field_name}:

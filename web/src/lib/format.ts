@@ -47,6 +47,10 @@ export function plural(word: string, count: number): string {
   return `${count} ${word}${count !== 1 ? "s" : ""}`;
 }
 
+export function amountColorClass(amount: number): string {
+  return amount < 0 ? "text-negative" : "text-positive";
+}
+
 export function formatSplit(payerPercentage: number | null): string {
   const payer = payerPercentage ?? 50;
   return `${payer}/${100 - payer}`;

@@ -66,6 +66,7 @@ import { useGroupIconMap } from "@/lib/categories";
 import { getCategoryGroupIcon } from "@/lib/category-icons";
 import { formatRangeLabel, useDateRange } from "@/lib/date-range";
 import {
+  amountColorClass,
   computeShares,
   formatCurrency,
   formatDate,
@@ -599,7 +600,7 @@ function TransactionRow({
           <PersonBadge name={payerName} accentColor={payerColor} size="xs" />
         </td>
         <td
-          className={`py-2 pr-4 text-right tabular-nums ${tx.amount < 0 ? "text-negative" : "text-positive"}`}
+          className={`py-2 pr-4 text-right tabular-nums ${amountColorClass(tx.amount)}`}
         >
           {formatCurrency(tx.amount)}
         </td>
