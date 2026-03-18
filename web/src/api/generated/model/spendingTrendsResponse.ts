@@ -8,6 +8,7 @@ import type { BudgetLineItem } from './budgetLineItem';
 import type { GroupComparisonItem } from './groupComparisonItem';
 import type { GroupSummaryItem } from './groupSummaryItem';
 import type { MonthlyGroupSpendingItem } from './monthlyGroupSpendingItem';
+import type { MonthlyPersonPaidItem } from './monthlyPersonPaidItem';
 import type { MonthlySettlementItem } from './monthlySettlementItem';
 import type { MonthlyTotalItem } from './monthlyTotalItem';
 import type { PersonResponse } from './personResponse';
@@ -21,6 +22,7 @@ export interface SpendingTrendsResponse {
   comparison_cards: GroupComparisonItem[];
   budget_lines: BudgetLineItem[];
   settlement_trend: MonthlySettlementItem[];
+  monthly_person_paid: MonthlyPersonPaidItem[];
   persons: PersonResponse[];
   comparison_monthly_group_spending: MonthlyGroupSpendingItem[];
 }

@@ -36,6 +36,7 @@
 | v0.8.2 | Upload history (endpoint + UI) | Completed (2026-03-17) | M |
 | v0.8.3 | CSV validation & error quality (client + server) | Completed (2026-03-18) | M |
 | v0.8.4 | Confirmation & flow polish | Completed (2026-03-18) | S |
+| v0.8.5 | Insights page UX overhaul — controls, KPI hierarchy, "Who's paying" | Completed (2026-03-18) | L |
 | v0.9.0 | Responsive layout (mobile + touch) | Planned | L |
 | v0.9.1 | Transaction exclusion flag | Planned | S |
 | v1.0.0 | Infrastructure investigation (benchmarks, DB audit, storage evaluation) | Planned | M |
@@ -75,6 +76,7 @@
 | Drag-and-drop upload | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
 | Upload history | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
 | Client + server CSV validation | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Insights UX overhaul + per-person spending | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
 | Mobile responsive layout (app-wide) | — | — | — | — | — | — | — | — | ✅ | ✅ |
 | Transaction exclusion | — | — | — | — | — | — | — | — | ✅ | ✅ |
 | Performance benchmarks + query optimization | — | — | — | — | — | — | — | — | — | ✅ |

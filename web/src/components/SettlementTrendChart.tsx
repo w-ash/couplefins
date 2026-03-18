@@ -91,10 +91,7 @@ export function SettlementTrendChart({
   });
 
   return (
-    <Card as="section" className="p-6">
-      <h2 className="mb-4 text-sm font-medium text-foreground">
-        Settlement Balance
-      </h2>
+    <Card className="p-6">
       <ResponsiveContainer width="100%" height={200}>
         <LineChart
           data={chartData}

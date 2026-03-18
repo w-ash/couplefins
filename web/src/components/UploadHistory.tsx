@@ -1,7 +1,7 @@
 import { ChevronDown, Clock } from "lucide-react";
 import { useState } from "react";
 import type { UploadHistoryEntryResponse } from "@/api/generated/model";
-import { useGetUploadHistory } from "@/api/generated/uploads/uploads";
+import { useUploadHistory } from "@/api/generated/uploads/uploads";
 import { Card } from "@/components/Card";
 import { PageError, PageLoading } from "@/components/PageStates";
 import { PersonBadge } from "@/components/PersonBadge";
@@ -59,7 +59,7 @@ function HistoryEntry({
 }
 
 export function UploadHistory() {
-  const { data: response, isLoading, error, refetch } = useGetUploadHistory();
+  const { data: response, isLoading, error, refetch } = useUploadHistory();
   const [expanded, setExpanded] = useState(false);
 
   if (isLoading) {

@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 
 from src.domain.insights import (
     compute_comparison_cards,
+    compute_person_paid_by_month,
     compute_spending_trends,
     compute_trailing_average,
 )
@@ -393,3 +394,107 @@ class TestComputeComparisonCards:
 
         assert cards[0].group_id == travel_id  # 50% delta > 10%
         assert cards[1].group_id == food_id
+
+
+class TestComputePersonPaidByMonth:
+    def test_two_payers_one_month(self) -> None:
+        food_id, _, lookup = _setup_groups()
+        alice = uuid4()
+        bob = uuid4()
+        txs = [
+            make_transaction(
+                date=date(2026, 1, 10),
+                category="Dining Out",
+                amount=Decimal("-60.00"),
+                payer_person_id=alice,
+            ),
+            make_transaction(
+                date=date(2026, 1, 20),
+                category="Groceries",
+                amount=Decimal("-40.00"),
+                payer_person_id=bob,
+            ),
+        ]
+
+        result = compute_person_paid_by_month(txs, lookup)
+
+        by_person = {r.person_id: r for r in result}
+        assert by_person[alice].month == 1
+        assert by_person[alice].group_id == food_id
+        assert by_person[alice].amount_paid == Decimal("60.00")
+        assert by_person[bob].amount_paid == Decimal("40.00")
+
+    def test_multiple_months(self) -> None:
+        _, _, lookup = _setup_groups()
+        alice = uuid4()
+        txs = [
+            make_transaction(
+                date=date(2026, 1, 10),
+                category="Dining Out",
+                amount=Decimal("-50.00"),
+                payer_person_id=alice,
+            ),
+            make_transaction(
+                date=date(2026, 2, 10),
+                category="Dining Out",
+                amount=Decimal("-70.00"),
+                payer_person_id=alice,
+            ),
+        ]
+
+        result = compute_person_paid_by_month(txs, lookup)
+
+        months = {r.month: r.amount_paid for r in result}
+        assert months[1] == Decimal("50.00")
+        assert months[2] == Decimal("70.00")
+
+    def test_empty_returns_empty(self) -> None:
+        result = compute_person_paid_by_month([], {})
+        assert result == []
+
+    def test_groups_by_category_group(self) -> None:
+        food_id, travel_id, lookup = _setup_groups()
+        alice = uuid4()
+        txs = [
+            make_transaction(
+                date=date(2026, 1, 10),
+                category="Dining Out",
+                amount=Decimal("-30.00"),
+                payer_person_id=alice,
+            ),
+            make_transaction(
+                date=date(2026, 1, 15),
+                category="Flights",
+                amount=Decimal("-200.00"),
+                payer_person_id=alice,
+            ),
+        ]
+
+        result = compute_person_paid_by_month(txs, lookup)
+
+        by_group = {r.group_id: r.amount_paid for r in result}
+        assert by_group[food_id] == Decimal("30.00")
+        assert by_group[travel_id] == Decimal("200.00")
+
+    def test_unmapped_category_has_none_group_id(self) -> None:
+        _, _, lookup = _setup_groups()
+        alice = uuid4()
+        txs = [
+            make_transaction(
+                date=date(2026, 1, 10),
+                category="Dining Out",
+                amount=Decimal("-40.00"),
+                payer_person_id=alice,
+            ),
+            make_transaction(
+                date=date(2026, 1, 15),
+                category="Mystery Store",  # not in lookup
+                amount=Decimal("-25.00"),
+                payer_person_id=alice,
+            ),
+        ]
+
+        result = compute_person_paid_by_month(txs, lookup)
+
+        by_group = {r.group_id: r.amount_paid for r in result}
+        assert by_group[None] == Decimal("25.00")

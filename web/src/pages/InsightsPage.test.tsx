@@ -10,6 +10,7 @@ const baseFields = {
   comparison_cards: [] as SpendingTrendsResponse["comparison_cards"],
   budget_lines: [] as SpendingTrendsResponse["budget_lines"],
   settlement_trend: [] as SpendingTrendsResponse["settlement_trend"],
+  monthly_person_paid: [] as SpendingTrendsResponse["monthly_person_paid"],
   comparison_monthly_group_spending:
     [] as SpendingTrendsResponse["comparison_monthly_group_spending"],
   persons: [
@@ -116,6 +117,14 @@ const populatedResponse: SpendingTrendsResponse = {
       is_settled: false,
     },
   ],
+  monthly_person_paid: [
+    { month: 1, person_id: "p1", group_id: "g1", amount_paid: 250 },
+    { month: 1, person_id: "p2", group_id: "g1", amount_paid: 150 },
+    { month: 1, person_id: "p1", group_id: "g2", amount_paid: 300 },
+    { month: 2, person_id: "p1", group_id: "g1", amount_paid: 300 },
+    { month: 2, person_id: "p2", group_id: "g1", amount_paid: 150 },
+    { month: 2, person_id: "p2", group_id: "g2", amount_paid: 200 },
+  ],
 };
 
 describe("InsightsPage", () => {
@@ -156,12 +165,12 @@ describe("InsightsPage", () => {
     await waitFor(() => {
       expect(screen.getAllByText("Food & Dining").length).toBeGreaterThan(0);
     });
-    expect(screen.getByText("Travel")).toBeInTheDocument();
+    expect(screen.getAllByText("Travel").length).toBeGreaterThan(0);
     expect(screen.getByText("YTD: $850.00")).toBeInTheDocument();
     expect(screen.getByText("YTD: $500.00")).toBeInTheDocument();
   });
 
-  it("shows KPI stats", async () => {
+  it("shows KPI cards with visual accents", async () => {
     server.use(
       http.get("/api/v1/insights/spending-trends", () =>
         HttpResponse.json(populatedResponse),
@@ -171,16 +180,11 @@ describe("InsightsPage", () => {
     renderWithProviders(<InsightsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("YTD shared spending")).toBeInTheDocument();
+      expect(screen.getByText("Year to date")).toBeInTheDocument();
     });
-    expect(screen.getByText("Monthly average")).toBeInTheDocument();
-    expect(screen.getByText("Highest month")).toBeInTheDocument();
-    expect(screen.getByText("Largest category")).toBeInTheDocument();
-  });
-
-  it("shows year selector", () => {
-    renderWithProviders(<InsightsPage />);
-    expect(screen.getByLabelText("Select year")).toBeInTheDocument();
+    expect(screen.getByText("Top category")).toBeInTheDocument();
+    expect(screen.getByText("$1,350.00")).toBeInTheDocument();
+    expect(screen.getByTestId("ytd-mini-chart")).toBeInTheDocument();
   });
 
   it("shows month picker", () => {
@@ -202,7 +206,7 @@ describe("InsightsPage", () => {
     });
   });
 
-  it("renders settlement trend heading", async () => {
+  it("renders who's paying section", async () => {
     server.use(
       http.get("/api/v1/insights/spending-trends", () =>
         HttpResponse.json(populatedResponse),
@@ -212,7 +216,7 @@ describe("InsightsPage", () => {
     renderWithProviders(<InsightsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Settlement Balance")).toBeInTheDocument();
+      expect(screen.getByText("Who's paying")).toBeInTheDocument();
     });
   });
 
@@ -250,12 +254,6 @@ describe("InsightsPage", () => {
     await waitFor(() => {
       expect(screen.getByRole("alert")).toBeInTheDocument();
     });
-  });
-
-  it("renders YoY toggle", () => {
-    renderWithProviders(<InsightsPage />);
-    expect(screen.getByText("This year")).toBeInTheDocument();
-    expect(screen.getByText("vs Last year")).toBeInTheDocument();
   });
 
   it("expands sparkline card on click", async () => {

@@ -23,20 +23,20 @@ import type {
 } from '../model';
 
 
-export const getGetUploadHistoryResponseMock = (overrideResponse: Partial<Extract<UploadHistoryResponse, object>> = {}): UploadHistoryResponse => ({entries: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({upload_id: faker.string.uuid(), person_id: faker.string.uuid(), person_name: faker.string.alpha({length: {min: 10, max: 20}}), filename: faker.string.alpha({length: {min: 10, max: 20}}), uploaded_at: faker.date.past().toISOString().slice(0, 19) + 'Z', transaction_count: faker.number.int(), shared_count: faker.number.int(), date_range_start: faker.helpers.arrayElement([faker.date.past().toISOString().slice(0, 10),null,]), date_range_end: faker.helpers.arrayElement([faker.date.past().toISOString().slice(0, 10),null,])})), ...overrideResponse})
+export const getUploadHistoryResponseMock = (overrideResponse: Partial<Extract<UploadHistoryResponse, object>> = {}): UploadHistoryResponse => ({entries: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({upload_id: faker.string.uuid(), person_id: faker.string.uuid(), person_name: faker.string.alpha({length: {min: 10, max: 20}}), filename: faker.string.alpha({length: {min: 10, max: 20}}), uploaded_at: faker.date.past().toISOString().slice(0, 19) + 'Z', transaction_count: faker.number.int(), shared_count: faker.number.int(), date_range_start: faker.helpers.arrayElement([faker.date.past().toISOString().slice(0, 10),null,]), date_range_end: faker.helpers.arrayElement([faker.date.past().toISOString().slice(0, 10),null,])})), ...overrideResponse})
 
 export const getPostUploadPreviewResponseMock = (overrideResponse: Partial<Extract<PreviewUploadResponse, object>> = {}): PreviewUploadResponse => ({new_transactions: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({date: faker.date.past().toISOString().slice(0, 10), merchant: faker.string.alpha({length: {min: 10, max: 20}}), category: faker.string.alpha({length: {min: 10, max: 20}}), amount: faker.number.float({fractionDigits: 2}), is_shared: faker.datatype.boolean(), payer_percentage: faker.helpers.arrayElement([faker.number.int(),null,])})), unchanged_count: faker.number.int(), changed_transactions: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({existing_id: faker.string.uuid(), incoming: {date: faker.date.past().toISOString().slice(0, 10), merchant: faker.string.alpha({length: {min: 10, max: 20}}), category: faker.string.alpha({length: {min: 10, max: 20}}), amount: faker.number.float({fractionDigits: 2}), is_shared: faker.datatype.boolean(), payer_percentage: faker.helpers.arrayElement([faker.number.int(),null,])}, existing: {date: faker.date.past().toISOString().slice(0, 10), merchant: faker.string.alpha({length: {min: 10, max: 20}}), category: faker.string.alpha({length: {min: 10, max: 20}}), amount: faker.number.float({fractionDigits: 2}), is_shared: faker.datatype.boolean(), payer_percentage: faker.helpers.arrayElement([faker.number.int(),null,])}, diffs: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({field_name: faker.string.alpha({length: {min: 10, max: 20}}), old_value: faker.string.alpha({length: {min: 10, max: 20}}), new_value: faker.string.alpha({length: {min: 10, max: 20}})}))})), unmapped_categories: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => (faker.string.alpha({length: {min: 10, max: 20}}))), ...overrideResponse})
 
 export const getPostUploadResponseMock = (overrideResponse: Partial<Extract<UploadSummaryResponse, object>> = {}): UploadSummaryResponse => ({upload_id: faker.string.uuid(), filename: faker.string.alpha({length: {min: 10, max: 20}}), new_count: faker.number.int(), updated_count: faker.number.int(), skipped_count: faker.number.int(), unmapped_categories: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => (faker.string.alpha({length: {min: 10, max: 20}}))), ...overrideResponse})
 
 
-export const getGetUploadHistoryMockHandler = (overrideResponse?: UploadHistoryResponse | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<UploadHistoryResponse> | UploadHistoryResponse), options?: RequestHandlerOptions) => {
+export const getUploadHistoryMockHandler = (overrideResponse?: UploadHistoryResponse | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<UploadHistoryResponse> | UploadHistoryResponse), options?: RequestHandlerOptions) => {
   return http.get('*/api/v1/uploads/history', async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
 
 
     return HttpResponse.json(overrideResponse !== undefined
     ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
-    : getGetUploadHistoryResponseMock(),
+    : getUploadHistoryResponseMock(),
       { status: 200
       })
   }, options)
@@ -66,7 +66,7 @@ export const getPostUploadMockHandler = (overrideResponse?: UploadSummaryRespons
   }, options)
 }
 export const getUploadsMock = () => [
-  getGetUploadHistoryMockHandler(),
+  getUploadHistoryMockHandler(),
   getPostUploadPreviewMockHandler(),
   getPostUploadMockHandler()
 ]

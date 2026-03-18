@@ -45,6 +45,7 @@ export * from './markTransactionRequest';
 export * from './markTransactionResponse';
 export * from './monthHistoryEntryResponse';
 export * from './monthlyGroupSpendingItem';
+export * from './monthlyPersonPaidItem';
 export * from './monthlySettlementItem';
 export * from './monthlyTotalItem';
 export * from './monthReference';

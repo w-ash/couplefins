@@ -1,6 +1,6 @@
 import { Card } from "@/components/Card";
 import { getCategoryGroupIcon } from "@/lib/category-icons";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, getDeltaColorClass } from "@/lib/format";
 
 interface ComparisonCardProps {
   groupName: string;
@@ -9,12 +9,6 @@ interface ComparisonCardProps {
   trailingAverage: number;
   deltaAmount: number;
   deltaPercentage: number;
-}
-
-function deltaColorClass(pct: number): string {
-  if (pct <= 0) return "text-positive";
-  if (pct > 25) return "text-destructive";
-  return "text-foreground";
 }
 
 export function ComparisonCard({
@@ -45,7 +39,7 @@ export function ComparisonCard({
           </span>
         </div>
         <span
-          className={`text-sm font-medium tabular-nums ${deltaColorClass(deltaPercentage)}`}
+          className={`text-sm font-medium tabular-nums ${getDeltaColorClass(deltaPercentage)}`}
         >
           {sign}
           {formatCurrency(Math.abs(deltaAmount))} ({pctSign}

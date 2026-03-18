@@ -48,6 +48,13 @@ class BudgetLineItem(BaseModel):
     monthly_budget: float
 
 
+class MonthlyPersonPaidItem(BaseModel):
+    month: int
+    person_id: UUID
+    group_id: UUID | None
+    amount_paid: float
+
+
 class MonthlySettlementItem(BaseModel):
     year: int
     month: int
@@ -66,6 +73,7 @@ class SpendingTrendsResponse(BaseModel):
     comparison_cards: list[GroupComparisonItem]
     budget_lines: list[BudgetLineItem]
     settlement_trend: list[MonthlySettlementItem]
+    monthly_person_paid: list[MonthlyPersonPaidItem]
     persons: list[PersonResponse]
     comparison_monthly_group_spending: list[MonthlyGroupSpendingItem]
 
@@ -129,6 +137,15 @@ class SpendingTrendsResponse(BaseModel):
                     monthly_budget=float(amount),
                 )
                 for gid, amount in result.budget_lines.items()
+            ],
+            monthly_person_paid=[
+                MonthlyPersonPaidItem(
+                    month=pp.month,
+                    person_id=pp.person_id,
+                    group_id=pp.group_id,
+                    amount_paid=float(pp.amount_paid),
+                )
+                for pp in result.monthly_person_paid
             ],
             settlement_trend=[
                 MonthlySettlementItem(

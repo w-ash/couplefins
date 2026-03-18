@@ -142,19 +142,15 @@ export function SparklineCard({
   const isExpandable = onToggle != null;
 
   const chartData: MergedPoint[] = useMemo(() => {
-    if (!comparisonData?.length) return data;
-    const compMap = new Map(comparisonData.map((d) => [d.month, d.amount]));
-    const allMonths = new Set([
-      ...data.map((d) => d.month),
-      ...comparisonData.map((d) => d.month),
-    ]);
-    return [...allMonths]
-      .sort((a, b) => a - b)
-      .map((month) => ({
-        month,
-        amount: data.find((d) => d.month === month)?.amount ?? 0,
-        comparisonAmount: compMap.get(month),
-      }));
+    const dataMap = new Map(data.map((d) => [d.month, d.amount]));
+    const compMap = comparisonData?.length
+      ? new Map(comparisonData.map((d) => [d.month, d.amount]))
+      : null;
+    return Array.from({ length: 12 }, (_, i) => i + 1).map((month) => ({
+      month,
+      amount: dataMap.get(month) ?? 0,
+      comparisonAmount: compMap?.get(month),
+    }));
   }, [data, comparisonData]);
 
   const maxComparisonAmount = comparisonData?.length
@@ -214,7 +210,7 @@ export function SparklineCard({
         <ResponsiveContainer width="100%" height={120}>
           <LineChart
             data={chartData}
-            margin={{ top: 4, right: 4, bottom: 0, left: 4 }}
+            margin={{ top: 4, right: 4, bottom: 0, left: 8 }}
           >
             <XAxis
               dataKey="month"
@@ -261,10 +257,10 @@ export function SparklineCard({
               <Line
                 type="monotone"
                 dataKey="comparisonAmount"
-                stroke={color}
+                stroke="var(--color-muted-foreground)"
                 strokeWidth={1.5}
-                strokeDasharray="6 3"
-                strokeOpacity={0.4}
+                strokeDasharray="4 3"
+                strokeOpacity={0.35}
                 dot={false}
                 activeDot={false}
                 connectNulls

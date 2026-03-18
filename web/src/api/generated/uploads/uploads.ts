@@ -40,21 +40,21 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 /**
- * @summary Get Upload History
+ * @summary Upload History
  */
-export type getUploadHistoryResponse200 = {
+export type uploadHistoryResponse200 = {
   data: UploadHistoryResponse
   status: 200
 }
 
-export type getUploadHistoryResponseSuccess = (getUploadHistoryResponse200) & {
+export type uploadHistoryResponseSuccess = (uploadHistoryResponse200) & {
   headers: Headers;
 };
 ;
 
-export type getUploadHistoryResponse = (getUploadHistoryResponseSuccess)
+export type uploadHistoryResponse = (uploadHistoryResponseSuccess)
 
-export const getGetUploadHistoryUrl = () => {
+export const getUploadHistoryUrl = () => {
 
 
 
@@ -62,9 +62,9 @@ export const getGetUploadHistoryUrl = () => {
   return `/api/v1/uploads/history`
 }
 
-export const getUploadHistory = async ( options?: RequestInit): Promise<getUploadHistoryResponse> => {
+export const uploadHistory = async ( options?: RequestInit): Promise<uploadHistoryResponse> => {
 
-  return customFetch<getUploadHistoryResponse>(getGetUploadHistoryUrl(),
+  return customFetch<uploadHistoryResponse>(getUploadHistoryUrl(),
   {
     ...options,
     method: 'GET'
@@ -77,69 +77,69 @@ export const getUploadHistory = async ( options?: RequestInit): Promise<getUploa
 
 
 
-export const getGetUploadHistoryQueryKey = () => {
+export const getUploadHistoryQueryKey = () => {
     return [
     `/api/v1/uploads/history`
     ] as const;
     }
 
 
-export const getGetUploadHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getUploadHistory>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUploadHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+export const getUploadHistoryQueryOptions = <TData = Awaited<ReturnType<typeof uploadHistory>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof uploadHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetUploadHistoryQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getUploadHistoryQueryKey();
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUploadHistory>>> = ({ signal }) => getUploadHistory({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof uploadHistory>>> = ({ signal }) => uploadHistory({ signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUploadHistory>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof uploadHistory>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
-export type GetUploadHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getUploadHistory>>>
-export type GetUploadHistoryQueryError = unknown
+export type UploadHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof uploadHistory>>>
+export type UploadHistoryQueryError = unknown
 
 
-export function useGetUploadHistory<TData = Awaited<ReturnType<typeof getUploadHistory>>, TError = unknown>(
-  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUploadHistory>>, TError, TData>> & Pick<
+export function useUploadHistory<TData = Awaited<ReturnType<typeof uploadHistory>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof uploadHistory>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getUploadHistory>>,
+          Awaited<ReturnType<typeof uploadHistory>>,
           TError,
-          Awaited<ReturnType<typeof getUploadHistory>>
+          Awaited<ReturnType<typeof uploadHistory>>
         > , 'initialData'
       >, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetUploadHistory<TData = Awaited<ReturnType<typeof getUploadHistory>>, TError = unknown>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUploadHistory>>, TError, TData>> & Pick<
+export function useUploadHistory<TData = Awaited<ReturnType<typeof uploadHistory>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof uploadHistory>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getUploadHistory>>,
+          Awaited<ReturnType<typeof uploadHistory>>,
           TError,
-          Awaited<ReturnType<typeof getUploadHistory>>
+          Awaited<ReturnType<typeof uploadHistory>>
         > , 'initialData'
       >, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetUploadHistory<TData = Awaited<ReturnType<typeof getUploadHistory>>, TError = unknown>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUploadHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+export function useUploadHistory<TData = Awaited<ReturnType<typeof uploadHistory>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof uploadHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary Get Upload History
+ * @summary Upload History
  */
 
-export function useGetUploadHistory<TData = Awaited<ReturnType<typeof getUploadHistory>>, TError = unknown>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUploadHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+export function useUploadHistory<TData = Awaited<ReturnType<typeof uploadHistory>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof uploadHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getGetUploadHistoryQueryOptions(options)
+  const queryOptions = getUploadHistoryQueryOptions(options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

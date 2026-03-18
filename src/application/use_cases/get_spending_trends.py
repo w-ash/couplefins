@@ -27,9 +27,11 @@ from src.domain.entities.transaction import Transaction
 from src.domain.insights import (
     GroupComparison,
     MonthlyGroupSpending,
+    MonthlyPersonPaid,
     MonthlySettlement,
     SpendingTrends,
     compute_comparison_cards,
+    compute_person_paid_by_month,
     compute_spending_trends,
 )
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
@@ -50,6 +52,7 @@ class GetSpendingTrendsResult:
     comparison_cards: list[GroupComparison]
     budget_lines: dict[UUID, Decimal]
     settlement_trend: list[MonthlySettlement]
+    monthly_person_paid: list[MonthlyPersonPaid]
     persons: list[Person]
     comparison_monthly_group_spending: list[MonthlyGroupSpending] = field(factory=list)
 
@@ -129,6 +132,10 @@ class GetSpendingTrendsUseCase:
                 year_txs, ctx, command.year, all_year_settlements
             )
 
+            monthly_person_paid = compute_person_paid_by_month(
+                year_txs, category_lookup
+            )
+
             comparison_monthly_group_spending: list[MonthlyGroupSpending] = []
             if command.comparison_year is not None:
                 comp_txs = await uow.transactions.get_shared_by_year(
@@ -146,6 +153,7 @@ class GetSpendingTrendsUseCase:
                 comparison_cards=comparison_cards,
                 budget_lines=budget_lines,
                 settlement_trend=settlement_trend,
+                monthly_person_paid=monthly_person_paid,
                 persons=ctx.persons,
                 comparison_monthly_group_spending=comparison_monthly_group_spending,
             )

@@ -51,6 +51,12 @@ export function amountColorClass(amount: number): string {
   return amount < 0 ? "text-negative" : "text-positive";
 }
 
+export function getDeltaColorClass(pct: number): string {
+  if (pct <= 0) return "text-positive";
+  if (pct > 25) return "text-destructive";
+  return "text-foreground";
+}
+
 export function formatSplit(payerPercentage: number | null): string {
   const payer = payerPercentage ?? 50;
   return `${payer}/${100 - payer}`;

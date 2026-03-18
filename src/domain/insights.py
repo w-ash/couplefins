@@ -54,6 +54,14 @@ class CategorySpending:
 
 
 @define(frozen=True, slots=True)
+class MonthlyPersonPaid:
+    month: int
+    person_id: UUID
+    group_id: UUID | None
+    amount_paid: Decimal
+
+
+@define(frozen=True, slots=True)
 class MonthlyGroupSpending:
     year: int
     month: int
@@ -210,3 +218,32 @@ def compute_comparison_cards(
 
     cards.sort(key=lambda c: abs(c.delta_percentage), reverse=True)
     return cards
+
+
+def compute_person_paid_by_month(
+    year_txs: list[Transaction],
+    category_lookup: dict[str, tuple[UUID, str]],
+) -> list[MonthlyPersonPaid]:
+    """Per-person paid amounts grouped by month and category group."""
+    expenses = _shared_expenses(year_txs)
+    totals: dict[tuple[int, UUID, UUID | None], Decimal] = defaultdict(Decimal)
+
+    for tx in expenses:
+        group_id: UUID | None = None
+        cat_entry = category_lookup.get(tx.category)
+        if cat_entry is not None:
+            group_id = cat_entry[0]
+        key = (tx.date.month, tx.payer_person_id, group_id)
+        totals[key] += abs(tx.amount)
+
+    return [
+        MonthlyPersonPaid(
+            month=month,
+            person_id=pid,
+            group_id=gid,
+            amount_paid=amount,
+        )
+        for (month, pid, gid), amount in sorted(
+            totals.items(), key=lambda t: (t[0][0], str(t[0][1]), str(t[0][2]))
+        )
+    ]

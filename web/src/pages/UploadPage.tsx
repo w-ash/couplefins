@@ -22,10 +22,10 @@ import type {
 } from "@/api/generated/model";
 import { useGetPersons } from "@/api/generated/persons/persons";
 import {
-  getGetUploadHistoryQueryKey,
-  useGetUploadHistory,
+  getUploadHistoryQueryKey,
   usePostUpload,
   usePostUploadPreview,
+  useUploadHistory,
 } from "@/api/generated/uploads/uploads";
 import { AnimatedCheck } from "@/components/AnimatedCheck";
 import { Button } from "@/components/Button";
@@ -441,7 +441,7 @@ export function UploadPage() {
 
   const { data: personsResponse } = useGetPersons();
   const persons = personsResponse?.data;
-  const { data: historyResponse } = useGetUploadHistory();
+  const { data: historyResponse } = useUploadHistory();
 
   const previewMutation = usePostUploadPreview({
     mutation: {
@@ -467,7 +467,7 @@ export function UploadPage() {
       onSuccess: () => {
         invalidateCategories();
         queryClient.invalidateQueries({
-          queryKey: getGetUploadHistoryQueryKey(),
+          queryKey: getUploadHistoryQueryKey(),
         });
         setStep("confirmed");
       },
