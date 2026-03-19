@@ -110,10 +110,8 @@ class GetSpendingTrendsUseCase:
     ) -> GetSpendingTrendsResult:
         async with uow:
             ctx = await load_reconciliation_context(uow)
-            year_txs = await uow.transactions.get_shared_by_year(command.year)
-            category_lookup = build_category_lookup(
-                ctx.category_mappings, ctx.category_groups
-            )
+            year_txs = await uow.transactions.get_household_by_year(command.year)
+            category_lookup = build_category_lookup(ctx.categories, ctx.category_groups)
             trends = compute_spending_trends(year_txs, category_lookup, command.year)
 
             target_month = command.month or datetime.now(UTC).month
@@ -138,7 +136,7 @@ class GetSpendingTrendsUseCase:
 
             comparison_monthly_group_spending: list[MonthlyGroupSpending] = []
             if command.comparison_year is not None:
-                comp_txs = await uow.transactions.get_shared_by_year(
+                comp_txs = await uow.transactions.get_household_by_year(
                     command.comparison_year
                 )
                 comp_trends = compute_spending_trends(

@@ -19,7 +19,7 @@ class UploadHistoryEntry:
     filename: str
     uploaded_at: datetime
     transaction_count: int
-    shared_count: int
+    household_count: int
     date_range_start: date | None
     date_range_end: date | None
 
@@ -47,7 +47,7 @@ class GetUploadHistoryUseCase:
                 filename=row.filename,
                 uploaded_at=row.uploaded_at,
                 transaction_count=row.transaction_count,
-                shared_count=row.shared_count,
+                household_count=row.household_count,
                 date_range_start=row.date_range_start,
                 date_range_end=row.date_range_end,
             )

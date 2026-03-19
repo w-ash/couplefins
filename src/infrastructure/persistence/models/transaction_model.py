@@ -16,7 +16,7 @@ class TransactionModel(Base):
             "payer_person_id",
             name="uq_transactions_natural_key",
         ),
-        Index("ix_transactions_shared_date", "is_shared", "date"),
+        Index("ix_transactions_household_date", "household", "date"),
         Index("ix_transactions_upload_id", "upload_id"),
         Index("ix_transactions_person_date", "payer_person_id", "date"),
     )
@@ -34,11 +34,11 @@ class TransactionModel(Base):
     notes: Mapped[str] = mapped_column(String, nullable=False)
     amount: Mapped[str] = mapped_column(String, nullable=False)
     tags_json: Mapped[str] = mapped_column(String, nullable=False)
-    is_shared: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    household: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     payer_person_id: Mapped[str] = mapped_column(
         String, ForeignKey("persons.id"), nullable=False
     )
-    payer_percentage: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    payer_percentage: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
     is_settlement: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     original_date: Mapped[str | None] = mapped_column(String, nullable=True)
     original_amount: Mapped[str | None] = mapped_column(String, nullable=True)

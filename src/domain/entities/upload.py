@@ -19,6 +19,6 @@ class UploadWithCounts:
     filename: str
     uploaded_at: datetime
     transaction_count: int
-    shared_count: int
+    household_count: int
     date_range_start: date | None
     date_range_end: date | None

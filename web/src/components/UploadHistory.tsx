@@ -41,10 +41,10 @@ function HistoryEntry({
         <span className="tabular-nums">
           {plural("transaction", entry.transaction_count)}
         </span>
-        {entry.shared_count > 0 && (
+        {entry.household_count > 0 && (
           <>
             <span aria-hidden>&middot;</span>
-            <span className="tabular-nums">{entry.shared_count} shared</span>
+            <span className="tabular-nums">{entry.household_count} household</span>
           </>
         )}
         {dateRange && (

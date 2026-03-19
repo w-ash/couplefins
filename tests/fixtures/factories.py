@@ -2,9 +2,9 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 import uuid
 
+from src.domain.entities.category import Category
 from src.domain.entities.category_group import CategoryGroup
 from src.domain.entities.category_group_budget import CategoryGroupBudget
-from src.domain.entities.category_mapping import CategoryMapping
 from src.domain.entities.person import Person
 from src.domain.entities.reconciliation_period import ReconciliationPeriod
 from src.domain.entities.settlement import Settlement, SettlementMethod
@@ -39,7 +39,8 @@ def make_transaction(
     amount: Decimal = Decimal("-50.00"),
     tags: tuple[str, ...] = ("shared",),
     payer_person_id: uuid.UUID | None = None,
-    payer_percentage: int | None = 50,
+    payer_percentage: int = 50,
+    household: bool = True,
     is_settlement: bool = False,
     original_date: date | None = None,
     original_amount: Decimal | None = None,
@@ -58,6 +59,7 @@ def make_transaction(
         tags=tags,
         payer_person_id=payer_person_id or uuid.uuid4(),
         payer_percentage=payer_percentage,
+        household=household,
         is_settlement=is_settlement,
         original_date=original_date,
         original_amount=original_amount,
@@ -88,17 +90,21 @@ def make_category_group(
     return CategoryGroup(id=id or uuid.uuid4(), name=name, icon=icon)
 
 
-_MISSING = object()
+_MISSING_GROUP = object()
 
 
-def make_category_mapping(
+def make_category(
     *,
-    category: str = "Dining Out",
-    group_id: uuid.UUID | object | None = _MISSING,
-) -> CategoryMapping:
-    return CategoryMapping(
-        category=category,
-        group_id=uuid.uuid4() if group_id is _MISSING else group_id,  # type: ignore[arg-type]
+    id: uuid.UUID | None = None,
+    name: str = "Dining Out",
+    group_id: uuid.UUID | object | None = _MISSING_GROUP,
+    include_personal: bool = False,
+) -> Category:
+    return Category(
+        id=id or uuid.uuid4(),
+        name=name,
+        group_id=uuid.uuid4() if group_id is _MISSING_GROUP else group_id,  # type: ignore[arg-type]
+        include_personal=include_personal,
     )
 
 

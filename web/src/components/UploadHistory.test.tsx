@@ -12,7 +12,7 @@ const historyEntries = [
     filename: "march-2026.csv",
     uploaded_at: new Date().toISOString(),
     transaction_count: 47,
-    shared_count: 23,
+    household_count: 23,
     date_range_start: "2026-03-01",
     date_range_end: "2026-03-31",
   },
@@ -23,7 +23,7 @@ const historyEntries = [
     filename: "february-export.csv",
     uploaded_at: new Date(Date.now() - 5 * 86400000).toISOString(),
     transaction_count: 38,
-    shared_count: 19,
+    household_count: 19,
     date_range_start: "2026-02-01",
     date_range_end: "2026-02-28",
   },
@@ -45,7 +45,7 @@ describe("UploadHistory", () => {
     expect(screen.getByText("march-2026.csv")).toBeInTheDocument();
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.getByText("47 transactions")).toBeInTheDocument();
-    expect(screen.getByText("23 shared")).toBeInTheDocument();
+    expect(screen.getByText("23 household")).toBeInTheDocument();
     expect(screen.getByText("february-export.csv")).toBeInTheDocument();
     expect(screen.getByText("Bob")).toBeInTheDocument();
     expect(screen.getByText("38 transactions")).toBeInTheDocument();
@@ -86,7 +86,7 @@ describe("UploadHistory", () => {
       filename: `upload-${i}.csv`,
       uploaded_at: new Date(Date.now() - i * 86400000).toISOString(),
       transaction_count: 10 + i,
-      shared_count: 5 + i,
+      household_count: 5 + i,
       date_range_start: "2026-01-01",
       date_range_end: "2026-01-31",
     }));

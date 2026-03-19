@@ -34,7 +34,14 @@ class ClassifiedTransaction:
     diffs: tuple[FieldDiff, ...]
 
 
-_MUTABLE_FIELDS = ("merchant", "category", "notes", "tags", "payer_percentage")
+_MUTABLE_FIELDS = (
+    "merchant",
+    "category",
+    "notes",
+    "tags",
+    "payer_percentage",
+    "household",
+)
 
 
 def natural_key(tx: Transaction) -> TransactionNaturalKey:

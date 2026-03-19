@@ -49,7 +49,7 @@ def test_standard_shared_expense_fifty_fifty() -> None:
 
     assert len(result) == 1
     tx = result[0]
-    assert tx.is_shared is True
+    assert tx.household is True
     assert tx.payer_percentage == 50
     assert tx.tags == ("shared",)
 
@@ -60,8 +60,8 @@ def test_non_shared_expense() -> None:
 
     assert len(result) == 1
     tx = result[0]
-    assert tx.is_shared is False
-    assert tx.payer_percentage is None
+    assert tx.household is False
+    assert tx.payer_percentage == 100
 
 
 def test_s70_tag_sets_payer_percentage() -> None:
@@ -100,7 +100,7 @@ def test_case_insensitive_shared_tag() -> None:
     for tag in ("Shared", "SHARED", "Split", "SPLIT"):
         csv = _make_csv({"Tags": tag})
         result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
-        assert result[0].is_shared is True, (
+        assert result[0].household is True, (
             f"Tag '{tag}' should be recognized as shared"
         )
 
@@ -110,8 +110,8 @@ def test_empty_tags_is_personal() -> None:
     result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
 
     assert len(result) == 1
-    assert result[0].is_shared is False
-    assert result[0].payer_percentage is None
+    assert result[0].household is False
+    assert result[0].payer_percentage == 100
 
 
 def test_negative_amount_is_expense() -> None:
@@ -254,3 +254,56 @@ def test_no_partial_import_when_errors_exist() -> None:
     )
     with pytest.raises(ValidationError):
         parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+
+
+def test_household_tag_sets_household_no_split() -> None:
+    csv = _make_csv({"Tags": "household"})
+    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+
+    assert len(result) == 1
+    tx = result[0]
+    assert tx.household is True
+    assert tx.payer_percentage == 100
+
+
+def test_person_name_tag_spotted() -> None:
+    csv = _make_csv({"Tags": "bob"})
+    result = parse_monarch_csv(
+        csv, PAYER_ID, UPLOAD_ID, person_names=frozenset({"bob"})
+    )
+
+    assert len(result) == 1
+    tx = result[0]
+    assert tx.household is True
+    assert tx.payer_percentage == 0
+
+
+def test_household_tag_with_sxx() -> None:
+    csv = _make_csv({"Tags": "household, s30"})
+    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+
+    assert len(result) == 1
+    tx = result[0]
+    assert tx.household is True
+    assert tx.payer_percentage == 30
+
+
+def test_multiple_sxx_tags_highest_wins() -> None:
+    csv = _make_csv({"Tags": "shared, s30, s70"})
+    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+
+    assert len(result) == 1
+    assert result[0].payer_percentage == 70
+
+
+def test_reserved_tag_not_treated_as_person_name() -> None:
+    csv = _make_csv({"Tags": "shared"})
+    result = parse_monarch_csv(
+        csv, PAYER_ID, UPLOAD_ID, person_names=frozenset({"shared"})
+    )
+
+    assert len(result) == 1
+    tx = result[0]
+    # "shared" is reserved, so it's treated as shared tag, not spotted
+    assert tx.household is True
+    assert tx.payer_percentage == 50

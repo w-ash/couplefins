@@ -5,7 +5,10 @@ from src.application.use_cases._shared.command_validators import (
     positive_int,
 )
 from src.domain.budget import BudgetOverview, compute_budget_overview
-from src.domain.categories import build_category_lookup
+from src.domain.categories import (
+    build_category_lookup,
+    get_personal_included_categories,
+)
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
@@ -29,11 +32,16 @@ class GetBudgetOverviewUseCase:
     ) -> GetBudgetOverviewResult:
         async with uow:
             budgets = await uow.category_group_budgets.get_all()
-            category_mappings = await uow.category_mappings.get_all()
+            categories = await uow.categories.get_all()
             category_groups = await uow.category_groups.get_all()
-            year_txs = await uow.transactions.get_shared_by_year(command.year)
 
-            category_lookup = build_category_lookup(category_mappings, category_groups)
+            personal_cats = get_personal_included_categories(categories)
+            if personal_cats:
+                year_txs = await uow.transactions.get_by_year(command.year)
+            else:
+                year_txs = await uow.transactions.get_household_by_year(command.year)
+
+            category_lookup = build_category_lookup(categories, category_groups)
 
             overview = compute_budget_overview(
                 budgets,
@@ -42,6 +50,7 @@ class GetBudgetOverviewUseCase:
                 category_groups,
                 command.year,
                 command.month,
+                personal_categories=personal_cats,
             )
 
             return GetBudgetOverviewResult(overview=overview, budgets=budgets)

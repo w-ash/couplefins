@@ -121,7 +121,8 @@ async def test_get_all_with_transaction_counts(db_session: AsyncSession) -> None
         payer_person_id=alice.id,
         amount=Decimal("-30.00"),
         tags=(),
-        payer_percentage=None,
+        payer_percentage=100,
+        household=False,
     )
     tx3 = make_transaction(
         upload_id=bob_upload.id,
@@ -140,13 +141,13 @@ async def test_get_all_with_transaction_counts(db_session: AsyncSession) -> None
     by_filename = {r.filename: r for r in result}
     alice_row = by_filename["alice-jan.csv"]
     assert alice_row.transaction_count == 2
-    assert alice_row.shared_count == 1
+    assert alice_row.household_count == 1
     assert alice_row.date_range_start == date(2026, 1, 10)
     assert alice_row.date_range_end == date(2026, 1, 20)
 
     bob_row = by_filename["bob-jan.csv"]
     assert bob_row.transaction_count == 1
-    assert bob_row.shared_count == 1
+    assert bob_row.household_count == 1
     assert bob_row.date_range_start == date(2026, 1, 15)
     assert bob_row.date_range_end == date(2026, 1, 15)
 
@@ -163,7 +164,7 @@ async def test_get_all_with_transaction_counts_empty_upload(
 
     assert len(result) == 1
     assert result[0].transaction_count == 0
-    assert result[0].shared_count == 0
+    assert result[0].household_count == 0
     assert result[0].date_range_start is None
     assert result[0].date_range_end is None
 

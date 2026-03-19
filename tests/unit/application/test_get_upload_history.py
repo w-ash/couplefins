@@ -23,7 +23,7 @@ async def test_enriches_with_person_names() -> None:
             filename="alice-jan.csv",
             uploaded_at=datetime(2026, 1, 15, 10, 0, tzinfo=UTC),
             transaction_count=47,
-            shared_count=23,
+            household_count=23,
             date_range_start=date(2026, 1, 1),
             date_range_end=date(2026, 1, 31),
         ),
@@ -33,7 +33,7 @@ async def test_enriches_with_person_names() -> None:
             filename="bob-jan.csv",
             uploaded_at=datetime(2026, 1, 14, 9, 0, tzinfo=UTC),
             transaction_count=38,
-            shared_count=19,
+            household_count=19,
             date_range_start=date(2026, 1, 1),
             date_range_end=date(2026, 1, 28),
         ),
@@ -44,7 +44,7 @@ async def test_enriches_with_person_names() -> None:
     assert len(result.entries) == 2
     assert result.entries[0].person_name == "Alice"
     assert result.entries[0].transaction_count == 47
-    assert result.entries[0].shared_count == 23
+    assert result.entries[0].household_count == 23
     assert result.entries[1].person_name == "Bob"
     assert result.entries[1].filename == "bob-jan.csv"
 

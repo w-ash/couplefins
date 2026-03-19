@@ -19,9 +19,9 @@ class ListUnmappedCategoriesUseCase:
         self, _command: ListUnmappedCategoriesCommand, uow: UnitOfWorkProtocol
     ) -> ListUnmappedCategoriesResult:
         async with uow:
-            unmapped = await uow.category_mappings.get_unmapped()
+            unmapped = await uow.categories.get_unmapped()
             return ListUnmappedCategoriesResult(
-                categories=sorted(m.category for m in unmapped)
+                categories=sorted(c.name for c in unmapped)
             )
 
 

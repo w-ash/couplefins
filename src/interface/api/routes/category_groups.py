@@ -18,6 +18,10 @@ from src.application.use_cases.delete_category_group import (
 )
 from src.application.use_cases.list_category_groups import list_category_groups
 from src.application.use_cases.list_unmapped_categories import list_unmapped_categories
+from src.application.use_cases.update_category import (
+    UpdateCategoryCommand,
+    UpdateCategoryUseCase,
+)
 from src.application.use_cases.update_category_group import (
     UpdateCategoryGroupCommand,
     UpdateCategoryGroupUseCase,
@@ -25,8 +29,10 @@ from src.application.use_cases.update_category_group import (
 from src.interface.api.schemas.category_groups import (
     BulkUpdateMappingsRequest,
     CategoryGroupResponse,
+    CategoryResponse,
     CreateCategoryGroupRequest,
     UpdateCategoryGroupRequest,
+    UpdateCategoryRequest,
 )
 
 router = APIRouter(tags=["category-groups"])
@@ -86,3 +92,16 @@ async def put_category_mappings(body: BulkUpdateMappingsRequest) -> dict[str, in
 async def get_unmapped_categories() -> list[str]:
     result = await execute_use_case(list_unmapped_categories)
     return result.categories
+
+
+@router.patch("/categories/{category_name}")
+async def patch_category(
+    category_name: str, body: UpdateCategoryRequest
+) -> CategoryResponse:
+    command = UpdateCategoryCommand(
+        name=category_name, include_personal=body.include_personal
+    )
+    result = await execute_use_case(
+        lambda uow: UpdateCategoryUseCase().execute(command, uow)
+    )
+    return CategoryResponse.from_domain(result.category)

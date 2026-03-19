@@ -3,8 +3,8 @@ from uuid import UUID
 
 from attrs import define
 
+from src.domain.entities.category import Category
 from src.domain.entities.category_group import CategoryGroup
-from src.domain.entities.category_mapping import CategoryMapping
 from src.domain.entities.transaction import Transaction
 
 _UNCATEGORIZED = "Uncategorized"
@@ -29,15 +29,19 @@ class CategoryGroupBreakdown:
 
 
 def build_category_lookup(
-    category_mappings: list[CategoryMapping],
+    categories: list[Category],
     category_groups: list[CategoryGroup],
 ) -> dict[str, tuple[UUID, str]]:
     group_names = {g.id: g.name for g in category_groups}
     return {
-        m.category: (m.group_id, group_names.get(m.group_id, "Unknown"))
-        for m in category_mappings
-        if m.group_id is not None
+        c.name: (c.group_id, group_names.get(c.group_id, "Unknown"))
+        for c in categories
+        if c.group_id is not None
     }
+
+
+def get_personal_included_categories(categories: list[Category]) -> set[str]:
+    return {c.name for c in categories if c.include_personal}
 
 
 def compute_category_breakdowns(

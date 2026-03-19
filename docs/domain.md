@@ -19,29 +19,70 @@ Monarch exports transactions via Settings > Data > Download Transactions. The CS
 | Amount | Negative = expense, positive = income/refund |
 | Tags | Comma-separated tags |
 
-### Shared Expense Conventions
+### Tag Conventions
 
-The couple uses Monarch tags to mark shared expenses:
+The couple uses Monarch tags to classify transactions:
 
-- **`shared`** tag (case-insensitive): marks a transaction as a shared expense
-- **`sXX`** tag (e.g., `s70`): overrides the default 50/50 split. The number means "the person who paid covers XX% of this expense." If no `sXX` tag is present, the split is 50/50.
-- Tags are dynamic — any integer 0-100 is valid (e.g., `s0`, `s30`, `s100`)
+- **`shared`** or **`split`** tag (case-insensitive): marks a transaction as a household expense and defaults to a 50/50 split
+- **`household`** tag (case-insensitive): marks a transaction as a household expense without implying a split — for expenses relevant to the couple's shared life but paid individually (e.g., concert tickets bought separately for an event you attend together)
+- **`sXX`** tag (e.g., `s70`): sets the payer's share to XX%. Authoritative — overrides any default from other tags. If multiple `sXX` tags are present, the highest value wins (payer takes the most share)
+- **Person name** tag (e.g., `bob`): marks a transaction as spotted — the payer fronted the money but the other person owes 100%. Detected by matching tags against known person names (case-insensitive). Reserved tags (`shared`, `split`, `household`, `settlement`) are never treated as person names.
+- Tags are dynamic — any integer 0-100 is valid for `sXX` (e.g., `s0`, `s30`, `s100`)
 
-**Input vs. internal representation**: The `sXX` tag is the *input mechanism* — how the system learns the split from a Monarch CSV. Internally, each transaction stores `payer_person_id` (who paid) and `payer_percentage` (their share, 0-100). The other person's share is always `100 - payer_percentage`. This makes the internal model agnostic to how the split was originally specified.
+**Input vs. internal representation**: Tags are the *input mechanism*. Internally, each transaction stores two fields: `payer_person_id` (who paid), `payer_percentage` (their share, 0-100, always set), and `household` (budget-relevant to the couple, bool).
 
-The couple can set splits either way: tag transactions with `sXX` in Monarch before exporting, or edit split percentages directly in the app after uploading. Both workflows produce the same internal representation.
+| Tags | `household` | `payer_percentage` | Type |
+|---|---|---|---|
+| (none) | false | 100 | Personal |
+| `shared` or `split` | true | 50 (default) | Shared |
+| `shared, sXX` | true | XX | Shared (custom split) |
+| `shared, s100` | true | 100 | Household (no settlement) |
+| `household` | true | 100 (no split implied) | Household (no settlement) |
+| `household, sXX` | true | XX | Household + split |
+| person-name (e.g., `bob`) | true | 0 | Spotted |
+
+The couple can set splits either way: tag transactions in Monarch before exporting, or edit split percentages and household flags directly in the app after uploading. Both workflows produce the same internal representation.
 
 ### Reconciliation Math
 
-For each shared transaction:
+For each transaction where `payer_percentage < 100`:
 - `payer_share = |amount| × (payer_percentage / 100)`
 - `other_share = |amount| × ((100 - payer_percentage) / 100)`
 
-Sum across all shared transactions for a period (a single month or an arbitrary date range) → net result: "Person A owes Person B $X"
+Sum across all settlement-relevant transactions for a period (a single month or an arbitrary date range) → net result: "Person A owes Person B $X"
 
 **Examples**:
 - Alice pays $100 dinner, tagged `shared` (no sXX → 50/50): Alice's share $50, Bob's share $50. Bob owes Alice $50.
 - Bob pays $200 rent, tagged `shared, s70`: Bob's share $140, Alice's share $60. Alice owes Bob $60.
+- Alice pays $30 for Bob's parking ticket, tagged `bob` (spotted → 0%): Alice's share $0, Bob's share $30. Bob owes Alice $30.
+- Alice pays $60 for her own concert ticket, tagged `household`: payer_percentage=100, so this does NOT enter settlement. Nobody owes anyone. (It does count toward the Lifestyle budget because `household=true`.)
+
+## Transaction Classification
+
+Transaction classification uses two orthogonal fields — one for settlement, one for budget:
+
+- **`payer_percentage: int`** (0-100, always set, default 100) — the payer's share of this expense. Determines settlement math. The other person's share is always `100 - payer_percentage`.
+- **`household: bool`** (default false) — whether this transaction is relevant to the couple's shared life. Determines budget inclusion.
+
+Neither field implies the other. A transaction can be household without being split (concert you attended together but paid separately), or split without being household (unusual, but the fields are independent).
+
+| Type | `household` | `payer_percentage` | Settlement? | Budget? |
+|---|---|---|---|---|
+| Personal | false | 100 | No | Only if category has `include_personal` |
+| Shared | true | 1-99 | Yes (split) | Yes |
+| Spotted | true | 0 | Yes (100% reimbursement) | Yes |
+| Household (no split) | true | 100 | No | Yes |
+
+**Spotted**: One person pays for something that is entirely the other person's expense — their subscription, their parking ticket, a hat they forgot their wallet for. The payer fronts the money and gets 100% back at settlement.
+
+**Household (no split)**: An expense relevant to the couple's shared life but paid individually — concert tickets bought separately for a show they attend together, or groceries one person picked up but isn't splitting. Tagged `household` (or `shared, s100`) in Monarch. No settlement impact, but counts toward the shared budget.
+
+### Settlement vs. budget
+
+Settlement and budget are separate concerns:
+
+- **Settlement**: Any transaction with `payer_percentage < 100` enters reconciliation math. The split determines each person's share. The `household` flag is irrelevant to settlement.
+- **Budget**: Any transaction with `household=true` counts toward its category group's budget. Additionally, individual categories can be configured with `include_personal=true` to also count personal (`household=false`) transactions in that category's budget totals. This lets the couple track total spending in categories like Groceries across both people, even when some purchases weren't tagged as household.
 
 ## User Identity
 
@@ -88,7 +129,9 @@ Couplefins vocabulary mapped to standard accounting terms:
 | CategoryMapping | Posting Rule | Routes categories to groups |
 | Adjustment (v0.3.x) | Correcting Entry (Reversal pattern) | Offsetting entries for accurate per-person spend |
 | Settlement | Payment Record | Records that Person A paid Person B (amount, method, notes). Linked transactions excluded from reconciliation. |
-| `payer_percentage` | Allocation Rule / Split Ratio | Determines each person's share |
+| `payer_percentage` | Allocation Rule / Split Ratio | Determines each person's share (0-100, always set). Settlement: any transaction where `payer_percentage < 100` |
+| `household` | Expense Classification | Per-transaction flag — "relevant to the couple's shared life." Set by `shared`, `split`, `household`, or person-name tags |
+| `include_personal` | Budget Scope Flag | Per-category toggle to also include personal (non-household) transactions in budget totals |
 | `is_finalized` | Period Close | Prevents modification after agreement |
 | TransactionEdit | Audit Log Entry | Records post-upload changes to a transaction (field, old value, new value, timestamp) |
 

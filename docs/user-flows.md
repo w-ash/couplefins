@@ -100,7 +100,9 @@ Getting transaction data into the system. Each person does this solo, on their o
 
 **US-IMPORT-2**: As a partner, I want to preview what will be imported before committing.
 
-- Given I select a CSV, then I see a table of parsed transactions: which are shared vs personal, split percentages, and counts (new, changed, unchanged)
+- Given I select a CSV, then I see a table of parsed transactions: classification (personal, shared, spotted, household), split percentages, and counts (new, changed, unchanged)
+- Given transactions tagged with my partner's name, then the preview shows them as "spotted" with the beneficiary identified
+- Given transactions tagged `household`, then the preview shows them as "household" with no split
 - Given the preview, then I can go back and change my file selection
 
 **US-IMPORT-3**: As a partner, I want to know about unmapped categories so I can fix them before or after importing.
@@ -119,12 +121,12 @@ Getting transaction data into the system. Each person does this solo, on their o
 
 Making sure the data is right before settling. This is solo prep work — each person reviews their own transactions and fixes mistakes.
 
-**Goal**: Shared transactions are correctly categorized, correctly split, and correctly tagged. I'm confident the settlement amount will be accurate.
+**Goal**: Transactions are correctly classified (personal, shared, spotted, household), correctly split, and correctly tagged. I'm confident the settlement amount and budget totals will be accurate.
 
-**US-REVIEW-1**: As a partner, I want to see all shared transactions for a period from both of us.
+**US-REVIEW-1**: As a partner, I want to see all household transactions for a period from both of us.
 
-- Given both partners have uploaded, then I see a combined table of all shared transactions from both people
-- Given each row, then I see: date, merchant, category, who paid, amount, split ratio, each person's share
+- Given both partners have uploaded, then I see a combined table of all household transactions from both people — shared, spotted, and household (no split)
+- Given each row, then I see: date, merchant, category, who paid, amount, split ratio, each person's share, and classification type
 - Given only one person has uploaded, then I see their transactions with a notice about the missing upload
 
 **US-REVIEW-2**: As a partner, I want to find specific transactions quickly.
@@ -145,9 +147,30 @@ Making sure the data is right before settling. This is solo prep work — each p
 - Given a category group, when I expand it, then I see individual categories and their totals
 - Given an unmapped category, then it appears under "Uncategorized"
 
-**US-REVIEW-5** (v0.9.x): As a partner, I want to exclude a specific transaction from reconciliation without deleting it.
+**US-REVIEW-5** (v0.9.x): As a partner, I want to see transaction classifications correctly after upload.
 
-- Given a transaction, then I can toggle it to "excluded" so it doesn't count toward settlement
+- Given my CSV contains transactions tagged with my partner's name, then they appear as "spotted" with my partner identified as the beneficiary
+- Given a spotted transaction, then I see it marked as 100% owed back to me — it enters settlement but is not a shared budget expense (it's a debt)
+- Given my CSV contains transactions tagged `household`, then they appear as "household" — they count toward the shared budget but don't generate a settlement entry
+- Given my CSV contains transactions tagged `shared`, then they enter both settlement (split) and budget
+
+**US-REVIEW-6** (v0.9.x): As a partner, I want to change a transaction's classification after upload.
+
+- Given a transaction, then I can change its type between personal, shared, spotted, and household in the expanded row editor
+- Given I change a transaction to spotted, then it enters settlement at 100% reimbursement
+- Given I change a transaction to household, then it counts toward the budget but not settlement
+- Given I change a transaction to personal, then it exits both settlement and budget (unless the category has `include_personal`)
+- Given any classification change, then an audit trail records what changed
+
+**US-REVIEW-7** (v0.9.x): As a partner, I want to filter transactions by classification type.
+
+- Given the transaction table, then I can filter by type: All / Shared / Spotted / Household / Personal
+- Given the spotted filter, then I see only transactions I fronted for my partner (or they fronted for me)
+- Given the household filter, then I see transactions relevant to the couple but not split — shared experiences paid individually
+
+**US-REVIEW-8** (v0.9.x): As a partner, I want to exclude a specific transaction from reconciliation without deleting it.
+
+- Given a transaction, then I can toggle it to "excluded" so it doesn't count toward settlement or budget
 - Given an excluded transaction, then it's visually distinct and can be re-included
 
 ---
@@ -233,7 +256,14 @@ Are we on track for the month and the year? The couple reviews this together.
 
 - Given either view, then I see a total row summing all groups
 
-**US-BUDGET-4** (v0.7.x): As a partner, I want to see spending trends over time so we can have data-driven conversations.
+**US-BUDGET-4** (v0.9.x): As a partner, I want certain categories to include personal spending so we see total spending across both of us.
+
+- Given the Settings page (category management), then I can toggle "Include personal spending" per category
+- Given a category with personal spending included, then its budget totals reflect all transactions — household and personal
+- Given a category without the toggle, then only household transactions count (tagged `shared`, `household`, or person-name)
+- Given the toggle, then settlement math is unaffected — only budget reporting changes
+
+**US-BUDGET-5** (v0.7.x): As a partner, I want to see spending trends over time so we can have data-driven conversations.
 
 - Given the Budget or a dedicated Insights page, then I see line/area charts of monthly spending per category group across the year
 - Given a chart, then I can toggle category groups on/off to focus on specific areas

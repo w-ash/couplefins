@@ -2,8 +2,8 @@ from uuid import UUID
 
 from attrs import define
 
+from src.domain.entities.category import Category
 from src.domain.entities.category_group import CategoryGroup
-from src.domain.entities.category_mapping import CategoryMapping
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -13,14 +13,14 @@ class ListCategoryGroupsCommand:
 
 
 @define(frozen=True, slots=True)
-class CategoryGroupWithMappings:
+class CategoryGroupWithCategories:
     group: CategoryGroup
-    mappings: list[CategoryMapping]
+    categories: list[Category]
 
 
 @define(frozen=True, slots=True)
 class ListCategoryGroupsResult:
-    items: list[CategoryGroupWithMappings]
+    items: list[CategoryGroupWithCategories]
 
 
 @define(slots=True)
@@ -30,17 +30,17 @@ class ListCategoryGroupsUseCase:
     ) -> ListCategoryGroupsResult:
         async with uow:
             groups = await uow.category_groups.get_all()
-            all_mappings = await uow.category_mappings.get_all()
+            all_categories = await uow.categories.get_all()
 
-            mappings_by_group: dict[UUID, list[CategoryMapping]] = {}
-            for mapping in all_mappings:
-                if mapping.group_id is not None:
-                    mappings_by_group.setdefault(mapping.group_id, []).append(mapping)
+            cats_by_group: dict[UUID, list[Category]] = {}
+            for cat in all_categories:
+                if cat.group_id is not None:
+                    cats_by_group.setdefault(cat.group_id, []).append(cat)
 
             items = [
-                CategoryGroupWithMappings(
+                CategoryGroupWithCategories(
                     group=group,
-                    mappings=mappings_by_group.get(group.id, []),
+                    categories=cats_by_group.get(group.id, []),
                 )
                 for group in groups
             ]

@@ -18,21 +18,24 @@ import type {
 
 import type {
   CategoryGroupResponse,
+  CategoryResponse,
   PutCategoryMappings200
 } from '../model';
 
 
-export const getGetCategoryGroupsResponseMock = (): CategoryGroupResponse[] => (Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({id: faker.string.uuid(), name: faker.string.alpha({length: {min: 10, max: 20}}), icon: faker.helpers.arrayElement([faker.string.alpha({length: {min: 10, max: 20}}),null,]), categories: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => (faker.string.alpha({length: {min: 10, max: 20}})))})))
+export const getGetCategoryGroupsResponseMock = (): CategoryGroupResponse[] => (Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({id: faker.string.uuid(), name: faker.string.alpha({length: {min: 10, max: 20}}), icon: faker.helpers.arrayElement([faker.string.alpha({length: {min: 10, max: 20}}),null,]), categories: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({name: faker.string.alpha({length: {min: 10, max: 20}}), include_personal: faker.datatype.boolean()}))})))
 
-export const getPostCategoryGroupResponseMock = (overrideResponse: Partial<Extract<CategoryGroupResponse, object>> = {}): CategoryGroupResponse => ({id: faker.string.uuid(), name: faker.string.alpha({length: {min: 10, max: 20}}), icon: faker.helpers.arrayElement([faker.string.alpha({length: {min: 10, max: 20}}),null,]), categories: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => (faker.string.alpha({length: {min: 10, max: 20}}))), ...overrideResponse})
+export const getPostCategoryGroupResponseMock = (overrideResponse: Partial<Extract<CategoryGroupResponse, object>> = {}): CategoryGroupResponse => ({id: faker.string.uuid(), name: faker.string.alpha({length: {min: 10, max: 20}}), icon: faker.helpers.arrayElement([faker.string.alpha({length: {min: 10, max: 20}}),null,]), categories: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({name: faker.string.alpha({length: {min: 10, max: 20}}), include_personal: faker.datatype.boolean()})), ...overrideResponse})
 
-export const getPutCategoryGroupResponseMock = (overrideResponse: Partial<Extract<CategoryGroupResponse, object>> = {}): CategoryGroupResponse => ({id: faker.string.uuid(), name: faker.string.alpha({length: {min: 10, max: 20}}), icon: faker.helpers.arrayElement([faker.string.alpha({length: {min: 10, max: 20}}),null,]), categories: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => (faker.string.alpha({length: {min: 10, max: 20}}))), ...overrideResponse})
+export const getPutCategoryGroupResponseMock = (overrideResponse: Partial<Extract<CategoryGroupResponse, object>> = {}): CategoryGroupResponse => ({id: faker.string.uuid(), name: faker.string.alpha({length: {min: 10, max: 20}}), icon: faker.helpers.arrayElement([faker.string.alpha({length: {min: 10, max: 20}}),null,]), categories: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({name: faker.string.alpha({length: {min: 10, max: 20}}), include_personal: faker.datatype.boolean()})), ...overrideResponse})
 
 export const getPutCategoryMappingsResponseMock = (): PutCategoryMappings200 => ({
         [faker.string.alphanumeric(5)]: faker.number.int()
       })
 
 export const getGetUnmappedCategoriesResponseMock = (): string[] => (Array.from({length: faker.number.int({min: 1, max: 10})}, () => faker.word.sample()))
+
+export const getPatchCategoryResponseMock = (overrideResponse: Partial<Extract<CategoryResponse, object>> = {}): CategoryResponse => ({name: faker.string.alpha({length: {min: 10, max: 20}}), include_personal: faker.datatype.boolean(), ...overrideResponse})
 
 
 export const getGetCategoryGroupsMockHandler = (overrideResponse?: CategoryGroupResponse[] | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<CategoryGroupResponse[]> | CategoryGroupResponse[]), options?: RequestHandlerOptions) => {
@@ -104,11 +107,24 @@ export const getGetUnmappedCategoriesMockHandler = (overrideResponse?: string[] 
       })
   }, options)
 }
+
+export const getPatchCategoryMockHandler = (overrideResponse?: CategoryResponse | ((info: Parameters<Parameters<typeof http.patch>[1]>[0]) => Promise<CategoryResponse> | CategoryResponse), options?: RequestHandlerOptions) => {
+  return http.patch('*/api/v1/categories/:categoryName', async (info: Parameters<Parameters<typeof http.patch>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getPatchCategoryResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
 export const getCategoryGroupsMock = () => [
   getGetCategoryGroupsMockHandler(),
   getPostCategoryGroupMockHandler(),
   getPutCategoryGroupMockHandler(),
   getDeleteCategoryGroupMockHandler(),
   getPutCategoryMappingsMockHandler(),
-  getGetUnmappedCategoriesMockHandler()
+  getGetUnmappedCategoriesMockHandler(),
+  getPatchCategoryMockHandler()
 ]

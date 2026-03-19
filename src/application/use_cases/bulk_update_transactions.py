@@ -33,7 +33,8 @@ class BulkUpdateTransactionsCommand:
     amount: Decimal | None = None
     category: str | None = None
     tags: tuple[str, ...] | None = None
-    payer_percentage: int | _Unset | None = field(default=_Unset.UNSET)
+    payer_percentage: int | _Unset = field(default=_Unset.UNSET)
+    household: bool | _Unset = field(default=_Unset.UNSET)
 
 
 @define(frozen=True, slots=True)
@@ -57,6 +58,8 @@ def _collect_updates(
         updates["tags"] = command.tags
     if not isinstance(command.payer_percentage, _Unset):
         updates["payer_percentage"] = command.payer_percentage
+    if not isinstance(command.household, _Unset):
+        updates["household"] = command.household
     return updates
 
 
@@ -83,14 +86,11 @@ def _validate_command(
         raise ValidationError(
             "date and amount can only be changed for a single transaction"
         )
-    if (
-        not isinstance(command.payer_percentage, _Unset)
-        and command.payer_percentage is not None
-    ):
+    if not isinstance(command.payer_percentage, _Unset):
         validate_payer_percentage(command.payer_percentage)
 
 
-_EDIT_FIELDS = ("date", "amount", "category", "tags", "payer_percentage")
+_EDIT_FIELDS = ("date", "amount", "category", "tags", "payer_percentage", "household")
 
 
 @define(slots=True)
@@ -130,6 +130,7 @@ class BulkUpdateTransactionsUseCase:
                     ("category", tx.category),
                     ("tags", tx.tags),
                     ("payer_percentage", tx.payer_percentage),
+                    ("household", tx.household),
                 )
                 edits = [
                     e

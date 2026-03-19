@@ -1,4 +1,5 @@
 from collections import defaultdict
+from collections.abc import Set
 from datetime import date
 from decimal import Decimal
 from typing import Literal
@@ -81,14 +82,19 @@ def determine_health(spent: Decimal, budget: Decimal) -> HealthStatus:
     return "on_track"
 
 
+def _is_budget_relevant(tx: Transaction, personal_categories: Set[str]) -> bool:
+    return tx.household or tx.category in personal_categories
+
+
 def compute_average_monthly_spending(
     year_txs: list[Transaction],
     category_lookup: dict[str, tuple[UUID, str]],
     through_month: int,
+    personal_categories: Set[str] = frozenset(),
 ) -> dict[UUID, Decimal]:
     by_month: dict[int, list[Transaction]] = defaultdict(list)
     for tx in year_txs:
-        if tx.is_shared and tx.amount < 0:
+        if _is_budget_relevant(tx, personal_categories) and tx.amount < 0:
             by_month[tx.date.month].append(tx)
 
     group_totals: dict[UUID, Decimal] = defaultdict(Decimal)
@@ -156,6 +162,7 @@ def compute_budget_overview(  # noqa: PLR0913, PLR0917
     groups: list[CategoryGroup],
     year: int,
     month: int,
+    personal_categories: Set[str] = frozenset(),
 ) -> BudgetOverview:
     group_names = {g.id: g.name for g in groups}
 
@@ -163,8 +170,16 @@ def compute_budget_overview(  # noqa: PLR0913, PLR0917
     for b in budgets:
         budgets_by_group[b.group_id].append(b)
 
-    month_txs = [tx for tx in year_txs if tx.is_shared and tx.date.month == month]
-    ytd_txs = [tx for tx in year_txs if tx.is_shared and tx.date.month <= month]
+    month_txs = [
+        tx
+        for tx in year_txs
+        if _is_budget_relevant(tx, personal_categories) and tx.date.month == month
+    ]
+    ytd_txs = [
+        tx
+        for tx in year_txs
+        if _is_budget_relevant(tx, personal_categories) and tx.date.month <= month
+    ]
 
     month_by_group: dict[UUID | None, CategoryGroupBreakdown] = {
         bd.group_id: bd
@@ -174,7 +189,9 @@ def compute_budget_overview(  # noqa: PLR0913, PLR0917
         bd.group_id: bd for bd in compute_category_breakdowns(ytd_txs, category_lookup)
     }
 
-    avg_spending = compute_average_monthly_spending(year_txs, category_lookup, month)
+    avg_spending = compute_average_monthly_spending(
+        year_txs, category_lookup, month, personal_categories
+    )
 
     budgeted_statuses: list[CategoryGroupBudgetStatus] = []
     unbudgeted_statuses: list[CategoryGroupBudgetStatus] = []

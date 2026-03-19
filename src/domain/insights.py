@@ -9,7 +9,7 @@ from src.domain.entities.transaction import Transaction
 
 
 def _shared_expenses(txs: list[Transaction]) -> list[Transaction]:
-    return [tx for tx in txs if tx.is_shared and tx.amount < 0]
+    return [tx for tx in txs if tx.household and tx.amount < 0]
 
 
 def _group_by_month(txs: list[Transaction]) -> dict[int, list[Transaction]]:

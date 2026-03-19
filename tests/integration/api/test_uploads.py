@@ -115,7 +115,7 @@ async def test_preview_csv_full_flow(client: AsyncClient) -> None:
     assert data["unchanged_count"] == 0
     assert data["changed_transactions"] == []
     assert data["new_transactions"][0]["merchant"] == "Grocery Store"
-    assert data["new_transactions"][0]["is_shared"] is True
+    assert data["new_transactions"][0]["household"] is True
 
 
 async def test_preview_csv_unknown_person_returns_404(client: AsyncClient) -> None:
@@ -149,7 +149,7 @@ async def test_upload_history(client: AsyncClient) -> None:
     assert entry["filename"] == "march.csv"
     assert entry["person_name"] == "Alice"
     assert entry["transaction_count"] == 2
-    assert entry["shared_count"] == 1
+    assert entry["household_count"] == 1
     assert entry["date_range_start"] is not None
 
 

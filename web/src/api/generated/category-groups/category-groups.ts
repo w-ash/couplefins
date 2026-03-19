@@ -26,10 +26,12 @@ import type {
 import type {
   BulkUpdateMappingsRequest,
   CategoryGroupResponse,
+  CategoryResponse,
   CreateCategoryGroupRequest,
   HTTPValidationError,
   PutCategoryMappings200,
-  UpdateCategoryGroupRequest
+  UpdateCategoryGroupRequest,
+  UpdateCategoryRequest
 } from '../model';
 
 import { customFetch } from '../../client';
@@ -611,3 +613,97 @@ export function useGetUnmappedCategories<TData = Awaited<ReturnType<typeof getUn
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+
+
+
+/**
+ * @summary Patch Category
+ */
+export type patchCategoryResponse200 = {
+  data: CategoryResponse
+  status: 200
+}
+
+export type patchCategoryResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type patchCategoryResponseSuccess = (patchCategoryResponse200) & {
+  headers: Headers;
+};
+export type patchCategoryResponseError = (patchCategoryResponse422) & {
+  headers: Headers;
+};
+
+export type patchCategoryResponse = (patchCategoryResponseSuccess | patchCategoryResponseError)
+
+export const getPatchCategoryUrl = (categoryName: string,) => {
+
+
+
+
+  return `/api/v1/categories/${categoryName}`
+}
+
+export const patchCategory = async (categoryName: string,
+    updateCategoryRequest: UpdateCategoryRequest, options?: RequestInit): Promise<patchCategoryResponse> => {
+
+  return customFetch<patchCategoryResponse>(getPatchCategoryUrl(categoryName),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      updateCategoryRequest,)
+  }
+);}
+
+
+
+
+export const getPatchCategoryMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCategory>>, TError,{categoryName: string;data: UpdateCategoryRequest}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchCategory>>, TError,{categoryName: string;data: UpdateCategoryRequest}, TContext> => {
+
+const mutationKey = ['patchCategory'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchCategory>>, {categoryName: string;data: UpdateCategoryRequest}> = (props) => {
+          const {categoryName,data} = props ?? {};
+
+          return  patchCategory(categoryName,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchCategoryMutationResult = NonNullable<Awaited<ReturnType<typeof patchCategory>>>
+    export type PatchCategoryMutationBody = UpdateCategoryRequest
+    export type PatchCategoryMutationError = HTTPValidationError
+
+    /**
+ * @summary Patch Category
+ */
+export const usePatchCategory = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCategory>>, TError,{categoryName: string;data: UpdateCategoryRequest}, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchCategory>>,
+        TError,
+        {categoryName: string;data: UpdateCategoryRequest},
+        TContext
+      > => {
+      return useMutation(getPatchCategoryMutationOptions(options), queryClient);
+    }

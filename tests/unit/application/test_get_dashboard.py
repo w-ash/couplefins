@@ -7,8 +7,8 @@ from src.application.use_cases.get_dashboard import (
     _resolve_active_month,
 )
 from tests.fixtures.factories import (
+    make_category,
     make_category_group,
-    make_category_mapping,
     make_person,
     make_reconciliation_period,
     make_settlement,
@@ -25,10 +25,10 @@ def _make_command(
     return GetDashboardCommand(year=year, month=month)
 
 
-def _setup_uow_base(uow, alice, bob, *, groups=None, mappings=None):
+def _setup_uow_base(uow, alice, bob, *, groups=None, categories=None):
     uow.persons.get_all.return_value = [alice, bob]
     uow.category_groups.get_all.return_value = groups or []
-    uow.category_mappings.get_all.return_value = mappings or []
+    uow.categories.get_all.return_value = categories or []
 
 
 async def test_happy_path_current_month() -> None:
@@ -36,8 +36,8 @@ async def test_happy_path_current_month() -> None:
     alice = make_person(name="Alice")
     bob = make_person(name="Bob")
     group = make_category_group(name="Food & Dining")
-    mapping = make_category_mapping(category="Dining Out", group_id=group.id)
-    _setup_uow_base(uow, alice, bob, groups=[group], mappings=[mapping])
+    category = make_category(name="Dining Out", group_id=group.id)
+    _setup_uow_base(uow, alice, bob, groups=[group], categories=[category])
 
     txs = [
         make_transaction(
@@ -48,7 +48,7 @@ async def test_happy_path_current_month() -> None:
             payer_percentage=50,
         ),
     ]
-    uow.transactions.get_shared_by_year.return_value = txs
+    uow.transactions.get_household_by_year.return_value = txs
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = [
         make_upload(person_id=alice.id),
         make_upload(person_id=bob.id),
@@ -69,7 +69,7 @@ async def test_empty_month_zeroed_summary() -> None:
     bob = make_person(name="Bob")
     _setup_uow_base(uow, alice, bob)
 
-    uow.transactions.get_shared_by_year.return_value = []
+    uow.transactions.get_household_by_year.return_value = []
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
     result = await GetDashboardUseCase().execute(_make_command(), uow)
@@ -106,7 +106,7 @@ async def test_multi_month_history() -> None:
             payer_percentage=50,
         ),
     ]
-    uow.transactions.get_shared_by_year.return_value = txs
+    uow.transactions.get_household_by_year.return_value = txs
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
     result = await GetDashboardUseCase().execute(_make_command(), uow)
@@ -148,7 +148,7 @@ async def test_ytd_aggregates_across_months() -> None:
             payer_percentage=50,
         ),
     ]
-    uow.transactions.get_shared_by_year.return_value = txs
+    uow.transactions.get_household_by_year.return_value = txs
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
     result = await GetDashboardUseCase().execute(_make_command(), uow)
@@ -184,7 +184,7 @@ async def test_ytd_excludes_future_months() -> None:
             payer_percentage=50,
         ),
     ]
-    uow.transactions.get_shared_by_year.return_value = txs
+    uow.transactions.get_household_by_year.return_value = txs
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
     result = await GetDashboardUseCase().execute(_make_command(), uow)
@@ -209,7 +209,7 @@ async def test_settlement_history_entries() -> None:
             payer_percentage=50,
         ),
     ]
-    uow.transactions.get_shared_by_year.return_value = txs
+    uow.transactions.get_household_by_year.return_value = txs
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
     result = await GetDashboardUseCase().execute(_make_command(), uow)
@@ -261,7 +261,7 @@ async def test_auto_month_picks_latest_unfinalized_with_txs() -> None:
             payer_percentage=50,
         ),
     ]
-    uow.transactions.get_shared_by_year.return_value = txs
+    uow.transactions.get_household_by_year.return_value = txs
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
     # No explicit month → auto-detect
@@ -292,7 +292,7 @@ async def test_auto_month_skips_finalized_months() -> None:
             payer_percentage=50,
         ),
     ]
-    uow.transactions.get_shared_by_year.return_value = txs
+    uow.transactions.get_household_by_year.return_value = txs
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
     # March is finalized
     uow.reconciliation_periods.get_by_year.return_value = [
@@ -323,7 +323,7 @@ async def test_month_with_full_settlement_is_settled() -> None:
             payer_percentage=50,
         ),
     ]
-    uow.transactions.get_shared_by_year.return_value = txs
+    uow.transactions.get_household_by_year.return_value = txs
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
     settled_at = datetime(2026, 2, 1, 12, 0, tzinfo=UTC)
@@ -359,7 +359,7 @@ async def test_month_with_partial_settlement_is_not_settled() -> None:
             payer_percentage=50,
         ),
     ]
-    uow.transactions.get_shared_by_year.return_value = txs
+    uow.transactions.get_household_by_year.return_value = txs
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
     uow.settlements.get_by_year.return_value = [
@@ -393,7 +393,7 @@ async def test_multiple_settlements_summing_to_full() -> None:
             payer_percentage=50,
         ),
     ]
-    uow.transactions.get_shared_by_year.return_value = txs
+    uow.transactions.get_household_by_year.return_value = txs
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
     earlier = datetime(2026, 2, 1, 10, 0, tzinfo=UTC)
@@ -438,7 +438,7 @@ async def test_waived_settlement_counts_as_settled() -> None:
             payer_percentage=50,
         ),
     ]
-    uow.transactions.get_shared_by_year.return_value = txs
+    uow.transactions.get_household_by_year.return_value = txs
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
     settled_at = datetime(2026, 2, 1, 12, 0, tzinfo=UTC)
@@ -480,7 +480,7 @@ async def test_ytd_total_settled_accumulates_across_months() -> None:
             payer_percentage=50,
         ),
     ]
-    uow.transactions.get_shared_by_year.return_value = txs
+    uow.transactions.get_household_by_year.return_value = txs
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
     uow.settlements.get_by_year.return_value = [
@@ -519,7 +519,7 @@ async def test_ytd_total_settled_excludes_future_months() -> None:
             payer_percentage=50,
         ),
     ]
-    uow.transactions.get_shared_by_year.return_value = txs
+    uow.transactions.get_household_by_year.return_value = txs
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
     uow.settlements.get_by_year.return_value = [
@@ -566,7 +566,7 @@ async def test_zero_balance_month_is_trivially_settled() -> None:
             payer_percentage=50,
         ),
     ]
-    uow.transactions.get_shared_by_year.return_value = txs
+    uow.transactions.get_household_by_year.return_value = txs
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
     result = await GetDashboardUseCase().execute(_make_command(), uow)
@@ -583,7 +583,7 @@ async def test_no_settlements_yields_zero_ytd_total() -> None:
     bob = make_person(name="Bob")
     _setup_uow_base(uow, alice, bob)
 
-    uow.transactions.get_shared_by_year.return_value = []
+    uow.transactions.get_household_by_year.return_value = []
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
     result = await GetDashboardUseCase().execute(_make_command(), uow)

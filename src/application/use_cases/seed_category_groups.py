@@ -6,8 +6,8 @@ from attrs import define
 from loguru import logger
 from pydantic import TypeAdapter
 
+from src.domain.entities.category import Category
 from src.domain.entities.category_group import CategoryGroup
-from src.domain.entities.category_mapping import CategoryMapping
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 FIXTURE_PATH = (
@@ -34,7 +34,7 @@ class SeedCategoryGroupsCommand:
 @define(frozen=True, slots=True)
 class SeedCategoryGroupsResult:
     groups_created: int
-    mappings_created: int
+    categories_created: int
     skipped: bool
 
 
@@ -51,14 +51,14 @@ class SeedCategoryGroupsUseCase:
                     existing_count,
                 )
                 return SeedCategoryGroupsResult(
-                    groups_created=0, mappings_created=0, skipped=True
+                    groups_created=0, categories_created=0, skipped=True
                 )
 
             fixture_text = FIXTURE_PATH.read_bytes()
             fixture_data = _fixture_adapter.validate_json(fixture_text)
 
             groups: list[CategoryGroup] = []
-            mappings: list[CategoryMapping] = []
+            categories: list[Category] = []
 
             for group_data in fixture_data:
                 group_id = uuid.uuid4()
@@ -67,22 +67,22 @@ class SeedCategoryGroupsUseCase:
                         id=group_id, name=group_data["name"], icon=group_data["icon"]
                     )
                 )
-                mappings.extend(
-                    CategoryMapping(category=category_name, group_id=group_id)
+                categories.extend(
+                    Category(id=uuid.uuid4(), name=category_name, group_id=group_id)
                     for category_name in group_data["categories"]
                 )
 
             await uow.category_groups.save_batch(groups)
-            await uow.category_mappings.save_batch(mappings)
+            await uow.categories.save_batch(categories)
             await uow.commit()
             logger.info(
-                "Seeded {} category groups with {} category mappings",
+                "Seeded {} category groups with {} categories",
                 len(groups),
-                len(mappings),
+                len(categories),
             )
             return SeedCategoryGroupsResult(
                 groups_created=len(groups),
-                mappings_created=len(mappings),
+                categories_created=len(categories),
                 skipped=False,
             )
 

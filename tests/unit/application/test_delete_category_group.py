@@ -18,7 +18,7 @@ async def test_nullifies_mappings_and_deletes_group() -> None:
 
     await DeleteCategoryGroupUseCase().execute(command, uow)
 
-    uow.category_mappings.unmap_by_group_id.assert_called_once_with(group.id)
+    uow.categories.unmap_by_group_id.assert_called_once_with(group.id)
     uow.category_groups.delete.assert_called_once_with(group.id)
     uow.commit.assert_called_once()
 

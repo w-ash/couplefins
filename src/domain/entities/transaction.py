@@ -21,19 +21,14 @@ class Transaction:
     amount: Decimal
     tags: tuple[str, ...]
     payer_person_id: UUID
-    payer_percentage: int | None
+    payer_percentage: int = 100
+    household: bool = False
     is_settlement: bool = False
     original_date: date | None = None
     original_amount: Decimal | None = None
 
     def __attrs_post_init__(self) -> None:
-        if self.payer_percentage is not None and not (
-            0 <= self.payer_percentage <= SplitDefaults.MAX_PAYER_PERCENTAGE
-        ):
+        if not (0 <= self.payer_percentage <= SplitDefaults.MAX_PAYER_PERCENTAGE):
             raise ValueError(
                 f"payer_percentage must be 0-{SplitDefaults.MAX_PAYER_PERCENTAGE}, got {self.payer_percentage}"
             )
-
-    @property
-    def is_shared(self) -> bool:
-        return self.payer_percentage is not None

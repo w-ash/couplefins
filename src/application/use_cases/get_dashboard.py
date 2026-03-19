@@ -124,7 +124,7 @@ class GetDashboardUseCase:
         async with uow:
             ctx = await load_reconciliation_context(uow)
 
-            all_year_txs = await uow.transactions.get_shared_by_year(command.year)
+            all_year_txs = await uow.transactions.get_household_by_year(command.year)
             by_month = partition_by_month(all_year_txs, lambda tx: tx.date.month)
 
             year_periods = await uow.reconciliation_periods.get_by_year(command.year)
@@ -148,7 +148,7 @@ class GetDashboardUseCase:
                 reconcile(
                     [],
                     ctx.persons,
-                    ctx.category_mappings,
+                    ctx.categories,
                     ctx.category_groups,
                     start_date=start,
                     end_date=end,
@@ -159,7 +159,7 @@ class GetDashboardUseCase:
             ytd_summary = reconcile(
                 [tx for tx in all_year_txs if tx.date.month <= active_month],
                 ctx.persons,
-                ctx.category_mappings,
+                ctx.categories,
                 ctx.category_groups,
                 start_date=date(command.year, 1, 1),
                 end_date=end,
@@ -190,7 +190,7 @@ class GetDashboardUseCase:
                 ),
                 persons=ctx.persons,
                 unmapped_categories=find_all_unmapped_categories(
-                    ctx.category_mappings,
+                    ctx.categories,
                     {tx.category for tx in by_month.get(active_month, [])},
                 ),
                 is_finalized=current_period.is_finalized if current_period else False,

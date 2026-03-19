@@ -8,8 +8,8 @@ from src.infrastructure.persistence.repositories.category_group_budget_repositor
 from src.infrastructure.persistence.repositories.category_group_repository import (
     CategoryGroupRepository,
 )
-from src.infrastructure.persistence.repositories.category_mapping_repository import (
-    CategoryMappingRepository,
+from src.infrastructure.persistence.repositories.category_repository import (
+    CategoryRepository,
 )
 from src.infrastructure.persistence.repositories.person_repository import (
     PersonRepository,
@@ -42,7 +42,7 @@ class UnitOfWork:
         self.transaction_edits = TransactionEditRepository(session)
         self.uploads = UploadRepository(session)
         self.category_groups = CategoryGroupRepository(session)
-        self.category_mappings = CategoryMappingRepository(session)
+        self.categories = CategoryRepository(session)
         self.category_group_budgets = CategoryGroupBudgetRepository(session)
         self.reconciliation_periods = ReconciliationPeriodRepository(session)
         self.settlements = SettlementRepository(session)

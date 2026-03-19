@@ -9,9 +9,9 @@ from src.domain.categories import (
     build_category_lookup,
     compute_category_breakdowns,
 )
-from src.domain.constants import CoupleDefaults
+from src.domain.constants import CoupleDefaults, SplitDefaults
+from src.domain.entities.category import Category
 from src.domain.entities.category_group import CategoryGroup
-from src.domain.entities.category_mapping import CategoryMapping
 from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
 from src.domain.splits import compute_shares
@@ -102,7 +102,7 @@ def _compute_settlement(
 def reconcile(  # noqa: PLR0913
     transactions: list[Transaction],
     persons: list[Person],
-    category_mappings: list[CategoryMapping],
+    categories: list[Category],
     category_groups: list[CategoryGroup],
     *,
     start_date: date,
@@ -114,7 +114,7 @@ def reconcile(  # noqa: PLR0913
     total_spending = Decimal(0)
     total_refunds = Decimal(0)
     for tx in transactions:
-        if not tx.is_shared:
+        if tx.payer_percentage == SplitDefaults.MAX_PAYER_PERCENTAGE:
             continue
         shared.append(tx)
         abs_amount = abs(tx.amount)
@@ -123,7 +123,7 @@ def reconcile(  # noqa: PLR0913
         else:
             total_refunds += abs_amount
 
-    category_lookup = build_category_lookup(category_mappings, category_groups)
+    category_lookup = build_category_lookup(categories, category_groups)
     person_summaries = _compute_person_summaries(shared, person_ids)
     settlement = _compute_settlement(person_summaries)
     breakdowns = compute_category_breakdowns(shared, category_lookup)

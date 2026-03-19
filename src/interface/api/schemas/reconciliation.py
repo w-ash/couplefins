@@ -92,7 +92,8 @@ class TransactionResponse(BaseModel):
     notes: str
     tags: list[str]
     payer_person_id: UUID
-    payer_percentage: int | None
+    payer_percentage: int
+    household: bool
     original_date: datetime.date | None
     original_amount: float | None
 
@@ -195,6 +196,7 @@ class ReconciliationResponse(BaseModel):
                     tags=list(tx.tags),
                     payer_person_id=tx.payer_person_id,
                     payer_percentage=tx.payer_percentage,
+                    household=tx.household,
                     original_date=tx.original_date,
                     original_amount=(
                         float(tx.original_amount)

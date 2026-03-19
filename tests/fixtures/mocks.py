@@ -6,8 +6,8 @@ from src.domain.repositories.category_group_budget_repository import (
 from src.domain.repositories.category_group_repository import (
     CategoryGroupRepositoryProtocol,
 )
-from src.domain.repositories.category_mapping_repository import (
-    CategoryMappingRepositoryProtocol,
+from src.domain.repositories.category_repository import (
+    CategoryRepositoryProtocol,
 )
 from src.domain.repositories.person_repository import PersonRepositoryProtocol
 from src.domain.repositories.reconciliation_period_repository import (
@@ -34,7 +34,7 @@ def make_mock_uow() -> AsyncMock:
     uow.transaction_edits = AsyncMock(spec=TransactionEditRepositoryProtocol)
     uow.uploads = AsyncMock(spec=UploadRepositoryProtocol)
     uow.category_groups = AsyncMock(spec=CategoryGroupRepositoryProtocol)
-    uow.category_mappings = AsyncMock(spec=CategoryMappingRepositoryProtocol)
+    uow.categories = AsyncMock(spec=CategoryRepositoryProtocol)
     uow.category_group_budgets = AsyncMock(spec=CategoryGroupBudgetRepositoryProtocol)
     uow.reconciliation_periods = AsyncMock(spec=ReconciliationPeriodRepositoryProtocol)
     uow.settlements = AsyncMock(spec=SettlementRepositoryProtocol)

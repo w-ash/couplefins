@@ -78,8 +78,8 @@ class UploadRepository(BaseRepository[Upload, UploadModel]):
                 UploadModel.filename,
                 UploadModel.uploaded_at,
                 func.count(tx.id).label("transaction_count"),
-                func.sum(case((tx.is_shared.is_(True), 1), else_=0)).label(
-                    "shared_count"
+                func.sum(case((tx.household.is_(True), 1), else_=0)).label(
+                    "household_count"
                 ),
                 func.min(tx.date).label("date_range_start"),
                 func.max(tx.date).label("date_range_end"),
@@ -96,7 +96,7 @@ class UploadRepository(BaseRepository[Upload, UploadModel]):
                 filename=row.filename,
                 uploaded_at=datetime.fromisoformat(row.uploaded_at),
                 transaction_count=row.transaction_count,
-                shared_count=row.shared_count or 0,
+                household_count=row.household_count or 0,
                 date_range_start=date.fromisoformat(row.date_range_start)
                 if row.date_range_start
                 else None,

@@ -11,8 +11,9 @@ from src.application.use_cases._shared.transactions import (
     classify_against_existing,
     find_new_categories,
     find_unmapped_categories,
+    get_other_person_names,
 )
-from src.domain.entities.category_mapping import CategoryMapping
+from src.domain.entities.category import Category
 from src.domain.entities.upload import Upload
 from src.domain.exceptions import NotFoundError
 from src.domain.parsing.monarch_csv import parse_monarch_csv
@@ -39,7 +40,7 @@ class UploadCsvResult:
 
 @define(slots=True)
 class UploadCsvUseCase:
-    async def execute(
+    async def execute(  # noqa: PLR0914
         self, command: UploadCsvCommand, uow: UnitOfWorkProtocol
     ) -> UploadCsvResult:
         async with uow:
@@ -48,24 +49,27 @@ class UploadCsvUseCase:
                 raise NotFoundError(f"Person {command.person_id} not found")
 
             upload_id = uuid.uuid4()
-            incoming = parse_monarch_csv(command.csv_text, command.person_id, upload_id)
+            other_names = await get_other_person_names(uow, command.person_id)
+            incoming = parse_monarch_csv(
+                command.csv_text, command.person_id, upload_id, person_names=other_names
+            )
 
             affected_periods = {(tx.date.year, tx.date.month) for tx in incoming}
             await assert_periods_not_finalized(uow, affected_periods)
 
-            all_mappings = await uow.category_mappings.get_all()
+            all_categories = await uow.categories.get_all()
             categories_in_csv = {tx.category for tx in incoming}
 
-            # Auto-create CategoryMapping(group_id=None) for previously unseen categories
+            # Auto-create Category(group_id=None) for previously unseen categories
             auto_created = [
-                CategoryMapping(category=cat, group_id=None)
-                for cat in find_new_categories(all_mappings, categories_in_csv)
+                Category(id=uuid.uuid4(), name=cat, group_id=None)
+                for cat in find_new_categories(all_categories, categories_in_csv)
             ]
             if auto_created:
-                await uow.category_mappings.save_batch(auto_created)
-                all_mappings = [*all_mappings, *auto_created]
+                await uow.categories.save_batch(auto_created)
+                all_categories = [*all_categories, *auto_created]
 
-            unmapped = find_unmapped_categories(all_mappings, categories_in_csv)
+            unmapped = find_unmapped_categories(all_categories, categories_in_csv)
 
             classified, _ = await classify_against_existing(
                 incoming, command.person_id, uow

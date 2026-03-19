@@ -11,4 +11,5 @@ export interface UpdateTransactionRequest {
   category?: string | null;
   tags?: string[] | null;
   payer_percentage?: number | null;
+  household?: boolean | null;
 }

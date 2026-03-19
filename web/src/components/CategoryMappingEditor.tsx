@@ -18,6 +18,7 @@ import {
   useDeleteCategoryGroup,
   useGetCategoryGroups,
   useGetUnmappedCategories,
+  usePatchCategory,
   usePostCategoryGroup,
   usePutCategoryGroup,
   usePutCategoryMappings,
@@ -126,6 +127,37 @@ function IconPicker({
         </div>
       )}
     </div>
+  );
+}
+
+function IncludePersonalToggle({
+  categoryName,
+  includePersonal,
+}: {
+  categoryName: string;
+  includePersonal: boolean;
+}) {
+  const invalidate = useInvalidateCategories();
+  const mutation = usePatchCategory({
+    mutation: { onSuccess: invalidate },
+  });
+
+  return (
+    <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+      <input
+        type="checkbox"
+        checked={includePersonal}
+        onChange={(e) =>
+          mutation.mutate({
+            categoryName,
+            data: { include_personal: e.target.checked },
+          })
+        }
+        disabled={mutation.isPending}
+        className="size-3.5 rounded border-border accent-primary"
+      />
+      Include personal
+    </label>
   );
 }
 
@@ -261,8 +293,17 @@ function GroupCard({ group }: { group: CategoryGroupResponse }) {
             {group.categories.length > 0 ? (
               <ul className="border-t border-border-muted px-4 py-3">
                 {group.categories.map((cat) => (
-                  <li key={cat} className="py-1 text-sm text-muted-foreground">
-                    {cat}
+                  <li
+                    key={cat.name}
+                    className="flex items-center justify-between py-1"
+                  >
+                    <span className="text-sm text-muted-foreground">
+                      {cat.name}
+                    </span>
+                    <IncludePersonalToggle
+                      categoryName={cat.name}
+                      includePersonal={cat.include_personal}
+                    />
                   </li>
                 ))}
               </ul>

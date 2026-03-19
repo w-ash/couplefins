@@ -149,7 +149,8 @@ class TestComputeSpendingTrends:
                 date=date(2026, 1, 15),
                 category="Dining Out",
                 amount=Decimal("-30.00"),
-                payer_percentage=None,
+                payer_percentage=100,
+                household=False,
             ),  # not shared
         ]
 

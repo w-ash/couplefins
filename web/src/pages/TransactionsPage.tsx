@@ -701,7 +701,11 @@ export function TransactionsPage() {
   const categoryOptions: ComboboxOption[] = useMemo(
     () =>
       (categoryGroups ?? []).flatMap((g) =>
-        g.categories.map((cat) => ({ value: cat, label: cat, group: g.name })),
+        g.categories.map((cat) => ({
+          value: cat.name,
+          label: cat.name,
+          group: g.name,
+        })),
       ),
     [categoryGroups],
   );

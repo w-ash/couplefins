@@ -9,4 +9,5 @@ export interface BulkUpdateRequest {
   transaction_ids: string[];
   category?: string | null;
   payer_percentage?: number | null;
+  household?: boolean | null;
 }

@@ -37,8 +37,11 @@
 | v0.8.3 | CSV validation & error quality (client + server) | Completed (2026-03-18) | M |
 | v0.8.4 | Confirmation & flow polish | Completed (2026-03-18) | S |
 | v0.8.5 | Insights page UX overhaul — controls, KPI hierarchy, "Who's paying" | Completed (2026-03-18) | L |
-| v0.9.0 | Responsive layout (mobile + touch) | Planned | L |
-| v0.9.1 | Transaction exclusion flag | Planned | S |
+| v0.9.0 | Split continuum + `household` flag + spotted detection | Completed (2026-03-18) | M |
+| v0.9.1 | Category entity + `include_personal` budget scope | Completed (2026-03-18) | M |
+| v0.9.2 | Classification UI: filters, type editing, preview polish | Planned | M |
+| v0.9.3 | Transaction exclusion flag | Planned | S |
+| v0.10.0 | Responsive layout (mobile + touch) | Planned | L |
 | v1.0.0 | Infrastructure investigation (benchmarks, DB audit, storage evaluation) | Planned | M |
 | v1.0.1 | Query & storage optimization (SQLite-native improvements) | Planned | M |
 | v1.0.2 | Database migration — PostgreSQL or normalized tags (conditional) | Planned | L |
@@ -46,43 +49,47 @@
 
 ## Infrastructure Readiness
 
-| Capability | v0.1.x | v0.2.x | v0.3.x | v0.4.x | v0.5.x | v0.6.x | v0.7.x | v0.8.x | v0.9.x | v1.0.x |
-|---|---|---|---|---|---|---|---|---|---|---|
-| FastAPI backend | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| SQLite + SQLAlchemy | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| CSV parsing | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| React frontend | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Upload flow | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Category groups | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Design system (fonts, theme) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Dark/light mode | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| App shell / navigation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| User identity (localStorage) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Reconciliation engine | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Dashboard | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Adjustment export (engine + UI) | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Budget tracking | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Month finalization | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Transaction split editing | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Transaction field editing + audit log | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Date range queries + search/filter | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Settlement tracking | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Settlement history (dashboard) | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Bulk transaction editing (category, tags, split) | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Orval codegen + MSW test mocks | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Spending insights + charts | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
-| YoY comparison + dark mode charts | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
-| Responsive upload page (mobile) | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
-| Drag-and-drop upload | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
-| Upload history | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
-| Client + server CSV validation | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
-| Insights UX overhaul + per-person spending | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
-| Mobile responsive layout (app-wide) | — | — | — | — | — | — | — | — | ✅ | ✅ |
-| Transaction exclusion | — | — | — | — | — | — | — | — | ✅ | ✅ |
-| Performance benchmarks + query optimization | — | — | — | — | — | — | — | — | — | ✅ |
-| Server-side tag filtering | — | — | — | — | — | — | — | — | — | ✅ |
-| PostgreSQL / normalized storage (conditional) | — | — | — | — | — | — | — | — | — | ✅ |
-| Docker + backups + observability (conditional) | — | — | — | — | — | — | — | — | — | ✅ |
+| Capability | v0.1.x | v0.2.x | v0.3.x | v0.4.x | v0.5.x | v0.6.x | v0.7.x | v0.8.x | v0.9.x | v0.10.x | v1.0.x |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| FastAPI backend | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| SQLite + SQLAlchemy | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| CSV parsing | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| React frontend | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Upload flow | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Category groups | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Design system (fonts, theme) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Dark/light mode | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| App shell / navigation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| User identity (localStorage) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Reconciliation engine | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Dashboard | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Adjustment export (engine + UI) | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Budget tracking | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Month finalization | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Transaction split editing | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Transaction field editing + audit log | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Date range queries + search/filter | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Settlement tracking | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Settlement history (dashboard) | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Bulk transaction editing (category, tags, split) | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Orval codegen + MSW test mocks | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Spending insights + charts | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
+| YoY comparison + dark mode charts | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Responsive upload page (mobile) | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
+| Drag-and-drop upload | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
+| Upload history | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
+| Client + server CSV validation | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
+| Insights UX overhaul + per-person spending | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
+| Split continuum + `household` flag (`payer_percentage` non-nullable) | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Spotted detection (person-name tags → 0% split) | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Category entity + `include_personal` budget scope | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Classification UI (filters, editing) | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Transaction exclusion | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Mobile responsive layout (app-wide) | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
+| Performance benchmarks + query optimization | — | — | — | — | — | — | — | — | — | — | ✅ |
+| Server-side tag filtering | — | — | — | — | — | — | — | — | — | — | ✅ |
+| PostgreSQL / normalized storage (conditional) | — | — | — | — | — | — | — | — | — | — | ✅ |
+| Docker + backups + observability (conditional) | — | — | — | — | — | — | — | — | — | — | ✅ |
 
 ## Key Technical Decisions
 
@@ -96,8 +103,8 @@
 - **Theme**: System preference by default (`prefers-color-scheme`), manual override stored in localStorage. Three-way: system/light/dark. Tailwind v4 class strategy with `@custom-variant dark`. Synchronous `<script>` in `<head>` prevents flash of wrong theme.
 - **App shell**: Left sidebar navigation (industry standard for finance apps). React Router v7 `createBrowserRouter` with layout routes.
 - **CSV source**: Monarch Money export (Date, Merchant, Category, Account, Original Statement, Notes, Amount, Tags)
-- **Shared detection**: "shared" tag in Monarch CSV
-- **Split ratios**: `sXX` tag (e.g., `s70` = payer pays 70%), default 50/50. Internally stored as `payer_person_id` + `payer_percentage` on each transaction — input-mechanism-agnostic
+- **Transaction classification**: Two orthogonal fields — `payer_percentage: int` (0-100, always set) for settlement, `household: bool` for budget relevance. Settlement: `payer_percentage < 100`. Budget: `household=true`, or category has `include_personal=true`. Neither field implies the other.
+- **Tag-to-field mapping**: `shared`/`split` tag → `household=true`, default 50/50 split. `household` tag → `household=true`, no split implied. `sXX` tag → payer pays XX% (authoritative, overrides defaults; highest wins if multiple). Person-name tag → `household=true`, 0% (spotted). No tag → `household=false`, 100% (personal). Internally stored as `payer_person_id` + `payer_percentage` + `household` on each transaction.
 - **Category groups**: ~75 Monarch categories roll up into ~12 groups (e.g., "Groceries & Home Supplies" → "Food & Dining"). Budgets are set at the group level. Initial mapping seeded from JSON fixture on startup. New categories auto-created during CSV upload with `group_id=None` (unmapped). Users assign them to groups via Settings UI.
 - **Adjustment export**: Pure domain functions (no stored adjustment entities). Deterministic dedup IDs via UUID5 for idempotent Monarch re-import. `couplefins-adjustment` tag for filtering.
 - **Use case pattern**: Every use case has 3 objects — `Command` (frozen attrs, validated at construction), `Result` (frozen attrs), `UseCase` (`@define(slots=True)`, stateless). Uniform signature: `execute(self, command, uow) -> Result`. UoW passed to execute (not constructor). Transaction scoped via `async with uow:`. Even parameterless queries get an empty Command. Shared validators in `_shared/command_validators.py`.

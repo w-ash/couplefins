@@ -66,7 +66,7 @@ class GetReconciliationUseCase:
     ) -> GetReconciliationResult:
         async with uow:
             ctx = await load_reconciliation_context(uow)
-            transactions = await uow.transactions.get_shared_by_date_range(
+            transactions = await uow.transactions.get_household_by_date_range(
                 command.start_date, command.end_date
             )
             uploads = (
@@ -85,7 +85,7 @@ class GetReconciliationUseCase:
             summary = reconcile(
                 transactions,
                 ctx.persons,
-                ctx.category_mappings,
+                ctx.categories,
                 ctx.category_groups,
                 start_date=command.start_date,
                 end_date=command.end_date,
@@ -93,9 +93,7 @@ class GetReconciliationUseCase:
 
             upload_statuses = build_upload_statuses(ctx.persons, uploads)
             tx_categories = {tx.category for tx in transactions}
-            unmapped = find_all_unmapped_categories(
-                ctx.category_mappings, tx_categories
-            )
+            unmapped = find_all_unmapped_categories(ctx.categories, tx_categories)
 
             latest_month = await get_latest_transaction_month(uow)
 

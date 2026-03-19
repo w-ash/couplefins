@@ -2,10 +2,11 @@ from datetime import date
 from decimal import Decimal
 import uuid
 
+from src.domain.entities.category import Category
 from src.domain.reconciliation import reconcile
 from tests.fixtures.factories import (
+    make_category,
     make_category_group,
-    make_category_mapping,
     make_person,
     make_transaction,
 )
@@ -274,8 +275,8 @@ def test_single_transaction() -> None:
 def test_category_group_aggregation() -> None:
     alice, bob = _alice_bob()
     group = make_category_group(name="Food & Dining")
-    mapping1 = make_category_mapping(category="Dining Out", group_id=group.id)
-    mapping2 = make_category_mapping(category="Groceries", group_id=group.id)
+    cat1 = make_category(name="Dining Out", group_id=group.id)
+    cat2 = make_category(name="Groceries", group_id=group.id)
 
     txs = [
         make_transaction(
@@ -295,7 +296,7 @@ def test_category_group_aggregation() -> None:
     result = reconcile(
         txs,
         [alice, bob],
-        [mapping1, mapping2],
+        [cat1, cat2],
         [group],
         start_date=date(2026, 1, 1),
         end_date=date(2026, 1, 31),
@@ -339,11 +340,11 @@ def test_unmapped_category_becomes_uncategorized() -> None:
     assert breakdown.categories[0].category == "Random Service"
 
 
-def test_nullable_group_id_mapping_becomes_uncategorized() -> None:
+def test_nullable_group_id_category_becomes_uncategorized() -> None:
     alice, bob = _alice_bob()
     group = make_category_group(name="Food & Dining")
-    mapped = make_category_mapping(category="Groceries", group_id=group.id)
-    unmapped = make_category_mapping(category="New Thing", group_id=None)
+    mapped = make_category(name="Groceries", group_id=group.id)
+    unmapped = Category(id=uuid.uuid4(), name="New Thing", group_id=None)
 
     txs = [
         make_transaction(
@@ -458,7 +459,8 @@ def test_personal_transactions_excluded() -> None:
         make_transaction(
             amount=Decimal("-200.00"),
             payer_person_id=alice.id,
-            payer_percentage=None,
+            payer_percentage=100,
+            household=False,
             tags=(),
         ),
     ]

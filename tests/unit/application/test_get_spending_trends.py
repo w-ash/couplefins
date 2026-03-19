@@ -8,9 +8,9 @@ from src.application.use_cases.get_spending_trends import (
     GetSpendingTrendsUseCase,
 )
 from tests.fixtures.factories import (
+    make_category,
     make_category_group,
     make_category_group_budget,
-    make_category_mapping,
     make_person,
     make_settlement,
     make_transaction,
@@ -27,8 +27,8 @@ def _setup_uow():
     food_group = make_category_group(name="Food & Dining")
     uow.category_groups.get_all.return_value = [food_group]
 
-    mapping = make_category_mapping(category="Dining Out", group_id=food_group.id)
-    uow.category_mappings.get_all.return_value = [mapping]
+    category = make_category(name="Dining Out", group_id=food_group.id)
+    uow.categories.get_all.return_value = [category]
 
     uow.category_group_budgets.get_all.return_value = []
 
@@ -37,7 +37,7 @@ def _setup_uow():
 
 async def test_happy_path() -> None:
     uow, alice, _, food_group = _setup_uow()
-    uow.transactions.get_shared_by_year.return_value = [
+    uow.transactions.get_household_by_year.return_value = [
         make_transaction(
             date=date(2026, 1, 10),
             category="Dining Out",
@@ -65,7 +65,7 @@ async def test_happy_path() -> None:
 
 async def test_no_data() -> None:
     uow, _, _, _ = _setup_uow()
-    uow.transactions.get_shared_by_year.return_value = []
+    uow.transactions.get_household_by_year.return_value = []
 
     command = GetSpendingTrendsCommand(year=2026)
     result = await GetSpendingTrendsUseCase().execute(command, uow)
@@ -91,7 +91,7 @@ def test_invalid_month() -> None:
 
 async def test_comparison_cards_computed() -> None:
     uow, alice, _, food_group = _setup_uow()
-    uow.transactions.get_shared_by_year.return_value = [
+    uow.transactions.get_household_by_year.return_value = [
         make_transaction(
             date=date(2026, 1, 10),
             category="Dining Out",
@@ -125,7 +125,7 @@ async def test_comparison_cards_computed() -> None:
 
 async def test_budget_lines_populated() -> None:
     uow, alice, _, food_group = _setup_uow()
-    uow.transactions.get_shared_by_year.return_value = [
+    uow.transactions.get_household_by_year.return_value = [
         make_transaction(
             date=date(2026, 1, 10),
             category="Dining Out",
@@ -150,7 +150,7 @@ async def test_budget_lines_populated() -> None:
 
 async def test_budget_lines_empty_when_no_budgets() -> None:
     uow, _, _, _ = _setup_uow()
-    uow.transactions.get_shared_by_year.return_value = []
+    uow.transactions.get_household_by_year.return_value = []
 
     command = GetSpendingTrendsCommand(year=2026, month=1)
     result = await GetSpendingTrendsUseCase().execute(command, uow)
@@ -160,7 +160,7 @@ async def test_budget_lines_empty_when_no_budgets() -> None:
 
 async def test_settlement_trend_populated() -> None:
     uow, alice, _bob, _food_group = _setup_uow()
-    uow.transactions.get_shared_by_year.return_value = [
+    uow.transactions.get_household_by_year.return_value = [
         make_transaction(
             date=date(2026, 1, 10),
             category="Dining Out",
@@ -187,7 +187,7 @@ async def test_settlement_trend_populated() -> None:
 
 async def test_settlement_trend_marks_settled() -> None:
     uow, alice, bob, _food_group = _setup_uow()
-    uow.transactions.get_shared_by_year.return_value = [
+    uow.transactions.get_household_by_year.return_value = [
         make_transaction(
             date=date(2026, 1, 10),
             category="Dining Out",
@@ -215,7 +215,7 @@ async def test_settlement_trend_marks_settled() -> None:
 
 async def test_persons_included() -> None:
     uow, _alice, _bob, _ = _setup_uow()
-    uow.transactions.get_shared_by_year.return_value = []
+    uow.transactions.get_household_by_year.return_value = []
 
     command = GetSpendingTrendsCommand(year=2026)
     result = await GetSpendingTrendsUseCase().execute(command, uow)
@@ -245,7 +245,7 @@ async def test_comparison_year_returns_both_years() -> None:
         ),
     ]
 
-    uow.transactions.get_shared_by_year.side_effect = lambda year: (
+    uow.transactions.get_household_by_year.side_effect = lambda year: (
         current_txs if year == 2026 else comparison_txs
     )
 
@@ -262,7 +262,7 @@ async def test_comparison_year_returns_both_years() -> None:
 
 async def test_comparison_year_none_returns_empty() -> None:
     uow, alice, _, _ = _setup_uow()
-    uow.transactions.get_shared_by_year.return_value = [
+    uow.transactions.get_household_by_year.return_value = [
         make_transaction(
             date=date(2026, 1, 10),
             category="Dining Out",
@@ -279,7 +279,7 @@ async def test_comparison_year_none_returns_empty() -> None:
 
 async def test_comparison_year_no_data() -> None:
     uow, alice, _, _ = _setup_uow()
-    uow.transactions.get_shared_by_year.side_effect = lambda year: (
+    uow.transactions.get_household_by_year.side_effect = lambda year: (
         [
             make_transaction(
                 date=date(2026, 1, 10),

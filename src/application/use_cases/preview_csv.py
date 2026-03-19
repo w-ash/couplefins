@@ -9,6 +9,7 @@ from src.application.use_cases._shared.command_validators import non_empty_strin
 from src.application.use_cases._shared.transactions import (
     classify_against_existing,
     find_all_unmapped_categories,
+    get_other_person_names,
 )
 from src.domain.dedup import FieldDiff
 from src.domain.entities.transaction import Transaction
@@ -31,8 +32,8 @@ class PreviewTransaction:
     merchant: str
     category: str
     amount: Decimal
-    is_shared: bool
-    payer_percentage: int | None
+    household: bool
+    payer_percentage: int
 
 
 @define(frozen=True, slots=True)
@@ -57,7 +58,7 @@ def _to_preview(tx: Transaction) -> PreviewTransaction:
         merchant=tx.merchant,
         category=tx.category,
         amount=tx.amount,
-        is_shared=tx.is_shared,
+        household=tx.household,
         payer_percentage=tx.payer_percentage,
     )
 
@@ -72,13 +73,17 @@ class PreviewCsvUseCase:
             if person is None:
                 raise NotFoundError(f"Person {command.person_id} not found")
 
+            other_names = await get_other_person_names(uow, command.person_id)
             incoming = parse_monarch_csv(
-                command.csv_text, command.person_id, _SENTINEL_UPLOAD_ID
+                command.csv_text,
+                command.person_id,
+                _SENTINEL_UPLOAD_ID,
+                person_names=other_names,
             )
 
-            all_mappings = await uow.category_mappings.get_all()
+            all_categories = await uow.categories.get_all()
             tx_categories = {tx.category for tx in incoming}
-            unmapped = find_all_unmapped_categories(all_mappings, tx_categories)
+            unmapped = find_all_unmapped_categories(all_categories, tx_categories)
 
             if not incoming:
                 logger.info("Previewed 0 transactions for person {}", person.name)

@@ -16,5 +16,13 @@ class SharedTags:
     SPLIT_TAG_PATTERN: Final = re.compile(r"^s(\d{1,3})$")
 
 
+class HouseholdTags:
+    TAGS: Final = frozenset({"household"})
+
+
 class SettlementTags:
     TAGS: Final = frozenset({"settlement"})
+
+
+# Tags that are never treated as person names during spotted detection.
+RESERVED_TAGS: Final = SharedTags.TAGS | HouseholdTags.TAGS | SettlementTags.TAGS

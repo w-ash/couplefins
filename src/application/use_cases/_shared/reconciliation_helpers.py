@@ -17,7 +17,7 @@ def reconcile_all_months(
         results[month] = reconcile(
             txs,
             ctx.persons,
-            ctx.category_mappings,
+            ctx.categories,
             ctx.category_groups,
             start_date=start,
             end_date=end,

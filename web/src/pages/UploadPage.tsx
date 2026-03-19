@@ -172,6 +172,18 @@ function ActionPanel({
   );
 }
 
+function TypeBadge({ household }: { household: boolean }) {
+  return household ? (
+    <span className="inline-block rounded-full bg-primary-muted px-2 py-0.5 text-xs font-medium text-primary-muted-foreground">
+      Shared
+    </span>
+  ) : (
+    <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+      Personal
+    </span>
+  );
+}
+
 function PreviewCard({ preview }: { preview: PreviewUploadResponse }) {
   const visibleNew = preview.new_transactions.slice(0, PREVIEW_LIMIT);
   const remainingCount = Math.max(
@@ -208,16 +220,8 @@ function PreviewCard({ preview }: { preview: PreviewUploadResponse }) {
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span className="tabular-nums">{formatDate(tx.date)}</span>
               <span>{tx.category}</span>
-              {tx.is_shared ? (
-                <span className="inline-block rounded-full bg-primary-muted px-2 py-0.5 text-xs font-medium text-primary-muted-foreground">
-                  Shared
-                </span>
-              ) : (
-                <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                  Personal
-                </span>
-              )}
-              {tx.is_shared && (
+              <TypeBadge household={tx.household} />
+              {tx.household && (
                 <span className="tabular-nums">
                   {formatSplit(tx.payer_percentage)}
                 </span>
@@ -260,18 +264,10 @@ function PreviewCard({ preview }: { preview: PreviewUploadResponse }) {
                   {formatCurrency(tx.amount)}
                 </td>
                 <td className="py-2 pr-4">
-                  {tx.is_shared ? (
-                    <span className="inline-block rounded-full bg-primary-muted px-2 py-0.5 text-xs font-medium text-primary-muted-foreground">
-                      Shared
-                    </span>
-                  ) : (
-                    <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                      Personal
-                    </span>
-                  )}
+                  <TypeBadge household={tx.household} />
                 </td>
                 <td className="py-2 text-muted-foreground tabular-nums">
-                  {tx.is_shared ? (
+                  {tx.household ? (
                     formatSplit(tx.payer_percentage)
                   ) : (
                     <Minus className="size-4 text-icon-muted" />
@@ -313,8 +309,8 @@ function ConfirmedCard({
     : null;
 
   const sharedCount = preview
-    ? preview.new_transactions.filter((tx) => tx.is_shared).length +
-      preview.changed_transactions.filter((ct) => ct.incoming.is_shared).length
+    ? preview.new_transactions.filter((tx) => tx.household).length +
+      preview.changed_transactions.filter((ct) => ct.incoming.household).length
     : summary.new_count + summary.updated_count;
 
   const partner = persons?.find((p) => p.id !== personId);

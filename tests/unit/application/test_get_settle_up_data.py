@@ -5,8 +5,8 @@ from src.application.use_cases.get_settle_up_data import (
     GetSettleUpDataUseCase,
 )
 from tests.fixtures.factories import (
+    make_category,
     make_category_group,
-    make_category_mapping,
     make_person,
     make_settlement,
     make_transaction,
@@ -32,12 +32,12 @@ class TestGetSettleUpData:
             to_person_id=alice.id,
         )
         group = make_category_group()
-        mapping = make_category_mapping(group_id=group.id)
+        category = make_category(group_id=group.id)
 
         uow = make_mock_uow()
         uow.persons.get_all.return_value = [alice, bob]
-        uow.transactions.get_shared_by_date_range.return_value = [tx]
-        uow.category_mappings.get_all.return_value = [mapping]
+        uow.transactions.get_household_by_date_range.return_value = [tx]
+        uow.categories.get_all.return_value = [category]
         uow.category_groups.get_all.return_value = [group]
         uow.settlements.get_by_period.return_value = [settlement]
         uow.settlement_transaction_links.get_by_settlement_id.return_value = []
@@ -72,12 +72,12 @@ class TestGetSettleUpData:
             to_person_id=alice.id,
         )
         group = make_category_group()
-        mapping = make_category_mapping(group_id=group.id)
+        category = make_category(group_id=group.id)
 
         uow = make_mock_uow()
         uow.persons.get_all.return_value = [alice, bob]
-        uow.transactions.get_shared_by_date_range.return_value = [tx]
-        uow.category_mappings.get_all.return_value = [mapping]
+        uow.transactions.get_household_by_date_range.return_value = [tx]
+        uow.categories.get_all.return_value = [category]
         uow.category_groups.get_all.return_value = [group]
         uow.settlements.get_by_period.return_value = [settlement]
         uow.settlement_transaction_links.get_by_settlement_id.return_value = []

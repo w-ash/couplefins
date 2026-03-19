@@ -58,12 +58,14 @@ class GetSettleUpDataUseCase:
             ctx = await load_reconciliation_context(uow)
 
             start, end = month_bounds(command.year, command.month)
-            transactions = await uow.transactions.get_shared_by_date_range(start, end)
+            transactions = await uow.transactions.get_household_by_date_range(
+                start, end
+            )
 
             summary = reconcile(
                 transactions,
                 ctx.persons,
-                ctx.category_mappings,
+                ctx.categories,
                 ctx.category_groups,
                 start_date=start,
                 end_date=end,

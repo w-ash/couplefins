@@ -70,13 +70,13 @@ def test_compute_edit_returns_none_when_unchanged() -> None:
     assert edit is None
 
 
-def test_compute_edit_handles_none_values() -> None:
-    tx = make_transaction(payer_percentage=None)
+def test_compute_edit_handles_default_payer_percentage() -> None:
+    tx = make_transaction(payer_percentage=100)
 
-    edit = compute_edit(tx, "payer_percentage", None, 50)
+    edit = compute_edit(tx, "payer_percentage", 100, 50)
 
     assert edit is not None
-    assert not edit.old_value
+    assert edit.old_value == "100"
     assert edit.new_value == "50"
 
 

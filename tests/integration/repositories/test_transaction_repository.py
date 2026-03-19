@@ -33,7 +33,8 @@ async def _seed_shared_transactions(
         upload_id=upload.id,
         date=date(2026, 1, 20),
         payer_person_id=alice.id,
-        payer_percentage=None,
+        payer_percentage=100,
+        household=False,
         amount=Decimal("-30.00"),
     )
 
@@ -41,29 +42,29 @@ async def _seed_shared_transactions(
     await session.commit()
 
 
-async def test_shared_by_date_range_returns_only_shared(
+async def test_household_by_date_range_returns_only_shared(
     db_session: AsyncSession,
 ) -> None:
     repo = TransactionRepository(db_session)
     await _seed_shared_transactions(repo, db_session)
 
-    result = await repo.get_shared_by_date_range(date(2026, 1, 1), date(2026, 1, 31))
+    result = await repo.get_household_by_date_range(date(2026, 1, 1), date(2026, 1, 31))
     assert len(result) == 1
     assert result[0].amount == Decimal("-100.00")
-    assert result[0].is_shared is True
+    assert result[0].household is True
 
 
-async def test_shared_by_date_range_excludes_out_of_range(
+async def test_household_by_date_range_excludes_out_of_range(
     db_session: AsyncSession,
 ) -> None:
     repo = TransactionRepository(db_session)
     await _seed_shared_transactions(repo, db_session)
 
-    result = await repo.get_shared_by_date_range(date(2026, 3, 1), date(2026, 3, 31))
+    result = await repo.get_household_by_date_range(date(2026, 3, 1), date(2026, 3, 31))
     assert result == []
 
 
-async def test_shared_by_date_range_boundary_dates(
+async def test_household_by_date_range_boundary_dates(
     db_session: AsyncSession,
 ) -> None:
     repo = TransactionRepository(db_session)
@@ -98,7 +99,7 @@ async def test_shared_by_date_range_boundary_dates(
     await repo.save_batch([start_tx, end_tx, before_tx, after_tx])
     await db_session.commit()
 
-    result = await repo.get_shared_by_date_range(date(2026, 1, 1), date(2026, 1, 31))
+    result = await repo.get_household_by_date_range(date(2026, 1, 1), date(2026, 1, 31))
     ids = {tx.id for tx in result}
     assert start_tx.id in ids
     assert end_tx.id in ids
@@ -106,7 +107,7 @@ async def test_shared_by_date_range_boundary_dates(
     assert after_tx.id not in ids
 
 
-async def test_shared_by_date_range_empty_db(db_session: AsyncSession) -> None:
+async def test_household_by_date_range_empty_db(db_session: AsyncSession) -> None:
     repo = TransactionRepository(db_session)
-    result = await repo.get_shared_by_date_range(date(2026, 1, 1), date(2026, 1, 31))
+    result = await repo.get_household_by_date_range(date(2026, 1, 1), date(2026, 1, 31))
     assert result == []

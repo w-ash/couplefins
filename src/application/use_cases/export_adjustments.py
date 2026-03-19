@@ -53,7 +53,7 @@ async def _load_adjustments(
     if not target.adjustment_account.strip():
         raise ValidationError(f"Adjustment account not configured for {target.name}")
 
-    transactions = await uow.transactions.get_shared_by_period(
+    transactions = await uow.transactions.get_household_by_period(
         command.year, command.month
     )
     adjustments = compute_adjustments(transactions, target)

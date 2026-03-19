@@ -205,7 +205,8 @@ def test_non_shared_transactions_skipped() -> None:
         make_transaction(
             amount=Decimal("-100.00"),
             payer_person_id=alice.id,
-            payer_percentage=None,  # not shared
+            payer_percentage=100,
+            household=False,
         )
     ]
 

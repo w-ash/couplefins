@@ -18,7 +18,7 @@ class UploadHistoryEntryResponse(BaseModel):
     filename: str
     uploaded_at: datetime
     transaction_count: int
-    shared_count: int
+    household_count: int
     date_range_start: date | None
     date_range_end: date | None
 
@@ -31,7 +31,7 @@ class UploadHistoryEntryResponse(BaseModel):
             filename=entry.filename,
             uploaded_at=entry.uploaded_at,
             transaction_count=entry.transaction_count,
-            shared_count=entry.shared_count,
+            household_count=entry.household_count,
             date_range_start=entry.date_range_start,
             date_range_end=entry.date_range_end,
         )
@@ -52,8 +52,8 @@ class PreviewTransactionResponse(BaseModel):
     merchant: str
     category: str
     amount: float
-    is_shared: bool
-    payer_percentage: int | None
+    household: bool
+    payer_percentage: int
 
 
 class FieldDiffResponse(BaseModel):
@@ -83,7 +83,7 @@ class PreviewUploadResponse(BaseModel):
                 merchant=tx.merchant,
                 category=tx.category,
                 amount=float(tx.amount),
-                is_shared=tx.is_shared,
+                household=tx.household,
                 payer_percentage=tx.payer_percentage,
             )
 

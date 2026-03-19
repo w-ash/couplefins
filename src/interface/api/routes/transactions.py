@@ -63,10 +63,15 @@ async def update_splits(body: UpdateSplitsRequest) -> UpdateSplitsResponse:
 
 @router.patch("/transactions/bulk-update")
 async def bulk_update_transactions(body: BulkUpdateRequest) -> BulkUpdateResponse:
+    kwargs: dict[str, object] = {}
+    if body.payer_percentage is not None:
+        kwargs["payer_percentage"] = body.payer_percentage
+    if body.household is not None:
+        kwargs["household"] = body.household
     command = BulkUpdateTransactionsCommand(
         transaction_ids=list(body.transaction_ids),
         category=body.category,
-        payer_percentage=body.payer_percentage,
+        **kwargs,  # type: ignore[arg-type]
     )
     result = await execute_use_case(
         lambda uow: BulkUpdateTransactionsUseCase().execute(command, uow)
@@ -91,17 +96,18 @@ async def bulk_modify_tags(body: BulkModifyTagsRequest) -> BulkModifyTagsRespons
 async def update_transaction(
     transaction_id: UUID, body: UpdateTransactionRequest
 ) -> UpdateTransactionResponse:
+    extras: dict[str, object] = {}
+    if "payer_percentage" in body.model_fields_set:
+        extras["payer_percentage"] = body.payer_percentage
+    if "household" in body.model_fields_set:
+        extras["household"] = body.household
     command = BulkUpdateTransactionsCommand(
         transaction_ids=[transaction_id],
         date=body.date,
         amount=Decimal(str(body.amount)) if body.amount is not None else None,
         category=body.category,
         tags=tuple(body.tags) if body.tags is not None else None,
-        **(
-            {"payer_percentage": body.payer_percentage}
-            if "payer_percentage" in body.model_fields_set
-            else {}
-        ),
+        **extras,  # type: ignore[arg-type]
     )
     result = await execute_use_case(
         lambda uow: BulkUpdateTransactionsUseCase().execute(command, uow)

@@ -3,9 +3,10 @@ import uuid
 import pytest
 
 from src.application.use_cases.preview_csv import PreviewCsvCommand, PreviewCsvUseCase
+from src.domain.entities.category import Category
 from src.domain.exceptions import NotFoundError
 from tests.fixtures.factories import (
-    make_category_mapping,
+    make_category,
     make_person,
     make_transaction,
 )
@@ -33,10 +34,10 @@ async def test_all_new_transactions() -> None:
     uow = make_mock_uow()
     person = make_person()
     uow.persons.get_by_id.return_value = person
-    uow.category_mappings.get_all.return_value = [
-        make_category_mapping(category="Groceries"),
-        make_category_mapping(category="Gas"),
-        make_category_mapping(category="Dining Out"),
+    uow.categories.get_all.return_value = [
+        make_category(name="Groceries"),
+        make_category(name="Gas"),
+        make_category(name="Dining Out"),
     ]
     uow.transactions.get_by_person_and_date_range.return_value = []
     command = _make_command(person_id=person.id)
@@ -48,7 +49,7 @@ async def test_all_new_transactions() -> None:
     assert result.changed_transactions == []
     assert result.unmapped_categories == []
     assert result.new_transactions[0].merchant == "Grocery Store"
-    assert result.new_transactions[0].is_shared is True
+    assert result.new_transactions[0].household is True
     assert result.new_transactions[0].payer_percentage == 50
     assert result.new_transactions[2].payer_percentage == 70
 
@@ -57,7 +58,7 @@ async def test_detects_unchanged_transactions() -> None:
     uow = make_mock_uow()
     person = make_person()
     uow.persons.get_by_id.return_value = person
-    uow.category_mappings.get_all.return_value = []
+    uow.categories.get_all.return_value = []
     # Simulate existing transaction matching by natural key
     existing = make_transaction(
         payer_person_id=person.id,
@@ -87,7 +88,7 @@ async def test_detects_changed_transactions() -> None:
     uow = make_mock_uow()
     person = make_person()
     uow.persons.get_by_id.return_value = person
-    uow.category_mappings.get_all.return_value = []
+    uow.categories.get_all.return_value = []
     existing = make_transaction(
         payer_person_id=person.id,
         original_statement="GROCERY STORE",
@@ -120,8 +121,8 @@ async def test_detects_changed_transactions() -> None:
 async def test_reports_new_and_unmapped_categories_without_creating() -> None:
     uow = make_mock_uow()
     uow.persons.get_by_id.return_value = make_person()
-    uow.category_mappings.get_all.return_value = [
-        make_category_mapping(category="Groceries"),
+    uow.categories.get_all.return_value = [
+        make_category(name="Groceries"),
     ]
     uow.transactions.get_by_person_and_date_range.return_value = []
     command = _make_command()
@@ -135,9 +136,9 @@ async def test_reports_new_and_unmapped_categories_without_creating() -> None:
 async def test_reports_existing_unmapped_categories() -> None:
     uow = make_mock_uow()
     uow.persons.get_by_id.return_value = make_person()
-    uow.category_mappings.get_all.return_value = [
-        make_category_mapping(category="Groceries"),
-        make_category_mapping(category="Gas", group_id=None),
+    uow.categories.get_all.return_value = [
+        make_category(name="Groceries"),
+        Category(id=uuid.uuid4(), name="Gas", group_id=None),
     ]
     uow.transactions.get_by_person_and_date_range.return_value = []
     command = _make_command()
@@ -160,7 +161,7 @@ async def test_raises_not_found_for_missing_person() -> None:
 async def test_handles_empty_csv() -> None:
     uow = make_mock_uow()
     uow.persons.get_by_id.return_value = make_person()
-    uow.category_mappings.get_all.return_value = []
+    uow.categories.get_all.return_value = []
     csv_text = "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
     command = _make_command(csv_text=csv_text)
 
@@ -174,7 +175,7 @@ async def test_handles_empty_csv() -> None:
 async def test_never_persists_data() -> None:
     uow = make_mock_uow()
     uow.persons.get_by_id.return_value = make_person()
-    uow.category_mappings.get_all.return_value = []
+    uow.categories.get_all.return_value = []
     uow.transactions.get_by_person_and_date_range.return_value = []
     command = _make_command()
 
@@ -182,5 +183,5 @@ async def test_never_persists_data() -> None:
 
     uow.uploads.save.assert_not_called()
     uow.transactions.save_batch.assert_not_called()
-    uow.category_mappings.save_batch.assert_not_called()
+    uow.categories.save_batch.assert_not_called()
     uow.commit.assert_not_called()

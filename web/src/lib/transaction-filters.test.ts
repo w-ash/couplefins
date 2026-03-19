@@ -60,6 +60,7 @@ function makeTx(overrides: Partial<TransactionResponse>): TransactionResponse {
     tags: [],
     payer_person_id: "p1",
     payer_percentage: 50,
+    household: true,
     original_date: null,
     original_amount: null,
     ...overrides,

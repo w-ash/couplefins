@@ -4,6 +4,7 @@ from uuid import UUID, uuid5
 
 from attrs import define
 
+from src.domain.constants import SplitDefaults
 from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
 from src.domain.splits import compute_shares
@@ -33,7 +34,7 @@ def compute_adjustments(
     adjustments: list[Adjustment] = []
 
     for tx in transactions:
-        if not tx.is_shared:
+        if tx.payer_percentage == SplitDefaults.MAX_PAYER_PERCENTAGE:
             continue
         _, other_share = compute_shares(tx.amount, tx.payer_percentage)
         if other_share == 0:

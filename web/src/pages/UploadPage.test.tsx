@@ -18,7 +18,7 @@ const previewResponseAllNew = {
       merchant: "Trader Joe's",
       category: "Groceries",
       amount: -50.0,
-      is_shared: true,
+      household: true,
       payer_percentage: 50,
     },
     {
@@ -26,8 +26,8 @@ const previewResponseAllNew = {
       merchant: "Netflix",
       category: "Streaming",
       amount: -15.99,
-      is_shared: false,
-      payer_percentage: null,
+      household: false,
+      payer_percentage: 100,
     },
   ],
   unchanged_count: 0,
@@ -53,7 +53,7 @@ const previewResponseWithChanges = {
         merchant: "Updated Store",
         category: "Groceries",
         amount: -50.0,
-        is_shared: true,
+        household: true,
         payer_percentage: 50,
       },
       existing: {
@@ -61,7 +61,7 @@ const previewResponseWithChanges = {
         merchant: "Old Store",
         category: "Groceries",
         amount: -50.0,
-        is_shared: true,
+        household: true,
         payer_percentage: 50,
       },
       diffs: [
@@ -215,7 +215,7 @@ describe("UploadPage", () => {
               filename: "march-2026.csv",
               uploaded_at: new Date().toISOString(),
               transaction_count: 47,
-              shared_count: 23,
+              household_count: 23,
               date_range_start: "2026-03-01",
               date_range_end: "2026-03-31",
             },
@@ -231,7 +231,7 @@ describe("UploadPage", () => {
     });
     expect(screen.getByText("march-2026.csv")).toBeInTheDocument();
     expect(screen.getByText("47 transactions")).toBeInTheDocument();
-    expect(screen.getByText("23 shared")).toBeInTheDocument();
+    expect(screen.getByText("23 household")).toBeInTheDocument();
   });
 
   it("shows empty state when no upload history", async () => {
@@ -483,7 +483,7 @@ describe("UploadPage", () => {
               filename: "jan-2026.csv",
               uploaded_at: new Date().toISOString(),
               transaction_count: 30,
-              shared_count: 15,
+              household_count: 15,
               date_range_start: "2026-01-01",
               date_range_end: "2026-01-31",
             },

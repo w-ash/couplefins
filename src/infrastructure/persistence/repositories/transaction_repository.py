@@ -33,6 +33,7 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             tags=tuple(cast(list[str], json.loads(model.tags_json))),
             payer_person_id=UUID(model.payer_person_id),
             payer_percentage=model.payer_percentage,
+            household=model.household,
             is_settlement=model.is_settlement,
             original_date=(
                 date.fromisoformat(model.original_date) if model.original_date else None
@@ -56,7 +57,7 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             "notes": entity.notes,
             "amount": str(entity.amount),
             "tags_json": json.dumps(list(entity.tags)),
-            "is_shared": entity.is_shared,
+            "household": entity.household,
             "payer_person_id": str(entity.payer_person_id),
             "payer_percentage": entity.payer_percentage,
             "is_settlement": entity.is_settlement,
@@ -81,33 +82,42 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         result = await self._session.execute(stmt)
         return [self._to_domain(row) for row in result.scalars().all()]
 
-    async def get_shared_by_period(self, year: int, month: int) -> list[Transaction]:
+    async def get_household_by_period(self, year: int, month: int) -> list[Transaction]:
         prefix = date_month_prefix(year, month)
         stmt = select(TransactionModel).where(
             TransactionModel.date.startswith(prefix),
-            TransactionModel.is_shared.is_(True),
+            TransactionModel.household.is_(True),
             TransactionModel.is_settlement.is_(False),
         )
         result = await self._session.execute(stmt)
         return [self._to_domain(row) for row in result.scalars().all()]
 
-    async def get_shared_by_year(self, year: int) -> list[Transaction]:
+    async def get_household_by_year(self, year: int) -> list[Transaction]:
         prefix = f"{year:04d}-"
         stmt = select(TransactionModel).where(
             TransactionModel.date.startswith(prefix),
-            TransactionModel.is_shared.is_(True),
+            TransactionModel.household.is_(True),
             TransactionModel.is_settlement.is_(False),
         )
         result = await self._session.execute(stmt)
         return [self._to_domain(row) for row in result.scalars().all()]
 
-    async def get_shared_by_date_range(
+    async def get_by_year(self, year: int) -> list[Transaction]:
+        prefix = f"{year:04d}-"
+        stmt = select(TransactionModel).where(
+            TransactionModel.date.startswith(prefix),
+            TransactionModel.is_settlement.is_(False),
+        )
+        result = await self._session.execute(stmt)
+        return [self._to_domain(row) for row in result.scalars().all()]
+
+    async def get_household_by_date_range(
         self, start_date: date, end_date: date
     ) -> list[Transaction]:
         stmt = select(TransactionModel).where(
             TransactionModel.date >= start_date.isoformat(),
             TransactionModel.date <= end_date.isoformat(),
-            TransactionModel.is_shared.is_(True),
+            TransactionModel.household.is_(True),
             TransactionModel.is_settlement.is_(False),
         )
         result = await self._session.execute(stmt)
@@ -170,11 +180,11 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             return result.rowcount
         return 0
 
-    async def get_latest_shared_transaction_date(self) -> date | None:
+    async def get_latest_household_transaction_date(self) -> date | None:
         stmt = (
             select(TransactionModel.date)
             .where(
-                TransactionModel.is_shared.is_(True),
+                TransactionModel.household.is_(True),
                 TransactionModel.is_settlement.is_(False),
             )
             .order_by(TransactionModel.date.desc())

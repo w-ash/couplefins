@@ -5,7 +5,13 @@ from decimal import Decimal, InvalidOperation
 import io
 import uuid
 
-from src.domain.constants import SettlementTags, SharedTags, SplitDefaults
+from src.domain.constants import (
+    RESERVED_TAGS,
+    HouseholdTags,
+    SettlementTags,
+    SharedTags,
+    SplitDefaults,
+)
 from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import ValidationError
 
@@ -27,6 +33,8 @@ def parse_monarch_csv(
     csv_text: str,
     payer_person_id: uuid.UUID,
     upload_id: uuid.UUID,
+    *,
+    person_names: frozenset[str] = frozenset(),
 ) -> list[Transaction]:
     reader = csv.DictReader(io.StringIO(csv_text))
 
@@ -47,8 +55,12 @@ def parse_monarch_csv(
     for row_num, row in enumerate(reader, start=2):
         tags = _parse_tags(row["Tags"])
         is_settlement = _is_settlement(tags)
-        is_shared = _is_shared(tags) and not is_settlement
-        payer_percentage = _extract_split_percentage(tags) if is_shared else None
+
+        if is_settlement:
+            household = False
+            payer_percentage = 100
+        else:
+            household, payer_percentage = _classify(tags, person_names)
 
         try:
             amount = Decimal(row["Amount"])
@@ -85,6 +97,7 @@ def parse_monarch_csv(
                 tags=tags,
                 payer_person_id=payer_person_id,
                 payer_percentage=payer_percentage,
+                household=household,
                 is_settlement=is_settlement,
             )
         )
@@ -104,20 +117,66 @@ def _parse_tags(tags_str: str) -> tuple[str, ...]:
     return tuple(tag.strip() for tag in tags_str.split(",") if tag.strip())
 
 
-def _is_shared(tags: tuple[str, ...]) -> bool:
-    return any(tag.lower() in SharedTags.TAGS for tag in tags)
-
-
 def _is_settlement(tags: tuple[str, ...]) -> bool:
     return any(tag.lower() in SettlementTags.TAGS for tag in tags)
 
 
-def _extract_split_percentage(tags: tuple[str, ...]) -> int:
-    for tag in tags:
-        match = SharedTags.SPLIT_TAG_PATTERN.match(tag.lower())
+def _classify(tags: tuple[str, ...], person_names: frozenset[str]) -> tuple[bool, int]:
+    """Classify a transaction from its tags into (household, payer_percentage).
+
+    A household-setting tag (shared/split, household, or person-name) must be present
+    for the transaction to be classified as household. When present, sXX is authoritative
+    for payer_percentage (highest wins if multiple). Without a household tag, sXX alone
+    has no effect.
+    """
+    lower_tags = [tag.lower() for tag in tags]
+
+    # 1. Extract sXX — authoritative split percentage (highest wins)
+    explicit_split = _extract_max_split_percentage(lower_tags)
+
+    # 2. Check for shared/split tag
+    has_shared = any(t in SharedTags.TAGS for t in lower_tags)
+
+    # 3. Check for household tag
+    has_household = any(t in HouseholdTags.TAGS for t in lower_tags)
+
+    # 4. Check for person-name tag (spotted)
+    has_person_name = _has_person_name_tag(lower_tags, person_names)
+
+    # Determine household flag
+    household = has_shared or has_household or has_person_name
+
+    if not household:
+        return False, 100
+
+    # Determine payer_percentage — sXX is authoritative
+    if explicit_split is not None:
+        return True, explicit_split
+
+    if has_shared:
+        return True, SplitDefaults.DEFAULT_PAYER_PERCENTAGE
+
+    if has_person_name:
+        return True, 0
+
+    # household tag only — no split implied
+    return True, 100
+
+
+def _extract_max_split_percentage(lower_tags: list[str]) -> int | None:
+    """Return the max sXX value from tags, or None if no valid sXX tags."""
+    values: list[int] = []
+    for tag in lower_tags:
+        match = SharedTags.SPLIT_TAG_PATTERN.match(tag)
         if match:
             value = int(match.group(1))
             if 0 <= value <= SplitDefaults.MAX_PAYER_PERCENTAGE:
-                return value
-            return SplitDefaults.DEFAULT_PAYER_PERCENTAGE
-    return SplitDefaults.DEFAULT_PAYER_PERCENTAGE
+                values.append(value)
+    return max(values) if values else None
+
+
+def _has_person_name_tag(lower_tags: list[str], person_names: frozenset[str]) -> bool:
+    """Check if any tag matches a known person name (excluding reserved tags)."""
+    if not person_names:
+        return False
+    return any(t in person_names and t not in RESERVED_TAGS for t in lower_tags)

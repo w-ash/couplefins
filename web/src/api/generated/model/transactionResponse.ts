@@ -15,7 +15,8 @@ export interface TransactionResponse {
   notes: string;
   tags: string[];
   payer_person_id: string;
-  payer_percentage: number | null;
+  payer_percentage: number;
+  household: boolean;
   original_date: string | null;
   original_amount: number | null;
 }

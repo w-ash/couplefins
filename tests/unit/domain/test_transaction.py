@@ -2,27 +2,25 @@ import pytest
 
 from tests.fixtures.factories import make_transaction
 
-# -- is_shared property --
+# -- household field --
 
 
-def test_is_shared_when_payer_percentage_set() -> None:
-    tx = make_transaction(payer_percentage=50)
-    assert tx.is_shared is True
+def test_household_default_false() -> None:
+    tx = make_transaction(household=False)
+    assert tx.household is False
 
 
-def test_is_shared_when_payer_percentage_zero() -> None:
-    tx = make_transaction(payer_percentage=0)
-    assert tx.is_shared is True
+def test_household_field_stored() -> None:
+    tx = make_transaction(household=True)
+    assert tx.household is True
 
 
-def test_is_shared_when_payer_percentage_100() -> None:
-    tx = make_transaction(payer_percentage=100)
-    assert tx.is_shared is True
+# -- payer_percentage defaults --
 
 
-def test_not_shared_when_payer_percentage_none() -> None:
-    tx = make_transaction(payer_percentage=None, tags=())
-    assert tx.is_shared is False
+def test_payer_percentage_default_100() -> None:
+    tx = make_transaction(payer_percentage=100, household=False)
+    assert tx.payer_percentage == 100
 
 
 # -- payer_percentage validation --
@@ -46,8 +44,3 @@ def test_accepts_payer_percentage_boundary_0() -> None:
 def test_accepts_payer_percentage_boundary_100() -> None:
     tx = make_transaction(payer_percentage=100)
     assert tx.payer_percentage == 100
-
-
-def test_accepts_payer_percentage_none() -> None:
-    tx = make_transaction(payer_percentage=None, tags=())
-    assert tx.payer_percentage is None

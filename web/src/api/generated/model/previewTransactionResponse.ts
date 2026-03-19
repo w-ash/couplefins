@@ -10,6 +10,6 @@ export interface PreviewTransactionResponse {
   merchant: string;
   category: string;
   amount: number;
-  is_shared: boolean;
-  payer_percentage: number | null;
+  household: boolean;
+  payer_percentage: number;
 }

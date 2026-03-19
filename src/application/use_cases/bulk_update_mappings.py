@@ -1,8 +1,10 @@
+import uuid
 from uuid import UUID
 
+import attrs
 from attrs import define
 
-from src.domain.entities.category_mapping import CategoryMapping
+from src.domain.entities.category import Category
 from src.domain.exceptions import ValidationError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
@@ -35,10 +37,23 @@ class BulkUpdateMappingsUseCase:
                 if group is None:
                     raise ValidationError(f"Category group {group_id} not found")
 
-            entities = [
-                CategoryMapping(category=entry.category, group_id=entry.group_id)
-                for entry in command.mappings
-            ]
-            await uow.category_mappings.save_batch(entities)
+            all_categories = await uow.categories.get_all()
+            by_name = {c.name: c for c in all_categories}
+
+            updated: list[Category] = []
+            for entry in command.mappings:
+                existing = by_name.get(entry.category)
+                if existing is None:
+                    updated.append(
+                        Category(
+                            id=uuid.uuid4(),
+                            name=entry.category,
+                            group_id=entry.group_id,
+                        )
+                    )
+                else:
+                    updated.append(attrs.evolve(existing, group_id=entry.group_id))
+
+            await uow.categories.save_batch(updated)
             await uow.commit()
-            return BulkUpdateMappingsResult(updated_count=len(entities))
+            return BulkUpdateMappingsResult(updated_count=len(command.mappings))

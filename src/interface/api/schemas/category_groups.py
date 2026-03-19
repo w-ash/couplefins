@@ -2,7 +2,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from src.application.use_cases.list_category_groups import CategoryGroupWithMappings
+from src.application.use_cases.list_category_groups import CategoryGroupWithCategories
+from src.domain.entities.category import Category
 from src.domain.entities.category_group import CategoryGroup
 
 
@@ -25,19 +26,35 @@ class BulkUpdateMappingsRequest(BaseModel):
     mappings: list[MappingEntryRequest]
 
 
+class UpdateCategoryRequest(BaseModel):
+    include_personal: bool
+
+
+class CategoryResponse(BaseModel):
+    name: str
+    include_personal: bool
+
+    @classmethod
+    def from_domain(cls, category: Category) -> CategoryResponse:
+        return cls(name=category.name, include_personal=category.include_personal)
+
+
 class CategoryGroupResponse(BaseModel):
     id: UUID
     name: str
     icon: str | None
-    categories: list[str]
+    categories: list[CategoryResponse]
 
     @classmethod
-    def from_domain(cls, item: CategoryGroupWithMappings) -> CategoryGroupResponse:
+    def from_domain(cls, item: CategoryGroupWithCategories) -> CategoryGroupResponse:
         return cls(
             id=item.group.id,
             name=item.group.name,
             icon=item.group.icon,
-            categories=sorted(m.category for m in item.mappings),
+            categories=sorted(
+                [CategoryResponse.from_domain(c) for c in item.categories],
+                key=lambda c: c.name,
+            ),
         )
 
     @classmethod

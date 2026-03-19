@@ -4,9 +4,10 @@ import uuid
 import pytest
 
 from src.application.use_cases.upload_csv import UploadCsvCommand, UploadCsvUseCase
+from src.domain.entities.category import Category
 from src.domain.exceptions import NotFoundError
 from tests.fixtures.factories import (
-    make_category_mapping,
+    make_category,
     make_person,
     make_transaction,
 )
@@ -37,10 +38,10 @@ async def test_uploads_all_new_transactions() -> None:
     uow = make_mock_uow()
     person = make_person()
     uow.persons.get_by_id.return_value = person
-    uow.category_mappings.get_all.return_value = [
-        make_category_mapping(category="Groceries"),
-        make_category_mapping(category="Gas"),
-        make_category_mapping(category="Dining Out"),
+    uow.categories.get_all.return_value = [
+        make_category(name="Groceries"),
+        make_category(name="Gas"),
+        make_category(name="Dining Out"),
     ]
     uow.transactions.get_by_person_and_date_range.return_value = []
     command = _make_command(person_id=person.id)
@@ -55,14 +56,14 @@ async def test_uploads_all_new_transactions() -> None:
     uow.transactions.save_batch.assert_called_once()
     uow.commit.assert_called_once()
     # No new categories to auto-create
-    uow.category_mappings.save_batch.assert_not_called()
+    uow.categories.save_batch.assert_not_called()
 
 
 async def test_skips_unchanged_transactions() -> None:
     uow = make_mock_uow()
     person = make_person()
     uow.persons.get_by_id.return_value = person
-    uow.category_mappings.get_all.return_value = []
+    uow.categories.get_all.return_value = []
     existing = make_transaction(
         payer_person_id=person.id,
         original_statement="GROCERY STORE",
@@ -94,7 +95,7 @@ async def test_updates_accepted_changes() -> None:
     uow = make_mock_uow()
     person = make_person()
     uow.persons.get_by_id.return_value = person
-    uow.category_mappings.get_all.return_value = []
+    uow.categories.get_all.return_value = []
     existing = make_transaction(
         payer_person_id=person.id,
         original_statement="GROCERY STORE",
@@ -130,7 +131,7 @@ async def test_skips_rejected_changes() -> None:
     uow = make_mock_uow()
     person = make_person()
     uow.persons.get_by_id.return_value = person
-    uow.category_mappings.get_all.return_value = []
+    uow.categories.get_all.return_value = []
     existing = make_transaction(
         payer_person_id=person.id,
         original_statement="GROCERY STORE",
@@ -162,8 +163,8 @@ async def test_skips_rejected_changes() -> None:
 async def test_auto_creates_unmapped_categories_on_upload() -> None:
     uow = make_mock_uow()
     uow.persons.get_by_id.return_value = make_person()
-    uow.category_mappings.get_all.return_value = [
-        make_category_mapping(category="Groceries"),
+    uow.categories.get_all.return_value = [
+        make_category(name="Groceries"),
     ]
     uow.transactions.get_by_person_and_date_range.return_value = []
     command = _make_command()
@@ -171,11 +172,11 @@ async def test_auto_creates_unmapped_categories_on_upload() -> None:
     result = await UploadCsvUseCase().execute(command, uow)
 
     # "Dining Out" and "Gas" are new → auto-created with group_id=None
-    uow.category_mappings.save_batch.assert_called_once()
-    saved = uow.category_mappings.save_batch.call_args[0][0]
-    saved_cats = sorted(m.category for m in saved)
+    uow.categories.save_batch.assert_called_once()
+    saved = uow.categories.save_batch.call_args[0][0]
+    saved_cats = sorted(c.name for c in saved)
     assert saved_cats == ["Dining Out", "Gas"]
-    assert all(m.group_id is None for m in saved)
+    assert all(c.group_id is None for c in saved)
     # They should be reported as unmapped
     assert result.unmapped_categories == ["Dining Out", "Gas"]
 
@@ -183,10 +184,10 @@ async def test_auto_creates_unmapped_categories_on_upload() -> None:
 async def test_reports_existing_unmapped_categories() -> None:
     uow = make_mock_uow()
     uow.persons.get_by_id.return_value = make_person()
-    uow.category_mappings.get_all.return_value = [
-        make_category_mapping(category="Groceries"),
-        make_category_mapping(category="Gas", group_id=None),
-        make_category_mapping(category="Dining Out", group_id=None),
+    uow.categories.get_all.return_value = [
+        make_category(name="Groceries"),
+        Category(id=uuid.uuid4(), name="Gas", group_id=None),
+        Category(id=uuid.uuid4(), name="Dining Out", group_id=None),
     ]
     uow.transactions.get_by_person_and_date_range.return_value = []
     command = _make_command()
@@ -194,7 +195,7 @@ async def test_reports_existing_unmapped_categories() -> None:
     result = await UploadCsvUseCase().execute(command, uow)
 
     # No new categories to create
-    uow.category_mappings.save_batch.assert_not_called()
+    uow.categories.save_batch.assert_not_called()
     # But existing unmapped ones are reported
     assert result.unmapped_categories == ["Dining Out", "Gas"]
 
@@ -211,7 +212,7 @@ async def test_raises_not_found_for_missing_person() -> None:
 async def test_handles_empty_csv() -> None:
     uow = make_mock_uow()
     uow.persons.get_by_id.return_value = make_person()
-    uow.category_mappings.get_all.return_value = []
+    uow.categories.get_all.return_value = []
     csv_text = "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
     command = _make_command(csv_text=csv_text)
 
@@ -231,7 +232,7 @@ async def test_rejects_upload_to_finalized_month() -> None:
 
     uow = make_mock_uow()
     uow.persons.get_by_id.return_value = make_person()
-    uow.category_mappings.get_all.return_value = []
+    uow.categories.get_all.return_value = []
     uow.reconciliation_periods.get_by_period.return_value = make_reconciliation_period(
         year=2026, month=1, is_finalized=True, finalized_at=datetime.now(UTC)
     )

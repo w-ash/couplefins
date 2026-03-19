@@ -12,7 +12,7 @@ export interface UploadHistoryEntryResponse {
   filename: string;
   uploaded_at: string;
   transaction_count: number;
-  shared_count: number;
+  household_count: number;
   date_range_start: string | null;
   date_range_end: string | null;
 }

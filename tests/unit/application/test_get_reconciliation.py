@@ -6,8 +6,8 @@ from src.application.use_cases.get_reconciliation import (
     GetReconciliationUseCase,
 )
 from tests.fixtures.factories import (
+    make_category,
     make_category_group,
-    make_category_mapping,
     make_person,
     make_transaction,
     make_upload,
@@ -26,9 +26,9 @@ async def test_happy_path_both_uploaded() -> None:
     uow.persons.get_all.return_value = [alice, bob]
 
     group = make_category_group(name="Food & Dining")
-    mapping = make_category_mapping(category="Dining Out", group_id=group.id)
+    category = make_category(name="Dining Out", group_id=group.id)
     uow.category_groups.get_all.return_value = [group]
-    uow.category_mappings.get_all.return_value = [mapping]
+    uow.categories.get_all.return_value = [category]
 
     txs = [
         make_transaction(
@@ -44,7 +44,7 @@ async def test_happy_path_both_uploaded() -> None:
             payer_percentage=50,
         ),
     ]
-    uow.transactions.get_shared_by_date_range.return_value = txs
+    uow.transactions.get_household_by_date_range.return_value = txs
 
     uploads = [
         make_upload(person_id=alice.id),
@@ -72,7 +72,7 @@ async def test_partial_upload_one_person() -> None:
     bob = make_person(name="Bob")
     uow.persons.get_all.return_value = [alice, bob]
     uow.category_groups.get_all.return_value = []
-    uow.category_mappings.get_all.return_value = []
+    uow.categories.get_all.return_value = []
 
     txs = [
         make_transaction(
@@ -81,7 +81,7 @@ async def test_partial_upload_one_person() -> None:
             payer_percentage=50,
         ),
     ]
-    uow.transactions.get_shared_by_date_range.return_value = txs
+    uow.transactions.get_household_by_date_range.return_value = txs
     uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = [
         make_upload(person_id=alice.id)
     ]
@@ -102,8 +102,8 @@ async def test_empty_month_no_transactions() -> None:
     bob = make_person(name="Bob")
     uow.persons.get_all.return_value = [alice, bob]
     uow.category_groups.get_all.return_value = []
-    uow.category_mappings.get_all.return_value = []
-    uow.transactions.get_shared_by_date_range.return_value = []
+    uow.categories.get_all.return_value = []
+    uow.transactions.get_household_by_date_range.return_value = []
     uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = []
 
     result = await GetReconciliationUseCase().execute(_make_command(), uow)
@@ -122,8 +122,8 @@ async def test_unmapped_categories_detected() -> None:
     bob = make_person(name="Bob")
     uow.persons.get_all.return_value = [alice, bob]
     uow.category_groups.get_all.return_value = []
-    uow.category_mappings.get_all.return_value = [
-        make_category_mapping(category="Dining Out"),
+    uow.categories.get_all.return_value = [
+        make_category(name="Dining Out"),
     ]
 
     txs = [
@@ -140,7 +140,7 @@ async def test_unmapped_categories_detected() -> None:
             payer_percentage=50,
         ),
     ]
-    uow.transactions.get_shared_by_date_range.return_value = txs
+    uow.transactions.get_household_by_date_range.return_value = txs
     uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = []
 
     result = await GetReconciliationUseCase().execute(_make_command(), uow)
@@ -154,8 +154,8 @@ async def test_multi_month_range_finalization_is_none() -> None:
     bob = make_person(name="Bob")
     uow.persons.get_all.return_value = [alice, bob]
     uow.category_groups.get_all.return_value = []
-    uow.category_mappings.get_all.return_value = []
-    uow.transactions.get_shared_by_date_range.return_value = []
+    uow.categories.get_all.return_value = []
+    uow.transactions.get_household_by_date_range.return_value = []
     uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = []
 
     command = GetReconciliationCommand.from_range(date(2026, 1, 1), date(2026, 3, 31))

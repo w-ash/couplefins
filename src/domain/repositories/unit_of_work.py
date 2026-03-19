@@ -6,8 +6,8 @@ from src.domain.repositories.category_group_budget_repository import (
 from src.domain.repositories.category_group_repository import (
     CategoryGroupRepositoryProtocol,
 )
-from src.domain.repositories.category_mapping_repository import (
-    CategoryMappingRepositoryProtocol,
+from src.domain.repositories.category_repository import (
+    CategoryRepositoryProtocol,
 )
 from src.domain.repositories.person_repository import PersonRepositoryProtocol
 from src.domain.repositories.reconciliation_period_repository import (
@@ -43,7 +43,7 @@ class UnitOfWorkProtocol(Protocol):
     def category_groups(self) -> CategoryGroupRepositoryProtocol: ...
 
     @property
-    def category_mappings(self) -> CategoryMappingRepositoryProtocol: ...
+    def categories(self) -> CategoryRepositoryProtocol: ...
 
     @property
     def category_group_budgets(self) -> CategoryGroupBudgetRepositoryProtocol: ...
