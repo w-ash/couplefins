@@ -11,6 +11,7 @@ import type { ComboboxOption } from "@/components/Combobox";
 import { Combobox } from "@/components/Combobox";
 import { InlineError } from "@/components/InlineError";
 import { PercentInput } from "@/components/PercentInput";
+import { SegmentedControl } from "@/components/SegmentedControl";
 import {
   computeShares,
   formatCurrency,
@@ -18,6 +19,11 @@ import {
   parsePercent,
 } from "@/lib/format";
 import { baseInputClass, inputErrorClass } from "@/lib/input-styles";
+import {
+  deriveTransactionType,
+  type TransactionType,
+  TYPE_OPTIONS,
+} from "@/lib/transaction-classification";
 
 interface TransactionEditorProps {
   tx: TransactionResponse;
@@ -43,10 +49,13 @@ const fieldLabels: Record<string, string> = {
   category: "Category",
   tags: "Tags",
   payer_percentage: "Split",
+  household: "Type",
 };
 
 function formatEditValue(fieldName: string, value: string): string {
   if (fieldName === "payer_percentage") return value ? `${value}%` : "—";
+  if (fieldName === "household")
+    return value === "true" ? "Household" : "Personal";
   if (fieldName === "date" && value) return formatDate(value);
   if (fieldName === "amount" && value) return formatCurrency(Number(value));
   return value || "—";
@@ -94,24 +103,60 @@ export function TransactionEditor({
   onSave,
   onCancel,
 }: TransactionEditorProps) {
+  const originalType = deriveTransactionType(tx.household, tx.payer_percentage);
+
   const [date, setDate] = useState(tx.date);
   const [amount, setAmount] = useState(String(tx.amount));
   const [category, setCategory] = useState(tx.category);
   const [tags, setTags] = useState<string[]>([...tx.tags]);
-  const [split, setSplit] = useState(String(tx.payer_percentage ?? 50));
+  const [split, setSplit] = useState(String(tx.payer_percentage));
+  const [household, setHousehold] = useState(tx.household);
   const firstInputRef = useRef<HTMLInputElement>(null);
+
+  const currentType = deriveTransactionType(
+    household,
+    parsePercent(split) ?? tx.payer_percentage,
+  );
+  const splitEditable = currentType === "shared";
 
   useEffect(() => {
     firstInputRef.current?.focus();
   }, []);
 
+  const handleTypeChange = useCallback(
+    (type: TransactionType) => {
+      switch (type) {
+        case "personal":
+          setHousehold(false);
+          setSplit("100");
+          break;
+        case "shared":
+          setHousehold(true);
+          // Restore original split if the tx was originally shared, otherwise default 50
+          setSplit(
+            originalType === "shared" ? String(tx.payer_percentage) : "50",
+          );
+          break;
+        case "spotted":
+          setHousehold(true);
+          setSplit("0");
+          break;
+        case "household":
+          setHousehold(true);
+          setSplit("100");
+          break;
+      }
+    },
+    [originalType, tx.payer_percentage],
+  );
+
   const parsedAmount = Number.parseFloat(amount);
   const parsedSplit = parsePercent(split);
   const isSplitValid = parsedSplit !== null;
   const isAmountValid = !Number.isNaN(parsedAmount);
-  const splitChanged =
-    split !== "" && split !== String(tx.payer_percentage ?? 50);
+  const splitChanged = split !== "" && split !== String(tx.payer_percentage);
   const amountChanged = amount !== "" && amount !== String(tx.amount);
+  const householdChanged = household !== tx.household;
 
   const absAmount = isAmountValid ? Math.abs(parsedAmount) : 0;
   const { payerShare, otherShare } =
@@ -127,7 +172,8 @@ export function TransactionEditor({
     (isAmountValid && parsedAmount !== tx.amount) ||
     category !== tx.category ||
     tagsChanged ||
-    (parsedSplit !== null && parsedSplit !== (tx.payer_percentage ?? 50));
+    householdChanged ||
+    (parsedSplit !== null && parsedSplit !== tx.payer_percentage);
 
   const handleSave = useCallback(() => {
     const fields: UpdateTransactionRequest = {};
@@ -136,8 +182,9 @@ export function TransactionEditor({
       fields.amount = parsedAmount;
     if (category !== tx.category) fields.category = category;
     if (tagsChanged) fields.tags = tags;
-    if (parsedSplit !== null && parsedSplit !== (tx.payer_percentage ?? 50))
+    if (parsedSplit !== null && parsedSplit !== tx.payer_percentage)
       fields.payer_percentage = parsedSplit;
+    if (householdChanged) fields.household = household;
     onSave(fields);
   }, [
     date,
@@ -148,6 +195,8 @@ export function TransactionEditor({
     parsedAmount,
     parsedSplit,
     isAmountValid,
+    household,
+    householdChanged,
     onSave,
   ]);
 
@@ -183,6 +232,18 @@ export function TransactionEditor({
           {formatDate(tx.date)}
         </span>
       </div>
+
+      <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+        <span className="w-16 shrink-0">Type</span>
+        <SegmentedControl<TransactionType>
+          options={TYPE_OPTIONS}
+          value={currentType}
+          onChange={handleTypeChange}
+          size="sm"
+          shape="pill"
+        />
+      </div>
+
       <div className="grid grid-cols-2 gap-x-6 gap-y-3">
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <span className="w-16 shrink-0">Date</span>
@@ -263,7 +324,7 @@ export function TransactionEditor({
             id="tx-split"
             value={split}
             onChange={setSplit}
-            disabled={saving}
+            disabled={saving || !splitEditable}
             error={splitHasError}
           />
         </label>

@@ -1,6 +1,11 @@
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router";
 import type { TransactionResponse } from "@/api/generated/model";
+import {
+  deriveTransactionType,
+  type TransactionType,
+  TYPE_LABELS,
+} from "@/lib/transaction-classification";
 
 export type SortField = "date" | "merchant" | "amount" | "group";
 export type SortDir = "asc" | "desc";
@@ -23,8 +28,13 @@ export function cycleSortState(
   return DEFAULT_SORT;
 }
 
+export type TypeFilter = TransactionType | "all";
+
+const VALID_TYPES = new Set<string>(["all", ...Object.keys(TYPE_LABELS)]);
+
 interface FilterState {
   query: string;
+  type: TypeFilter;
   payers: string[];
   categories: string[];
   tags: string[];
@@ -52,6 +62,11 @@ function serializeSort(s: SortState): string | null {
   return `${s.field}:${s.dir}`;
 }
 
+function parseType(raw: string | null): TypeFilter {
+  if (raw && VALID_TYPES.has(raw)) return raw as TypeFilter;
+  return "all";
+}
+
 export function useTransactionFilters(
   transactions: TransactionResponse[],
   categoryGroups: Map<string, string>,
@@ -64,6 +79,7 @@ export function useTransactionFilters(
     const tParam = searchParams.getAll("tag");
     return {
       query: searchParams.get("q") ?? "",
+      type: parseType(searchParams.get("type")),
       payers: pParam,
       categories: cParam,
       tags: tParam,
@@ -85,6 +101,11 @@ export function useTransactionFilters(
           if ("query" in updates) {
             if (updates.query) next.set("q", updates.query);
             else next.delete("q");
+          }
+          if ("type" in updates) {
+            if (updates.type && updates.type !== "all")
+              next.set("type", updates.type);
+            else next.delete("type");
           }
           if ("payers" in updates) {
             next.delete("payer");
@@ -126,6 +147,11 @@ export function useTransactionFilters(
     [setFilter],
   );
 
+  const setType = useCallback(
+    (t: TypeFilter) => setFilter({ type: t }),
+    [setFilter],
+  );
+
   const setPayers = useCallback(
     (p: string[]) => setFilter({ payers: p }),
     [setFilter],
@@ -155,6 +181,7 @@ export function useTransactionFilters(
   const clearAll = useCallback(() => {
     setFilter({
       query: "",
+      type: "all",
       payers: [],
       categories: [],
       tags: [],
@@ -174,6 +201,15 @@ export function useTransactionFilters(
 
   const filtered = useMemo(() => {
     let result = transactions;
+
+    // Type filter
+    if (state.type !== "all") {
+      result = result.filter(
+        (tx) =>
+          deriveTransactionType(tx.household, tx.payer_percentage) ===
+          state.type,
+      );
+    }
 
     // Search
     if (state.query) {
@@ -219,6 +255,7 @@ export function useTransactionFilters(
 
   const activeFilterCount =
     (state.query ? 1 : 0) +
+    (state.type !== "all" ? 1 : 0) +
     (state.payers.length > 0 ? 1 : 0) +
     (state.categories.length > 0 ? 1 : 0) +
     (state.tags.length > 0 ? 1 : 0) +
@@ -228,6 +265,7 @@ export function useTransactionFilters(
     filtered,
     totalCount: transactions.length,
     query: state.query,
+    type: state.type,
     payers: state.payers,
     categories: state.categories,
     tags: state.tags,
@@ -235,6 +273,7 @@ export function useTransactionFilters(
     maxAmount: state.maxAmount,
     sort: state.sort,
     setQuery,
+    setType,
     setPayers,
     setCategories,
     setTags,

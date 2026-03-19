@@ -39,7 +39,7 @@
 | v0.8.5 | Insights page UX overhaul — controls, KPI hierarchy, "Who's paying" | Completed (2026-03-18) | L |
 | v0.9.0 | Split continuum + `household` flag + spotted detection | Completed (2026-03-18) | M |
 | v0.9.1 | Category entity + `include_personal` budget scope | Completed (2026-03-18) | M |
-| v0.9.2 | Classification UI: filters, type editing, preview polish | Planned | M |
+| v0.9.2 | Classification UI: filters, type editing, preview polish | Completed (2026-03-18) | M |
 | v0.9.3 | Transaction exclusion flag | Planned | S |
 | v0.10.0 | Responsive layout (mobile + touch) | Planned | L |
 | v1.0.0 | Infrastructure investigation (benchmarks, DB audit, storage evaluation) | Planned | M |

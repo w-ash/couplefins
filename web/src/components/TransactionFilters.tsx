@@ -1,6 +1,7 @@
 import { ChevronDown, Search, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CategoryGroupBreakdownResponse } from "@/api/generated/model";
+import { TYPE_LABELS } from "@/lib/transaction-classification";
 import type { TransactionFilters as TransactionFiltersType } from "@/lib/transaction-filters";
 import { useClickOutside } from "@/lib/use-click-outside";
 import { getPersonAccentColor } from "@/types/person";
@@ -369,6 +370,14 @@ export function ActiveFilterPills({
   personNames: Map<string, string>;
 }) {
   const pills: ActiveFilter[] = [];
+
+  if (filters.type !== "all") {
+    pills.push({
+      key: "type",
+      label: `Type: ${TYPE_LABELS[filters.type]}`,
+      onRemove: () => filters.setType("all"),
+    });
+  }
 
   if (filters.query) {
     pills.push({

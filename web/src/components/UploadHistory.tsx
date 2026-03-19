@@ -44,7 +44,9 @@ function HistoryEntry({
         {entry.household_count > 0 && (
           <>
             <span aria-hidden>&middot;</span>
-            <span className="tabular-nums">{entry.household_count} household</span>
+            <span className="tabular-nums">
+              {entry.household_count} household
+            </span>
           </>
         )}
         {dateRange && (

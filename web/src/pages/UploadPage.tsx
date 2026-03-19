@@ -49,6 +49,12 @@ import {
 } from "@/lib/format";
 import { useIdentityStore } from "@/lib/identity";
 import { selectInputClass } from "@/lib/input-styles";
+import {
+  ClassificationBadge,
+  deriveTransactionType,
+  type TransactionType,
+  TYPE_LABELS,
+} from "@/lib/transaction-classification";
 
 const PREVIEW_LIMIT = 5;
 const MAX_CSV_SIZE = 10 * 1024 * 1024;
@@ -172,24 +178,35 @@ function ActionPanel({
   );
 }
 
-function TypeBadge({ household }: { household: boolean }) {
-  return household ? (
-    <span className="inline-block rounded-full bg-primary-muted px-2 py-0.5 text-xs font-medium text-primary-muted-foreground">
-      Shared
-    </span>
-  ) : (
-    <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-      Personal
-    </span>
-  );
+function typeBreakdown(
+  transactions: { household: boolean; payer_percentage: number }[],
+): string {
+  const counts = new Map<TransactionType, number>();
+  for (const tx of transactions) {
+    const t = deriveTransactionType(tx.household, tx.payer_percentage);
+    counts.set(t, (counts.get(t) ?? 0) + 1);
+  }
+  const parts: string[] = [];
+  for (const type of ["shared", "spotted", "household", "personal"] as const) {
+    const count = counts.get(type);
+    if (count) parts.push(`${count} ${TYPE_LABELS[type].toLowerCase()}`);
+  }
+  return parts.join(", ");
 }
 
-function PreviewCard({ preview }: { preview: PreviewUploadResponse }) {
+function PreviewCard({
+  preview,
+  otherPersonName,
+}: {
+  preview: PreviewUploadResponse;
+  otherPersonName?: string;
+}) {
   const visibleNew = preview.new_transactions.slice(0, PREVIEW_LIMIT);
   const remainingCount = Math.max(
     0,
     preview.new_transactions.length - PREVIEW_LIMIT,
   );
+  const breakdown = typeBreakdown(preview.new_transactions);
 
   return (
     <Card>
@@ -197,11 +214,14 @@ function PreviewCard({ preview }: { preview: PreviewUploadResponse }) {
         <Eye className="size-5" />
         Preview
       </h2>
-      <p className="mb-4 text-sm text-muted-foreground">
+      <p className="mb-1 text-sm text-muted-foreground">
         {plural("new transaction", preview.new_transactions.length)}
         {preview.unchanged_count > 0 &&
           `, ${preview.unchanged_count} unchanged`}
       </p>
+      {breakdown && (
+        <p className="mb-4 text-xs text-muted-foreground">{breakdown}</p>
+      )}
 
       {/* Mobile: card layout */}
       <div className="space-y-3 sm:hidden">
@@ -220,8 +240,11 @@ function PreviewCard({ preview }: { preview: PreviewUploadResponse }) {
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span className="tabular-nums">{formatDate(tx.date)}</span>
               <span>{tx.category}</span>
-              <TypeBadge household={tx.household} />
-              {tx.household && (
+              <ClassificationBadge
+                type={deriveTransactionType(tx.household, tx.payer_percentage)}
+                otherPersonName={otherPersonName}
+              />
+              {tx.household && tx.payer_percentage < 100 && (
                 <span className="tabular-nums">
                   {formatSplit(tx.payer_percentage)}
                 </span>
@@ -264,10 +287,16 @@ function PreviewCard({ preview }: { preview: PreviewUploadResponse }) {
                   {formatCurrency(tx.amount)}
                 </td>
                 <td className="py-2 pr-4">
-                  <TypeBadge household={tx.household} />
+                  <ClassificationBadge
+                    type={deriveTransactionType(
+                      tx.household,
+                      tx.payer_percentage,
+                    )}
+                    otherPersonName={otherPersonName}
+                  />
                 </td>
                 <td className="py-2 text-muted-foreground tabular-nums">
-                  {tx.household ? (
+                  {tx.household && tx.payer_percentage < 100 ? (
                     formatSplit(tx.payer_percentage)
                   ) : (
                     <Minus className="size-4 text-icon-muted" />
@@ -685,7 +714,10 @@ export function UploadPage() {
           <div className="space-y-6">
             {/* Preview summary + capped transaction table */}
             {step === "preview" && hasNewTransactions && (
-              <PreviewCard preview={preview} />
+              <PreviewCard
+                preview={preview}
+                otherPersonName={persons?.find((p) => p.id !== personId)?.name}
+              />
             )}
 
             {/* Review — changed transactions with checkboxes */}

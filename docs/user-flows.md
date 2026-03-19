@@ -132,7 +132,7 @@ Making sure the data is right before settling. This is solo prep work — each p
 **US-REVIEW-2**: As a partner, I want to find specific transactions quickly.
 
 - Given the transaction table, then I can search by merchant name or text
-- Given the transaction table, then I can filter by person, by shared/personal, or by date range
+- Given the transaction table, then I can filter by person, by classification type (shared, spotted, household), or by date range
 - Given the transaction table, then I can sort by date, amount, or category
 
 **US-REVIEW-3**: As a partner, I want to fix mistakes — wrong category, wrong split, wrong tag — without re-uploading.

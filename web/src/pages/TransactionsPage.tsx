@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useGetCategoryGroups } from "@/api/generated/category-groups/category-groups";
+
 import { getGetDashboardQueryKey } from "@/api/generated/dashboard/dashboard";
 import type {
   BulkModifyTagsRequest,
@@ -48,6 +49,7 @@ import {
   PageLoading,
 } from "@/components/PageStates";
 import { PersonBadge } from "@/components/PersonBadge";
+import { SegmentedControl } from "@/components/SegmentedControl";
 import { StatsGrid } from "@/components/StatsGrid";
 import { TransactionEditor } from "@/components/TransactionEditor";
 import {
@@ -74,9 +76,15 @@ import {
   plural,
 } from "@/lib/format";
 import { usePersonMaps } from "@/lib/persons";
+import {
+  ClassificationBadge,
+  deriveTransactionType,
+  TYPE_OPTIONS,
+} from "@/lib/transaction-classification";
 import type { SortField, SortState } from "@/lib/transaction-filters";
 import {
   cycleSortState,
+  type TypeFilter,
   useTransactionFilters,
 } from "@/lib/transaction-filters";
 
@@ -313,7 +321,7 @@ function TransactionTable({
     exitBulkMode,
   );
 
-  const colCount = 7 + personEntries.length + (bulkMode ? 1 : 0);
+  const colCount = 8 + personEntries.length + (bulkMode ? 1 : 0);
 
   const toggleAll = useCallback(() => {
     if (selected.size === transactions.length) clearSelection();
@@ -447,6 +455,7 @@ function TransactionTable({
                 Group
               </SortableHeader>
               <th className="pb-2 pr-4 font-medium">Paid by</th>
+              <th className="pb-2 pr-4 font-medium">Type</th>
               <SortableHeader
                 field="amount"
                 sort={sort}
@@ -598,6 +607,12 @@ function TransactionRow({
         <td className="py-2 pr-4 text-muted-foreground">{categoryGroup}</td>
         <td className="py-2 pr-4">
           <PersonBadge name={payerName} accentColor={payerColor} size="xs" />
+        </td>
+        <td className="py-2 pr-4">
+          <ClassificationBadge
+            type={deriveTransactionType(tx.household, tx.payer_percentage)}
+            otherPersonName={otherName}
+          />
         </td>
         <td
           className={`py-2 pr-4 text-right tabular-nums ${amountColorClass(tx.amount)}`}
@@ -792,6 +807,16 @@ export function TransactionsPage() {
               />
 
               <div className="flex flex-wrap items-center gap-2">
+                <SegmentedControl<TypeFilter>
+                  options={[
+                    { value: "all" as const, label: "All" },
+                    ...TYPE_OPTIONS,
+                  ]}
+                  value={filters.type}
+                  onChange={filters.setType}
+                  size="sm"
+                  shape="pill"
+                />
                 <PayerFilter
                   persons={personEntries}
                   activePayers={filters.payers}
