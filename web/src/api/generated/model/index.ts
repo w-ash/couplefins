@@ -53,6 +53,7 @@ export * from './monthlyTotalItem';
 export * from './monthReference';
 export * from './owedAmountResponse';
 export * from './periodStatusResponse';
+export * from './personCategorySpend';
 export * from './personResponse';
 export * from './personSummaryResponse';
 export * from './previewTransactionResponse';

@@ -114,6 +114,8 @@ def reconcile(  # noqa: PLR0913
     total_spending = Decimal(0)
     total_refunds = Decimal(0)
     for tx in transactions:
+        if tx.is_excluded:
+            continue
         if tx.payer_percentage == SplitDefaults.MAX_PAYER_PERCENTAGE:
             continue
         shared.append(tx)

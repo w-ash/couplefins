@@ -46,10 +46,19 @@ class BudgetResponse(BaseModel):
         )
 
 
+class PersonCategorySpend(BaseModel):
+    person_id: UUID
+    person_name: str
+    amount: float
+
+
 class CategorySpendResponse(BaseModel):
     category: str
     total_amount: float
     transaction_count: int
+    include_personal: bool
+    household_amount: float
+    personal_amounts: list[PersonCategorySpend]
 
 
 class GroupBudgetStatusResponse(BaseModel):
@@ -79,6 +88,8 @@ class BudgetOverviewResponse(BaseModel):
     @classmethod
     def from_result(cls, result: GetBudgetOverviewResult) -> BudgetOverviewResponse:
         overview = result.overview
+        personal_lookup = {cat.name: cat.include_personal for cat in result.categories}
+        person_names = {p.id: p.name for p in result.persons}
         return cls(
             year=overview.year,
             month=overview.month,
@@ -103,6 +114,16 @@ class BudgetOverviewResponse(BaseModel):
                             category=c.category,
                             total_amount=float(c.total_amount),
                             transaction_count=c.transaction_count,
+                            include_personal=personal_lookup.get(c.category, False),
+                            household_amount=float(c.household_amount),
+                            personal_amounts=[
+                                PersonCategorySpend(
+                                    person_id=pid,
+                                    person_name=person_names.get(pid, "Unknown"),
+                                    amount=float(amt),
+                                )
+                                for pid, amt in c.personal_amounts.items()
+                            ],
                         )
                         for c in s.categories
                     ],

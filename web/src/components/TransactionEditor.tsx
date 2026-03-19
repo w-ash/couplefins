@@ -50,12 +50,14 @@ const fieldLabels: Record<string, string> = {
   tags: "Tags",
   payer_percentage: "Split",
   household: "Type",
+  is_excluded: "Excluded",
 };
 
 function formatEditValue(fieldName: string, value: string): string {
   if (fieldName === "payer_percentage") return value ? `${value}%` : "—";
   if (fieldName === "household")
     return value === "true" ? "Household" : "Personal";
+  if (fieldName === "is_excluded") return value === "true" ? "Yes" : "No";
   if (fieldName === "date" && value) return formatDate(value);
   if (fieldName === "amount" && value) return formatCurrency(Number(value));
   return value || "—";
@@ -111,6 +113,7 @@ export function TransactionEditor({
   const [tags, setTags] = useState<string[]>([...tx.tags]);
   const [split, setSplit] = useState(String(tx.payer_percentage));
   const [household, setHousehold] = useState(tx.household);
+  const [isExcluded, setIsExcluded] = useState(tx.is_excluded);
   const firstInputRef = useRef<HTMLInputElement>(null);
 
   const currentType = deriveTransactionType(
@@ -167,12 +170,15 @@ export function TransactionEditor({
   const tagsChanged =
     tags.length !== tx.tags.length || tags.some((t, i) => t !== tx.tags[i]);
 
+  const excludedChanged = isExcluded !== tx.is_excluded;
+
   const hasChanges =
     date !== tx.date ||
     (isAmountValid && parsedAmount !== tx.amount) ||
     category !== tx.category ||
     tagsChanged ||
     householdChanged ||
+    excludedChanged ||
     (parsedSplit !== null && parsedSplit !== tx.payer_percentage);
 
   const handleSave = useCallback(() => {
@@ -185,6 +191,7 @@ export function TransactionEditor({
     if (parsedSplit !== null && parsedSplit !== tx.payer_percentage)
       fields.payer_percentage = parsedSplit;
     if (householdChanged) fields.household = household;
+    if (excludedChanged) fields.is_excluded = isExcluded;
     onSave(fields);
   }, [
     date,
@@ -197,6 +204,8 @@ export function TransactionEditor({
     isAmountValid,
     household,
     householdChanged,
+    isExcluded,
+    excludedChanged,
     onSave,
   ]);
 
@@ -337,6 +346,17 @@ export function TransactionEditor({
             </span>
           ) : null}
         </div>
+
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={isExcluded}
+            onChange={(e) => setIsExcluded(e.target.checked)}
+            disabled={saving}
+            className="size-4 accent-primary"
+          />
+          Exclude from reconciliation
+        </label>
 
         <div className="ml-auto flex gap-2">
           <Button

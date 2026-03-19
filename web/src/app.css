@@ -41,6 +41,17 @@
   --warning-muted-foreground: oklch(0.5 0.1 55);
   --warning-border: oklch(0.88 0.06 85);
 
+  /* Semantic identity — person & household */
+  --person-0: oklch(0.52 0.1 230); /* blue */
+  --person-0-muted: oklch(0.935 0.04 230);
+  --person-0-muted-foreground: oklch(0.365 0.08 230);
+  --person-1: oklch(0.52 0.1 290); /* violet */
+  --person-1-muted: oklch(0.935 0.04 290);
+  --person-1-muted-foreground: oklch(0.365 0.08 290);
+  --household: oklch(0.525 0.105 175); /* teal — same as primary */
+  --household-muted: oklch(0.935 0.04 175);
+  --household-muted-foreground: oklch(0.365 0.08 175);
+
   /* Financial */
   --positive: oklch(0.525 0.105 175);
   --negative: oklch(0.577 0.15 27);
@@ -100,6 +111,17 @@
   --warning-muted: oklch(0.22 0.03 55);
   --warning-muted-foreground: oklch(0.75 0.1 55);
   --warning-border: oklch(0.35 0.06 55);
+
+  /* Semantic identity — person & household */
+  --person-0: oklch(0.64 0.08 230); /* blue */
+  --person-0-muted: oklch(0.25 0.04 230);
+  --person-0-muted-foreground: oklch(0.8 0.06 230);
+  --person-1: oklch(0.64 0.08 290); /* violet */
+  --person-1-muted: oklch(0.25 0.04 290);
+  --person-1-muted-foreground: oklch(0.8 0.06 290);
+  --household: oklch(0.575 0.1 175); /* teal — same as primary */
+  --household-muted: oklch(0.25 0.04 175);
+  --household-muted-foreground: oklch(0.8 0.06 175);
 
   --positive: oklch(0.65 0.1 175);
   --negative: oklch(0.65 0.14 27);
@@ -162,6 +184,15 @@
   --color-ring: var(--ring);
   --color-placeholder: var(--placeholder);
   --color-icon-muted: var(--icon-muted);
+  --color-person-0: var(--person-0);
+  --color-person-0-muted: var(--person-0-muted);
+  --color-person-0-muted-foreground: var(--person-0-muted-foreground);
+  --color-person-1: var(--person-1);
+  --color-person-1-muted: var(--person-1-muted);
+  --color-person-1-muted-foreground: var(--person-1-muted-foreground);
+  --color-household: var(--household);
+  --color-household-muted: var(--household-muted);
+  --color-household-muted-foreground: var(--household-muted-foreground);
 }
 
 @layer base {
@@ -256,6 +287,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .step-enter,
+  .editor-enter,
   .animated-check circle,
   .animated-check path {
     animation: none !important;

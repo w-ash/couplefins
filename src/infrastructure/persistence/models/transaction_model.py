@@ -40,5 +40,6 @@ class TransactionModel(Base):
     )
     payer_percentage: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
     is_settlement: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_excluded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     original_date: Mapped[str | None] = mapped_column(String, nullable=True)
     original_amount: Mapped[str | None] = mapped_column(String, nullable=True)

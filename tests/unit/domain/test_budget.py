@@ -3,12 +3,14 @@ from decimal import Decimal
 from uuid import UUID
 
 from src.domain.budget import (
+    _is_budget_relevant,
     compute_average_monthly_spending,
     compute_budget_overview,
     compute_ytd_budget,
     determine_health,
     resolve_effective_budget,
 )
+from src.domain.categories import compute_category_breakdowns
 from tests.fixtures.factories import (
     make_category_group,
     make_category_group_budget,
@@ -328,3 +330,98 @@ def test_overview_ytd_computation() -> None:
     assert status.monthly_health == "on_track"
     assert overview.total_ytd_budget == Decimal(1500)
     assert overview.total_ytd_spent == Decimal(650)
+
+
+def test_excluded_transaction_not_budget_relevant() -> None:
+    tx = make_transaction(household=True, is_excluded=True)
+    assert _is_budget_relevant(tx, frozenset()) is False
+
+
+def test_excluded_transaction_not_budget_relevant_even_with_personal_category() -> None:
+    tx = make_transaction(category="Groceries", household=False, is_excluded=True)
+    assert _is_budget_relevant(tx, frozenset({"Groceries"})) is False
+
+
+# --- category breakdown per-source tracking ---
+
+
+def test_breakdown_splits_household_vs_personal() -> None:
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    alice = UUID("bbbbbbbb-0000-0000-0000-000000000001")
+    bob = UUID("bbbbbbbb-0000-0000-0000-000000000002")
+
+    lookup = {"Groceries": (food_gid, "Food & Dining")}
+    txs = [
+        make_transaction(
+            category="Groceries",
+            amount=Decimal(-100),
+            household=True,
+            payer_person_id=alice,
+        ),
+        make_transaction(
+            category="Groceries",
+            amount=Decimal(-60),
+            household=False,
+            payer_person_id=alice,
+        ),
+        make_transaction(
+            category="Groceries",
+            amount=Decimal(-40),
+            household=False,
+            payer_person_id=bob,
+        ),
+    ]
+
+    groups = compute_category_breakdowns(txs, lookup, personal_categories={"Groceries"})
+    assert len(groups) == 1
+    cat = groups[0].categories[0]
+
+    assert cat.total_amount == Decimal(200)
+    assert cat.household_amount == Decimal(100)
+    assert cat.personal_amounts[alice] == Decimal(60)
+    assert cat.personal_amounts[bob] == Decimal(40)
+
+
+def test_breakdown_no_personal_categories_all_household() -> None:
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    alice = UUID("bbbbbbbb-0000-0000-0000-000000000001")
+
+    lookup = {"Groceries": (food_gid, "Food & Dining")}
+    txs = [
+        make_transaction(
+            category="Groceries",
+            amount=Decimal(-100),
+            household=True,
+            payer_person_id=alice,
+        ),
+    ]
+
+    groups = compute_category_breakdowns(txs, lookup)
+    cat = groups[0].categories[0]
+
+    assert cat.total_amount == Decimal(100)
+    assert cat.household_amount == Decimal(100)
+    assert cat.personal_amounts == {}
+
+
+def test_breakdown_personal_not_in_set_excluded_from_personal_amounts() -> None:
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    alice = UUID("bbbbbbbb-0000-0000-0000-000000000001")
+
+    lookup = {"Groceries": (food_gid, "Food & Dining")}
+    txs = [
+        make_transaction(
+            category="Groceries",
+            amount=Decimal(-50),
+            household=False,
+            payer_person_id=alice,
+        ),
+    ]
+
+    # "Groceries" not in personal_categories, so personal_amounts stays empty
+    groups = compute_category_breakdowns(txs, lookup, personal_categories=frozenset())
+    cat = groups[0].categories[0]
+
+    assert cat.total_amount == Decimal(50)
+    assert cat.household_amount == Decimal(0)
+    assert cat.personal_amounts == {}

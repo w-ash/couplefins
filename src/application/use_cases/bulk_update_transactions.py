@@ -35,6 +35,7 @@ class BulkUpdateTransactionsCommand:
     tags: tuple[str, ...] | None = None
     payer_percentage: int | _Unset = field(default=_Unset.UNSET)
     household: bool | _Unset = field(default=_Unset.UNSET)
+    is_excluded: bool | _Unset = field(default=_Unset.UNSET)
 
 
 @define(frozen=True, slots=True)
@@ -60,6 +61,8 @@ def _collect_updates(
         updates["payer_percentage"] = command.payer_percentage
     if not isinstance(command.household, _Unset):
         updates["household"] = command.household
+    if not isinstance(command.is_excluded, _Unset):
+        updates["is_excluded"] = command.is_excluded
     return updates
 
 
@@ -90,7 +93,15 @@ def _validate_command(
         validate_payer_percentage(command.payer_percentage)
 
 
-_EDIT_FIELDS = ("date", "amount", "category", "tags", "payer_percentage", "household")
+_EDIT_FIELDS = (
+    "date",
+    "amount",
+    "category",
+    "tags",
+    "payer_percentage",
+    "household",
+    "is_excluded",
+)
 
 
 @define(slots=True)
@@ -131,6 +142,7 @@ class BulkUpdateTransactionsUseCase:
                     ("tags", tx.tags),
                     ("payer_percentage", tx.payer_percentage),
                     ("household", tx.household),
+                    ("is_excluded", tx.is_excluded),
                 )
                 edits = [
                     e

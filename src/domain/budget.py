@@ -83,6 +83,8 @@ def determine_health(spent: Decimal, budget: Decimal) -> HealthStatus:
 
 
 def _is_budget_relevant(tx: Transaction, personal_categories: Set[str]) -> bool:
+    if tx.is_excluded:
+        return False
     return tx.household or tx.category in personal_categories
 
 
@@ -104,7 +106,9 @@ def compute_average_monthly_spending(
         if month > through_month:
             continue
         months_with_data.add(month)
-        breakdowns = compute_category_breakdowns(txs, category_lookup)
+        breakdowns = compute_category_breakdowns(
+            txs, category_lookup, personal_categories
+        )
         for bd in breakdowns:
             if bd.group_id is not None:
                 group_totals[bd.group_id] += bd.total_amount
@@ -170,23 +174,24 @@ def compute_budget_overview(  # noqa: PLR0913, PLR0917
     for b in budgets:
         budgets_by_group[b.group_id].append(b)
 
-    month_txs = [
-        tx
-        for tx in year_txs
-        if _is_budget_relevant(tx, personal_categories) and tx.date.month == month
-    ]
     ytd_txs = [
         tx
         for tx in year_txs
         if _is_budget_relevant(tx, personal_categories) and tx.date.month <= month
     ]
+    month_txs = [tx for tx in ytd_txs if tx.date.month == month]
 
     month_by_group: dict[UUID | None, CategoryGroupBreakdown] = {
         bd.group_id: bd
-        for bd in compute_category_breakdowns(month_txs, category_lookup)
+        for bd in compute_category_breakdowns(
+            month_txs, category_lookup, personal_categories
+        )
     }
     ytd_by_group: dict[UUID | None, CategoryGroupBreakdown] = {
-        bd.group_id: bd for bd in compute_category_breakdowns(ytd_txs, category_lookup)
+        bd.group_id: bd
+        for bd in compute_category_breakdowns(
+            ytd_txs, category_lookup, personal_categories
+        )
     }
 
     avg_spending = compute_average_monthly_spending(

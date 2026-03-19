@@ -4,9 +4,13 @@
  * Couplefins
  * OpenAPI spec version: 0.1.0
  */
+import type { PersonCategorySpend } from './personCategorySpend';
 
 export interface CategorySpendResponse {
   category: string;
   total_amount: number;
   transaction_count: number;
+  include_personal: boolean;
+  household_amount: number;
+  personal_amounts: PersonCategorySpend[];
 }

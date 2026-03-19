@@ -55,6 +55,7 @@ class UpdateTransactionRequest(BaseModel):
     tags: list[str] | None = None
     payer_percentage: int | None = None
     household: bool | None = None
+    is_excluded: bool | None = None
 
     @field_validator("payer_percentage")
     @classmethod
@@ -87,6 +88,7 @@ class BulkUpdateRequest(BaseModel):
     category: str | None = None
     payer_percentage: int | None = None
     household: bool | None = None
+    is_excluded: bool | None = None
 
     @field_validator("transaction_ids")
     @classmethod

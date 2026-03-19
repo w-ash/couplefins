@@ -42,6 +42,7 @@ def make_transaction(
     payer_percentage: int = 50,
     household: bool = True,
     is_settlement: bool = False,
+    is_excluded: bool = False,
     original_date: date | None = None,
     original_amount: Decimal | None = None,
 ) -> Transaction:
@@ -61,6 +62,7 @@ def make_transaction(
         payer_percentage=payer_percentage,
         household=household,
         is_settlement=is_settlement,
+        is_excluded=is_excluded,
         original_date=original_date,
         original_amount=original_amount,
     )

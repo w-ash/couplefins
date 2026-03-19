@@ -14,6 +14,7 @@ export function usePersonMaps(
       getPersonName: (id: string) => personNames.get(id) ?? "Unknown",
       getPersonColor: (id: string) =>
         getPersonAccentColor(personIndexMap.get(id) ?? -1),
+      getPersonIndex: (id: string) => personIndexMap.get(id) ?? 0,
     };
   }, [persons]);
 }

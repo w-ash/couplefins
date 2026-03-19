@@ -222,3 +222,17 @@ def test_account_comes_from_target_person() -> None:
 
     bob_adj = compute_adjustments(txs, bob)
     assert bob_adj[0].account == "Bob Adjustments"
+
+
+def test_excluded_transactions_produce_no_adjustments() -> None:
+    alice, _bob = _alice_bob()
+    txs = [
+        make_transaction(
+            amount=Decimal("-100.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+            is_excluded=True,
+        )
+    ]
+
+    assert compute_adjustments(txs, alice) == []

@@ -295,7 +295,7 @@ export function InsightsPage() {
       (data?.persons ?? []).map((p, i) => ({
         id: p.id,
         name: p.name,
-        color: `var(--chart-${i * 2})`,
+        color: `var(--person-${i})`,
       })),
     [data?.persons],
   );

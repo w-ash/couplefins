@@ -3,13 +3,10 @@ import {
   AlertCircle,
   CheckCircle2,
   ChevronDown,
-  ChevronRight,
   PieChart,
   Plus,
-  Trash2,
-  X,
 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   getGetBudgetOverviewQueryKey,
   useDeleteBudget,
@@ -17,16 +14,20 @@ import {
   usePostBudget,
   usePutBudget,
 } from "@/api/generated/budgets/budgets";
+import { usePatchCategory } from "@/api/generated/category-groups/category-groups";
 import type {
   BudgetOverviewResponse,
   GroupBudgetStatusResponse,
 } from "@/api/generated/model";
+import { useGetPersons } from "@/api/generated/persons/persons";
 import { Button } from "@/components/Button";
+import { Combobox, type ComboboxOption } from "@/components/Combobox";
 import { MonthPicker } from "@/components/MonthPicker";
 import { PageHeader } from "@/components/PageHeader";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { StatsGrid } from "@/components/StatsGrid";
+import { useDialogSync } from "@/hooks/useDialogSync";
 import {
   type SortMode,
   useBudgetFilters,
@@ -35,7 +36,9 @@ import {
 import { useGroupIconMap } from "@/lib/categories";
 import { getCategoryGroupIcon } from "@/lib/category-icons";
 import { formatCurrency, useMonthYear } from "@/lib/format";
-import { baseInputClass, selectInputClass } from "@/lib/input-styles";
+import { baseInputClass } from "@/lib/input-styles";
+import { usePersonMaps } from "@/lib/persons";
+import { getPersonBarColor } from "@/types/person";
 
 const HEALTH_STYLES: Record<
   string,
@@ -110,23 +113,90 @@ function SummaryStats({
   );
 }
 
-function ProgressBar({
+function ProgressBar({ pct, barColor }: { pct: number; barColor: string }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    requestAnimationFrame(() => setMounted(true));
+  }, []);
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-2 flex-1 rounded-full bg-muted">
+        <div
+          className={`h-2 rounded-full transition-[width] duration-500 ease-out ${barColor}`}
+          style={{ width: mounted ? `${pct}%` : "0%" }}
+        />
+      </div>
+      <span className="w-8 text-right text-xs tabular-nums text-muted-foreground">
+        {Math.round(pct)}%
+      </span>
+    </div>
+  );
+}
+
+function GroupHeader({
+  groupName,
+  icon,
+  health,
+  healthStyle,
+  hasBudget,
+}: {
+  groupName: string;
+  icon: string | null;
+  health: string | null;
+  healthStyle: { color: string };
+  hasBudget: boolean;
+}) {
+  const GroupIcon = getCategoryGroupIcon(icon);
+  return (
+    <div className="flex items-center gap-2">
+      <GroupIcon className="size-4 shrink-0 text-muted-foreground" />
+      <span className="text-sm font-medium text-foreground">{groupName}</span>
+      {hasBudget && (
+        <span
+          className={`flex items-center gap-1 text-xs ${healthStyle.color}`}
+        >
+          <HealthIcon health={health} />
+          {getHealthStyle(health).label}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function SpentBudgetLabel({
   spent,
   budget,
-  barColor,
+  remaining,
+  hasBudget,
 }: {
   spent: number;
-  budget: number;
-  barColor: string;
+  budget: number | null;
+  remaining: number | null;
+  hasBudget: boolean;
 }) {
-  const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
+  if (!hasBudget || budget == null) {
+    return (
+      <span className="text-sm tabular-nums text-foreground">
+        {formatCurrency(spent)}
+      </span>
+    );
+  }
   return (
-    <div className="h-2 w-full rounded-full bg-muted">
-      <div
-        className={`h-2 rounded-full transition-[width,background-color] duration-200 ${barColor}`}
-        style={{ width: `${pct}%` }}
-      />
-    </div>
+    <span className="text-sm tabular-nums">
+      <span className="text-foreground">{formatCurrency(spent)}</span>
+      <span className="text-muted-foreground">
+        {" / "}
+        {formatCurrency(budget)}
+      </span>
+      {remaining != null && (
+        <span
+          className={`ml-2 font-medium ${remaining < 0 ? "text-destructive-muted-foreground" : "text-muted-foreground"}`}
+        >
+          {formatCurrency(remaining)}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -136,18 +206,30 @@ function BudgetGroupRow({
   icon,
   onUpdate,
   onDelete,
+  budgetQueryKey,
+  getPersonIndex,
 }: {
   status: GroupBudgetStatusResponse;
   viewMode: ViewMode;
   icon: string | null;
   onUpdate: (budgetId: string, amount: number) => void;
   onDelete: (budgetId: string) => void;
+  budgetQueryKey: readonly unknown[];
+  getPersonIndex: (id: string) => number;
 }) {
+  const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const GroupIcon = getCategoryGroupIcon(icon);
+  const dialogRef = useDialogSync(confirmDelete);
+
+  const patchCategory = usePatchCategory({
+    mutation: {
+      onSuccess: () =>
+        queryClient.invalidateQueries({ queryKey: budgetQueryKey }),
+    },
+  });
 
   const budget =
     viewMode === "monthly" ? status.monthly_budget : status.ytd_budget;
@@ -158,6 +240,18 @@ function BudgetGroupRow({
   const healthStyle = getHealthStyle(health);
   const remaining = budget != null ? budget - spent : null;
   const hasBudget = status.monthly_budget != null;
+  const pct =
+    hasBudget && budget != null && budget > 0
+      ? Math.min(100, (spent / budget) * 100)
+      : 0;
+
+  const headerProps = {
+    groupName: status.group_name,
+    icon,
+    health,
+    healthStyle,
+    hasBudget,
+  };
 
   function handleEditSubmit() {
     const amount = Number.parseFloat(editValue);
@@ -168,184 +262,273 @@ function BudgetGroupRow({
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card shadow-sm">
-      {/* Main row */}
-      <button
-        type="button"
-        className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left"
-        aria-expanded={expanded}
-        aria-label={`${expanded ? "Collapse" : "Expand"} ${status.group_name}`}
-        onClick={() => setExpanded(!expanded)}
-      >
-        <span className="shrink-0">
-          {expanded ? (
-            <ChevronDown className="size-4 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="size-4 text-muted-foreground" />
-          )}
-        </span>
+    <>
+      <div className="rounded-xl border border-border bg-card shadow-sm">
+        {/* Main row */}
+        <button
+          type="button"
+          className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50"
+          aria-expanded={expanded}
+          aria-label={`${expanded ? "Collapse" : "Expand"} ${status.group_name}`}
+          onClick={() => setExpanded(!expanded)}
+        >
+          <ChevronDown
+            className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${expanded ? "" : "-rotate-90"}`}
+          />
 
-        <div className="min-w-0 flex-1 space-y-1.5">
-          <div className="flex items-center gap-2">
-            <GroupIcon className="size-4 shrink-0 text-muted-foreground" />
-            <span className="text-sm font-medium text-foreground">
-              {status.group_name}
-            </span>
-            {hasBudget && (
-              <span
-                className={`flex items-center gap-1 text-xs ${healthStyle.color}`}
-              >
-                <HealthIcon health={health} />
-                {healthStyle.label}
-              </span>
+          {/* Mobile layout */}
+          <div className="min-w-0 flex-1 sm:hidden">
+            <GroupHeader {...headerProps} />
+            {hasBudget && budget != null && (
+              <div className="mt-1.5">
+                <ProgressBar pct={pct} barColor={healthStyle.barColor} />
+              </div>
+            )}
+            <div className="mt-1">
+              <SpentBudgetLabel
+                spent={spent}
+                budget={budget}
+                remaining={remaining}
+                hasBudget={hasBudget}
+              />
+            </div>
+          </div>
+
+          {/* Desktop layout */}
+          <div className="hidden min-w-0 flex-1 space-y-1.5 sm:block">
+            <GroupHeader {...headerProps} />
+            {hasBudget && budget != null && (
+              <ProgressBar pct={pct} barColor={healthStyle.barColor} />
             )}
           </div>
-          {hasBudget && budget != null && (
-            <ProgressBar
+
+          <div className="hidden shrink-0 items-center gap-4 text-right sm:flex">
+            <SpentBudgetLabel
               spent={spent}
               budget={budget}
-              barColor={healthStyle.barColor}
+              remaining={remaining}
+              hasBudget={hasBudget}
             />
-          )}
-        </div>
+          </div>
+        </button>
 
-        <div className="flex shrink-0 items-center gap-4 text-right">
-          {hasBudget && budget != null ? (
-            <>
-              <div className="text-sm tabular-nums">
-                <span className="text-foreground">{formatCurrency(spent)}</span>
-                <span className="text-muted-foreground">
-                  {" / "}
-                  {formatCurrency(budget)}
-                </span>
-              </div>
-              <div
-                className={`text-sm font-medium tabular-nums ${remaining != null && remaining < 0 ? "text-destructive-muted-foreground" : "text-muted-foreground"}`}
-              >
-                {remaining != null && formatCurrency(remaining)}
-              </div>
-            </>
-          ) : (
-            <span className="text-sm tabular-nums text-foreground">
-              {formatCurrency(spent)}
-            </span>
-          )}
-        </div>
-      </button>
-
-      {/* Expanded content */}
-      {expanded && (
-        <div className="border-t border-border-muted px-4 py-4">
-          {/* Per-category breakdown */}
-          {status.categories.length > 0 && (
-            <div className="mb-4 space-y-1.5">
-              {status.categories.map((cat) => (
-                <div
-                  key={cat.category}
-                  className="flex justify-between text-sm text-muted-foreground"
-                >
-                  <span>{cat.category}</span>
-                  <span className="tabular-nums">
-                    {formatCurrency(cat.total_amount)}
-                  </span>
+        {/* Expanded content — CSS grid transition */}
+        <div
+          className="grid transition-[grid-template-rows] duration-200"
+          style={{ gridTemplateRows: expanded ? "1fr" : "0fr" }}
+        >
+          <div className="overflow-hidden">
+            <div className="border-t border-border-muted px-4 py-4">
+              {/* Per-category breakdown */}
+              {status.categories.length > 0 && (
+                <div className="mb-4 space-y-2">
+                  {status.categories.map((cat) => {
+                    const catPct =
+                      spent !== 0
+                        ? Math.round((cat.total_amount / spent) * 100)
+                        : 0;
+                    return (
+                      <div key={cat.category}>
+                        <div className="flex items-center justify-between text-sm text-muted-foreground">
+                          <span className="flex items-center gap-2">
+                            {cat.category}
+                            <span className="text-xs tabular-nums">
+                              {catPct}%
+                            </span>
+                          </span>
+                          <span className="flex items-center gap-3">
+                            <label className="flex cursor-pointer items-center gap-1.5 text-xs">
+                              <input
+                                type="checkbox"
+                                checked={cat.include_personal}
+                                disabled={patchCategory.isPending}
+                                onChange={(e) =>
+                                  patchCategory.mutate({
+                                    categoryName: cat.category,
+                                    data: {
+                                      include_personal: e.target.checked,
+                                    },
+                                  })
+                                }
+                                className="size-3.5 rounded border-border accent-primary disabled:opacity-50"
+                              />
+                              Include personal
+                            </label>
+                            <span className="tabular-nums">
+                              {formatCurrency(cat.total_amount)}
+                            </span>
+                          </span>
+                        </div>
+                        {cat.include_personal &&
+                        cat.personal_amounts.length > 0 ? (
+                          <div className="mt-0.5 flex h-1 overflow-hidden rounded-full bg-muted">
+                            {cat.household_amount > 0 && (
+                              <div
+                                className="h-full bg-household"
+                                style={{
+                                  width: `${(cat.household_amount / cat.total_amount) * 100}%`,
+                                }}
+                              />
+                            )}
+                            {cat.personal_amounts.map((pa) => (
+                              <div
+                                key={pa.person_id}
+                                className={`h-full ${getPersonBarColor(getPersonIndex(pa.person_id))}`}
+                                style={{
+                                  width: `${(pa.amount / cat.total_amount) * 100}%`,
+                                }}
+                              />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="mt-0.5 h-0.5 rounded-full bg-muted">
+                            <div
+                              className="h-0.5 rounded-full bg-household"
+                              style={{ width: `${catPct}%` }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {/* Legend for stacked bars */}
+                  {status.categories.some(
+                    (c) => c.include_personal && c.personal_amounts.length > 0,
+                  ) && (
+                    <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <span className="inline-block size-2 rounded-full bg-household" />
+                        Household
+                      </span>
+                      {status.categories
+                        .flatMap((c) => c.personal_amounts)
+                        .filter(
+                          (pa, i, arr) =>
+                            arr.findIndex(
+                              (x) => x.person_id === pa.person_id,
+                            ) === i,
+                        )
+                        .map((pa) => (
+                          <span
+                            key={pa.person_id}
+                            className="flex items-center gap-1.5"
+                          >
+                            <span
+                              className={`inline-block size-2 rounded-full ${getPersonBarColor(getPersonIndex(pa.person_id))}`}
+                            />
+                            {pa.person_name}
+                          </span>
+                        ))}
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* Actions */}
-          {hasBudget && status.budget_id && (
-            <div className="flex items-center gap-2 border-t border-border-muted pt-3">
-              {editing ? (
-                <form
-                  className="flex items-center gap-2"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleEditSubmit();
-                  }}
-                >
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    className={`w-28 tabular-nums ${baseInputClass}`}
-                    aria-label="New budget amount"
-                  />
-                  <Button type="submit" size="sm">
-                    Save Budget
-                  </Button>
-                  <button
-                    type="button"
-                    onClick={() => setEditing(false)}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="size-4" />
-                  </button>
-                </form>
-              ) : (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEditValue(status.monthly_budget?.toString() ?? "");
-                    setEditing(true);
-                  }}
-                >
-                  Edit amount
-                </Button>
               )}
 
-              {confirmDelete ? (
-                <span className="ml-auto flex items-center gap-2 text-xs">
-                  <span className="text-destructive-muted-foreground">
-                    Delete?
-                  </span>
+              {/* Actions */}
+              {hasBudget && status.budget_id && (
+                <div className="flex items-center gap-2 border-t border-border-muted pt-3">
+                  {editing ? (
+                    <form
+                      className="flex items-center gap-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleEditSubmit();
+                      }}
+                    >
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        className={`w-28 tabular-nums ${baseInputClass}`}
+                        aria-label="New budget amount"
+                      />
+                      <Button type="submit" size="sm">
+                        Save Budget
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => setEditing(false)}
+                        className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        Cancel
+                      </button>
+                    </form>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditValue(status.monthly_budget?.toString() ?? "");
+                        setEditing(true);
+                      }}
+                    >
+                      Edit amount
+                    </Button>
+                  )}
+
                   <button
                     type="button"
-                    onClick={() => {
-                      if (status.budget_id) onDelete(status.budget_id);
-                      setConfirmDelete(false);
-                    }}
-                    className="font-medium text-destructive-muted-foreground hover:text-destructive"
+                    onClick={() => setConfirmDelete(true)}
+                    className="ml-auto text-sm text-muted-foreground transition-colors hover:text-destructive-muted-foreground"
                   >
-                    Yes
+                    Remove budget
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDelete(false)}
-                    className="text-muted-foreground"
-                  >
-                    No
-                  </button>
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setConfirmDelete(true);
-                  }}
-                  className="ml-auto text-muted-foreground hover:text-destructive-muted-foreground"
-                  aria-label={`Delete ${status.group_name} budget`}
-                >
-                  <Trash2 className="size-4" />
-                </button>
+                </div>
+              )}
+
+              {/* Unbudgeted hint */}
+              {!hasBudget && status.average_monthly_spending > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Avg: {formatCurrency(status.average_monthly_spending)}/mo
+                </p>
               )}
             </div>
-          )}
-
-          {/* Unbudgeted hint */}
-          {!hasBudget && status.average_monthly_spending > 0 && (
-            <p className="text-xs text-muted-foreground">
-              Avg: {formatCurrency(status.average_monthly_spending)}/mo
-            </p>
-          )}
+          </div>
         </div>
+      </div>
+
+      {/* Delete confirmation dialog */}
+      {hasBudget && (
+        <dialog
+          ref={dialogRef}
+          onClose={() => setConfirmDelete(false)}
+          className="mx-4 w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-lg backdrop:bg-black/40"
+        >
+          <h3 className="font-medium text-foreground">
+            Remove {status.group_name} budget?
+          </h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Monthly tracking for this group will stop.
+          </p>
+          <div className="mt-5 flex gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setConfirmDelete(false)}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                if (status.budget_id) onDelete(status.budget_id);
+                setConfirmDelete(false);
+              }}
+              className="flex-1"
+            >
+              Remove Budget
+            </Button>
+          </div>
+        </dialog>
       )}
-    </div>
+    </>
   );
 }
 
@@ -363,6 +546,15 @@ function AddBudgetForm({
     new Date().toISOString().slice(0, 10),
   );
 
+  const groupOptions: ComboboxOption[] = useMemo(
+    () =>
+      unbudgetedGroups.map((g) => ({
+        value: g.group_id,
+        label: g.group_name,
+      })),
+    [unbudgetedGroups],
+  );
+
   // Find the selected group to show average hint
   const selectedGroup = unbudgetedGroups.find((g) => g.group_id === groupId);
 
@@ -371,7 +563,7 @@ function AddBudgetForm({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+        className="flex items-center gap-2 rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
       >
         <Plus className="size-4" />
         Add budget
@@ -380,98 +572,94 @@ function AddBudgetForm({
   }
 
   return (
-    <form
-      className="rounded-lg border border-border bg-card p-4 shadow-sm"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (groupId && Number.parseFloat(amount) > 0) {
-          onSave(groupId, Number.parseFloat(amount), effectiveFrom);
-          setOpen(false);
-          setGroupId("");
-          setAmount("");
-        }
-      }}
-    >
-      <div className="flex flex-wrap items-end gap-3">
-        <div>
-          <label
-            htmlFor="budget-group"
-            className="mb-1 block text-xs font-medium text-muted-foreground"
+    <div className="step-enter">
+      <form
+        className="rounded-xl border border-border bg-card p-4 shadow-sm"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (groupId && Number.parseFloat(amount) > 0) {
+            onSave(groupId, Number.parseFloat(amount), effectiveFrom);
+            setOpen(false);
+            setGroupId("");
+            setAmount("");
+          }
+        }}
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="min-w-0 flex-1 sm:max-w-48">
+            <label
+              htmlFor="budget-group"
+              className="mb-1 block text-xs font-medium text-muted-foreground"
+            >
+              Category group
+            </label>
+            <Combobox
+              mode="single"
+              options={groupOptions}
+              value={groupId}
+              onChange={(v) => setGroupId(v as string)}
+              placeholder="Select group..."
+              allowCreate={false}
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="budget-amount"
+              className="mb-1 block text-xs font-medium text-muted-foreground"
+            >
+              Monthly amount
+            </label>
+            <input
+              id="budget-amount"
+              type="number"
+              step="0.01"
+              min="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder={
+                selectedGroup?.average_monthly_spending
+                  ? `Avg: ${formatCurrency(selectedGroup.average_monthly_spending)}`
+                  : "0.00"
+              }
+              className={`w-32 tabular-nums ${baseInputClass}`}
+              required
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="budget-effective"
+              className="mb-1 block text-xs font-medium text-muted-foreground"
+            >
+              Effective from
+            </label>
+            <input
+              id="budget-effective"
+              type="date"
+              value={effectiveFrom}
+              onChange={(e) => setEffectiveFrom(e.target.value)}
+              className={baseInputClass}
+              required
+            />
+          </div>
+          <Button type="submit" size="sm">
+            Save Budget
+          </Button>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
-            Category group
-          </label>
-          <select
-            id="budget-group"
-            value={groupId}
-            onChange={(e) => setGroupId(e.target.value)}
-            className={selectInputClass}
-            required
-          >
-            <option value="">Select group...</option>
-            {unbudgetedGroups.map((g) => (
-              <option key={g.group_id} value={g.group_id}>
-                {g.group_name}
-              </option>
-            ))}
-          </select>
+            Cancel
+          </button>
         </div>
-        <div>
-          <label
-            htmlFor="budget-amount"
-            className="mb-1 block text-xs font-medium text-muted-foreground"
-          >
-            Monthly amount
-          </label>
-          <input
-            id="budget-amount"
-            type="number"
-            step="0.01"
-            min="0.01"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder={
-              selectedGroup?.average_monthly_spending
-                ? `Avg: ${formatCurrency(selectedGroup.average_monthly_spending)}`
-                : "0.00"
-            }
-            className={`w-32 tabular-nums ${baseInputClass}`}
-            required
-          />
-        </div>
-        <div>
-          <label
-            htmlFor="budget-effective"
-            className="mb-1 block text-xs font-medium text-muted-foreground"
-          >
-            Effective from
-          </label>
-          <input
-            id="budget-effective"
-            type="date"
-            value={effectiveFrom}
-            onChange={(e) => setEffectiveFrom(e.target.value)}
-            className={baseInputClass}
-            required
-          />
-        </div>
-        <Button type="submit" size="sm">
-          Save Budget
-        </Button>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <X className="size-4" />
-        </button>
-      </div>
-      {selectedGroup && selectedGroup.average_monthly_spending > 0 && (
-        <p className="mt-2 text-xs text-muted-foreground">
-          Average monthly spending:{" "}
-          {formatCurrency(selectedGroup.average_monthly_spending)}
-        </p>
-      )}
-    </form>
+        {selectedGroup && selectedGroup.average_monthly_spending > 0 && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Average monthly spending:{" "}
+            {formatCurrency(selectedGroup.average_monthly_spending)}
+          </p>
+        )}
+      </form>
+    </div>
   );
 }
 
@@ -511,6 +699,12 @@ function sortStatuses(
   return sorted;
 }
 
+const SORT_OPTIONS: { value: SortMode; label: string }[] = [
+  { value: "urgency", label: "Urgency" },
+  { value: "spending", label: "Spending" },
+  { value: "name", label: "Name" },
+];
+
 export function BudgetPage() {
   const { year, month } = useMonthYear();
   const queryClient = useQueryClient();
@@ -528,6 +722,10 @@ export function BudgetPage() {
   const data = budgetResponse?.status === 200 ? budgetResponse.data : undefined;
 
   const groupIconMap = useGroupIconMap();
+  const { data: personsResponse } = useGetPersons();
+  const persons =
+    personsResponse?.status === 200 ? personsResponse.data : undefined;
+  const { getPersonIndex } = usePersonMaps(persons);
 
   const saveMutation = usePostBudget({
     mutation: {
@@ -589,7 +787,7 @@ export function BudgetPage() {
       </PageHeader>
 
       {/* Controls */}
-      <div className="mb-6 flex items-center gap-3">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
         <SegmentedControl
           options={[
             { value: "monthly", label: "Monthly" },
@@ -598,16 +796,12 @@ export function BudgetPage() {
           value={viewMode}
           onChange={setViewMode}
         />
-        <select
-          aria-label="Sort order"
+        <SegmentedControl
+          options={SORT_OPTIONS}
           value={sortMode}
-          onChange={(e) => setSortMode(e.target.value as SortMode)}
-          className={selectInputClass}
-        >
-          <option value="urgency">Sort: Urgency</option>
-          <option value="spending">Sort: Spending</option>
-          <option value="name">Sort: Name</option>
-        </select>
+          onChange={setSortMode}
+          size="sm"
+        />
       </div>
 
       {isLoading && <PageLoading label="Loading budgets..." />}
@@ -637,6 +831,8 @@ export function BudgetPage() {
                       icon={groupIconMap.get(status.group_id) ?? null}
                       onUpdate={handleUpdate}
                       onDelete={handleDelete}
+                      budgetQueryKey={queryKey}
+                      getPersonIndex={getPersonIndex}
                     />
                   ))}
                 </div>
@@ -644,10 +840,13 @@ export function BudgetPage() {
 
               {/* Unbudgeted groups with spending */}
               {unbudgetedGroups.length > 0 && (
-                <div>
-                  <h2 className="mb-4 font-medium text-lg text-foreground">
+                <section>
+                  <h2 className="mb-1 font-medium text-lg text-foreground">
                     Spending without a budget
                   </h2>
+                  <p className="mb-4 text-xs text-muted-foreground">
+                    Groups with spending but no monthly target set
+                  </p>
                   <div className="space-y-3">
                     {unbudgetedGroups.map((status) => (
                       <BudgetGroupRow
@@ -657,10 +856,12 @@ export function BudgetPage() {
                         icon={groupIconMap.get(status.group_id) ?? null}
                         onUpdate={handleUpdate}
                         onDelete={handleDelete}
+                        budgetQueryKey={queryKey}
+                        getPersonIndex={getPersonIndex}
                       />
                     ))}
                   </div>
-                </div>
+                </section>
               )}
             </>
           )}

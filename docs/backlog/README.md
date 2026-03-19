@@ -40,7 +40,7 @@
 | v0.9.0 | Split continuum + `household` flag + spotted detection | Completed (2026-03-18) | M |
 | v0.9.1 | Category entity + `include_personal` budget scope | Completed (2026-03-18) | M |
 | v0.9.2 | Classification UI: filters, type editing, preview polish | Completed (2026-03-18) | M |
-| v0.9.3 | Transaction exclusion flag | Planned | S |
+| v0.9.3 | Transaction exclusion flag | Completed (2026-03-18) | S |
 | v0.10.0 | Responsive layout (mobile + touch) | Planned | L |
 | v1.0.0 | Infrastructure investigation (benchmarks, DB audit, storage evaluation) | Planned | M |
 | v1.0.1 | Query & storage optimization (SQLite-native improvements) | Planned | M |

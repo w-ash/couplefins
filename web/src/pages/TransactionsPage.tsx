@@ -95,6 +95,7 @@ function SummaryStats({
   data: ReconciliationResponse;
   getPersonName: (id: string) => string;
 }) {
+  const excludedCount = data.transactions.filter((tx) => tx.is_excluded).length;
   return (
     <StatsGrid
       stats={[
@@ -106,6 +107,9 @@ function SummaryStats({
           label: `${getPersonName(ps.person_id)} paid`,
           value: formatCurrency(ps.total_paid),
         })),
+        ...(excludedCount > 0
+          ? [{ label: "Excluded", value: String(excludedCount) }]
+          : []),
       ]}
     />
   );
@@ -577,10 +581,11 @@ function TransactionRow({
   onTransactionUpdate: (fields: UpdateTransactionRequest) => void;
   onCancel: () => void;
 }) {
+  const strikethrough = tx.is_excluded ? "line-through" : "";
   return (
     <>
       <tr
-        className={`border-b border-border-muted transition-colors duration-300 ${canEdit ? "cursor-pointer hover:bg-muted/50" : ""} ${isExpanded ? "bg-muted/30" : ""} ${isSaved ? "bg-positive/10" : ""}`}
+        className={`border-b border-border-muted transition-colors duration-300 ${canEdit ? "cursor-pointer hover:bg-muted/50" : ""} ${isExpanded ? "bg-muted/30" : ""} ${isSaved ? "bg-positive/10" : ""} ${tx.is_excluded ? "opacity-50" : ""}`}
         onClick={canEdit ? onToggleExpand : undefined}
       >
         {bulkMode && (
@@ -594,16 +599,20 @@ function TransactionRow({
             />
           </td>
         )}
-        <td className="py-2 pr-4 text-muted-foreground tabular-nums">
+        <td
+          className={`py-2 pr-4 text-muted-foreground tabular-nums ${strikethrough}`}
+        >
           {formatDate(tx.date)}
         </td>
-        <td className="py-2 pr-4 text-foreground">
+        <td className={`py-2 pr-4 text-foreground ${strikethrough}`}>
           <span className="flex items-center gap-1.5">
             {tx.merchant}
             {isSaved && <Check className="size-3.5 text-positive" />}
           </span>
         </td>
-        <td className="py-2 pr-4 text-muted-foreground">{tx.category}</td>
+        <td className={`py-2 pr-4 text-muted-foreground ${strikethrough}`}>
+          {tx.category}
+        </td>
         <td className="py-2 pr-4 text-muted-foreground">{categoryGroup}</td>
         <td className="py-2 pr-4">
           <PersonBadge name={payerName} accentColor={payerColor} size="xs" />
@@ -811,6 +820,7 @@ export function TransactionsPage() {
                   options={[
                     { value: "all" as const, label: "All" },
                     ...TYPE_OPTIONS,
+                    { value: "excluded" as const, label: "Excluded" },
                   ]}
                   value={filters.type}
                   onChange={filters.setType}

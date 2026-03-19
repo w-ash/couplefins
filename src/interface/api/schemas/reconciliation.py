@@ -90,6 +90,7 @@ class TransactionResponse(BaseModel):
     payer_person_id: UUID
     payer_percentage: int
     household: bool
+    is_excluded: bool
     original_date: datetime.date | None
     original_amount: float | None
 
@@ -193,6 +194,7 @@ class ReconciliationResponse(BaseModel):
                     payer_person_id=tx.payer_person_id,
                     payer_percentage=tx.payer_percentage,
                     household=tx.household,
+                    is_excluded=tx.is_excluded,
                     original_date=tx.original_date,
                     original_amount=(
                         float(tx.original_amount)

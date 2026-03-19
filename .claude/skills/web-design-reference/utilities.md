@@ -53,7 +53,7 @@ const mutation = usePostBudget({
 | `lib/input-styles.ts` | `baseInputClass`, `selectInputClass`, `triggerButtonClass`, `actionLinkClass`, `inputErrorClass` |
 | `lib/theme.ts` | `getStoredTheme()`, `storeTheme()`, `resolveIsDark()`, `applyTheme()` |
 | `lib/identity.ts` | `useIdentityStore`, `useIdentityHydrated()` |
-| `lib/persons.ts` | `usePersonMaps()` → `personNames`, `getPersonName()`, `getPersonColor()` |
+| `lib/persons.ts` | `usePersonMaps()` → `personNames`, `getPersonName()`, `getPersonColor()`, `getPersonIndex()` |
 | `lib/categories.ts` | `useGroupIconMap()`, `useInvalidateCategories()` |
 | `lib/category-icons.ts` | `getCategoryGroupIcon()`, `ICON_OPTIONS`, `CATEGORY_ICON_REGISTRY` |
 | `lib/date-range.ts` | `monthStartEnd()`, `thisMonth()`, `lastMonth()`, `useDateRange()`, `formatRangeLabel()` |

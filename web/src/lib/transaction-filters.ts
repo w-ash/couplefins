@@ -28,9 +28,13 @@ export function cycleSortState(
   return DEFAULT_SORT;
 }
 
-export type TypeFilter = TransactionType | "all";
+export type TypeFilter = TransactionType | "all" | "excluded";
 
-const VALID_TYPES = new Set<string>(["all", ...Object.keys(TYPE_LABELS)]);
+const VALID_TYPES = new Set<string>([
+  "all",
+  ...Object.keys(TYPE_LABELS),
+  "excluded",
+]);
 
 interface FilterState {
   query: string;
@@ -203,11 +207,14 @@ export function useTransactionFilters(
     let result = transactions;
 
     // Type filter
-    if (state.type !== "all") {
+    if (state.type === "excluded") {
+      result = result.filter((tx) => tx.is_excluded);
+    } else if (state.type !== "all") {
       result = result.filter(
         (tx) =>
+          !tx.is_excluded &&
           deriveTransactionType(tx.household, tx.payer_percentage) ===
-          state.type,
+            state.type,
       );
     }
 

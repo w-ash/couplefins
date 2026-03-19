@@ -18,6 +18,7 @@ Calm, personal, trustworthy — like a well-organized notebook, not a corporate 
 - Text: warm dark gray (never pure black)
 - Positive/income/under-budget: teal (not green). Negative/expense/over-budget: coral (not red)
 - Warm accent for primary actions (derived from teal or complementary warm tone)
+- Identity colors: `--household` (teal=primary), `--person-0` (blue, hue 230), `--person-1` (violet, hue 290). Cool triad for spending breakdowns & person badges. Use `getPersonAccentColor()` for badges, `bg-person-N` / `bg-household` for bar fills.
 
 ## Anti-Patterns (never do these)
 - No Inter, Roboto, or Open Sans

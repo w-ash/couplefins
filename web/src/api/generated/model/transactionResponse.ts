@@ -17,6 +17,7 @@ export interface TransactionResponse {
   payer_person_id: string;
   payer_percentage: number;
   household: boolean;
+  is_excluded: boolean;
   original_date: string | null;
   original_amount: number | null;
 }

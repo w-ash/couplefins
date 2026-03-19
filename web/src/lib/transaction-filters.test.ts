@@ -61,6 +61,7 @@ function makeTx(overrides: Partial<TransactionResponse>): TransactionResponse {
     payer_person_id: "p1",
     payer_percentage: 50,
     household: true,
+    is_excluded: false,
     original_date: null,
     original_amount: null,
     ...overrides,

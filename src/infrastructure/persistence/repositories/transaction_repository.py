@@ -35,6 +35,7 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             payer_percentage=model.payer_percentage,
             household=model.household,
             is_settlement=model.is_settlement,
+            is_excluded=model.is_excluded,
             original_date=(
                 date.fromisoformat(model.original_date) if model.original_date else None
             ),
@@ -61,6 +62,7 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             "payer_person_id": str(entity.payer_person_id),
             "payer_percentage": entity.payer_percentage,
             "is_settlement": entity.is_settlement,
+            "is_excluded": entity.is_excluded,
             "original_date": (
                 entity.original_date.isoformat() if entity.original_date else None
             ),

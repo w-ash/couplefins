@@ -1,7 +1,9 @@
+from collections import defaultdict
+from collections.abc import Set
 from decimal import Decimal
 from uuid import UUID
 
-from attrs import define
+from attrs import Factory, define
 
 from src.domain.entities.category import Category
 from src.domain.entities.category_group import CategoryGroup
@@ -17,6 +19,8 @@ class CategoryBreakdown:
     group_name: str
     total_amount: Decimal
     transaction_count: int
+    household_amount: Decimal = Decimal(0)
+    personal_amounts: dict[UUID, Decimal] = Factory(dict[UUID, Decimal])
 
 
 @define(frozen=True, slots=True)
@@ -47,14 +51,25 @@ def get_personal_included_categories(categories: list[Category]) -> set[str]:
 def compute_category_breakdowns(
     transactions: list[Transaction],
     category_lookup: dict[str, tuple[UUID, str]],
+    personal_categories: Set[str] = frozenset(),
 ) -> list[CategoryGroupBreakdown]:
     # Accumulate per category
-    cat_amounts: dict[str, Decimal] = {}
-    cat_counts: dict[str, int] = {}
+    cat_amounts: dict[str, Decimal] = defaultdict(Decimal)
+    cat_counts: dict[str, int] = defaultdict(int)
+    cat_household: dict[str, Decimal] = defaultdict(Decimal)
+    cat_personal: dict[str, dict[UUID, Decimal]] = defaultdict(
+        lambda: defaultdict(Decimal)
+    )
+
     for tx in transactions:
         abs_amount = abs(tx.amount)
-        cat_amounts[tx.category] = cat_amounts.get(tx.category, Decimal(0)) + abs_amount
-        cat_counts[tx.category] = cat_counts.get(tx.category, 0) + 1
+        cat_amounts[tx.category] += abs_amount
+        cat_counts[tx.category] += 1
+
+        if tx.household:
+            cat_household[tx.category] += abs_amount
+        elif tx.category in personal_categories:
+            cat_personal[tx.category][tx.payer_person_id] += abs_amount
 
     # Build CategoryBreakdown per category
     category_breakdowns: list[CategoryBreakdown] = []
@@ -67,6 +82,8 @@ def compute_category_breakdowns(
                 group_name=gname,
                 total_amount=amount,
                 transaction_count=cat_counts[cat],
+                household_amount=cat_household.get(cat, Decimal(0)),
+                personal_amounts=dict(cat_personal.get(cat, {})),
             )
         )
 

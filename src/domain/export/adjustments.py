@@ -34,6 +34,8 @@ def compute_adjustments(
     adjustments: list[Adjustment] = []
 
     for tx in transactions:
+        if tx.is_excluded:
+            continue
         if tx.payer_percentage == SplitDefaults.MAX_PAYER_PERCENTAGE:
             continue
         _, other_share = compute_shares(tx.amount, tx.payer_percentage)

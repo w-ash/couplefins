@@ -499,3 +499,44 @@ class TestComputePersonPaidByMonth:
 
         by_group = {r.group_id: r.amount_paid for r in result}
         assert by_group[None] == Decimal("25.00")
+
+
+class TestExcludedTransactions:
+    def test_excluded_not_in_spending_trends(self) -> None:
+        _, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                date=date(2026, 1, 10),
+                category="Dining Out",
+                amount=Decimal("-50.00"),
+            ),
+            make_transaction(
+                date=date(2026, 1, 15),
+                category="Dining Out",
+                amount=Decimal("-30.00"),
+                is_excluded=True,
+            ),
+        ]
+
+        result = compute_spending_trends(txs, lookup, 2026)
+
+        assert result.monthly_totals[0].total_amount == Decimal("50.00")
+
+    def test_excluded_not_in_comparison_cards(self) -> None:
+        _, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                date=date(2026, 2, 10),
+                category="Dining Out",
+                amount=Decimal("-50.00"),
+            ),
+            make_transaction(
+                date=date(2026, 2, 15),
+                category="Dining Out",
+                amount=Decimal("-40.00"),
+                is_excluded=True,
+            ),
+        ]
+
+        cards = compute_comparison_cards(txs, lookup, target_month=2)
+        assert cards[0].current_month_amount == Decimal("50.00")

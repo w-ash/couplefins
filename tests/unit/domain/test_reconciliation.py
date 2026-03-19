@@ -476,3 +476,32 @@ def test_personal_transactions_excluded() -> None:
 
     assert result.transaction_count == 1
     assert result.total_shared_spending == Decimal("100.00")
+
+
+def test_excluded_transactions_not_in_settlement() -> None:
+    alice, bob = _alice_bob()
+    txs = [
+        make_transaction(
+            amount=Decimal("-100.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+            is_excluded=True,
+        ),
+        make_transaction(
+            amount=Decimal("-60.00"),
+            payer_person_id=bob.id,
+            payer_percentage=50,
+        ),
+    ]
+
+    result = reconcile(
+        txs,
+        [alice, bob],
+        [],
+        [],
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+    )
+
+    assert result.transaction_count == 1
+    assert result.total_shared_spending == Decimal("60.00")

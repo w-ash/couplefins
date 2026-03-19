@@ -374,7 +374,7 @@ export function ActiveFilterPills({
   if (filters.type !== "all") {
     pills.push({
       key: "type",
-      label: `Type: ${TYPE_LABELS[filters.type]}`,
+      label: `Type: ${filters.type === "excluded" ? "Excluded" : TYPE_LABELS[filters.type]}`,
       onRemove: () => filters.setType("all"),
     });
   }

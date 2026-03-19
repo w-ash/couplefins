@@ -54,6 +54,8 @@ The palette uses **OKLCH** throughout — perceptually uniform, so lightness and
 
 **Amber** (`oklch(0.666 0.14 55)`) handles warnings — the middle lane between teal and coral for states that need attention without urgency.
 
+**Identity colors** distinguish the three spending sources in budget breakdowns and person badges throughout the app. Household spending uses primary teal — it IS the app's core concept. The two people get **blue** (`oklch(0.52 0.1 230)`) and **violet** (`oklch(0.52 0.1 290)`) — a cool-tone triad with teal, spaced ~55-60° apart for clear visual separation. These appear as bar fills and muted badge backgrounds, not as page-level hero colors or gradients. The three tokens (`--household`, `--person-0`, `--person-1`) each have solid, `-muted`, and `-muted-foreground` variants matching the primary/destructive/warning pattern.
+
 ### Space and rhythm
 
 Generous whitespace signals "take your time" — appropriate for a tool used briefly once a month, where density offers no advantage. Spacing between sections intentionally varies: different content types get different breathing room. Uniform spacing between uniform containers signals template, not craft.
@@ -119,7 +121,7 @@ What the app avoids, and what choosing those defaults would signal.
 
 **Inter, Roboto, Open Sans** — "Nobody made a typography decision." Satoshi occupies the same readability tier with actual character.
 
-**Indigo/purple gradients** — The statistical average of "modern web app." This app has no gradients at all — solid warm tones throughout.
+**Indigo/purple gradients** — The statistical average of "modern web app." This app has no gradients at all — solid warm tones throughout. (Note: person-1 uses violet as a subtle badge/bar accent for identity distinction, not as a hero color or gradient.)
 
 **Glassmorphism, frosted glass** — Decorative complexity for its own sake. Depth here comes from subtle shadows and background shifts, not blur filters.
 

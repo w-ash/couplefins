@@ -6,19 +6,12 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import {
-  type KeyboardEvent,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { type KeyboardEvent, useCallback, useRef, useState } from "react";
 import { Link } from "react-router";
 import {
   useDeleteCategoryGroup,
   useGetCategoryGroups,
   useGetUnmappedCategories,
-  usePatchCategory,
   usePostCategoryGroup,
   usePutCategoryGroup,
   usePutCategoryMappings,
@@ -26,6 +19,7 @@ import {
 import type { CategoryGroupResponse } from "@/api/generated/model";
 import { Button } from "@/components/Button";
 import { PageError, PageLoading } from "@/components/PageStates";
+import { useDialogSync } from "@/hooks/useDialogSync";
 import { useInvalidateCategories } from "@/lib/categories";
 import { getCategoryGroupIcon, ICON_OPTIONS } from "@/lib/category-icons";
 import { baseInputClass, selectInputClass } from "@/lib/input-styles";
@@ -130,37 +124,6 @@ function IconPicker({
   );
 }
 
-function IncludePersonalToggle({
-  categoryName,
-  includePersonal,
-}: {
-  categoryName: string;
-  includePersonal: boolean;
-}) {
-  const invalidate = useInvalidateCategories();
-  const mutation = usePatchCategory({
-    mutation: { onSuccess: invalidate },
-  });
-
-  return (
-    <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
-      <input
-        type="checkbox"
-        checked={includePersonal}
-        onChange={(e) =>
-          mutation.mutate({
-            categoryName,
-            data: { include_personal: e.target.checked },
-          })
-        }
-        disabled={mutation.isPending}
-        className="size-3.5 rounded border-border accent-primary"
-      />
-      Include personal
-    </label>
-  );
-}
-
 function GroupCard({ group }: { group: CategoryGroupResponse }) {
   const invalidate = useInvalidateCategories();
   const [expanded, setExpanded] = useState(false);
@@ -168,14 +131,7 @@ function GroupCard({ group }: { group: CategoryGroupResponse }) {
   const [editName, setEditName] = useState(group.name);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const dialogRef = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (confirmDelete && !dialog.open) dialog.showModal();
-    else if (!confirmDelete && dialog.open) dialog.close();
-  }, [confirmDelete]);
+  const dialogRef = useDialogSync(confirmDelete);
 
   const updateMutation = usePutCategoryGroup({
     mutation: {
@@ -293,17 +249,10 @@ function GroupCard({ group }: { group: CategoryGroupResponse }) {
             {group.categories.length > 0 ? (
               <ul className="border-t border-border-muted px-4 py-3">
                 {group.categories.map((cat) => (
-                  <li
-                    key={cat.name}
-                    className="flex items-center justify-between py-1"
-                  >
+                  <li key={cat.name} className="py-1">
                     <span className="text-sm text-muted-foreground">
                       {cat.name}
                     </span>
-                    <IncludePersonalToggle
-                      categoryName={cat.name}
-                      includePersonal={cat.include_personal}
-                    />
                   </li>
                 ))}
               </ul>

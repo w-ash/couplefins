@@ -68,6 +68,8 @@ async def bulk_update_transactions(body: BulkUpdateRequest) -> BulkUpdateRespons
         kwargs["payer_percentage"] = body.payer_percentage
     if body.household is not None:
         kwargs["household"] = body.household
+    if body.is_excluded is not None:
+        kwargs["is_excluded"] = body.is_excluded
     command = BulkUpdateTransactionsCommand(
         transaction_ids=list(body.transaction_ids),
         category=body.category,
@@ -101,6 +103,8 @@ async def update_transaction(
         extras["payer_percentage"] = body.payer_percentage
     if "household" in body.model_fields_set:
         extras["household"] = body.household
+    if "is_excluded" in body.model_fields_set:
+        extras["is_excluded"] = body.is_excluded
     command = BulkUpdateTransactionsCommand(
         transaction_ids=[transaction_id],
         date=body.date,

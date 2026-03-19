@@ -9,7 +9,7 @@ from src.domain.entities.transaction import Transaction
 
 
 def _shared_expenses(txs: list[Transaction]) -> list[Transaction]:
-    return [tx for tx in txs if tx.household and tx.amount < 0]
+    return [tx for tx in txs if tx.household and tx.amount < 0 and not tx.is_excluded]
 
 
 def _group_by_month(txs: list[Transaction]) -> dict[int, list[Transaction]]:
@@ -153,13 +153,13 @@ def compute_spending_trends(
     )
 
 
-def compute_trailing_average(
-    year_txs: list[Transaction],
+def _compute_trailing_average_from_expenses(
+    expenses: list[Transaction],
     category_lookup: dict[str, tuple[UUID, str]],
     target_month: int,
     window: int = 3,
 ) -> dict[UUID | None, Decimal]:
-    by_month = _group_by_month(_shared_expenses(year_txs))
+    by_month = _group_by_month(expenses)
 
     prior_months = sorted(m for m in by_month if m < target_month)
     trailing_months = prior_months[-window:]
@@ -175,6 +175,17 @@ def compute_trailing_average(
     return {gid: total / num_months for gid, total in group_totals.items()}
 
 
+def compute_trailing_average(
+    year_txs: list[Transaction],
+    category_lookup: dict[str, tuple[UUID, str]],
+    target_month: int,
+    window: int = 3,
+) -> dict[UUID | None, Decimal]:
+    return _compute_trailing_average_from_expenses(
+        _shared_expenses(year_txs), category_lookup, target_month, window
+    )
+
+
 def compute_comparison_cards(
     year_txs: list[Transaction],
     category_lookup: dict[str, tuple[UUID, str]],
@@ -188,8 +199,8 @@ def compute_comparison_cards(
     for bd in compute_category_breakdowns(target_txs, category_lookup):
         current_by_group[bd.group_id] = (bd.group_name, bd.total_amount)
 
-    trailing_avg = compute_trailing_average(
-        year_txs, category_lookup, target_month, window
+    trailing_avg = _compute_trailing_average_from_expenses(
+        expenses, category_lookup, target_month, window
     )
 
     group_names = _build_group_name_lookup(category_lookup)

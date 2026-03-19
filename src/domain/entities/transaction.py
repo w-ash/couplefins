@@ -24,6 +24,7 @@ class Transaction:
     payer_percentage: int = 100
     household: bool = False
     is_settlement: bool = False
+    is_excluded: bool = False
     original_date: date | None = None
     original_amount: Decimal | None = None
 

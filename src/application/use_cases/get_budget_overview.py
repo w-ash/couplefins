@@ -9,7 +9,9 @@ from src.domain.categories import (
     build_category_lookup,
     get_personal_included_categories,
 )
+from src.domain.entities.category import Category
 from src.domain.entities.category_group_budget import CategoryGroupBudget
+from src.domain.entities.person import Person
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -23,6 +25,8 @@ class GetBudgetOverviewCommand:
 class GetBudgetOverviewResult:
     overview: BudgetOverview
     budgets: list[CategoryGroupBudget]
+    categories: list[Category]
+    persons: list[Person]
 
 
 @define(slots=True)
@@ -34,6 +38,7 @@ class GetBudgetOverviewUseCase:
             budgets = await uow.category_group_budgets.get_all()
             categories = await uow.categories.get_all()
             category_groups = await uow.category_groups.get_all()
+            persons = await uow.persons.get_all()
 
             personal_cats = get_personal_included_categories(categories)
             if personal_cats:
@@ -53,4 +58,9 @@ class GetBudgetOverviewUseCase:
                 personal_categories=personal_cats,
             )
 
-            return GetBudgetOverviewResult(overview=overview, budgets=budgets)
+            return GetBudgetOverviewResult(
+                overview=overview,
+                budgets=budgets,
+                categories=categories,
+                persons=persons,
+            )

@@ -1,3 +1,4 @@
+import { fireEvent } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { BudgetOverviewResponse } from "@/api/generated/model";
@@ -32,8 +33,22 @@ const overviewWithData: BudgetOverviewResponse = {
       ytd_health: "near_limit",
       average_monthly_spending: 366.67,
       categories: [
-        { category: "Groceries", total_amount: 200, transaction_count: 5 },
-        { category: "Dining Out", total_amount: 150, transaction_count: 3 },
+        {
+          category: "Groceries",
+          total_amount: 200,
+          transaction_count: 5,
+          include_personal: false,
+          household_amount: 0,
+          personal_amounts: [],
+        },
+        {
+          category: "Dining Out",
+          total_amount: 150,
+          transaction_count: 3,
+          include_personal: false,
+          household_amount: 0,
+          personal_amounts: [],
+        },
       ],
     },
     {
@@ -47,7 +62,16 @@ const overviewWithData: BudgetOverviewResponse = {
       monthly_health: null,
       ytd_health: null,
       average_monthly_spending: 66.67,
-      categories: [{ category: "Gas", total_amount: 75, transaction_count: 2 }],
+      categories: [
+        {
+          category: "Gas",
+          total_amount: 75,
+          transaction_count: 2,
+          include_personal: false,
+          household_amount: 0,
+          personal_amounts: [],
+        },
+      ],
     },
   ],
   total_monthly_budget: 500,
@@ -98,10 +122,11 @@ describe("BudgetPage", () => {
     renderWithProviders(<BudgetPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Food & Dining")).toBeInTheDocument();
+      // Text appears in both mobile and desktop layouts
+      expect(screen.getAllByText("Food & Dining").length).toBeGreaterThan(0);
     });
 
-    expect(screen.getByText("On track")).toBeInTheDocument();
+    expect(screen.getAllByText("On track").length).toBeGreaterThan(0);
   });
 
   it("renders unbudgeted groups section", async () => {
@@ -114,7 +139,7 @@ describe("BudgetPage", () => {
     renderWithProviders(<BudgetPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Auto & Transport")).toBeInTheDocument();
+      expect(screen.getAllByText("Auto & Transport").length).toBeGreaterThan(0);
     });
 
     expect(screen.getByText("Spending without a budget")).toBeInTheDocument();
@@ -144,10 +169,12 @@ describe("BudgetPage", () => {
     expect(screen.getByText("Year to date")).toBeInTheDocument();
   });
 
-  it("has sort selector", () => {
+  it("has sort options", () => {
     renderWithProviders(<BudgetPage />);
 
-    expect(screen.getByLabelText("Sort order")).toBeInTheDocument();
+    expect(screen.getByText("Urgency")).toBeInTheDocument();
+    expect(screen.getByText("Spending")).toBeInTheDocument();
+    expect(screen.getByText("Name")).toBeInTheDocument();
   });
 
   it("shows add budget button", async () => {
@@ -173,5 +200,49 @@ describe("BudgetPage", () => {
     await waitFor(() => {
       expect(screen.getByRole("alert")).toBeInTheDocument();
     });
+  });
+
+  it("expands group to show categories", async () => {
+    server.use(
+      http.get("/api/v1/budgets/overview", () =>
+        HttpResponse.json(overviewWithData),
+      ),
+    );
+
+    renderWithProviders(<BudgetPage />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Food & Dining").length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByLabelText("Expand Food & Dining"));
+
+    expect(screen.getByText("Groceries")).toBeInTheDocument();
+    expect(screen.getByText("Dining Out")).toBeInTheDocument();
+  });
+
+  it("shows delete dialog when clicking remove budget", async () => {
+    server.use(
+      http.get("/api/v1/budgets/overview", () =>
+        HttpResponse.json(overviewWithData),
+      ),
+    );
+
+    renderWithProviders(<BudgetPage />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Food & Dining").length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByLabelText("Expand Food & Dining"));
+
+    fireEvent.click(screen.getByText("Remove budget"));
+
+    expect(
+      screen.getByText("Remove Food & Dining budget?"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Monthly tracking for this group will stop."),
+    ).toBeInTheDocument();
   });
 });
