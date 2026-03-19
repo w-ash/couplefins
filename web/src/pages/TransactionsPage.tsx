@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useGetCategoryGroups } from "@/api/generated/category-groups/category-groups";
-
 import { getGetDashboardQueryKey } from "@/api/generated/dashboard/dashboard";
 import type {
   BulkModifyTagsRequest,
@@ -75,6 +74,7 @@ import {
   formatSplit,
   plural,
 } from "@/lib/format";
+import { PAGE_PADDING } from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
 import {
   ClassificationBadge,
@@ -753,7 +753,7 @@ export function TransactionsPage() {
   const isFinalized = data?.is_finalized === true;
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-12">
+    <div className={`mx-auto max-w-4xl ${PAGE_PADDING}`}>
       <PageHeader
         icon={<ArrowLeftRight className="size-6" />}
         title="Transactions"

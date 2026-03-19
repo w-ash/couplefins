@@ -27,6 +27,7 @@ import {
   MONTHS,
   useMonthYear,
 } from "@/lib/format";
+import { PAGE_PADDING } from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
 
 interface GroupChartData {
@@ -304,7 +305,7 @@ export function InsightsPage() {
   const settlementTrend = data?.settlement_trend ?? [];
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-12">
+    <div className={`mx-auto max-w-4xl ${PAGE_PADDING}`}>
       <PageHeader icon={<TrendingUp className="size-6" />} title="Insights">
         <MonthPicker />
       </PageHeader>

@@ -7,7 +7,7 @@ interface Stat {
 export function StatsGrid({ stats }: { stats: Stat[] }) {
   return (
     <div
-      className={`grid gap-3 ${stats.length <= 3 ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-4"}`}
+      className={`grid gap-3 ${stats.length <= 3 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2 sm:grid-cols-4"}`}
     >
       {stats.map((stat) => (
         <div

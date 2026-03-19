@@ -4,10 +4,11 @@ import { CategoryMappingEditor } from "@/components/CategoryMappingEditor";
 import { PageHeader } from "@/components/PageHeader";
 import { PersonAccountSettings } from "@/components/PersonAccountSettings";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { PAGE_PADDING } from "@/lib/layout";
 
 export function SettingsPage() {
   return (
-    <div className="mx-auto max-w-3xl px-6 py-12">
+    <div className={`mx-auto max-w-3xl ${PAGE_PADDING}`}>
       <PageHeader icon={<Settings className="size-6" />} title="Settings" />
 
       <div className="space-y-6">

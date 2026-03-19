@@ -312,6 +312,7 @@ export function AmountRangeFilter({
           <div className="flex items-center gap-2">
             <input
               type="number"
+              inputMode="decimal"
               value={localMin}
               onChange={(e) => setLocalMin(e.target.value)}
               placeholder="Min"
@@ -320,6 +321,7 @@ export function AmountRangeFilter({
             <span className="text-xs text-muted-foreground">to</span>
             <input
               type="number"
+              inputMode="decimal"
               value={localMax}
               onChange={(e) => setLocalMax(e.target.value)}
               placeholder="Max"

@@ -49,6 +49,7 @@ import {
 } from "@/lib/format";
 import { useIdentityStore } from "@/lib/identity";
 import { selectInputClass } from "@/lib/input-styles";
+import { PAGE_PADDING } from "@/lib/layout";
 import {
   ClassificationBadge,
   deriveTransactionType,
@@ -580,7 +581,7 @@ export function UploadPage() {
 
   return (
     <div
-      className={`mx-auto px-6 py-12 ${showGrid ? "max-w-3xl md:max-w-5xl" : "max-w-3xl"}`}
+      className={`mx-auto ${PAGE_PADDING} ${showGrid ? "max-w-3xl md:max-w-5xl" : "max-w-3xl"}`}
     >
       <PageHeader
         icon={<Upload className="size-6" />}

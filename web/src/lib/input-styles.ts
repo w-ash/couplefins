@@ -1,9 +1,9 @@
 const inputCoreClass =
   "rounded-lg border border-input bg-card px-3 text-sm text-foreground shadow-sm focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none";
 
-export const baseInputClass = `${inputCoreClass} py-2`;
+export const baseInputClass = `${inputCoreClass} min-h-11 py-2`;
 
-export const selectInputClass = `${inputCoreClass} py-1.5`;
+export const selectInputClass = `${inputCoreClass} min-h-11 py-1.5`;
 
 export const percentInputClass = `w-16 tabular-nums ${baseInputClass}`;
 

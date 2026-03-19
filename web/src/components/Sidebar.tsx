@@ -1,17 +1,9 @@
-import {
-  ArrowLeftRight,
-  HandCoins,
-  Heart,
-  LayoutDashboard,
-  PieChart,
-  Settings,
-  TrendingUp,
-  Upload,
-} from "lucide-react";
+import { Heart } from "lucide-react";
 import { useGetPersons } from "@/api/generated/persons/persons";
 import { useIdentityStore } from "@/lib/identity";
-import { getPersonAccentColor } from "@/types/person";
+import { PRIMARY_ROUTES, SECONDARY_ROUTES } from "@/lib/navigation";
 import { NavItem } from "./NavItem";
+import { PersonSwitcher } from "./PersonSwitcher";
 
 export function Sidebar() {
   const { data: response } = useGetPersons();
@@ -34,52 +26,33 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav aria-label="App navigation" className="flex-1 space-y-1 px-3 py-4">
-        <NavItem to="/" label="Dashboard" icon={LayoutDashboard} />
-        <NavItem
-          to="/transactions"
-          label="Transactions"
-          icon={ArrowLeftRight}
-        />
-        <NavItem to="/settle" label="Settle Up" icon={HandCoins} />
-        <NavItem to="/budget" label="Budget" icon={PieChart} />
-        <NavItem to="/insights" label="Insights" icon={TrendingUp} />
-        <NavItem to="/upload" label="Upload" icon={Upload} />
-        <NavItem to="/settings" label="Settings" icon={Settings} />
+        {PRIMARY_ROUTES.map((route) => (
+          <NavItem
+            key={route.to}
+            to={route.to}
+            label={route.label}
+            icon={route.icon}
+          />
+        ))}
+        {SECONDARY_ROUTES.map((route) => (
+          <NavItem
+            key={route.to}
+            to={route.to}
+            label={route.label}
+            icon={route.icon}
+          />
+        ))}
       </nav>
 
       {/* Identity toggle */}
-      {persons && persons.length >= 2 && (
+      {persons && persons.length >= 2 && currentPersonId && (
         <div className="space-y-1 border-t border-border px-4 py-4">
-          {persons.map((person, index) => {
-            const isActive = person.id === currentPersonId;
-            return (
-              <button
-                key={person.id}
-                type="button"
-                aria-pressed={isActive}
-                aria-label={
-                  isActive
-                    ? `${person.name} (active)`
-                    : `Switch to ${person.name}`
-                }
-                onClick={() => {
-                  if (!isActive) setCurrentPersonId(person.id);
-                }}
-                className={`flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-sm transition-colors duration-150 ${
-                  isActive
-                    ? "bg-accent font-semibold text-accent-foreground"
-                    : "cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
-              >
-                <div
-                  className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${getPersonAccentColor(index)}`}
-                >
-                  {person.name.charAt(0).toUpperCase()}
-                </div>
-                {person.name}
-              </button>
-            );
-          })}
+          <PersonSwitcher
+            persons={persons}
+            currentPersonId={currentPersonId}
+            onSwitch={setCurrentPersonId}
+            compact
+          />
         </div>
       )}
     </aside>

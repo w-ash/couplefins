@@ -80,8 +80,12 @@ describe("App three-state gate", () => {
     await waitFor(() => {
       expect(screen.getByText("CoupleFins")).toBeInTheDocument();
     });
-    expect(screen.getByText("Upload")).toBeInTheDocument();
-    expect(screen.getByText("Settings")).toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", { name: "App navigation" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", { name: "Mobile navigation" }),
+    ).toBeInTheDocument();
   });
 
   it("renders skip-to-content link in app shell", async () => {

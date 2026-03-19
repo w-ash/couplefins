@@ -22,6 +22,7 @@ import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarnin
 import { UploadStatusRow } from "@/components/UploadStatusRow";
 import { buildSettlementLabel, formatCurrency, MONTHS } from "@/lib/format";
 import { actionLinkClass } from "@/lib/input-styles";
+import { PAGE_PADDING } from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
 
 function SummaryStats({
@@ -172,7 +173,7 @@ export function DashboardPage() {
     data.month_history.length === 0;
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-12">
+    <div className={`mx-auto max-w-4xl ${PAGE_PADDING}`}>
       <PageHeader
         icon={<LayoutDashboard className="size-6" />}
         title="Dashboard"

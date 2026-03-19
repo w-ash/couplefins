@@ -36,6 +36,7 @@ import { UploadStatusRow } from "@/components/UploadStatusRow";
 import { useTemporary } from "@/hooks/useTemporary";
 import { formatCurrency, MONTHS, useMonthYear } from "@/lib/format";
 import { baseInputClass } from "@/lib/input-styles";
+import { PAGE_PADDING } from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
 
 const formInputClass = `w-full ${baseInputClass}`;
@@ -159,6 +160,7 @@ function RecordPaymentForm({
             <input
               id="settlement-amount"
               type="number"
+              inputMode="decimal"
               step="0.01"
               min="0.01"
               value={amount}
@@ -435,7 +437,7 @@ export function SettleUpPage() {
     data.recorded_settlements.length === 0;
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-12">
+    <div className={`mx-auto max-w-4xl ${PAGE_PADDING}`}>
       <PageHeader icon={<HandCoins className="size-6" />} title="Settle Up">
         <MonthPicker />
       </PageHeader>

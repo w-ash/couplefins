@@ -276,6 +276,7 @@ export function TransactionEditor({
             <span className="w-16 shrink-0">Amount</span>
             <input
               type="number"
+              inputMode="decimal"
               step="0.01"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}

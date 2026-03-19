@@ -31,6 +31,7 @@ export function PercentInput({
         id={id}
         ref={inputRef}
         type="number"
+        inputMode="decimal"
         min={0}
         max={100}
         value={value}

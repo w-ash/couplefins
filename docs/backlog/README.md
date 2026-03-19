@@ -41,7 +41,10 @@
 | v0.9.1 | Category entity + `include_personal` budget scope | Completed (2026-03-18) | M |
 | v0.9.2 | Classification UI: filters, type editing, preview polish | Completed (2026-03-18) | M |
 | v0.9.3 | Transaction exclusion flag | Completed (2026-03-18) | S |
-| v0.10.0 | Responsive layout (mobile + touch) | Planned | L |
+| v0.10.0 | App shell + shared component mobile foundations | Completed (2026-03-19) | M |
+| v0.10.1 | Content pages mobile layouts (Dashboard, Transactions, Settle Up) | Planned | L |
+| v0.10.2 | Settings page overhaul (desktop + mobile quality) | Planned | M |
+| v0.10.3 | Interaction consistency + touch polish | Planned | M |
 | v1.0.0 | Infrastructure investigation (benchmarks, DB audit, storage evaluation) | Planned | M |
 | v1.0.1 | Query & storage optimization (SQLite-native improvements) | Planned | M |
 | v1.0.2 | Database migration — PostgreSQL or normalized tags (conditional) | Planned | L |
@@ -85,7 +88,10 @@
 | Category entity + `include_personal` budget scope | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
 | Classification UI (filters, editing) | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
 | Transaction exclusion | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
-| Mobile responsive layout (app-wide) | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
+| Mobile app shell (bottom nav + shared component foundations) | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
+| Content page mobile layouts (cards, form stacking) | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
+| Settings page overhaul | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
+| Interaction consistency + touch targets (44px) | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
 | Performance benchmarks + query optimization | — | — | — | — | — | — | — | — | — | — | ✅ |
 | Server-side tag filtering | — | — | — | — | — | — | — | — | — | — | ✅ |
 | PostgreSQL / normalized storage (conditional) | — | — | — | — | — | — | — | — | — | — | ✅ |
@@ -101,7 +107,7 @@
 - **Information architecture**: Left sidebar with 7 pages: Dashboard / Transactions / Settle Up / Budget / Insights / Upload / Settings. "Transactions" replaces "Reconciliation" (standard finance-app naming). "Settings" absorbs person config + category management. "History" is not a standalone page — month navigation lives within Dashboard and Transactions. Finalization controls live on the Settle Up page. Insights (v0.7.0) is the together-session spending analysis page — small multiples, comparison cards, settlement trends.
 - **Design system**: Satoshi font (Fontshare) + Geist Mono. Warm neutrals (not pure black/white), teal for positive, coral for negative. CSS custom properties via Tailwind v4 `@theme` for light/dark switching. Defined in `.claude/rules/web-design-system.md`.
 - **Theme**: System preference by default (`prefers-color-scheme`), manual override stored in localStorage. Three-way: system/light/dark. Tailwind v4 class strategy with `@custom-variant dark`. Synchronous `<script>` in `<head>` prevents flash of wrong theme.
-- **App shell**: Left sidebar navigation (industry standard for finance apps). React Router v7 `createBrowserRouter` with layout routes.
+- **App shell**: Left sidebar navigation on desktop (industry standard for finance apps). Bottom tab bar on mobile (5 primary + "More" sheet for Upload/Settings/identity). React Router v7 `createBrowserRouter` with layout routes.
 - **CSV source**: Monarch Money export (Date, Merchant, Category, Account, Original Statement, Notes, Amount, Tags)
 - **Transaction classification**: Two orthogonal fields — `payer_percentage: int` (0-100, always set) for settlement, `household: bool` for budget relevance. Settlement: `payer_percentage < 100`. Budget: `household=true`, or category has `include_personal=true`. Neither field implies the other.
 - **Tag-to-field mapping**: `shared`/`split` tag → `household=true`, default 50/50 split. `household` tag → `household=true`, no split implied. `sXX` tag → payer pays XX% (authoritative, overrides defaults; highest wins if multiple). Person-name tag → `household=true`, 0% (spotted). No tag → `household=false`, 100% (personal). Internally stored as `payer_person_id` + `payer_percentage` + `household` on each transaction.

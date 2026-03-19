@@ -37,6 +37,7 @@ import { useGroupIconMap } from "@/lib/categories";
 import { getCategoryGroupIcon } from "@/lib/category-icons";
 import { formatCurrency, useMonthYear } from "@/lib/format";
 import { baseInputClass } from "@/lib/input-styles";
+import { PAGE_PADDING } from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
 import { getPersonBarColor } from "@/types/person";
 
@@ -437,6 +438,7 @@ function BudgetGroupRow({
                     >
                       <input
                         type="number"
+                        inputMode="decimal"
                         step="0.01"
                         min="0.01"
                         value={editValue}
@@ -612,6 +614,7 @@ function AddBudgetForm({
             <input
               id="budget-amount"
               type="number"
+              inputMode="decimal"
               step="0.01"
               min="0.01"
               value={amount}
@@ -781,7 +784,7 @@ export function BudgetPage() {
   }, [data, sortMode, viewMode]);
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-12">
+    <div className={`mx-auto max-w-4xl ${PAGE_PADDING}`}>
       <PageHeader icon={<PieChart className="size-6" />} title="Budget">
         <MonthPicker />
       </PageHeader>
