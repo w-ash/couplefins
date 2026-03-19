@@ -24,6 +24,7 @@ dev = [
     "ruff>=0.11",
     "basedpyright>=1.29",
     "pre-commit>=4.1",
+    "vulture>=2.15",
 ]
 
 [tool.uv]
@@ -80,6 +81,11 @@ fixable = ["ALL"]
 ]
 "src/application/use_cases/**/*.py" = [
     "PLR6301",  # Stateless execute() is intentional — use case architecture pattern
+]
+"vulture_whitelist.py" = [
+    "B018",    # Useless expressions — intentional, Vulture whitelist convention
+    "E402",    # Import order — imports grouped by category for readability
+    "F401",    # Unused imports — the import IS the usage for Vulture
 ]
 "tests/**/*.py" = [
     "S101",     # Allow assert
@@ -146,4 +152,25 @@ markers = [
     "slow: tests >1 second (skipped by default)",
     "performance: timing assertion tests (skipped by default)",
     "diagnostic: investigation-only tests (skipped by default)",
+]
+
+# ── Vulture (dead code) ───────────────────────────
+[tool.vulture]
+paths = ["src", "vulture_whitelist.py"]
+min_confidence = 60
+ignore_decorators = [
+    "@router.*",               # FastAPI route handlers
+    "@field_validator",        # Pydantic field validators
+    "@app.*",                  # FastAPI exception handlers
+    "@override",               # typing.override
+]
+ignore_names = [
+    "__tablename__",           # SQLAlchemy declarative base
+    "__table_args__",          # SQLAlchemy constraints/indexes
+    "__attrs_post_init__",     # attrs post-init validation
+    "__all__",                 # module public API exports
+    "model_config",            # Pydantic model configuration
+    "_model_class",            # Repository pattern: class-level model ref
+    "_to_domain",              # Repository: abstract model→entity conversion
+    "_to_model",               # Repository: abstract entity→model conversion
 ]

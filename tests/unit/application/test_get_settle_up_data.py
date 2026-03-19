@@ -40,7 +40,6 @@ class TestGetSettleUpData:
         uow.categories.get_all.return_value = [category]
         uow.category_groups.get_all.return_value = [group]
         uow.settlements.get_by_period.return_value = [settlement]
-        uow.settlement_transaction_links.get_by_settlement_id.return_value = []
         uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = [
             make_upload(person_id=alice.id)
         ]
@@ -80,7 +79,6 @@ class TestGetSettleUpData:
         uow.categories.get_all.return_value = [category]
         uow.category_groups.get_all.return_value = [group]
         uow.settlements.get_by_period.return_value = [settlement]
-        uow.settlement_transaction_links.get_by_settlement_id.return_value = []
         uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = []
 
         command = GetSettleUpDataCommand(year=2026, month=1)

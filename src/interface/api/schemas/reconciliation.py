@@ -14,10 +14,6 @@ class MonthReference(BaseModel):
     month: int
 
     @classmethod
-    def from_tuple(cls, ym: tuple[int, int]) -> MonthReference:
-        return cls(year=ym[0], month=ym[1])
-
-    @classmethod
     def from_optional_tuple(cls, ym: tuple[int, int] | None) -> MonthReference | None:
         return cls(year=ym[0], month=ym[1]) if ym else None
 

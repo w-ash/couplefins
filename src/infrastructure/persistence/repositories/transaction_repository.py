@@ -4,7 +4,7 @@ import json
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import CursorResult, delete, select, update
+from sqlalchemy import select, update
 
 from src.domain.entities.transaction import Transaction
 from src.infrastructure.persistence.models.transaction_model import TransactionModel
@@ -74,13 +74,6 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
     @staticmethod
     def _to_model(entity: Transaction) -> TransactionModel:
         return TransactionModel(**TransactionRepository._to_column_values(entity))
-
-    async def get_by_upload_id(self, upload_id: UUID) -> list[Transaction]:
-        stmt = select(TransactionModel).where(
-            TransactionModel.upload_id == str(upload_id),
-        )
-        result = await self._session.execute(stmt)
-        return [self._to_domain(row) for row in result.scalars().all()]
 
     async def get_household_by_period(self, year: int, month: int) -> list[Transaction]:
         prefix = date_month_prefix(year, month)
@@ -170,16 +163,6 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         await self._session.flush()
         return entity
 
-    async def delete_by_upload_id(self, upload_id: UUID) -> int:
-        stmt = delete(TransactionModel).where(
-            TransactionModel.upload_id == str(upload_id)
-        )
-        result = await self._session.execute(stmt)
-        await self._session.flush()
-        if isinstance(result, CursorResult):
-            return result.rowcount
-        return 0
-
     async def get_latest_household_transaction_date(self) -> date | None:
         stmt = (
             select(TransactionModel.date)
@@ -193,11 +176,6 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         result = await self._session.execute(stmt)
         value = result.scalar_one_or_none()
         return date.fromisoformat(value) if value else None
-
-    async def get_distinct_categories(self) -> list[str]:
-        stmt = select(TransactionModel.category).distinct()
-        result = await self._session.execute(stmt)
-        return [row[0] for row in result.all()]
 
     async def get_distinct_tags(self) -> list[str]:
         stmt = select(TransactionModel.tags_json).distinct()

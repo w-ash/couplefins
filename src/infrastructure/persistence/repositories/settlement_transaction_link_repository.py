@@ -30,15 +30,6 @@ class SettlementTransactionLinkRepository(
             transaction_id=str(entity.transaction_id),
         )
 
-    async def get_by_settlement_id(
-        self, settlement_id: UUID
-    ) -> list[SettlementTransactionLink]:
-        stmt = select(SettlementTransactionLinkModel).where(
-            SettlementTransactionLinkModel.settlement_id == str(settlement_id),
-        )
-        result = await self._session.execute(stmt)
-        return [self._to_domain(row) for row in result.scalars().all()]
-
     async def get_by_settlement_ids(
         self, settlement_ids: list[UUID]
     ) -> list[SettlementTransactionLink]:
@@ -47,19 +38,6 @@ class SettlementTransactionLinkRepository(
         stmt = select(SettlementTransactionLinkModel).where(
             SettlementTransactionLinkModel.settlement_id.in_(  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
                 [str(sid) for sid in settlement_ids]
-            ),
-        )
-        result = await self._session.execute(stmt)
-        return [self._to_domain(row) for row in result.scalars().all()]
-
-    async def get_by_transaction_ids(
-        self, transaction_ids: list[UUID]
-    ) -> list[SettlementTransactionLink]:
-        if not transaction_ids:
-            return []
-        stmt = select(SettlementTransactionLinkModel).where(
-            SettlementTransactionLinkModel.transaction_id.in_(  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
-                [str(tid) for tid in transaction_ids]
             ),
         )
         result = await self._session.execute(stmt)

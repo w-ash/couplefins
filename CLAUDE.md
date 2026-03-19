@@ -40,6 +40,7 @@ uv run pytest -k "test_name"            # Single test by name
 uv run ruff check . --fix               # Lint + autofix
 uv run ruff format .                    # Format
 uv run basedpyright src/                # Type check
+uv run vulture                          # Dead code detection
 
 # Frontend
 pnpm --prefix web dev                       # Vite dev server (port 5173)
@@ -48,7 +49,7 @@ pnpm --prefix web check                     # Biome lint + tsc
 pnpm --prefix web generate                  # Orval codegen
 
 # Quality gate (run before committing)
-uv run ruff check . --fix && uv run ruff format . && uv run basedpyright src/ && uv run pytest
+uv run ruff check . --fix && uv run ruff format . && uv run basedpyright src/ && uv run vulture && uv run pytest
 ```
 
 ## Testing Self-Check (after every implementation)
