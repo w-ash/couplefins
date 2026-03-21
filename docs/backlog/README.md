@@ -42,8 +42,8 @@
 | v0.9.2 | Classification UI: filters, type editing, preview polish | Completed (2026-03-18) | M |
 | v0.9.3 | Transaction exclusion flag | Completed (2026-03-18) | S |
 | v0.10.0 | App shell + shared component mobile foundations | Completed (2026-03-19) | M |
-| v0.10.1 | Content pages mobile layouts (Dashboard, Transactions, Settle Up) | Planned | L |
-| v0.10.2 | Settings page overhaul (desktop + mobile quality) | Planned | M |
+| v0.10.1 | Content pages mobile layouts (Dashboard, Transactions, Settle Up) | Completed (2026-03-20) | L |
+| v0.10.2 | Settings page overhaul (desktop + mobile quality) | Completed (2026-03-20) | M |
 | v0.10.3 | Interaction consistency + touch polish | Planned | M |
 | v1.0.0 | Infrastructure investigation (benchmarks, DB audit, storage evaluation) | Planned | M |
 | v1.0.1 | Query & storage optimization (SQLite-native improvements) | Planned | M |
@@ -89,7 +89,7 @@
 | Classification UI (filters, editing) | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
 | Transaction exclusion | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
 | Mobile app shell (bottom nav + shared component foundations) | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
-| Content page mobile layouts (cards, form stacking) | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
+| Content page mobile layouts (responsive columns, form stacking, picker dialogs) | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
 | Settings page overhaul | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
 | Interaction consistency + touch targets (44px) | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
 | Performance benchmarks + query optimization | — | — | — | — | — | — | — | — | — | — | ✅ |

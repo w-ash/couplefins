@@ -1,137 +1,99 @@
-import {
-  AlertTriangle,
-  ChevronDown,
-  Pencil,
-  Plus,
-  Trash2,
-  Upload,
-} from "lucide-react";
-import { type KeyboardEvent, useCallback, useRef, useState } from "react";
+import { ChevronDown, Plus, Upload } from "lucide-react";
+import { type KeyboardEvent, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
+import { useGetBudgets } from "@/api/generated/budgets/budgets";
 import {
   useDeleteCategoryGroup,
   useGetCategoryGroups,
   useGetUnmappedCategories,
   usePostCategoryGroup,
   usePutCategoryGroup,
-  usePutCategoryMappings,
 } from "@/api/generated/category-groups/category-groups";
 import type { CategoryGroupResponse } from "@/api/generated/model";
+import { BottomSheet } from "@/components/BottomSheet";
 import { Button } from "@/components/Button";
+import { Combobox } from "@/components/Combobox";
 import { PageError, PageLoading } from "@/components/PageStates";
+import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { useDialogSync } from "@/hooks/useDialogSync";
-import { useInvalidateCategories } from "@/lib/categories";
+import { useGroupOptions, useInvalidateCategories } from "@/lib/categories";
 import { getCategoryGroupIcon, ICON_OPTIONS } from "@/lib/category-icons";
-import { baseInputClass, selectInputClass } from "@/lib/input-styles";
-import { useClickOutside } from "@/lib/use-click-outside";
+import { baseInputClass } from "@/lib/input-styles";
 
-// -- Unmapped category row --
+// -- Icon picker sheet --
 
-function UnmappedRow({
-  category,
-  groups,
+function IconPickerSheet({
+  open,
+  onClose,
+  currentIcon,
+  onSelect,
 }: {
-  category: string;
-  groups: CategoryGroupResponse[];
+  open: boolean;
+  onClose: () => void;
+  currentIcon: string | null;
+  onSelect: (icon: string) => void;
 }) {
-  const invalidate = useInvalidateCategories();
-  const assignMutation = usePutCategoryMappings({
-    mutation: { onSuccess: invalidate },
-  });
-
   return (
-    <div className="flex items-center gap-3">
-      <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-        {category}
-      </span>
-      <select
-        aria-label={`Assign ${category} to group`}
-        value=""
-        onChange={(e) =>
-          assignMutation.mutate({
-            data: { mappings: [{ category, group_id: e.target.value }] },
-          })
-        }
-        disabled={assignMutation.isPending}
-        className={`w-48 ${selectInputClass} disabled:opacity-50`}
-      >
-        <option value="" disabled>
-          Assign to group...
-        </option>
-        {groups.map((g) => (
-          <option key={g.id} value={g.id}>
-            {g.name}
-          </option>
+    <BottomSheet open={open} onClose={onClose}>
+      <p className="mb-3 text-sm font-medium text-foreground">Choose an icon</p>
+      <div className="grid grid-cols-5 gap-1 pb-2">
+        {ICON_OPTIONS.map(({ name, Icon }) => (
+          <button
+            key={name}
+            type="button"
+            onClick={() => {
+              onSelect(name);
+              onClose();
+            }}
+            className={`rounded-md p-2.5 transition-colors ${
+              name === currentIcon
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+            aria-label={name}
+          >
+            <Icon className="mx-auto size-5" />
+          </button>
         ))}
-      </select>
-    </div>
+      </div>
+    </BottomSheet>
   );
 }
 
 // -- Group card --
 
-function IconPicker({
-  currentIcon,
-  onSelect,
+function GroupCard({
+  group,
+  allGroups,
 }: {
-  currentIcon: string | null;
-  onSelect: (icon: string) => void;
+  group: CategoryGroupResponse;
+  allGroups: CategoryGroupResponse[];
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const close = useCallback(() => setOpen(false), []);
-  useClickOutside(ref, open, close);
-
-  const CurrentIcon = getCategoryGroupIcon(currentIcon);
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen(!open);
-        }}
-        aria-label="Change icon"
-        className="rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <CurrentIcon className="size-4" />
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full z-10 mt-1 grid grid-cols-5 gap-1 rounded-lg border border-border bg-card p-2 shadow-lg">
-          {ICON_OPTIONS.map(({ name, Icon }) => (
-            <button
-              key={name}
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelect(name);
-                setOpen(false);
-              }}
-              className={`rounded-md p-1.5 transition-colors ${
-                name === currentIcon
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
-              aria-label={name}
-            >
-              <Icon className="size-4" />
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function GroupCard({ group }: { group: CategoryGroupResponse }) {
   const invalidate = useInvalidateCategories();
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(group.name);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const [moveToGroupId, setMoveToGroupId] = useState<string>("");
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useDialogSync(confirmDelete);
+
+  // Lazy-fetch budgets only when delete dialog is open
+  const { data: budgetsResponse } = useGetBudgets({
+    query: { enabled: confirmDelete },
+  });
+  const groupBudgets = useMemo(
+    () => (budgetsResponse?.data ?? []).filter((b) => b.group_id === group.id),
+    [budgetsResponse, group.id],
+  );
+
+  // Combobox options: all groups except this one
+  const otherGroups = useMemo(
+    () => allGroups.filter((g) => g.id !== group.id),
+    [allGroups, group.id],
+  );
+  const moveOptions = useGroupOptions(otherGroups);
 
   const updateMutation = usePutCategoryGroup({
     mutation: {
@@ -146,10 +108,19 @@ function GroupCard({ group }: { group: CategoryGroupResponse }) {
     mutation: {
       onSuccess: () => {
         setConfirmDelete(false);
+        setMoveToGroupId("");
         invalidate();
       },
     },
   });
+
+  const hasCategories = group.categories.length > 0;
+  const hasBudgets = groupBudgets.length > 0;
+  const latestBudget = hasBudgets
+    ? groupBudgets.reduce((latest, b) =>
+        b.effective_from > latest.effective_from ? b : latest,
+      )
+    : null;
 
   function handleSaveRename() {
     const trimmed = editName.trim();
@@ -178,22 +149,49 @@ function GroupCard({ group }: { group: CategoryGroupResponse }) {
     requestAnimationFrame(() => inputRef.current?.select());
   }
 
+  function cancelEditing() {
+    setEditing(false);
+    setEditName(group.name);
+  }
+
+  function handleCancelDelete() {
+    setConfirmDelete(false);
+    setMoveToGroupId("");
+  }
+
+  function handleConfirmDelete() {
+    deleteGroupMutation.mutate({
+      groupId: group.id,
+      params: moveToGroupId ? { move_categories_to: moveToGroupId } : undefined,
+    });
+  }
+
   const GroupIcon = getCategoryGroupIcon(group.icon);
 
   return (
     <>
       <div className="rounded-xl border border-border bg-card shadow-sm">
+        {/* Primary row — clean, read-only (or rename input) */}
         <div className="flex items-center gap-3 p-4">
           {editing ? (
-            <input
-              ref={inputRef}
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              onBlur={handleSaveRename}
-              onKeyDown={handleRenameKeyDown}
-              aria-label="Group name"
-              className="min-w-0 flex-1 rounded-lg border border-input bg-card px-2.5 py-1 text-sm font-medium text-foreground shadow-sm focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none"
-            />
+            <>
+              <ChevronDown
+                className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${expanded ? "" : "-rotate-90"}`}
+              />
+              <input
+                ref={inputRef}
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onBlur={handleSaveRename}
+                onKeyDown={handleRenameKeyDown}
+                onClick={(e) => e.stopPropagation()}
+                aria-label="Group name"
+                className="min-w-0 flex-1 rounded-lg border border-input bg-card px-2.5 py-1 text-sm font-medium text-foreground shadow-sm focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none"
+              />
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {group.categories.length}
+              </span>
+            </>
           ) : (
             <button
               type="button"
@@ -212,40 +210,15 @@ function GroupCard({ group }: { group: CategoryGroupResponse }) {
               </span>
             </button>
           )}
-
-          <IconPicker
-            currentIcon={group.icon}
-            onSelect={(icon) =>
-              updateMutation.mutate({
-                groupId: group.id,
-                data: { name: group.name, icon },
-              })
-            }
-          />
-          <button
-            type="button"
-            onClick={startEditing}
-            aria-label={`Rename ${group.name}`}
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <Pencil className="size-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirmDelete(true)}
-            aria-label={`Delete ${group.name}`}
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:text-destructive"
-          >
-            <Trash2 className="size-3.5" />
-          </button>
         </div>
 
-        {/* Expanded category list */}
+        {/* Expanded: category list + action bar */}
         <div
           className="grid transition-[grid-template-rows] duration-200"
           style={{ gridTemplateRows: expanded ? "1fr" : "0fr" }}
         >
           <div className="overflow-hidden">
+            {/* Category list */}
             {group.categories.length > 0 ? (
               <ul className="border-t border-border-muted px-4 py-3">
                 {group.categories.map((cat) => (
@@ -261,15 +234,74 @@ function GroupCard({ group }: { group: CategoryGroupResponse }) {
                 No categories assigned yet.
               </p>
             )}
+
+            {/* Action bar */}
+            <div className="flex items-center gap-4 border-t border-border-muted px-4 py-3">
+              {editing ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleSaveRename}
+                    className="text-sm font-medium text-primary transition-colors hover:text-primary/80"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelEditing}
+                    className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setIconPickerOpen(true)}
+                    className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    Change Icon
+                  </button>
+                  <button
+                    type="button"
+                    onClick={startEditing}
+                    className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    Rename
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(true)}
+                    className="text-sm text-destructive transition-colors hover:text-destructive/80"
+                  >
+                    Delete Group
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Icon picker bottom sheet */}
+      <IconPickerSheet
+        open={iconPickerOpen}
+        onClose={() => setIconPickerOpen(false)}
+        currentIcon={group.icon}
+        onSelect={(icon) =>
+          updateMutation.mutate({
+            groupId: group.id,
+            data: { name: group.name, icon },
+          })
+        }
+      />
 
       {/* Delete confirmation dialog */}
       <dialog
         ref={dialogRef}
         aria-labelledby={`delete-${group.id}-title`}
-        onClose={() => setConfirmDelete(false)}
+        onClose={handleCancelDelete}
         className="mx-4 w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-lg backdrop:bg-black/40"
       >
         <h3
@@ -278,17 +310,48 @@ function GroupCard({ group }: { group: CategoryGroupResponse }) {
         >
           Remove &ldquo;{group.name}&rdquo;?
         </h3>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {group.categories.length > 0
-            ? `${group.categories.length} ${group.categories.length === 1 ? "category" : "categories"} will become unmapped.`
-            : "This group has no categories."}
-        </p>
+        <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+          {hasCategories && (
+            <p>
+              {group.categories.length}{" "}
+              {group.categories.length === 1 ? "category" : "categories"} will
+              need a new home.
+            </p>
+          )}
+          {hasBudgets && latestBudget && (
+            <p>
+              The ${latestBudget.monthly_amount.toLocaleString()}/mo budget will
+              also be removed.
+            </p>
+          )}
+          {!hasCategories && !hasBudgets && <p>This group is empty.</p>}
+        </div>
+
+        {hasCategories && (
+          <div className="mt-3">
+            <label
+              htmlFor={`move-${group.id}`}
+              className="mb-1 block text-sm font-medium text-foreground"
+            >
+              Move to
+            </label>
+            <Combobox
+              mode="single"
+              options={moveOptions}
+              value={moveToGroupId}
+              onChange={(v) => setMoveToGroupId(v as string)}
+              placeholder="Select a group..."
+              allowCreate={false}
+            />
+          </div>
+        )}
+
         <div className="mt-5 flex gap-3">
           <Button
             type="button"
             variant="secondary"
             size="sm"
-            onClick={() => setConfirmDelete(false)}
+            onClick={handleCancelDelete}
             className="flex-1"
           >
             Cancel
@@ -297,11 +360,12 @@ function GroupCard({ group }: { group: CategoryGroupResponse }) {
             type="button"
             variant="destructive"
             size="sm"
-            onClick={() => deleteGroupMutation.mutate({ groupId: group.id })}
+            onClick={handleConfirmDelete}
+            disabled={hasCategories && !moveToGroupId}
             loading={deleteGroupMutation.isPending}
             className="flex-1"
           >
-            Remove Group
+            {hasCategories ? "Move & Remove" : "Remove Group"}
           </Button>
         </div>
       </dialog>
@@ -370,7 +434,6 @@ export function CategoryMappingEditor() {
     refetch: refetchUnmapped,
   } = useGetUnmappedCategories();
   const unmapped = unmappedResponse?.data ?? [];
-
   // Loading
   if (groupsLoading || unmappedLoading) {
     return <PageLoading label="Loading categories..." />;
@@ -416,24 +479,13 @@ export function CategoryMappingEditor() {
     <div className="space-y-4">
       {/* Unmapped banner */}
       {unmapped.length > 0 && (
-        <div className="rounded-xl border border-warning-border bg-warning-muted p-4">
-          <p className="mb-3 flex items-center gap-1.5 font-medium text-sm text-warning">
-            <AlertTriangle className="size-4 shrink-0" />
-            {unmapped.length} unmapped{" "}
-            {unmapped.length === 1 ? "category" : "categories"}
-          </p>
-          <div className="space-y-2">
-            {unmapped.map((cat) => (
-              <UnmappedRow key={cat} category={cat} groups={groups} />
-            ))}
-          </div>
-        </div>
+        <UnmappedCategoriesWarning categories={unmapped} />
       )}
 
       {/* Groups */}
       <div className="space-y-2">
         {groups.map((group) => (
-          <GroupCard key={group.id} group={group} />
+          <GroupCard key={group.id} group={group} allGroups={groups} />
         ))}
       </div>
 

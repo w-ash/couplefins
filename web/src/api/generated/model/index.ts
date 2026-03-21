@@ -28,6 +28,7 @@ export * from './changedTransactionResponse';
 export * from './createCategoryGroupRequest';
 export * from './dashboardPersonResponse';
 export * from './dashboardResponse';
+export * from './deleteCategoryGroupParams';
 export * from './deleteSettlementResponse';
 export * from './fieldDiffResponse';
 export * from './finalizePeriodRequest';

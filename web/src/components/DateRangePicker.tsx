@@ -1,9 +1,11 @@
-import { Calendar, ChevronLeft, ChevronRight, Grid3X3 } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Grid3X3, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DateRange as RdpDateRange } from "react-day-picker";
 import { DayPicker } from "react-day-picker";
+import { BottomSheet } from "@/components/BottomSheet";
 import { MonthGrid } from "@/components/MonthGrid";
 import { SegmentedControl } from "@/components/SegmentedControl";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import type { DateRange } from "@/lib/date-range";
 import {
   formatRangeLabel,
@@ -236,6 +238,64 @@ function DateInputFields({
   );
 }
 
+// ─── Shared content (used by both mobile + desktop) ───
+
+function ViewToggleAndContent({
+  view,
+  setView,
+  startDate,
+  endDate,
+  onSelect,
+  onRangeChange,
+  gridYear,
+}: {
+  view: "months" | "calendar";
+  setView: (v: "months" | "calendar") => void;
+  startDate: string;
+  endDate: string;
+  onSelect: (range: DateRange) => void;
+  onRangeChange: (range: DateRange) => void;
+  gridYear: number;
+}) {
+  return (
+    <>
+      <SegmentedControl
+        options={[
+          {
+            value: "months",
+            label: "Months",
+            icon: <Grid3X3 className="size-3" />,
+          },
+          {
+            value: "calendar",
+            label: "Calendar",
+            icon: <Calendar className="size-3" />,
+          },
+        ]}
+        value={view}
+        onChange={setView}
+        size="sm"
+      />
+      <div className="mt-3">
+        {view === "months" ? (
+          <MonthGrid
+            startDate={startDate}
+            endDate={endDate}
+            onSelect={onSelect}
+            initialYear={gridYear}
+          />
+        ) : (
+          <CalendarRange
+            startDate={startDate}
+            endDate={endDate}
+            onRangeChange={onRangeChange}
+          />
+        )}
+      </div>
+    </>
+  );
+}
+
 // ─── Orchestrator ───
 
 interface DateRangePickerProps {
@@ -253,7 +313,8 @@ export function DateRangePicker({
   const [view, setView] = useState<"months" | "calendar">("months");
   const ref = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);
-  useClickOutside(ref, open, close);
+  const isMobile = useIsMobile();
+  useClickOutside(ref, open && !isMobile, close);
 
   const label = formatRangeLabel(startDate, endDate);
 
@@ -285,57 +346,83 @@ export function DateRangePicker({
         {label}
       </button>
 
-      {open && (
+      {open && isMobile && (
+        <BottomSheet open variant="fullscreen" onClose={close}>
+          <div className="flex h-full flex-col">
+            <div className="flex items-center justify-between border-b border-border-muted px-4 py-3">
+              <h2 className="text-sm font-medium text-foreground">
+                Date range
+              </h2>
+              <button
+                type="button"
+                onClick={close}
+                className="p-2 text-muted-foreground"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+            <div className="flex gap-2 overflow-x-auto border-b border-border-muted px-4 py-2">
+              {presets.map((p) => {
+                const active = matchesPreset(startDate, endDate, p.fn);
+                return (
+                  <button
+                    key={p.label}
+                    type="button"
+                    onClick={() => applyAndClose(p.fn())}
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-sm transition-colors ${
+                      active
+                        ? "bg-accent font-medium text-accent-foreground"
+                        : "text-popover-foreground hover:bg-accent"
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <ViewToggleAndContent
+                view={view}
+                setView={setView}
+                startDate={startDate}
+                endDate={endDate}
+                onSelect={applyAndClose}
+                onRangeChange={setDateRange}
+                gridYear={gridYear}
+              />
+            </div>
+            <div className="border-t border-border-muted px-4 py-3">
+              <DateInputFields
+                startDate={startDate}
+                endDate={endDate}
+                onRangeChange={setDateRange}
+              />
+            </div>
+          </div>
+        </BottomSheet>
+      )}
+
+      {open && !isMobile && (
         <div
           role="dialog"
           aria-label="Choose date range"
           className="absolute right-0 top-full z-50 mt-1.5 flex overflow-hidden rounded-xl border border-border bg-popover shadow-lg"
         >
-          {/* Left: Presets */}
           <Presets
             startDate={startDate}
             endDate={endDate}
             onSelect={applyAndClose}
           />
-
-          {/* Right: View toggle + content + date inputs */}
           <div className="flex flex-col gap-3 p-4">
-            {/* View toggle */}
-            <SegmentedControl
-              options={[
-                {
-                  value: "months",
-                  label: "Months",
-                  icon: <Grid3X3 className="size-3" />,
-                },
-                {
-                  value: "calendar",
-                  label: "Calendar",
-                  icon: <Calendar className="size-3" />,
-                },
-              ]}
-              value={view}
-              onChange={setView}
-              size="sm"
+            <ViewToggleAndContent
+              view={view}
+              setView={setView}
+              startDate={startDate}
+              endDate={endDate}
+              onSelect={applyAndClose}
+              onRangeChange={setDateRange}
+              gridYear={gridYear}
             />
-
-            {/* Content */}
-            {view === "months" ? (
-              <MonthGrid
-                startDate={startDate}
-                endDate={endDate}
-                onSelect={applyAndClose}
-                initialYear={gridYear}
-              />
-            ) : (
-              <CalendarRange
-                startDate={startDate}
-                endDate={endDate}
-                onRangeChange={setDateRange}
-              />
-            )}
-
-            {/* Date input fields */}
             <div className="mt-1 border-t border-border-muted pt-3">
               <DateInputFields
                 startDate={startDate}

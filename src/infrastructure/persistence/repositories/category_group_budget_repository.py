@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete as sa_delete
 
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.infrastructure.persistence.models.category_group_budget_model import (
@@ -34,9 +34,8 @@ class CategoryGroupBudgetRepository(
             effective_from=entity.effective_from.isoformat(),
         )
 
-    async def get_by_group_id(self, group_id: UUID) -> list[CategoryGroupBudget]:
-        stmt = select(CategoryGroupBudgetModel).where(
+    async def delete_by_group_id(self, group_id: UUID) -> int:
+        stmt = sa_delete(CategoryGroupBudgetModel).where(
             CategoryGroupBudgetModel.group_id == str(group_id),
         )
-        result = await self._session.execute(stmt)
-        return [self._to_domain(row) for row in result.scalars().all()]
+        return await self._execute_rowcount(stmt)

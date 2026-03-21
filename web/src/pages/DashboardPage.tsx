@@ -60,7 +60,7 @@ function SummaryStats({
 
 function QuickActions() {
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
       <Link to="/upload" className={actionLinkClass}>
         <Upload className="size-4" />
         Upload CSV
@@ -98,7 +98,9 @@ function MonthHistory({
           <tr className="border-b border-border text-left text-muted-foreground">
             <th className="pb-2 pr-4 font-medium">Month</th>
             <th className="pb-2 pr-4 font-medium">Settlement</th>
-            <th className="pb-2 text-right font-medium">Spending</th>
+            <th className="hidden pb-2 text-right font-medium sm:table-cell">
+              Spending
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -144,7 +146,7 @@ function MonthHistory({
                     {label}
                   </span>
                 </td>
-                <td className="py-2.5 text-right tabular-nums text-foreground">
+                <td className="hidden py-2.5 text-right tabular-nums text-foreground sm:table-cell">
                   {formatCurrency(entry.total_shared_spending)}
                 </td>
               </tr>
@@ -216,12 +218,12 @@ export function DashboardPage() {
           data.current_month_settlement.amount > 0 ? (
             <Link
               to="/settle"
-              className="block rounded-xl border border-primary/20 bg-card p-6 shadow-md transition-colors hover:bg-muted/50"
+              className="block rounded-xl border border-primary/20 bg-card p-4 shadow-md transition-colors hover:bg-muted/50 sm:p-6"
             >
               <p className="mb-1 text-center text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 {monthLabel}
               </p>
-              <p className="text-center text-lg font-semibold text-foreground">
+              <p className="text-center text-base font-semibold text-foreground sm:text-lg">
                 <PersonBadge
                   name={getPersonName(
                     data.current_month_settlement.from_person_id,
@@ -241,11 +243,11 @@ export function DashboardPage() {
               </p>
             </Link>
           ) : (
-            <div className="rounded-xl border border-primary/20 bg-card p-6 shadow-md">
+            <div className="rounded-xl border border-primary/20 bg-card p-4 shadow-md sm:p-6">
               <p className="mb-1 text-center text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 {monthLabel}
               </p>
-              <p className="text-center text-lg font-semibold text-primary">
+              <p className="text-center text-base font-semibold text-primary sm:text-lg">
                 <span className="inline-flex items-center gap-2">
                   <CheckCircle2 className="size-5" />
                   All settled!

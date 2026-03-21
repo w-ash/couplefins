@@ -247,6 +247,7 @@ function SortableHeader({
   align,
   title,
   children,
+  className: extraClassName,
 }: {
   field: SortField;
   sort: SortState;
@@ -254,10 +255,11 @@ function SortableHeader({
   align?: "right";
   title?: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
     <th
-      className={`pb-2 pr-4 font-medium cursor-pointer select-none transition-colors hover:text-foreground ${align === "right" ? "text-right" : ""}`}
+      className={`pb-2 pr-4 font-medium cursor-pointer select-none transition-colors hover:text-foreground ${align === "right" ? "text-right" : ""} ${extraClassName ?? ""}`}
       title={title}
       onClick={() => onSort(cycleSortState(sort, field))}
     >
@@ -376,16 +378,6 @@ function TransactionTable({
     [onBulkUpdate, onBulkTags, setBulkResult],
   );
 
-  const otherNameMap = useMemo(() => {
-    const map = new Map<string, string>();
-    const entries = [...personNames];
-    for (const [id] of entries) {
-      const other = entries.find(([otherId]) => otherId !== id);
-      map.set(id, other?.[1] ?? "Other");
-    }
-    return map;
-  }, [personNames]);
-
   if (transactions.length === 0) return null;
 
   return (
@@ -454,12 +446,23 @@ function TransactionTable({
               <SortableHeader field="merchant" sort={sort} onSort={onSort}>
                 Merchant
               </SortableHeader>
-              <th className="pb-2 pr-4 font-medium">Category</th>
-              <SortableHeader field="group" sort={sort} onSort={onSort}>
+              <th className="hidden pb-2 pr-4 font-medium sm:table-cell">
+                Category
+              </th>
+              <SortableHeader
+                field="group"
+                sort={sort}
+                onSort={onSort}
+                className="hidden sm:table-cell"
+              >
                 Group
               </SortableHeader>
-              <th className="pb-2 pr-4 font-medium">Paid by</th>
-              <th className="pb-2 pr-4 font-medium">Type</th>
+              <th className="hidden pb-2 pr-4 font-medium sm:table-cell">
+                Paid by
+              </th>
+              <th className="hidden pb-2 pr-4 font-medium sm:table-cell">
+                Type
+              </th>
               <SortableHeader
                 field="amount"
                 sort={sort}
@@ -469,13 +472,16 @@ function TransactionTable({
                 Amount
               </SortableHeader>
               <th
-                className="pb-2 pr-4 text-right font-medium"
+                className="hidden pb-2 pr-4 text-right font-medium sm:table-cell"
                 title="How the expense is divided between you"
               >
                 Split
               </th>
               {personEntries.map((p) => (
-                <th key={p.id} className="pb-2 text-right font-medium">
+                <th
+                  key={p.id}
+                  className="hidden pb-2 text-right font-medium sm:table-cell"
+                >
                   {p.name}
                 </th>
               ))}
@@ -483,35 +489,20 @@ function TransactionTable({
           </thead>
           <tbody>
             {transactions.map((tx) => {
-              const payerPct = tx.payer_percentage ?? 50;
-              const { payerShare, otherShare } = computeShares(
-                Math.abs(tx.amount),
-                payerPct,
-              );
-              const payerName =
-                personNames.get(tx.payer_person_id) ?? "Unknown";
-              const payerColor = getPersonColor(tx.payer_person_id);
               const isExpanded = expandedId === tx.id;
-              const canEdit = !isFinalized && !bulkMode;
-
               return (
                 <TransactionRow
                   key={tx.id}
                   tx={tx}
-                  payerShare={payerShare}
-                  otherShare={otherShare}
-                  payerName={payerName}
-                  payerColor={payerColor}
-                  otherName={otherNameMap.get(tx.payer_person_id) ?? "Other"}
-                  categoryGroup={
-                    categoryGroups.get(tx.category) ?? "Uncategorized"
-                  }
+                  personNames={personNames}
+                  getPersonColor={getPersonColor}
+                  categoryGroups={categoryGroups}
                   categoryOptions={categoryOptions}
                   tagOptions={tagOptions}
                   personEntries={personEntries}
                   isExpanded={isExpanded}
                   isSaved={savedId === tx.id}
-                  canEdit={canEdit}
+                  canEdit={!isFinalized && !bulkMode}
                   bulkMode={bulkMode}
                   isSelected={selected.has(tx.id)}
                   isSaving={isSaving}
@@ -538,12 +529,9 @@ function TransactionTable({
 
 function TransactionRow({
   tx,
-  payerShare,
-  otherShare,
-  payerName,
-  payerColor,
-  otherName,
-  categoryGroup,
+  personNames,
+  getPersonColor,
+  categoryGroups,
   categoryOptions,
   tagOptions,
   personEntries,
@@ -560,12 +548,9 @@ function TransactionRow({
   onCancel,
 }: {
   tx: TransactionResponse;
-  payerShare: number;
-  otherShare: number;
-  payerName: string;
-  payerColor: string;
-  otherName: string;
-  categoryGroup: string;
+  personNames: Map<string, string>;
+  getPersonColor: (id: string) => string;
+  categoryGroups: Map<string, string>;
   categoryOptions: ComboboxOption[];
   tagOptions: ComboboxOption[];
   personEntries: Array<{ id: string; name: string }>;
@@ -581,7 +566,18 @@ function TransactionRow({
   onTransactionUpdate: (fields: UpdateTransactionRequest) => void;
   onCancel: () => void;
 }) {
+  const payerPct = tx.payer_percentage ?? 50;
+  const { payerShare, otherShare } = computeShares(
+    Math.abs(tx.amount),
+    payerPct,
+  );
+  const payerName = personNames.get(tx.payer_person_id) ?? "Unknown";
+  const payerColor = getPersonColor(tx.payer_person_id);
+  const otherName =
+    [...personNames].find(([id]) => id !== tx.payer_person_id)?.[1] ?? "Other";
+  const categoryGroup = categoryGroups.get(tx.category) ?? "Uncategorized";
   const strikethrough = tx.is_excluded ? "line-through" : "";
+  const txType = deriveTransactionType(tx.household, tx.payer_percentage);
   return (
     <>
       <tr
@@ -608,33 +604,37 @@ function TransactionRow({
           <span className="flex items-center gap-1.5">
             {tx.merchant}
             {isSaved && <Check className="size-3.5 text-positive" />}
+            <span className="sm:hidden">
+              <ClassificationBadge type={txType} otherPersonName={otherName} />
+            </span>
           </span>
         </td>
-        <td className={`py-2 pr-4 text-muted-foreground ${strikethrough}`}>
+        <td
+          className={`hidden py-2 pr-4 text-muted-foreground sm:table-cell ${strikethrough}`}
+        >
           {tx.category}
         </td>
-        <td className="py-2 pr-4 text-muted-foreground">{categoryGroup}</td>
-        <td className="py-2 pr-4">
+        <td className="hidden py-2 pr-4 text-muted-foreground sm:table-cell">
+          {categoryGroup}
+        </td>
+        <td className="hidden py-2 pr-4 sm:table-cell">
           <PersonBadge name={payerName} accentColor={payerColor} size="xs" />
         </td>
-        <td className="py-2 pr-4">
-          <ClassificationBadge
-            type={deriveTransactionType(tx.household, tx.payer_percentage)}
-            otherPersonName={otherName}
-          />
+        <td className="hidden py-2 pr-4 sm:table-cell">
+          <ClassificationBadge type={txType} otherPersonName={otherName} />
         </td>
         <td
           className={`py-2 pr-4 text-right tabular-nums ${amountColorClass(tx.amount)}`}
         >
           {formatCurrency(tx.amount)}
         </td>
-        <td className="py-2 pr-4 text-right text-muted-foreground tabular-nums">
+        <td className="hidden py-2 pr-4 text-right text-muted-foreground tabular-nums sm:table-cell">
           {formatSplit(tx.payer_percentage)}
         </td>
         {personEntries.map((p) => (
           <td
             key={p.id}
-            className="py-2 text-right text-muted-foreground tabular-nums"
+            className="hidden py-2 text-right text-muted-foreground tabular-nums sm:table-cell"
           >
             {formatCurrency(
               p.id === tx.payer_person_id ? payerShare : otherShare,
@@ -815,7 +815,7 @@ export function TransactionsPage() {
                 totalCount={filters.totalCount}
               />
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="w-full overflow-x-auto sm:w-auto sm:overflow-visible">
                 <SegmentedControl<TypeFilter>
                   options={[
                     { value: "all" as const, label: "All" },
@@ -827,6 +827,8 @@ export function TransactionsPage() {
                   size="sm"
                   shape="pill"
                 />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
                 <PayerFilter
                   persons={personEntries}
                   activePayers={filters.payers}

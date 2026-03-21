@@ -538,7 +538,7 @@ export function InsightsPage() {
               )}
 
               {/* Per-person stats */}
-              <div className="mb-4 grid grid-cols-3 gap-3">
+              <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {personChartEntries.map((person) => (
                   <Card key={person.id} className="rounded-lg p-4">
                     <p className="text-xs font-medium text-muted-foreground">

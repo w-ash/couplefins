@@ -28,6 +28,7 @@ import type {
   CategoryGroupResponse,
   CategoryResponse,
   CreateCategoryGroupRequest,
+  DeleteCategoryGroupParams,
   HTTPValidationError,
   PutCategoryMappings200,
   UpdateCategoryGroupRequest,
@@ -352,17 +353,26 @@ export type deleteCategoryGroupResponseError = (deleteCategoryGroupResponse422) 
 
 export type deleteCategoryGroupResponse = (deleteCategoryGroupResponseSuccess | deleteCategoryGroupResponseError)
 
-export const getDeleteCategoryGroupUrl = (groupId: string,) => {
+export const getDeleteCategoryGroupUrl = (groupId: string,
+    params?: DeleteCategoryGroupParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/v1/category-groups/${groupId}`
+  return stringifiedParams.length > 0 ? `/api/v1/category-groups/${groupId}?${stringifiedParams}` : `/api/v1/category-groups/${groupId}`
 }
 
-export const deleteCategoryGroup = async (groupId: string, options?: RequestInit): Promise<deleteCategoryGroupResponse> => {
+export const deleteCategoryGroup = async (groupId: string,
+    params?: DeleteCategoryGroupParams, options?: RequestInit): Promise<deleteCategoryGroupResponse> => {
 
-  return customFetch<deleteCategoryGroupResponse>(getDeleteCategoryGroupUrl(groupId),
+  return customFetch<deleteCategoryGroupResponse>(getDeleteCategoryGroupUrl(groupId,params),
   {
     ...options,
     method: 'DELETE'
@@ -375,8 +385,8 @@ export const deleteCategoryGroup = async (groupId: string, options?: RequestInit
 
 
 export const getDeleteCategoryGroupMutationOptions = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCategoryGroup>>, TError,{groupId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteCategoryGroup>>, TError,{groupId: string}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCategoryGroup>>, TError,{groupId: string;params?: DeleteCategoryGroupParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteCategoryGroup>>, TError,{groupId: string;params?: DeleteCategoryGroupParams}, TContext> => {
 
 const mutationKey = ['deleteCategoryGroup'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -388,10 +398,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCategoryGroup>>, {groupId: string}> = (props) => {
-          const {groupId} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCategoryGroup>>, {groupId: string;params?: DeleteCategoryGroupParams}> = (props) => {
+          const {groupId,params} = props ?? {};
 
-          return  deleteCategoryGroup(groupId,requestOptions)
+          return  deleteCategoryGroup(groupId,params,requestOptions)
         }
 
 
@@ -409,11 +419,11 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
  * @summary Delete Category Group
  */
 export const useDeleteCategoryGroup = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCategoryGroup>>, TError,{groupId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCategoryGroup>>, TError,{groupId: string;params?: DeleteCategoryGroupParams}, TContext>, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof deleteCategoryGroup>>,
         TError,
-        {groupId: string},
+        {groupId: string;params?: DeleteCategoryGroupParams},
         TContext
       > => {
       return useMutation(getDeleteCategoryGroupMutationOptions(options), queryClient);

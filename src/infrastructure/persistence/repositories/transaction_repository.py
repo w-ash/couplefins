@@ -4,7 +4,7 @@ import json
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import ColumnElement, select, update
 
 from src.domain.entities.transaction import Transaction
 from src.infrastructure.persistence.models.transaction_model import TransactionModel
@@ -77,93 +77,79 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
     def _to_model(entity: Transaction) -> TransactionModel:
         return TransactionModel(**TransactionRepository._to_column_values(entity))
 
+    async def _query(self, *filters: ColumnElement[bool]) -> list[Transaction]:
+        stmt = select(TransactionModel).where(*filters)
+        result = await self._session.execute(stmt)
+        return [self._to_domain(row) for row in result.scalars().all()]
+
     async def get_household_by_period(self, year: int, month: int) -> list[Transaction]:
-        prefix = date_month_prefix(year, month)
-        stmt = select(TransactionModel).where(
-            TransactionModel.date.startswith(prefix),
+        return await self._query(
+            TransactionModel.date.startswith(date_month_prefix(year, month)),
             TransactionModel.household.is_(True),
             TransactionModel.is_settlement.is_(False),
         )
-        result = await self._session.execute(stmt)
-        return [self._to_domain(row) for row in result.scalars().all()]
 
     async def get_household_by_year(self, year: int) -> list[Transaction]:
-        prefix = f"{year:04d}-"
-        stmt = select(TransactionModel).where(
-            TransactionModel.date.startswith(prefix),
+        return await self._query(
+            TransactionModel.date.startswith(f"{year:04d}-"),
             TransactionModel.household.is_(True),
             TransactionModel.is_settlement.is_(False),
         )
-        result = await self._session.execute(stmt)
-        return [self._to_domain(row) for row in result.scalars().all()]
 
     async def get_by_year(self, year: int) -> list[Transaction]:
-        prefix = f"{year:04d}-"
-        stmt = select(TransactionModel).where(
-            TransactionModel.date.startswith(prefix),
+        return await self._query(
+            TransactionModel.date.startswith(f"{year:04d}-"),
             TransactionModel.is_settlement.is_(False),
         )
-        result = await self._session.execute(stmt)
-        return [self._to_domain(row) for row in result.scalars().all()]
 
     async def get_household_by_date_range(
         self, start_date: date, end_date: date
     ) -> list[Transaction]:
-        stmt = select(TransactionModel).where(
+        return await self._query(
             TransactionModel.date >= start_date.isoformat(),
             TransactionModel.date <= end_date.isoformat(),
             TransactionModel.household.is_(True),
             TransactionModel.is_settlement.is_(False),
         )
-        result = await self._session.execute(stmt)
-        return [self._to_domain(row) for row in result.scalars().all()]
 
     async def get_by_person_and_date_range(
         self, person_id: UUID, start_date: date, end_date: date
     ) -> list[Transaction]:
-        stmt = select(TransactionModel).where(
+        return await self._query(
             TransactionModel.payer_person_id == str(person_id),
             TransactionModel.date >= start_date.isoformat(),
             TransactionModel.date <= end_date.isoformat(),
         )
-        result = await self._session.execute(stmt)
-        return [self._to_domain(row) for row in result.scalars().all()]
+
+    _IMMUTABLE_KEYS = frozenset({"account", "original_statement", "occurrence"})
+    _UPLOAD_ONLY_KEYS = frozenset({
+        "date",
+        "amount",
+        "original_date",
+        "original_amount",
+    })
+
+    async def _update(
+        self, entity: Transaction, exclude: frozenset[str]
+    ) -> Transaction:
+        values = self._to_column_values(entity)
+        entity_id = values.pop("id")
+        for k in exclude:
+            del values[k]
+        stmt = (
+            update(TransactionModel)
+            .where(TransactionModel.id == entity_id)
+            .values(**values)
+        )
+        await self._session.execute(stmt)
+        await self._session.flush()
+        return entity
 
     async def update_mutable_fields(self, entity: Transaction) -> Transaction:
-        values = self._to_column_values(entity)
-        entity_id = values.pop("id")
-        for k in (
-            "account",
-            "original_statement",
-            "occurrence",
-            "date",
-            "amount",
-            "original_date",
-            "original_amount",
-        ):
-            del values[k]
-        stmt = (
-            update(TransactionModel)
-            .where(TransactionModel.id == entity_id)
-            .values(**values)
-        )
-        await self._session.execute(stmt)
-        await self._session.flush()
-        return entity
+        return await self._update(entity, self._IMMUTABLE_KEYS | self._UPLOAD_ONLY_KEYS)
 
     async def update_all_fields(self, entity: Transaction) -> Transaction:
-        values = self._to_column_values(entity)
-        entity_id = values.pop("id")
-        for k in ("account", "original_statement", "occurrence"):
-            del values[k]
-        stmt = (
-            update(TransactionModel)
-            .where(TransactionModel.id == entity_id)
-            .values(**values)
-        )
-        await self._session.execute(stmt)
-        await self._session.flush()
-        return entity
+        return await self._update(entity, self._IMMUTABLE_KEYS)
 
     async def get_latest_household_transaction_date(self) -> date | None:
         stmt = (

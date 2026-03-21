@@ -55,8 +55,8 @@ function HeroCard({
 
   if (isSettled) {
     return (
-      <div className="rounded-xl border border-primary/20 bg-card p-8 shadow-md">
-        <p className="text-center text-2xl font-semibold text-primary">
+      <div className="rounded-xl border border-primary/20 bg-card p-5 shadow-md sm:p-8">
+        <p className="text-center text-xl font-semibold text-primary sm:text-2xl">
           <span className="inline-flex items-center gap-2">
             <CheckCircle2 className="size-6" />
             All settled!
@@ -67,8 +67,8 @@ function HeroCard({
   }
 
   return (
-    <div className="rounded-xl border border-primary/20 bg-card p-8 shadow-md">
-      <p className="text-center text-2xl font-semibold text-foreground">
+    <div className="rounded-xl border border-primary/20 bg-card p-5 shadow-md sm:p-8">
+      <p className="text-center text-xl font-semibold text-foreground sm:text-2xl">
         <PersonBadge
           name={getPersonName(owed.from_person_id)}
           accentColor={getPersonColor(owed.from_person_id)}
@@ -149,7 +149,7 @@ function RecordPaymentForm({
         <p className="text-sm text-muted-foreground">
           {fromName} pays {toName}
         </p>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label
               htmlFor="settlement-amount"
@@ -263,7 +263,7 @@ function WaiveAction({
 
   return (
     <div className="rounded-lg border border-border-muted px-4 py-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">
             Waive {getPersonName(owed.from_person_id)}'s balance for this month
@@ -338,7 +338,7 @@ function PaymentHistory({
           return (
             <div
               key={s.id}
-              className="flex items-center justify-between rounded-lg border border-border-muted px-4 py-3"
+              className="flex items-start justify-between gap-2 rounded-lg border border-border-muted px-4 py-3"
             >
               <div className="flex items-center gap-3">
                 <div>

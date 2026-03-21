@@ -182,7 +182,7 @@ export function BulkEditToolbar({
       {step === "editing" ? (
         <>
           {/* Form fields */}
-          <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-3">
             {/* Split */}
             <label
               htmlFor="bulk-split"
@@ -215,7 +215,7 @@ export function BulkEditToolbar({
             </div>
 
             {/* Tags — full width */}
-            <div className="col-span-2 flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground sm:col-span-2">
               <span className="w-16 shrink-0">Tags</span>
               <SegmentedControl
                 options={[

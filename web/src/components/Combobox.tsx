@@ -13,6 +13,7 @@ export interface ComboboxOption {
   value: string;
   label: string;
   group?: string;
+  icon?: React.ReactNode;
 }
 
 interface ComboboxProps {
@@ -49,10 +50,13 @@ export function Combobox({
   const optionIdPrefix = useId();
 
   // In single mode, sync input text with current value
-  const singleLabel = useMemo(() => {
-    if (mode !== "single" || typeof value !== "string") return "";
-    return options.find((o) => o.value === value)?.label ?? value;
+  const singleOption = useMemo(() => {
+    if (mode !== "single" || typeof value !== "string" || !value) return null;
+    return options.find((o) => o.value === value) ?? null;
   }, [mode, value, options]);
+
+  const singleLabel =
+    singleOption?.label ?? (typeof value === "string" ? value : "");
 
   // Initialize query for single mode
   useEffect(() => {
@@ -327,6 +331,12 @@ export function Combobox({
             </span>
           ))}
 
+        {mode === "single" && singleOption?.icon && !open && (
+          <span className="shrink-0 text-muted-foreground">
+            {singleOption.icon}
+          </span>
+        )}
+
         <input
           ref={inputRef}
           type="text"
@@ -395,6 +405,11 @@ export function Combobox({
                     selectOption(opt.value);
                   }}
                 >
+                  {opt.icon && (
+                    <span className="shrink-0 text-muted-foreground">
+                      {opt.icon}
+                    </span>
+                  )}
                   {opt.label}
                 </div>
               );

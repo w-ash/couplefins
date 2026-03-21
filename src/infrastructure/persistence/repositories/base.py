@@ -3,6 +3,7 @@ from uuid import UUID
 
 from sqlalchemy import CursorResult, delete as sa_delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.expression import Executable
 
 from src.infrastructure.persistence.models.base import Base
 
@@ -59,6 +60,13 @@ class BaseRepository[TEntity, TModel: Base]:
         result = await self._session.execute(stmt)
         await self._session.flush()
         return isinstance(result, CursorResult) and result.rowcount > 0
+
+    async def _execute_rowcount(self, stmt: Executable) -> int:
+        result = await self._session.execute(stmt)
+        await self._session.flush()
+        if isinstance(result, CursorResult):
+            return result.rowcount
+        return 0
 
     async def count(self) -> int:
         result = await self._session.execute(

@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import CursorResult, select, update as sa_update
+from sqlalchemy import select, update as sa_update
 
 from src.domain.entities.category import Category
 from src.infrastructure.persistence.models.category_model import CategoryModel
@@ -34,13 +34,6 @@ class CategoryRepository(BaseRepository[Category, CategoryModel]):
         row = result.scalars().first()
         return self._to_domain(row) if row else None
 
-    async def get_by_group_id(self, group_id: UUID) -> list[Category]:
-        stmt = select(CategoryModel).where(
-            CategoryModel.group_id == str(group_id),
-        )
-        result = await self._session.execute(stmt)
-        return [self._to_domain(row) for row in result.scalars().all()]
-
     async def get_unmapped(self) -> list[Category]:
         stmt = select(CategoryModel).where(
             CategoryModel.group_id.is_(None),
@@ -54,8 +47,12 @@ class CategoryRepository(BaseRepository[Category, CategoryModel]):
             .where(CategoryModel.group_id == str(group_id))
             .values(group_id=None)
         )
-        result = await self._session.execute(stmt)
-        await self._session.flush()
-        if isinstance(result, CursorResult):
-            return result.rowcount
-        return 0
+        return await self._execute_rowcount(stmt)
+
+    async def remap_by_group_id(self, from_group_id: UUID, to_group_id: UUID) -> int:
+        stmt = (
+            sa_update(CategoryModel)
+            .where(CategoryModel.group_id == str(from_group_id))
+            .values(group_id=str(to_group_id))
+        )
+        return await self._execute_rowcount(stmt)

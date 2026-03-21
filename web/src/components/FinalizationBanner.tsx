@@ -26,7 +26,7 @@ export function FinalizationBanner({
 }: FinalizationBannerProps) {
   if (isFinalized) {
     return (
-      <div className="flex items-center justify-between rounded-lg border border-primary-muted bg-primary-muted/40 px-4 py-2.5">
+      <div className="flex flex-col gap-2 rounded-lg border border-primary-muted bg-primary-muted/40 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2.5">
           <Lock className="size-4 text-primary-muted-foreground" />
           <span className="text-sm font-medium text-primary-muted-foreground">
@@ -56,7 +56,7 @@ export function FinalizationBanner({
   }
 
   return (
-    <div className="flex items-center justify-between rounded-lg border border-border-muted px-4 py-2.5">
+    <div className="flex flex-col gap-2 rounded-lg border border-border-muted px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <span className="text-sm text-muted-foreground">
           This month is still open for changes

@@ -253,7 +253,7 @@ export function TransactionEditor({
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-3">
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <span className="w-16 shrink-0">Date</span>
           <input
@@ -359,7 +359,7 @@ export function TransactionEditor({
           Exclude from reconciliation
         </label>
 
-        <div className="ml-auto flex gap-2">
+        <div className="flex w-full gap-2 sm:ml-auto sm:w-auto">
           <Button
             variant="secondary"
             size="sm"

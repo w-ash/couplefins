@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import CursorResult, delete, select
+from sqlalchemy import delete, select
 
 from src.domain.entities.settlement_transaction_link import SettlementTransactionLink
 from src.infrastructure.persistence.models.settlement_transaction_link_model import (
@@ -47,8 +47,4 @@ class SettlementTransactionLinkRepository(
         stmt = delete(SettlementTransactionLinkModel).where(
             SettlementTransactionLinkModel.settlement_id == str(settlement_id)
         )
-        result = await self._session.execute(stmt)
-        await self._session.flush()
-        if isinstance(result, CursorResult):
-            return result.rowcount
-        return 0
+        return await self._execute_rowcount(stmt)

@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from src.application.runner import execute_use_case
 from src.application.use_cases.bulk_update_mappings import (
@@ -67,8 +67,13 @@ async def put_category_group(
 
 
 @router.delete("/category-groups/{group_id}", status_code=204)
-async def delete_category_group(group_id: UUID) -> None:
-    command = DeleteCategoryGroupCommand(group_id=group_id)
+async def delete_category_group(
+    group_id: UUID,
+    move_categories_to: UUID | None = Query(None),
+) -> None:
+    command = DeleteCategoryGroupCommand(
+        group_id=group_id, move_categories_to=move_categories_to
+    )
     await execute_use_case(
         lambda uow: DeleteCategoryGroupUseCase().execute(command, uow)
     )

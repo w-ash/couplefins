@@ -1,3 +1,4 @@
+import { within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { renderWithProviders, screen, userEvent } from "../test/test-utils";
 import { MonthPicker } from "./MonthPicker";
@@ -28,10 +29,11 @@ describe("MonthPicker", () => {
     });
 
     await user.click(screen.getByRole("button", { name: "Select month" }));
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("Jan")).toBeInTheDocument();
-    expect(screen.getByText("Dec")).toBeInTheDocument();
-    expect(screen.getByText("2026")).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", { name: "Choose month" });
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByText("Jan")).toBeInTheDocument();
+    expect(within(dialog).getByText("Dec")).toBeInTheDocument();
+    expect(within(dialog).getByText("2026")).toBeInTheDocument();
   });
 
   it("navigates years with chevron buttons", async () => {
@@ -41,13 +43,19 @@ describe("MonthPicker", () => {
     });
 
     await user.click(screen.getByRole("button", { name: "Select month" }));
-    expect(screen.getByText("2026")).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", { name: "Choose month" });
+    expect(dialog).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Previous year" }));
-    expect(screen.getByText("2025")).toBeInTheDocument();
+    const prevBtn = within(dialog).getByRole("button", {
+      name: "Previous year",
+    });
+    const nextBtn = within(dialog).getByRole("button", { name: "Next year" });
 
-    await user.click(screen.getByRole("button", { name: "Next year" }));
-    expect(screen.getByText("2026")).toBeInTheDocument();
+    await user.click(prevBtn);
+    expect(within(dialog).getByText("2025")).toBeInTheDocument();
+
+    await user.click(nextBtn);
+    expect(within(dialog).getByText("2026")).toBeInTheDocument();
   });
 
   it("closes popover after selecting a month", async () => {
@@ -57,9 +65,12 @@ describe("MonthPicker", () => {
     });
 
     await user.click(screen.getByRole("button", { name: "Select month" }));
-    await user.click(screen.getByText("Mar"));
+    const dialog = screen.getByRole("dialog", { name: "Choose month" });
+    await user.click(within(dialog).getByText("Mar"));
 
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Choose month" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Select month" }),
     ).toHaveTextContent("March 2026");

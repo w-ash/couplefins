@@ -1,7 +1,9 @@
 import { Calendar } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import { BottomSheet } from "@/components/BottomSheet";
 import { MonthGrid } from "@/components/MonthGrid";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import type { DateRange } from "@/lib/date-range";
 import { isSingleMonth, monthStartEnd } from "@/lib/date-range";
 import { MONTHS, useMonthYear } from "@/lib/format";
@@ -12,7 +14,8 @@ export function MonthPicker() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);
-  useClickOutside(ref, open, close);
+  const isMobile = useIsMobile();
+  useClickOutside(ref, open && !isMobile, close);
 
   const { year, month } = useMonthYear();
   const [, setSearchParams] = useSearchParams();
@@ -54,7 +57,18 @@ export function MonthPicker() {
         {label}
       </button>
 
-      {open && (
+      {open && isMobile && (
+        <BottomSheet open onClose={close}>
+          <MonthGrid
+            startDate={startDate}
+            endDate={endDate}
+            onSelect={handleSelect}
+            initialYear={year}
+          />
+        </BottomSheet>
+      )}
+
+      {open && !isMobile && (
         <div
           role="dialog"
           aria-label="Choose month"

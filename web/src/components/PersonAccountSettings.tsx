@@ -47,7 +47,10 @@ function PersonAccountRow({ person }: { person: Person }) {
     value.trim() !== "" && value.trim() !== person.adjustment_account;
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-start gap-3">
+    <form
+      onSubmit={handleSubmit}
+      className="flex flex-col gap-3 sm:flex-row sm:items-start"
+    >
       <div className="min-w-0 flex-1">
         <label
           htmlFor={`adj-account-${person.id}`}
@@ -73,7 +76,7 @@ function PersonAccountRow({ person }: { person: Person }) {
           </div>
         )}
       </div>
-      <div className="pt-6">
+      <div className="sm:pt-6">
         {saved ? (
           <span className="inline-flex items-center gap-1 text-sm text-positive">
             <Check className="size-4" />

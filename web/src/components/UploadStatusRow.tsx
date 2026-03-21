@@ -13,7 +13,7 @@ export function UploadStatusRow({
   getPersonColor: (id: string) => string;
 }) {
   return (
-    <div className="flex items-center justify-center gap-6">
+    <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
       {statuses.map((s) => (
         <div key={s.person_id} className="flex items-center gap-2 text-sm">
           {s.has_uploaded ? (
