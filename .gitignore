@@ -39,6 +39,7 @@ coverage.xml
 logs/
 
 # Data (DB + personal fixture files)
+*.db
 data/
 
 # uv
