@@ -44,7 +44,7 @@
 | v0.10.0 | App shell + shared component mobile foundations | Completed (2026-03-19) | M |
 | v0.10.1 | Content pages mobile layouts (Dashboard, Transactions, Settle Up) | Completed (2026-03-20) | L |
 | v0.10.2 | Settings page overhaul (desktop + mobile quality) | Completed (2026-03-20) | M |
-| v0.10.3 | Interaction consistency + touch polish | Planned | M |
+| v0.10.3 | Interaction consistency + touch polish | Completed (2026-03-21) | M |
 | v1.0.0 | Infrastructure investigation (benchmarks, DB audit, storage evaluation) | Planned | M |
 | v1.0.1 | Query & storage optimization (SQLite-native improvements) | Planned | M |
 | v1.0.2 | Database migration — PostgreSQL or normalized tags (conditional) | Planned | L |

@@ -3,7 +3,6 @@ import {
   ArrowLeftRight,
   Check,
   ChevronDown,
-  ChevronRight,
   ChevronUp,
   Pencil,
   Upload,
@@ -40,6 +39,7 @@ import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import type { ComboboxOption } from "@/components/Combobox";
 import { DateRangePicker } from "@/components/DateRangePicker";
+import { ExpandChevron } from "@/components/ExpandChevron";
 import { PageHeader } from "@/components/PageHeader";
 import {
   EmptyStateActions,
@@ -87,6 +87,9 @@ import {
   type TypeFilter,
   useTransactionFilters,
 } from "@/lib/transaction-filters";
+
+const checkboxTouchTarget =
+  "flex min-h-11 min-w-8 items-center justify-center sm:min-h-0 sm:min-w-0";
 
 function SummaryStats({
   data,
@@ -138,11 +141,7 @@ function CategoryGroupRow({
             aria-label={`${expanded ? "Collapse" : "Expand"} ${group.group_name}`}
             className="flex items-center gap-1.5 text-sm font-medium text-foreground"
           >
-            {expanded ? (
-              <ChevronDown className="size-4 text-muted-foreground" />
-            ) : (
-              <ChevronRight className="size-4 text-muted-foreground" />
-            )}
+            <ExpandChevron expanded={expanded} />
             <Icon className="size-4 text-muted-foreground" />
             {group.group_name}
           </button>
@@ -185,7 +184,7 @@ function CategoryGroupBreakdownTable({
 
   return (
     <Card>
-      <h2 className="mb-4 font-medium text-lg text-foreground">
+      <h2 className="mb-1 font-medium text-lg text-foreground">
         Category Breakdown
         {hasRefunds && (
           <span className="ml-2 text-xs font-normal text-muted-foreground">
@@ -193,6 +192,9 @@ function CategoryGroupBreakdownTable({
           </span>
         )}
       </h2>
+      <p className="mb-4 text-xs text-muted-foreground">
+        See where your shared spending goes
+      </p>
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border text-left text-muted-foreground">
@@ -429,15 +431,17 @@ function TransactionTable({
             <tr className="border-b border-border text-left text-muted-foreground">
               {bulkMode && (
                 <th className="w-8 pb-2 pr-2 align-middle">
-                  <input
-                    type="checkbox"
-                    checked={
-                      selected.size === transactions.length &&
-                      transactions.length > 0
-                    }
-                    onChange={toggleAll}
-                    className="size-4 accent-primary"
-                  />
+                  <div className={checkboxTouchTarget}>
+                    <input
+                      type="checkbox"
+                      checked={
+                        selected.size === transactions.length &&
+                        transactions.length > 0
+                      }
+                      onChange={toggleAll}
+                      className="size-4 accent-primary"
+                    />
+                  </div>
                 </th>
               )}
               <SortableHeader field="date" sort={sort} onSort={onSort}>
@@ -581,18 +585,20 @@ function TransactionRow({
   return (
     <>
       <tr
-        className={`border-b border-border-muted transition-colors duration-300 ${canEdit ? "cursor-pointer hover:bg-muted/50" : ""} ${isExpanded ? "bg-muted/30" : ""} ${isSaved ? "bg-positive/10" : ""} ${tx.is_excluded ? "opacity-50" : ""}`}
+        className={`border-b border-border-muted transition-colors duration-150 ${canEdit ? "cursor-pointer hover:bg-muted/50" : ""} ${isExpanded ? "bg-muted/30" : ""} ${isSaved ? "bg-positive/10" : ""} ${tx.is_excluded ? "opacity-50" : ""}`}
         onClick={canEdit ? onToggleExpand : undefined}
       >
         {bulkMode && (
           <td className="py-2 pr-2 align-middle">
-            <input
-              type="checkbox"
-              checked={isSelected}
-              onChange={onToggleSelect}
-              onClick={(e) => e.stopPropagation()}
-              className="size-4 accent-primary"
-            />
+            <div className={checkboxTouchTarget}>
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={onToggleSelect}
+                onClick={(e) => e.stopPropagation()}
+                className="size-4 accent-primary"
+              />
+            </div>
           </td>
         )}
         <td

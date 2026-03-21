@@ -142,9 +142,12 @@ function RecordPaymentForm({
 
   return (
     <Card>
-      <h2 className="mb-4 font-medium text-lg text-foreground">
+      <h2 className="mb-1 font-medium text-lg text-foreground">
         Record Payment
       </h2>
+      <p className="mb-4 text-xs text-muted-foreground">
+        Log a payment to reduce the outstanding balance
+      </p>
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">
           {fromName} pays {toName}
@@ -323,9 +326,12 @@ function PaymentHistory({
 
   return (
     <Card>
-      <h2 className="mb-4 font-medium text-lg text-foreground">
+      <h2 className="mb-1 font-medium text-lg text-foreground">
         Payment History
       </h2>
+      <p className="mb-4 text-xs text-muted-foreground">
+        Payments and waivers recorded for this month
+      </p>
       <div className="space-y-3">
         {settlements.map((s) => {
           const fromName = getPersonName(s.from_person_id);
@@ -372,7 +378,7 @@ function PaymentHistory({
                   type="button"
                   onClick={() => onDelete(s.id)}
                   disabled={isDeleting}
-                  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                  className="rounded-md p-2.5 sm:p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
                   aria-label={
                     s.is_waived
                       ? "Delete waiver"

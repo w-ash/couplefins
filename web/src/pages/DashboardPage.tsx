@@ -90,9 +90,12 @@ function MonthHistory({
 
   return (
     <Card>
-      <h2 className="mb-4 font-medium text-lg text-foreground">
+      <h2 className="mb-1 font-medium text-lg text-foreground">
         Month History
       </h2>
+      <p className="mb-4 text-xs text-muted-foreground">
+        Track spending and settlement status across months
+      </p>
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border text-left text-muted-foreground">

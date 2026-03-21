@@ -1,10 +1,4 @@
-import {
-  ArrowRight,
-  ChevronDown,
-  ChevronRight,
-  TrendingDown,
-  TrendingUp,
-} from "lucide-react";
+import { ArrowRight, TrendingDown, TrendingUp } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
 import { Link } from "react-router";
@@ -18,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import { Card } from "@/components/Card";
+import { ExpandChevron } from "@/components/ExpandChevron";
 import { getCategoryGroupIcon } from "@/lib/category-icons";
 import { formatCurrency, MONTHS, SHORT_MONTHS } from "@/lib/format";
 
@@ -160,15 +155,7 @@ export function SparklineCard({
   const headerContent: ReactNode = (
     <>
       <div className="flex items-center gap-2">
-        {isExpandable && (
-          <span className="shrink-0">
-            {isExpanded ? (
-              <ChevronDown className="size-4 text-muted-foreground" />
-            ) : (
-              <ChevronRight className="size-4 text-muted-foreground" />
-            )}
-          </span>
-        )}
+        {isExpandable && <ExpandChevron expanded={isExpanded ?? false} />}
         <Icon className="size-4 text-muted-foreground" />
         <span className="text-sm font-medium text-foreground">{groupName}</span>
         {creep && (

@@ -1,11 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  AlertCircle,
-  CheckCircle2,
-  ChevronDown,
-  PieChart,
-  Plus,
-} from "lucide-react";
+import { AlertCircle, CheckCircle2, PieChart, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   getGetBudgetOverviewQueryKey,
@@ -22,6 +16,7 @@ import type {
 import { useGetPersons } from "@/api/generated/persons/persons";
 import { Button } from "@/components/Button";
 import { Combobox, type ComboboxOption } from "@/components/Combobox";
+import { ExpandChevron } from "@/components/ExpandChevron";
 import { MonthPicker } from "@/components/MonthPicker";
 import { PageHeader } from "@/components/PageHeader";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
@@ -273,9 +268,7 @@ function BudgetGroupRow({
           aria-label={`${expanded ? "Collapse" : "Expand"} ${status.group_name}`}
           onClick={() => setExpanded(!expanded)}
         >
-          <ChevronDown
-            className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${expanded ? "" : "-rotate-90"}`}
-          />
+          <ExpandChevron expanded={expanded} />
 
           {/* Mobile layout */}
           <div className="min-w-0 flex-1 sm:hidden">
@@ -338,7 +331,7 @@ function BudgetGroupRow({
                             </span>
                           </span>
                           <span className="flex items-center gap-3">
-                            <label className="flex cursor-pointer items-center gap-1.5 text-xs">
+                            <label className="flex min-h-11 sm:min-h-0 cursor-pointer items-center gap-1.5 py-2 sm:py-0 text-xs">
                               <input
                                 type="checkbox"
                                 checked={cat.include_personal}
@@ -591,7 +584,7 @@ function AddBudgetForm({
           <div className="min-w-0 flex-1 sm:max-w-48">
             <label
               htmlFor="budget-group"
-              className="mb-1 block text-xs font-medium text-muted-foreground"
+              className="mb-1 block text-sm font-medium text-foreground"
             >
               Category group
             </label>
@@ -607,7 +600,7 @@ function AddBudgetForm({
           <div>
             <label
               htmlFor="budget-amount"
-              className="mb-1 block text-xs font-medium text-muted-foreground"
+              className="mb-1 block text-sm font-medium text-foreground"
             >
               Monthly amount
             </label>
@@ -631,7 +624,7 @@ function AddBudgetForm({
           <div>
             <label
               htmlFor="budget-effective"
-              className="mb-1 block text-xs font-medium text-muted-foreground"
+              className="mb-1 block text-sm font-medium text-foreground"
             >
               Effective from
             </label>

@@ -1,4 +1,4 @@
-import { ChevronDown, Plus, Upload } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 import { type KeyboardEvent, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useGetBudgets } from "@/api/generated/budgets/budgets";
@@ -13,6 +13,7 @@ import type { CategoryGroupResponse } from "@/api/generated/model";
 import { BottomSheet } from "@/components/BottomSheet";
 import { Button } from "@/components/Button";
 import { Combobox } from "@/components/Combobox";
+import { ExpandChevron } from "@/components/ExpandChevron";
 import { PageError, PageLoading } from "@/components/PageStates";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { useDialogSync } from "@/hooks/useDialogSync";
@@ -175,9 +176,7 @@ function GroupCard({
         <div className="flex items-center gap-3 p-4">
           {editing ? (
             <>
-              <ChevronDown
-                className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${expanded ? "" : "-rotate-90"}`}
-              />
+              <ExpandChevron expanded={expanded} />
               <input
                 ref={inputRef}
                 value={editName}
@@ -198,9 +197,7 @@ function GroupCard({
               onClick={() => setExpanded(!expanded)}
               className="flex min-w-0 flex-1 items-center gap-2 text-left"
             >
-              <ChevronDown
-                className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${expanded ? "" : "-rotate-90"}`}
-              />
+              <ExpandChevron expanded={expanded} />
               <GroupIcon className="size-4 shrink-0 text-muted-foreground" />
               <span className="truncate font-medium text-sm text-foreground">
                 {group.name}

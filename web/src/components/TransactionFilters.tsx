@@ -1,47 +1,14 @@
 import { ChevronDown, Search, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CategoryGroupBreakdownResponse } from "@/api/generated/model";
+import { ResponsivePopover } from "@/components/ResponsivePopover";
 import { TYPE_LABELS } from "@/lib/transaction-classification";
 import type { TransactionFilters as TransactionFiltersType } from "@/lib/transaction-filters";
-import { useClickOutside } from "@/lib/use-click-outside";
 import { getPersonAccentColor } from "@/types/person";
-
-// ─── Shared popover wrapper ───
-
-function FilterPopover({
-  trigger,
-  children,
-  onClose,
-}: {
-  trigger: React.ReactNode;
-  children: (close: () => void) => React.ReactNode;
-  onClose?: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const close = useCallback(() => {
-    setOpen(false);
-    onClose?.();
-  }, [onClose]);
-  useClickOutside(ref, open, close);
-
-  return (
-    <div ref={ref} className="relative">
-      <button type="button" onClick={() => setOpen(!open)}>
-        {trigger}
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full z-40 mt-1.5 min-w-56 overflow-hidden rounded-lg border border-border bg-popover shadow-lg">
-          {children(close)}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function FilterButton({ label, count }: { label: string; count: number }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-lg border border-input bg-card px-3 py-1.5 text-sm text-secondary-foreground shadow-sm transition-colors hover:bg-muted">
+    <span className="inline-flex items-center gap-1.5 rounded-lg border border-input bg-card px-3 py-2.5 sm:py-1.5 text-sm text-secondary-foreground shadow-sm transition-colors hover:bg-muted">
       {label}
       {count > 0 && (
         <span className="inline-flex size-5 items-center justify-center rounded-full bg-primary text-[11px] font-medium text-primary-foreground">
@@ -144,11 +111,12 @@ export function CategoryFilter({
   const q = search.toLowerCase();
 
   return (
-    <FilterPopover
+    <ResponsivePopover
       trigger={
         <FilterButton label="Category" count={activeCategories.length} />
       }
       onClose={() => setSearch("")}
+      title="Filter by category"
     >
       {() => (
         <div className="max-h-72 overflow-y-auto">
@@ -213,7 +181,7 @@ export function CategoryFilter({
           </div>
         </div>
       )}
-    </FilterPopover>
+    </ResponsivePopover>
   );
 }
 
@@ -243,8 +211,9 @@ export function TagFilter({
   if (availableTags.length === 0) return null;
 
   return (
-    <FilterPopover
+    <ResponsivePopover
       trigger={<FilterButton label="Tags" count={activeTags.length} />}
+      title="Filter by tag"
     >
       {() => (
         <div className="max-h-56 overflow-y-auto p-1">
@@ -264,7 +233,7 @@ export function TagFilter({
           ))}
         </div>
       )}
-    </FilterPopover>
+    </ResponsivePopover>
   );
 }
 
@@ -301,8 +270,9 @@ export function AmountRangeFilter({
   const active = minAmount != null || maxAmount != null;
 
   return (
-    <FilterPopover
+    <ResponsivePopover
       trigger={<FilterButton label="Amount" count={active ? 1 : 0} />}
+      title="Filter by amount"
     >
       {(close) => (
         <div className="w-52 p-3">
@@ -352,7 +322,7 @@ export function AmountRangeFilter({
           </div>
         </div>
       )}
-    </FilterPopover>
+    </ResponsivePopover>
   );
 }
 
@@ -438,7 +408,7 @@ export function ActiveFilterPills({
           <button
             type="button"
             onClick={pill.onRemove}
-            className="ml-0.5 rounded-full hover:bg-primary/20"
+            className="ml-0.5 rounded-full p-1 hover:bg-primary/20"
           >
             <X className="size-3" />
           </button>

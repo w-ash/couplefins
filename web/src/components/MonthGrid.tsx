@@ -22,6 +22,9 @@ export function MonthGrid({
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
 
+  const yearNavBtn =
+    "inline-flex size-11 sm:size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted";
+
   return (
     <div className="flex min-w-64 flex-col gap-3">
       {/* Year navigation */}
@@ -29,7 +32,7 @@ export function MonthGrid({
         <button
           type="button"
           onClick={() => setYear((y) => y - 1)}
-          className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted"
+          className={yearNavBtn}
           aria-label="Previous year"
         >
           <ChevronLeft className="size-4" />
@@ -40,7 +43,7 @@ export function MonthGrid({
         <button
           type="button"
           onClick={() => setYear((y) => y + 1)}
-          className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted"
+          className={yearNavBtn}
           aria-label="Next year"
         >
           <ChevronRight className="size-4" />

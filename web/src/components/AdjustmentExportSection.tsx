@@ -2,7 +2,6 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Check,
-  ChevronDown,
   Download,
   Loader2,
 } from "lucide-react";
@@ -11,6 +10,7 @@ import type { AdjustmentResponse } from "@/api/generated/model";
 import { usePreviewAdjustments } from "@/api/generated/persons/persons";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { ExpandChevron } from "@/components/ExpandChevron";
 import { InlineError } from "@/components/InlineError";
 import { PersonBadge } from "@/components/PersonBadge";
 import { useTemporary } from "@/hooks/useTemporary";
@@ -185,11 +185,7 @@ function PersonExportCard({
             disabled={!hasAccount}
             className="flex items-center gap-1 text-sm text-muted-foreground transition-colors duration-150 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <ChevronDown
-              className={`size-4 transition-transform duration-200 ${
-                expanded ? "" : "-rotate-90"
-              }`}
-            />
+            <ExpandChevron expanded={expanded} />
             Preview
           </button>
         </div>
@@ -228,9 +224,12 @@ export function AdjustmentExportSection({
 
   return (
     <Card>
-      <h2 className="mb-4 font-medium text-lg text-foreground">
+      <h2 className="mb-1 font-medium text-lg text-foreground">
         Export Adjustments
       </h2>
+      <p className="mb-4 text-xs text-muted-foreground">
+        Download CSVs to sync each person's Monarch account
+      </p>
       <div className="space-y-5">
         {persons.map((person) => (
           <PersonExportCard

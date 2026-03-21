@@ -348,7 +348,7 @@ export function TransactionEditor({
           ) : null}
         </div>
 
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+        <label className="flex items-center gap-2 py-2 sm:py-0 text-sm text-muted-foreground">
           <input
             type="checkbox"
             checked={isExcluded}
