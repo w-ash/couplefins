@@ -45,6 +45,10 @@
 | v0.10.1 | Content pages mobile layouts (Dashboard, Transactions, Settle Up) | Completed (2026-03-20) | L |
 | v0.10.2 | Settings page overhaul (desktop + mobile quality) | Completed (2026-03-20) | M |
 | v0.10.3 | Interaction consistency + touch polish | Completed (2026-03-21) | M |
+| v0.11.0 | Auth backend (name+password, JWT cookies, protected routes) | Completed (2026-03-24) | M |
+| v0.11.1 | Auth frontend (login page, setup flow, session management) | Planned | M |
+| v0.11.2 | Personal budget backend (per-person limits, spending computation) | Planned | M |
+| v0.11.3 | Scope UI (budget toggle, transaction scope filter) | Planned | L |
 | v1.0.0 | Infrastructure investigation (benchmarks, DB audit, storage evaluation) | Planned | M |
 | v1.0.1 | Query & storage optimization (SQLite-native improvements) | Planned | M |
 | v1.0.2 | Database migration — PostgreSQL or normalized tags (conditional) | Planned | L |
@@ -52,58 +56,62 @@
 
 ## Infrastructure Readiness
 
-| Capability | v0.1.x | v0.2.x | v0.3.x | v0.4.x | v0.5.x | v0.6.x | v0.7.x | v0.8.x | v0.9.x | v0.10.x | v1.0.x |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| FastAPI backend | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| SQLite + SQLAlchemy | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| CSV parsing | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| React frontend | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Upload flow | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Category groups | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Design system (fonts, theme) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Dark/light mode | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| App shell / navigation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| User identity (localStorage) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Reconciliation engine | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Dashboard | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Adjustment export (engine + UI) | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Budget tracking | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Month finalization | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Transaction split editing | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Transaction field editing + audit log | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Date range queries + search/filter | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Settlement tracking | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Settlement history (dashboard) | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Bulk transaction editing (category, tags, split) | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Orval codegen + MSW test mocks | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Spending insights + charts | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
-| YoY comparison + dark mode charts | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Responsive upload page (mobile) | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
-| Drag-and-drop upload | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
-| Upload history | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
-| Client + server CSV validation | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
-| Insights UX overhaul + per-person spending | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
-| Split continuum + `household` flag (`payer_percentage` non-nullable) | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
-| Spotted detection (person-name tags → 0% split) | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
-| Category entity + `include_personal` budget scope | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
-| Classification UI (filters, editing) | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
-| Transaction exclusion | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
-| Mobile app shell (bottom nav + shared component foundations) | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
-| Content page mobile layouts (responsive columns, form stacking, picker dialogs) | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
-| Settings page overhaul | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
-| Interaction consistency + touch targets (44px) | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
-| Performance benchmarks + query optimization | — | — | — | — | — | — | — | — | — | — | ✅ |
-| Server-side tag filtering | — | — | — | — | — | — | — | — | — | — | ✅ |
-| PostgreSQL / normalized storage (conditional) | — | — | — | — | — | — | — | — | — | — | ✅ |
-| Docker + backups + observability (conditional) | — | — | — | — | — | — | — | — | — | — | ✅ |
+| Capability | v0.1.x | v0.2.x | v0.3.x | v0.4.x | v0.5.x | v0.6.x | v0.7.x | v0.8.x | v0.9.x | v0.10.x | v0.11.x | v1.0.x |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| FastAPI backend | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| SQLite + SQLAlchemy | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| CSV parsing | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| React frontend | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Upload flow | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Category groups | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Design system (fonts, theme) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Dark/light mode | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| App shell / navigation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| User identity (localStorage) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | — |
+| Reconciliation engine | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Dashboard | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Adjustment export (engine + UI) | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Budget tracking | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Month finalization | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Transaction split editing | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Transaction field editing + audit log | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Date range queries + search/filter | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Settlement tracking | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Settlement history (dashboard) | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Bulk transaction editing (category, tags, split) | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Orval codegen + MSW test mocks | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Spending insights + charts | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| YoY comparison + dark mode charts | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Responsive upload page (mobile) | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Drag-and-drop upload | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Upload history | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Client + server CSV validation | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Insights UX overhaul + per-person spending | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Split continuum + `household` flag (`payer_percentage` non-nullable) | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
+| Spotted detection (person-name tags → 0% split) | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
+| Category entity + `include_personal` budget scope | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
+| Classification UI (filters, editing) | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
+| Transaction exclusion | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
+| Mobile app shell (bottom nav + shared component foundations) | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Content page mobile layouts (responsive columns, form stacking, picker dialogs) | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Settings page overhaul | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Interaction consistency + touch targets (44px) | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Authentication (name + password, JWT cookies) | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
+| Login page + session management | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
+| Personal budgets (per-person limits + spending computation) | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
+| Budget + transaction scope toggles | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
+| Performance benchmarks + query optimization | — | — | — | — | — | — | — | — | — | — | — | ✅ |
+| Server-side tag filtering | — | — | — | — | — | — | — | — | — | — | — | ✅ |
+| PostgreSQL / normalized storage (conditional) | — | — | — | — | — | — | — | — | — | — | — | ✅ |
+| Docker + backups + observability (conditional) | — | — | — | — | — | — | — | — | — | — | — | ✅ |
 
 ## Key Technical Decisions
 
 - **Database**: SQLite via SQLAlchemy async (aiosqlite)
 - **Backend**: FastAPI with Clean Architecture (domain / application / infrastructure / interface)
 - **Frontend**: React 19 + Tailwind v4 + Tanstack Query, Orval codegen from OpenAPI
-- **Auth**: None — two named profiles, select on upload
-- **User identity**: localStorage via Zustand persist (~1KB). Stores `currentPersonId` (UUID). Setup flow sets it, sidebar toggle switches it. Three app states: needs-setup, needs-identity, has-identity.
+- **Auth**: Name + password with argon2id hashing + JWT httpOnly cookies (v0.11.0). No email infrastructure, no OAuth. Password recovery via partner reset from Settings + CLI fallback. Prior to v0.11.0: no auth, two named profiles selected on upload.
+- **User identity**: Post v0.11.x: JWT httpOnly cookie verified by `GET /auth/me` on load. Zustand stores `currentPersonId` in memory (no localStorage persist). Three app states: needs-setup, needs-login, authenticated. Prior to v0.11.x: localStorage via Zustand persist.
 - **Information architecture**: Left sidebar with 7 pages: Dashboard / Transactions / Settle Up / Budget / Insights / Upload / Settings. "Transactions" replaces "Reconciliation" (standard finance-app naming). "Settings" absorbs person config + category management. "History" is not a standalone page — month navigation lives within Dashboard and Transactions. Finalization controls live on the Settle Up page. Insights (v0.7.0) is the together-session spending analysis page — small multiples, comparison cards, settlement trends.
 - **Design system**: Satoshi font (Fontshare) + Geist Mono. Warm neutrals (not pure black/white), teal for positive, coral for negative. CSS custom properties via Tailwind v4 `@theme` for light/dark switching. Defined in `.claude/rules/web-design-system.md`.
 - **Theme**: System preference by default (`prefers-color-scheme`), manual override stored in localStorage. Three-way: system/light/dark. Tailwind v4 class strategy with `@custom-variant dark`. Synchronous `<script>` in `<head>` prevents flash of wrong theme.

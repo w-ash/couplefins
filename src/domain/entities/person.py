@@ -8,3 +8,4 @@ class Person:
     id: UUID
     name: str
     adjustment_account: str = ""
+    password_hash: str = ""

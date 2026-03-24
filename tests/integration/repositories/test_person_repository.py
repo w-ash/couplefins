@@ -55,6 +55,42 @@ async def test_get_by_id_returns_none_for_missing(db_session: AsyncSession) -> N
     assert await repo.get_by_id(uuid.uuid4()) is None
 
 
+async def test_get_by_name(db_session: AsyncSession) -> None:
+    repo = PersonRepository(db_session)
+    await repo.save(make_person(name="Alice"))
+    await db_session.commit()
+
+    found = await repo.get_by_name("Alice")
+    assert found is not None
+    assert found.name == "Alice"
+
+
+async def test_get_by_name_case_insensitive(db_session: AsyncSession) -> None:
+    repo = PersonRepository(db_session)
+    await repo.save(make_person(name="Alice"))
+    await db_session.commit()
+
+    found = await repo.get_by_name("alice")
+    assert found is not None
+    assert found.name == "Alice"
+
+
+async def test_get_by_name_returns_none_for_missing(db_session: AsyncSession) -> None:
+    repo = PersonRepository(db_session)
+    assert await repo.get_by_name("Nobody") is None
+
+
+async def test_password_hash_persists(db_session: AsyncSession) -> None:
+    repo = PersonRepository(db_session)
+    person = make_person(name="Alice", password_hash="$argon2id$test-hash")
+    await repo.save(person)
+    await db_session.commit()
+
+    found = await repo.get_by_id(person.id)
+    assert found is not None
+    assert found.password_hash == "$argon2id$test-hash"
+
+
 async def test_save_upserts_existing(db_session: AsyncSession) -> None:
     repo = PersonRepository(db_session)
     person = make_person(name="Alice")

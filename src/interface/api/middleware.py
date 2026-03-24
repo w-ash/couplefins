@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 
 from src.domain.exceptions import (
+    AuthenticationError,
     DomainError,
     DuplicateError,
     NotFoundError,
@@ -15,6 +16,7 @@ _DOMAIN_ERROR_MAP: dict[type[DomainError], tuple[int, str]] = {
     ValidationError: (422, "VALIDATION_ERROR"),
     DuplicateError: (409, "DUPLICATE_ERROR"),
     PeriodFinalizedError: (409, "PERIOD_FINALIZED"),
+    AuthenticationError: (401, "AUTHENTICATION_ERROR"),
 }
 
 

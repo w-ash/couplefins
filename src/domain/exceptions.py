@@ -16,3 +16,7 @@ class DuplicateError(DomainError):
 
 class PeriodFinalizedError(DomainError):
     pass
+
+
+class AuthenticationError(DomainError):
+    pass

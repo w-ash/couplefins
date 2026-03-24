@@ -12,3 +12,6 @@ class PersonModel(Base):
     adjustment_account: Mapped[str] = mapped_column(
         String, nullable=False, server_default=""
     )
+    password_hash: Mapped[str] = mapped_column(
+        String, nullable=False, server_default=""
+    )

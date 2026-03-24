@@ -16,6 +16,16 @@ SettlementMethod.VENMO  # deserialized from API request + used in test factories
 SettlementMethod.ZELLE  # valid settlement method, serialized to API
 SettlementMethod.OTHER  # valid settlement method, serialized to API
 
+# --- Auth result fields: constructed in use case, consumed by route handler ---
+
+from src.application.use_cases.auth.change_password import ChangePasswordResult
+from src.application.use_cases.auth.reset_partner_password import (
+    ResetPartnerPasswordResult,
+)
+
+ChangePasswordResult.success  # returned from change-password use case
+ResetPartnerPasswordResult.success  # returned from reset-partner-password use case
+
 # --- attrs Result fields: constructed in use case, consumed by caller ---
 
 from src.application.use_cases.seed_category_groups import SeedCategoryGroupsResult

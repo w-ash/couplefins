@@ -1,6 +1,6 @@
 [project]
 name = "couplefins"
-version = "0.10.2"
+version = "0.11.0"
 description = "Shared finance reconciliation tool for couples"
 requires-python = ">=3.14,<4.0"
 dependencies = [
@@ -15,6 +15,8 @@ dependencies = [
     "alembic>=1.15",
     "python-multipart>=0.0.20",
     "attrs>=25.4.0,<26.0.0",
+    "argon2-cffi>=24.0",
+    "PyJWT>=2.9",
 ]
 
 [dependency-groups]
@@ -89,6 +91,9 @@ fixable = ["ALL"]
 ]
 "tests/**/*.py" = [
     "S101",     # Allow assert
+    "S105",     # Hardcoded password strings in tests
+    "S106",     # Hardcoded password arguments in tests
+    "S107",     # Hardcoded password defaults in tests
     "ARG001",   # Unused function args (fixtures)
     "ARG002",   # Unused method args (fixtures)
     "PLR2004",  # Magic numbers in tests

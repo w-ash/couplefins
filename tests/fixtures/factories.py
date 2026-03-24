@@ -19,9 +19,13 @@ def make_person(
     id: uuid.UUID | None = None,
     name: str = "Test Person",
     adjustment_account: str = "",
+    password_hash: str = "",
 ) -> Person:
     return Person(
-        id=id or uuid.uuid4(), name=name, adjustment_account=adjustment_account
+        id=id or uuid.uuid4(),
+        name=name,
+        adjustment_account=adjustment_account,
+        password_hash=password_hash,
     )
 
 

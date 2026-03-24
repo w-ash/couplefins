@@ -18,6 +18,7 @@ from src.application.use_cases.update_person import (
     UpdatePersonCommand,
     UpdatePersonUseCase,
 )
+from src.infrastructure.auth.password import hash_password
 from src.interface.api.schemas.persons import (
     AdjustmentPreviewResponse,
     PersonResponse,
@@ -36,9 +37,16 @@ async def get_persons() -> list[PersonResponse]:
 
 @router.post("/setup", status_code=201)
 async def setup_couple(body: SetupCoupleRequest) -> list[PersonResponse]:
-    command = SetupCoupleCommand(name1=body.name1, name2=body.name2)
+    command = SetupCoupleCommand(
+        name1=body.name1,
+        name2=body.name2,
+        password1=body.password1,
+        password2=body.password2,
+    )
     result = await execute_use_case(
-        lambda uow: SetupCoupleUseCase().execute(command, uow)
+        lambda uow: SetupCoupleUseCase(
+            hash_password=hash_password,
+        ).execute(command, uow)
     )
     return [PersonResponse.from_domain(p) for p in result.persons]
 

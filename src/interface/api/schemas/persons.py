@@ -11,6 +11,8 @@ _NAME_MAX = 50
 class SetupCoupleRequest(BaseModel):
     name1: str = Field(max_length=_NAME_MAX)
     name2: str = Field(max_length=_NAME_MAX)
+    password1: str
+    password2: str
 
     @field_validator("name1", "name2")
     @classmethod

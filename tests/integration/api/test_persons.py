@@ -4,7 +4,12 @@ from httpx import AsyncClient
 async def test_setup_couple_creates_two_persons(client: AsyncClient) -> None:
     response = await client.post(
         "/api/v1/persons/setup",
-        json={"name1": "Alice", "name2": "Bob"},
+        json={
+            "name1": "Alice",
+            "name2": "Bob",
+            "password1": "password123",
+            "password2": "password456",
+        },
     )
     assert response.status_code == 201
     persons = response.json()
@@ -18,7 +23,12 @@ async def test_setup_couple_creates_two_persons(client: AsyncClient) -> None:
 async def test_setup_couple_then_list(client: AsyncClient) -> None:
     await client.post(
         "/api/v1/persons/setup",
-        json={"name1": "Alice", "name2": "Bob"},
+        json={
+            "name1": "Alice",
+            "name2": "Bob",
+            "password1": "password123",
+            "password2": "password456",
+        },
     )
 
     response = await client.get("/api/v1/persons/")
@@ -32,12 +42,22 @@ async def test_setup_couple_then_list(client: AsyncClient) -> None:
 async def test_setup_couple_rejects_duplicate_setup(client: AsyncClient) -> None:
     await client.post(
         "/api/v1/persons/setup",
-        json={"name1": "Alice", "name2": "Bob"},
+        json={
+            "name1": "Alice",
+            "name2": "Bob",
+            "password1": "password123",
+            "password2": "password456",
+        },
     )
 
     response = await client.post(
         "/api/v1/persons/setup",
-        json={"name1": "Charlie", "name2": "Dana"},
+        json={
+            "name1": "Charlie",
+            "name2": "Dana",
+            "password1": "password123",
+            "password2": "password456",
+        },
     )
     assert response.status_code == 409
     assert "already set up" in response.json()["error"]["message"]
@@ -46,7 +66,12 @@ async def test_setup_couple_rejects_duplicate_setup(client: AsyncClient) -> None
 async def test_setup_couple_rejects_identical_names(client: AsyncClient) -> None:
     response = await client.post(
         "/api/v1/persons/setup",
-        json={"name1": "Alice", "name2": "alice"},
+        json={
+            "name1": "Alice",
+            "name2": "alice",
+            "password1": "password123",
+            "password2": "password456",
+        },
     )
     assert response.status_code == 422
     assert "different" in response.json()["error"]["message"]
@@ -81,7 +106,12 @@ async def test_patch_person_updates_adjustment_account(
 ) -> None:
     setup = await client.post(
         "/api/v1/persons/setup",
-        json={"name1": "Alice", "name2": "Bob"},
+        json={
+            "name1": "Alice",
+            "name2": "Bob",
+            "password1": "password123",
+            "password2": "password456",
+        },
     )
     person_id = setup.json()[0]["id"]
 
@@ -111,7 +141,12 @@ async def test_patch_person_rejects_blank_account(
 ) -> None:
     setup = await client.post(
         "/api/v1/persons/setup",
-        json={"name1": "Alice", "name2": "Bob"},
+        json={
+            "name1": "Alice",
+            "name2": "Bob",
+            "password1": "password123",
+            "password2": "password456",
+        },
     )
     person_id = setup.json()[0]["id"]
 

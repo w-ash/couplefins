@@ -55,11 +55,20 @@ async def client() -> AsyncGenerator[AsyncClient]:
     pathlib.Path(db_path).unlink()  # noqa: ASYNC240
 
 
-async def setup_couple(client: AsyncClient) -> list[dict]:
+async def setup_couple(
+    client: AsyncClient,
+    password1: str = "password123",
+    password2: str = "password456",
+) -> list[dict]:
     """Create a couple (Alice & Bob) and return the person dicts."""
     resp = await client.post(
         "/api/v1/persons/setup",
-        json={"name1": "Alice", "name2": "Bob"},
+        json={
+            "name1": "Alice",
+            "name2": "Bob",
+            "password1": password1,
+            "password2": password2,
+        },
     )
     return resp.json()
 
