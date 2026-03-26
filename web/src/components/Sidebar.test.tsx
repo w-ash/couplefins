@@ -10,15 +10,15 @@ import {
 } from "@/test/test-utils";
 import { Sidebar } from "./Sidebar";
 
-const persons = [
-  { id: "p1", name: "Alice", adjustment_account: "adj-1" },
-  { id: "p2", name: "Bob", adjustment_account: "adj-2" },
-];
-
 describe("Sidebar", () => {
   beforeEach(() => {
-    useIdentityStore.setState({ currentPersonId: "p1" });
-    server.use(http.get("/api/v1/persons/", () => HttpResponse.json(persons)));
+    useIdentityStore.setState({
+      currentPersonId: "p1",
+      currentPersonName: "Alice",
+    });
+    server.use(
+      http.post("/api/v1/auth/logout", () => HttpResponse.json({ ok: true })),
+    );
   });
 
   it("renders the wordmark", async () => {
@@ -52,28 +52,32 @@ describe("Sidebar", () => {
     expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
   });
 
-  it("displays both person names in identity toggle", async () => {
+  it("displays the current person name", () => {
     renderWithProviders(<Sidebar />, {
       routerProps: { initialEntries: ["/upload"] },
     });
-    await waitFor(() => {
-      expect(screen.getByText("Alice")).toBeInTheDocument();
-    });
-    expect(screen.getByText("Bob")).toBeInTheDocument();
+    expect(screen.getByText("Alice")).toBeInTheDocument();
   });
 
-  it("switches identity when clicking the inactive person", async () => {
+  it("has a logout button", () => {
+    renderWithProviders(<Sidebar />, {
+      routerProps: { initialEntries: ["/upload"] },
+    });
+    expect(screen.getByRole("button", { name: "Log out" })).toBeInTheDocument();
+  });
+
+  it("clears identity on logout", async () => {
     const user = userEvent.setup();
     renderWithProviders(<Sidebar />, {
       routerProps: { initialEntries: ["/upload"] },
     });
 
-    await waitFor(() => {
-      expect(screen.getByText("Bob")).toBeInTheDocument();
-    });
+    await user.click(screen.getByRole("button", { name: "Log out" }));
 
-    await user.click(screen.getByText("Bob"));
-    expect(useIdentityStore.getState().currentPersonId).toBe("p2");
+    await waitFor(() => {
+      expect(useIdentityStore.getState().currentPersonId).toBeNull();
+      expect(useIdentityStore.getState().currentPersonName).toBeNull();
+    });
   });
 
   it("has aria-label on aside and nav", () => {
@@ -86,22 +90,5 @@ describe("Sidebar", () => {
     expect(
       screen.getByRole("navigation", { name: "App navigation" }),
     ).toBeInTheDocument();
-  });
-
-  it("has aria-pressed on identity toggle buttons", async () => {
-    renderWithProviders(<Sidebar />, {
-      routerProps: { initialEntries: ["/upload"] },
-    });
-    await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: "Alice (active)" }),
-      ).toBeInTheDocument();
-    });
-
-    const aliceButton = screen.getByRole("button", { name: "Alice (active)" });
-    const bobButton = screen.getByRole("button", { name: "Switch to Bob" });
-
-    expect(aliceButton).toHaveAttribute("aria-pressed", "true");
-    expect(bobButton).toHaveAttribute("aria-pressed", "false");
   });
 });

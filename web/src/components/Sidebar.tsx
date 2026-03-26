@@ -1,16 +1,9 @@
 import { Heart } from "lucide-react";
-import { useGetPersons } from "@/api/generated/persons/persons";
-import { useIdentityStore } from "@/lib/identity";
 import { PRIMARY_ROUTES, SECONDARY_ROUTES } from "@/lib/navigation";
+import { LoggedInUser } from "./LoggedInUser";
 import { NavItem } from "./NavItem";
-import { PersonSwitcher } from "./PersonSwitcher";
 
 export function Sidebar() {
-  const { data: response } = useGetPersons();
-  const persons = response?.data;
-  const currentPersonId = useIdentityStore((s) => s.currentPersonId);
-  const setCurrentPersonId = useIdentityStore((s) => s.setCurrentPersonId);
-
   return (
     <aside
       aria-label="Main navigation"
@@ -44,17 +37,10 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* Identity toggle */}
-      {persons && persons.length >= 2 && currentPersonId && (
-        <div className="space-y-1 border-t border-border px-4 py-4">
-          <PersonSwitcher
-            persons={persons}
-            currentPersonId={currentPersonId}
-            onSwitch={setCurrentPersonId}
-            compact
-          />
-        </div>
-      )}
+      {/* Logged-in user + logout */}
+      <div className="border-t border-border px-4 py-4">
+        <LoggedInUser compact />
+      </div>
     </aside>
   );
 }

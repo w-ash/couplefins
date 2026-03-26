@@ -3,7 +3,7 @@ import io
 
 from httpx import AsyncClient
 
-from tests.integration.conftest import setup_couple, upload_csv
+from tests.integration.conftest import setup_and_login, upload_csv
 
 SHARED_CSV_ALICE = (
     "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
@@ -17,29 +17,35 @@ SHARED_CSV_BOB = (
 )
 
 
-async def _setup_with_accounts(client: AsyncClient) -> tuple[str, str]:
-    """Create couple and set adjustment accounts. Returns (alice_id, bob_id)."""
-    persons = await setup_couple(client)
+async def _setup_with_accounts(
+    client: AsyncClient,
+) -> tuple[str, str, dict[str, str]]:
+    """Create couple, log in, set adjustment accounts. Returns (alice_id, bob_id, cookies)."""
+    persons, cookies = await setup_and_login(client)
     alice_id = persons[0]["id"]
     bob_id = persons[1]["id"]
 
     await client.patch(
         f"/api/v1/persons/{alice_id}",
         json={"adjustment_account": "Alice Adjustments"},
+        cookies=cookies,
     )
     await client.patch(
         f"/api/v1/persons/{bob_id}",
         json={"adjustment_account": "Bob Adjustments"},
+        cookies=cookies,
     )
-    return alice_id, bob_id
+    return alice_id, bob_id, cookies
 
 
 async def test_export_full_flow(client: AsyncClient) -> None:
-    alice_id, bob_id = await _setup_with_accounts(client)
-    await upload_csv(client, alice_id, SHARED_CSV_ALICE)
-    await upload_csv(client, bob_id, SHARED_CSV_BOB)
+    alice_id, bob_id, cookies = await _setup_with_accounts(client)
+    await upload_csv(client, alice_id, SHARED_CSV_ALICE, cookies=cookies)
+    await upload_csv(client, bob_id, SHARED_CSV_BOB, cookies=cookies)
 
-    response = await client.get(f"/api/v1/persons/{alice_id}/export/2026/1")
+    response = await client.get(
+        f"/api/v1/persons/{alice_id}/export/2026/1", cookies=cookies
+    )
     assert response.status_code == 200
     assert response.headers["content-type"] == "text/csv; charset=utf-8"
     assert "adjustments-alice-2026-01.csv" in response.headers["content-disposition"]
@@ -62,11 +68,13 @@ async def test_export_full_flow(client: AsyncClient) -> None:
 
 
 async def test_export_bob_perspective(client: AsyncClient) -> None:
-    alice_id, bob_id = await _setup_with_accounts(client)
-    await upload_csv(client, alice_id, SHARED_CSV_ALICE)
-    await upload_csv(client, bob_id, SHARED_CSV_BOB)
+    alice_id, bob_id, cookies = await _setup_with_accounts(client)
+    await upload_csv(client, alice_id, SHARED_CSV_ALICE, cookies=cookies)
+    await upload_csv(client, bob_id, SHARED_CSV_BOB, cookies=cookies)
 
-    response = await client.get(f"/api/v1/persons/{bob_id}/export/2026/1")
+    response = await client.get(
+        f"/api/v1/persons/{bob_id}/export/2026/1", cookies=cookies
+    )
     assert response.status_code == 200
     assert "adjustments-bob-2026-01.csv" in response.headers["content-disposition"]
 
@@ -77,26 +85,31 @@ async def test_export_bob_perspective(client: AsyncClient) -> None:
 
 
 async def test_export_person_not_found(client: AsyncClient) -> None:
-    await _setup_with_accounts(client)
+    _, _, cookies = await _setup_with_accounts(client)
     response = await client.get(
-        "/api/v1/persons/00000000-0000-0000-0000-000000000000/export/2026/1"
+        "/api/v1/persons/00000000-0000-0000-0000-000000000000/export/2026/1",
+        cookies=cookies,
     )
     assert response.status_code == 404
 
 
 async def test_export_without_adjustment_account(client: AsyncClient) -> None:
-    persons = await setup_couple(client)
+    persons, cookies = await setup_and_login(client)
     alice_id = persons[0]["id"]
 
-    response = await client.get(f"/api/v1/persons/{alice_id}/export/2026/1")
+    response = await client.get(
+        f"/api/v1/persons/{alice_id}/export/2026/1", cookies=cookies
+    )
     assert response.status_code == 422
     assert "not configured" in response.json()["error"]["message"]
 
 
 async def test_export_empty_month(client: AsyncClient) -> None:
-    alice_id, _ = await _setup_with_accounts(client)
+    alice_id, _, cookies = await _setup_with_accounts(client)
 
-    response = await client.get(f"/api/v1/persons/{alice_id}/export/2026/3")
+    response = await client.get(
+        f"/api/v1/persons/{alice_id}/export/2026/3", cookies=cookies
+    )
     assert response.status_code == 200
 
     rows = list(csv.reader(io.StringIO(response.text)))
@@ -104,12 +117,16 @@ async def test_export_empty_month(client: AsyncClient) -> None:
 
 
 async def test_export_idempotent(client: AsyncClient) -> None:
-    alice_id, bob_id = await _setup_with_accounts(client)
-    await upload_csv(client, alice_id, SHARED_CSV_ALICE)
-    await upload_csv(client, bob_id, SHARED_CSV_BOB)
+    alice_id, bob_id, cookies = await _setup_with_accounts(client)
+    await upload_csv(client, alice_id, SHARED_CSV_ALICE, cookies=cookies)
+    await upload_csv(client, bob_id, SHARED_CSV_BOB, cookies=cookies)
 
-    first = await client.get(f"/api/v1/persons/{alice_id}/export/2026/1")
-    second = await client.get(f"/api/v1/persons/{alice_id}/export/2026/1")
+    first = await client.get(
+        f"/api/v1/persons/{alice_id}/export/2026/1", cookies=cookies
+    )
+    second = await client.get(
+        f"/api/v1/persons/{alice_id}/export/2026/1", cookies=cookies
+    )
     assert first.text == second.text
 
 
@@ -117,11 +134,13 @@ async def test_export_idempotent(client: AsyncClient) -> None:
 
 
 async def test_preview_returns_json(client: AsyncClient) -> None:
-    alice_id, bob_id = await _setup_with_accounts(client)
-    await upload_csv(client, alice_id, SHARED_CSV_ALICE)
-    await upload_csv(client, bob_id, SHARED_CSV_BOB)
+    alice_id, bob_id, cookies = await _setup_with_accounts(client)
+    await upload_csv(client, alice_id, SHARED_CSV_ALICE, cookies=cookies)
+    await upload_csv(client, bob_id, SHARED_CSV_BOB, cookies=cookies)
 
-    response = await client.get(f"/api/v1/persons/{alice_id}/adjustments/2026/1")
+    response = await client.get(
+        f"/api/v1/persons/{alice_id}/adjustments/2026/1", cookies=cookies
+    )
     assert response.status_code == 200
 
     data = response.json()
@@ -137,9 +156,11 @@ async def test_preview_returns_json(client: AsyncClient) -> None:
 
 
 async def test_preview_empty_month(client: AsyncClient) -> None:
-    alice_id, _ = await _setup_with_accounts(client)
+    alice_id, _, cookies = await _setup_with_accounts(client)
 
-    response = await client.get(f"/api/v1/persons/{alice_id}/adjustments/2026/3")
+    response = await client.get(
+        f"/api/v1/persons/{alice_id}/adjustments/2026/3", cookies=cookies
+    )
     assert response.status_code == 200
 
     data = response.json()
@@ -148,9 +169,11 @@ async def test_preview_empty_month(client: AsyncClient) -> None:
 
 
 async def test_preview_without_adjustment_account(client: AsyncClient) -> None:
-    persons = await setup_couple(client)
+    persons, cookies = await setup_and_login(client)
     alice_id = persons[0]["id"]
 
-    response = await client.get(f"/api/v1/persons/{alice_id}/adjustments/2026/1")
+    response = await client.get(
+        f"/api/v1/persons/{alice_id}/adjustments/2026/1", cookies=cookies
+    )
     assert response.status_code == 422
     assert "not configured" in response.json()["error"]["message"]

@@ -1,16 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { useIdentityStore } from "./identity";
-
-const STORAGE_KEY = "couplefins:currentPersonId";
 
 describe("identity store", () => {
   beforeEach(() => {
-    localStorage.removeItem(STORAGE_KEY);
-    useIdentityStore.setState({ currentPersonId: null });
-  });
-
-  afterEach(() => {
-    localStorage.removeItem(STORAGE_KEY);
+    useIdentityStore.setState({
+      currentPersonId: null,
+      currentPersonName: null,
+    });
   });
 
   it("starts with null currentPersonId", () => {
@@ -26,24 +22,20 @@ describe("identity store", () => {
     useIdentityStore.getState().setCurrentPersonId("abc-123");
     useIdentityStore.getState().clearIdentity();
     expect(useIdentityStore.getState().currentPersonId).toBeNull();
+    expect(useIdentityStore.getState().currentPersonName).toBeNull();
   });
 
-  it("persists currentPersonId to localStorage", () => {
+  it("sets from auth response", () => {
+    useIdentityStore
+      .getState()
+      .setFromAuthResponse({ id: "abc-123", name: "Alice" });
+    expect(useIdentityStore.getState().currentPersonId).toBe("abc-123");
+    expect(useIdentityStore.getState().currentPersonName).toBe("Alice");
+  });
+
+  it("does not persist to localStorage", () => {
     useIdentityStore.getState().setCurrentPersonId("abc-123");
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
-    expect(stored.state.currentPersonId).toBe("abc-123");
-  });
-
-  it("hydrates from localStorage", async () => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ state: { currentPersonId: "xyz-789" }, version: 0 }),
-    );
-    await useIdentityStore.persist.rehydrate();
-    expect(useIdentityStore.getState().currentPersonId).toBe("xyz-789");
-  });
-
-  it("reports hydrated via persist API", () => {
-    expect(useIdentityStore.persist.hasHydrated()).toBe(true);
+    const stored = localStorage.getItem("couplefins:currentPersonId");
+    expect(stored).toBeNull();
   });
 });

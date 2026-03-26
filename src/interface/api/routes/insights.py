@@ -1,15 +1,16 @@
 from datetime import UTC, datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from src.application.runner import execute_use_case
 from src.application.use_cases.get_spending_trends import (
     GetSpendingTrendsCommand,
     GetSpendingTrendsUseCase,
 )
+from src.interface.api.dependencies import get_current_user
 from src.interface.api.schemas.insights import SpendingTrendsResponse
 
-router = APIRouter(tags=["insights"])
+router = APIRouter(tags=["insights"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/insights/spending-trends")

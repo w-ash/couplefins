@@ -1,7 +1,7 @@
 from httpx import AsyncClient
 import pytest
 
-from tests.integration.conftest import setup_couple, upload_csv
+from tests.integration.conftest import setup_and_login, upload_csv
 
 SHARED_CSV_ALICE = (
     "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
@@ -17,14 +17,14 @@ SHARED_CSV_BOB = (
 
 
 async def test_dashboard_with_data(client: AsyncClient) -> None:
-    persons = await setup_couple(client)
+    persons, cookies = await setup_and_login(client)
     alice_id = persons[0]["id"]
     bob_id = persons[1]["id"]
 
-    await upload_csv(client, alice_id, SHARED_CSV_ALICE)
-    await upload_csv(client, bob_id, SHARED_CSV_BOB)
+    await upload_csv(client, alice_id, SHARED_CSV_ALICE, cookies=cookies)
+    await upload_csv(client, bob_id, SHARED_CSV_BOB, cookies=cookies)
 
-    response = await client.get("/api/v1/dashboard?year=2026&month=1")
+    response = await client.get("/api/v1/dashboard?year=2026&month=1", cookies=cookies)
     assert response.status_code == 200
 
     data = response.json()
@@ -38,12 +38,12 @@ async def test_dashboard_with_data(client: AsyncClient) -> None:
 
 
 async def test_dashboard_month_history(client: AsyncClient) -> None:
-    persons = await setup_couple(client)
+    persons, cookies = await setup_and_login(client)
     alice_id = persons[0]["id"]
 
-    await upload_csv(client, alice_id, SHARED_CSV_ALICE)
+    await upload_csv(client, alice_id, SHARED_CSV_ALICE, cookies=cookies)
 
-    response = await client.get("/api/v1/dashboard?year=2026&month=2")
+    response = await client.get("/api/v1/dashboard?year=2026&month=2", cookies=cookies)
     assert response.status_code == 200
 
     data = response.json()
@@ -55,12 +55,12 @@ async def test_dashboard_month_history(client: AsyncClient) -> None:
 
 
 async def test_dashboard_ytd_aggregation(client: AsyncClient) -> None:
-    persons = await setup_couple(client)
+    persons, cookies = await setup_and_login(client)
     alice_id = persons[0]["id"]
 
-    await upload_csv(client, alice_id, SHARED_CSV_ALICE)
+    await upload_csv(client, alice_id, SHARED_CSV_ALICE, cookies=cookies)
 
-    response = await client.get("/api/v1/dashboard?year=2026&month=2")
+    response = await client.get("/api/v1/dashboard?year=2026&month=2", cookies=cookies)
     data = response.json()
 
     # YTD should include Jan ($100 + $60) + Feb ($20) = $180
@@ -68,9 +68,9 @@ async def test_dashboard_ytd_aggregation(client: AsyncClient) -> None:
 
 
 async def test_dashboard_defaults_to_current_month(client: AsyncClient) -> None:
-    await setup_couple(client)
+    _, cookies = await setup_and_login(client)
 
-    response = await client.get("/api/v1/dashboard")
+    response = await client.get("/api/v1/dashboard", cookies=cookies)
     assert response.status_code == 200
 
     data = response.json()
@@ -80,9 +80,9 @@ async def test_dashboard_defaults_to_current_month(client: AsyncClient) -> None:
 
 
 async def test_dashboard_empty_month(client: AsyncClient) -> None:
-    await setup_couple(client)
+    _, cookies = await setup_and_login(client)
 
-    response = await client.get("/api/v1/dashboard?year=2026&month=6")
+    response = await client.get("/api/v1/dashboard?year=2026&month=6", cookies=cookies)
     assert response.status_code == 200
 
     data = response.json()

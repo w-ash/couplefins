@@ -1,6 +1,6 @@
 from httpx import AsyncClient
 
-from tests.integration.conftest import setup_couple, upload_csv
+from tests.integration.conftest import setup_and_login, upload_csv
 
 ALICE_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags
 2026-01-10,Sushi Place,Dining Out,Chase,SUSHI PLACE,,-40.00,"shared"
@@ -19,11 +19,13 @@ BOB_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags
 
 
 async def test_spending_trends_with_data(client: AsyncClient) -> None:
-    persons = await setup_couple(client)
-    await upload_csv(client, persons[0]["id"], ALICE_CSV)
-    await upload_csv(client, persons[1]["id"], BOB_CSV)
+    persons, cookies = await setup_and_login(client)
+    await upload_csv(client, persons[0]["id"], ALICE_CSV, cookies=cookies)
+    await upload_csv(client, persons[1]["id"], BOB_CSV, cookies=cookies)
 
-    resp = await client.get("/api/v1/insights/spending-trends", params={"year": 2026})
+    resp = await client.get(
+        "/api/v1/insights/spending-trends", params={"year": 2026}, cookies=cookies
+    )
     assert resp.status_code == 200
 
     data = resp.json()
@@ -45,9 +47,11 @@ async def test_spending_trends_with_data(client: AsyncClient) -> None:
 
 
 async def test_spending_trends_empty_year(client: AsyncClient) -> None:
-    await setup_couple(client)
+    _, cookies = await setup_and_login(client)
 
-    resp = await client.get("/api/v1/insights/spending-trends", params={"year": 2025})
+    resp = await client.get(
+        "/api/v1/insights/spending-trends", params={"year": 2025}, cookies=cookies
+    )
     assert resp.status_code == 200
 
     data = resp.json()
@@ -61,19 +65,21 @@ async def test_spending_trends_empty_year(client: AsyncClient) -> None:
 
 
 async def test_spending_trends_defaults_to_current_year(client: AsyncClient) -> None:
-    await setup_couple(client)
+    _, cookies = await setup_and_login(client)
 
-    resp = await client.get("/api/v1/insights/spending-trends")
+    resp = await client.get("/api/v1/insights/spending-trends", cookies=cookies)
     assert resp.status_code == 200
     assert resp.json()["year"] > 0
 
 
 async def test_spending_trends_with_month_param(client: AsyncClient) -> None:
-    persons = await setup_couple(client)
-    await upload_csv(client, persons[0]["id"], ALICE_CSV)
+    persons, cookies = await setup_and_login(client)
+    await upload_csv(client, persons[0]["id"], ALICE_CSV, cookies=cookies)
 
     resp = await client.get(
-        "/api/v1/insights/spending-trends", params={"year": 2026, "month": 2}
+        "/api/v1/insights/spending-trends",
+        params={"year": 2026, "month": 2},
+        cookies=cookies,
     )
     assert resp.status_code == 200
 
@@ -82,9 +88,11 @@ async def test_spending_trends_with_month_param(client: AsyncClient) -> None:
 
 
 async def test_spending_trends_includes_persons(client: AsyncClient) -> None:
-    await setup_couple(client)
+    _, cookies = await setup_and_login(client)
 
-    resp = await client.get("/api/v1/insights/spending-trends", params={"year": 2026})
+    resp = await client.get(
+        "/api/v1/insights/spending-trends", params={"year": 2026}, cookies=cookies
+    )
     assert resp.status_code == 200
 
     persons = resp.json()["persons"]
@@ -94,13 +102,14 @@ async def test_spending_trends_includes_persons(client: AsyncClient) -> None:
 
 
 async def test_spending_trends_with_comparison_year(client: AsyncClient) -> None:
-    persons = await setup_couple(client)
-    await upload_csv(client, persons[0]["id"], ALICE_CSV)
-    await upload_csv(client, persons[0]["id"], ALICE_2025_CSV)
+    persons, cookies = await setup_and_login(client)
+    await upload_csv(client, persons[0]["id"], ALICE_CSV, cookies=cookies)
+    await upload_csv(client, persons[0]["id"], ALICE_2025_CSV, cookies=cookies)
 
     resp = await client.get(
         "/api/v1/insights/spending-trends",
         params={"year": 2026, "comparison_year": 2025},
+        cookies=cookies,
     )
     assert resp.status_code == 200
 
@@ -111,22 +120,25 @@ async def test_spending_trends_with_comparison_year(client: AsyncClient) -> None
 
 
 async def test_spending_trends_comparison_year_no_data(client: AsyncClient) -> None:
-    persons = await setup_couple(client)
-    await upload_csv(client, persons[0]["id"], ALICE_CSV)
+    persons, cookies = await setup_and_login(client)
+    await upload_csv(client, persons[0]["id"], ALICE_CSV, cookies=cookies)
 
     resp = await client.get(
         "/api/v1/insights/spending-trends",
         params={"year": 2026, "comparison_year": 2020},
+        cookies=cookies,
     )
     assert resp.status_code == 200
     assert resp.json()["comparison_monthly_group_spending"] == []
 
 
 async def test_spending_trends_categories_present(client: AsyncClient) -> None:
-    persons = await setup_couple(client)
-    await upload_csv(client, persons[0]["id"], ALICE_CSV)
+    persons, cookies = await setup_and_login(client)
+    await upload_csv(client, persons[0]["id"], ALICE_CSV, cookies=cookies)
 
-    resp = await client.get("/api/v1/insights/spending-trends", params={"year": 2026})
+    resp = await client.get(
+        "/api/v1/insights/spending-trends", params={"year": 2026}, cookies=cookies
+    )
     assert resp.status_code == 200
 
     data = resp.json()

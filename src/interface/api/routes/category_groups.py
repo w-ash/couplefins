@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from src.application.runner import execute_use_case
 from src.application.use_cases.bulk_update_mappings import (
@@ -26,6 +26,7 @@ from src.application.use_cases.update_category_group import (
     UpdateCategoryGroupCommand,
     UpdateCategoryGroupUseCase,
 )
+from src.interface.api.dependencies import get_current_user
 from src.interface.api.schemas.category_groups import (
     BulkUpdateMappingsRequest,
     CategoryGroupResponse,
@@ -35,7 +36,7 @@ from src.interface.api.schemas.category_groups import (
     UpdateCategoryRequest,
 )
 
-router = APIRouter(tags=["category-groups"])
+router = APIRouter(tags=["category-groups"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/category-groups")

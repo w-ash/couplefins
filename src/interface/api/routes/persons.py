@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 
 from src.application.runner import execute_use_case
@@ -18,7 +18,9 @@ from src.application.use_cases.update_person import (
     UpdatePersonCommand,
     UpdatePersonUseCase,
 )
+from src.domain.entities.person import Person
 from src.infrastructure.auth.password import hash_password
+from src.interface.api.dependencies import get_current_user
 from src.interface.api.schemas.persons import (
     AdjustmentPreviewResponse,
     PersonResponse,
@@ -30,7 +32,9 @@ router = APIRouter(prefix="/persons", tags=["persons"])
 
 
 @router.get("/")
-async def get_persons() -> list[PersonResponse]:
+async def get_persons(
+    _current_user: Person = Depends(get_current_user),
+) -> list[PersonResponse]:
     result = await execute_use_case(list_persons)
     return [PersonResponse.from_domain(p) for p in result.persons]
 
@@ -52,7 +56,11 @@ async def setup_couple(body: SetupCoupleRequest) -> list[PersonResponse]:
 
 
 @router.patch("/{person_id}")
-async def update_person(person_id: UUID, body: UpdatePersonRequest) -> PersonResponse:
+async def update_person(
+    person_id: UUID,
+    body: UpdatePersonRequest,
+    _current_user: Person = Depends(get_current_user),
+) -> PersonResponse:
     command = UpdatePersonCommand(
         id=person_id, adjustment_account=body.adjustment_account
     )
@@ -64,7 +72,10 @@ async def update_person(person_id: UUID, body: UpdatePersonRequest) -> PersonRes
 
 @router.get("/{person_id}/adjustments/{year}/{month}")
 async def preview_adjustments(
-    person_id: UUID, year: int, month: int
+    person_id: UUID,
+    year: int,
+    month: int,
+    _current_user: Person = Depends(get_current_user),
 ) -> AdjustmentPreviewResponse:
     command = ExportAdjustmentsCommand(person_id=person_id, year=year, month=month)
     result = await execute_use_case(
@@ -74,7 +85,12 @@ async def preview_adjustments(
 
 
 @router.get("/{person_id}/export/{year}/{month}")
-async def export_adjustments(person_id: UUID, year: int, month: int) -> Response:
+async def export_adjustments(
+    person_id: UUID,
+    year: int,
+    month: int,
+    _current_user: Person = Depends(get_current_user),
+) -> Response:
     command = ExportAdjustmentsCommand(person_id=person_id, year=year, month=month)
     result = await execute_use_case(
         lambda uow: ExportAdjustmentsUseCase().execute(command, uow)

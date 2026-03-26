@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from src.application.runner import execute_use_case
 from src.application.use_cases.delete_budget import (
@@ -17,6 +17,7 @@ from src.application.use_cases.update_budget import (
     UpdateBudgetCommand,
     UpdateBudgetUseCase,
 )
+from src.interface.api.dependencies import get_current_user
 from src.interface.api.schemas.budgets import (
     BudgetOverviewResponse,
     BudgetResponse,
@@ -24,7 +25,7 @@ from src.interface.api.schemas.budgets import (
     UpdateBudgetRequest,
 )
 
-router = APIRouter(tags=["budgets"])
+router = APIRouter(tags=["budgets"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/budgets/overview")

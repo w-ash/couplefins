@@ -7,9 +7,11 @@ import { useIdentityStore } from "@/lib/identity";
 import { server } from "@/test/server";
 import { App } from "./App";
 
-const persons = [
-  { id: "p1", name: "Alice", adjustment_account: "adj-1" },
-  { id: "p2", name: "Bob", adjustment_account: "adj-2" },
+const meResponse = { id: "p1", name: "Alice", adjustment_account: "adj-1" };
+
+const authPersons = [
+  { name: "Alice", has_password: true },
+  { name: "Bob", has_password: true },
 ];
 
 function renderApp() {
@@ -28,13 +30,28 @@ function renderApp() {
   );
 }
 
-describe("App three-state gate", () => {
+function mockAuth401() {
+  return http.get("/api/v1/auth/me", () =>
+    HttpResponse.json(
+      { error: { code: "AUTHENTICATION_ERROR", message: "Not authenticated" } },
+      { status: 401 },
+    ),
+  );
+}
+
+describe("App auth gate", () => {
   beforeEach(() => {
-    useIdentityStore.setState({ currentPersonId: null });
+    useIdentityStore.setState({
+      currentPersonId: null,
+      currentPersonName: null,
+    });
   });
 
   it("shows SetupPage when no persons exist", async () => {
-    server.use(http.get("/api/v1/persons/", () => HttpResponse.json([])));
+    server.use(
+      mockAuth401(),
+      http.get("/api/v1/auth/persons", () => HttpResponse.json([])),
+    );
     renderApp();
     await waitFor(() => {
       expect(screen.getByText("Welcome to CoupleFins")).toBeInTheDocument();
@@ -43,7 +60,10 @@ describe("App three-state gate", () => {
 
   it("shows SetupPage when only one person exists", async () => {
     server.use(
-      http.get("/api/v1/persons/", () => HttpResponse.json([persons[0]])),
+      mockAuth401(),
+      http.get("/api/v1/auth/persons", () =>
+        HttpResponse.json([{ name: "Alice", has_password: true }]),
+      ),
     );
     renderApp();
     await waitFor(() => {
@@ -51,30 +71,40 @@ describe("App three-state gate", () => {
     });
   });
 
-  it("shows ProfilePicker when persons exist but no identity is stored", async () => {
-    server.use(http.get("/api/v1/persons/", () => HttpResponse.json(persons)));
+  it("shows LoginPage when persons exist with passwords", async () => {
+    server.use(
+      mockAuth401(),
+      http.get("/api/v1/auth/persons", () => HttpResponse.json(authPersons)),
+    );
     renderApp();
     await waitFor(() => {
-      expect(screen.getByText("Who are you?")).toBeInTheDocument();
+      expect(screen.getByText("Welcome back")).toBeInTheDocument();
     });
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.getByText("Bob")).toBeInTheDocument();
   });
 
-  it("shows ProfilePicker when stored identity is stale", async () => {
-    useIdentityStore.setState({ currentPersonId: "nonexistent-id" });
-    server.use(http.get("/api/v1/persons/", () => HttpResponse.json(persons)));
+  it("shows SetInitialPasswordPage when persons have no passwords", async () => {
+    server.use(
+      mockAuth401(),
+      http.get("/api/v1/auth/persons", () =>
+        HttpResponse.json([
+          { name: "Alice", has_password: false },
+          { name: "Bob", has_password: false },
+        ]),
+      ),
+    );
     renderApp();
     await waitFor(() => {
-      expect(screen.getByText("Who are you?")).toBeInTheDocument();
+      expect(screen.getByText("Set Your Password")).toBeInTheDocument();
     });
   });
 
-  it("shows app shell when identity is valid", async () => {
-    useIdentityStore.setState({ currentPersonId: "p1" });
+  it("shows app shell when authenticated", async () => {
     server.use(
-      http.get("/api/v1/persons/", () => HttpResponse.json(persons)),
+      http.get("/api/v1/auth/me", () => HttpResponse.json(meResponse)),
       http.get("/api/v1/dashboard", () => HttpResponse.json({})),
+      http.get("/api/v1/persons/", () => HttpResponse.json([])),
     );
     renderApp();
     await waitFor(() => {
@@ -83,16 +113,13 @@ describe("App three-state gate", () => {
     expect(
       screen.getByRole("navigation", { name: "App navigation" }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("navigation", { name: "Mobile navigation" }),
-    ).toBeInTheDocument();
   });
 
   it("renders skip-to-content link in app shell", async () => {
-    useIdentityStore.setState({ currentPersonId: "p1" });
     server.use(
-      http.get("/api/v1/persons/", () => HttpResponse.json(persons)),
+      http.get("/api/v1/auth/me", () => HttpResponse.json(meResponse)),
       http.get("/api/v1/dashboard", () => HttpResponse.json({})),
+      http.get("/api/v1/persons/", () => HttpResponse.json([])),
     );
     renderApp();
     await waitFor(() => {
@@ -103,12 +130,15 @@ describe("App three-state gate", () => {
     expect(link).toHaveAttribute("href", "#main-content");
   });
 
-  it("shows error state when persons API fails", async () => {
+  it("shows error state when /auth/me returns non-401 error", async () => {
     server.use(
-      http.get("/api/v1/persons/", () =>
+      http.get("/api/v1/auth/me", () =>
         HttpResponse.json(
           {
-            error: { code: "INTERNAL_ERROR", message: "Database unavailable" },
+            error: {
+              code: "INTERNAL_ERROR",
+              message: "Database unavailable",
+            },
           },
           { status: 500 },
         ),
@@ -123,9 +153,9 @@ describe("App three-state gate", () => {
 
   it("shows accessible loading state", () => {
     server.use(
-      http.get("/api/v1/persons/", async () => {
+      http.get("/api/v1/auth/me", async () => {
         await new Promise(() => {});
-        return HttpResponse.json([]);
+        return HttpResponse.json({});
       }),
     );
     renderApp();

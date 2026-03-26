@@ -1,6 +1,6 @@
 from httpx import AsyncClient
 
-from tests.integration.conftest import setup_couple, upload_csv
+from tests.integration.conftest import setup_and_login, upload_csv
 
 SHARED_CSV = (
     "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
@@ -9,38 +9,41 @@ SHARED_CSV = (
 )
 
 
-async def _setup_transactions(client: AsyncClient) -> tuple[str, list[dict]]:
-    """Upload CSV and return (person_id, transactions from reconciliation)."""
-    persons = await setup_couple(client)
+async def _setup_transactions(
+    client: AsyncClient,
+) -> tuple[str, list[dict], dict[str, str]]:
+    """Upload CSV and return (person_id, transactions, cookies)."""
+    persons, cookies = await setup_and_login(client)
     alice_id = persons[0]["id"]
-    await upload_csv(client, alice_id, SHARED_CSV)
+    await upload_csv(client, alice_id, SHARED_CSV, cookies=cookies)
 
-    resp = await client.get("/api/v1/reconciliation?year=2026&month=1")
+    resp = await client.get("/api/v1/reconciliation?year=2026&month=1", cookies=cookies)
     assert resp.status_code == 200
     txs = resp.json()["transactions"]
     assert len(txs) == 2
-    return alice_id, txs
+    return alice_id, txs, cookies
 
 
 async def test_update_single_split(client: AsyncClient) -> None:
-    _, txs = await _setup_transactions(client)
+    _, txs, cookies = await _setup_transactions(client)
     tx_id = txs[0]["id"]
 
     response = await client.patch(
         "/api/v1/transactions/splits",
         json={"splits": [{"transaction_id": tx_id, "payer_percentage": 70}]},
+        cookies=cookies,
     )
     assert response.status_code == 200
     assert response.json()["updated_count"] == 1
 
     # Verify the change persisted
-    resp = await client.get("/api/v1/reconciliation?year=2026&month=1")
+    resp = await client.get("/api/v1/reconciliation?year=2026&month=1", cookies=cookies)
     updated_tx = next(t for t in resp.json()["transactions"] if t["id"] == tx_id)
     assert updated_tx["payer_percentage"] == 70
 
 
 async def test_update_bulk_splits(client: AsyncClient) -> None:
-    _, txs = await _setup_transactions(client)
+    _, txs, cookies = await _setup_transactions(client)
 
     response = await client.patch(
         "/api/v1/transactions/splits",
@@ -50,6 +53,7 @@ async def test_update_bulk_splits(client: AsyncClient) -> None:
                 {"transaction_id": txs[1]["id"], "payer_percentage": 80},
             ]
         },
+        cookies=cookies,
     )
     assert response.status_code == 200
     assert response.json()["updated_count"] == 2
@@ -58,15 +62,18 @@ async def test_update_bulk_splits(client: AsyncClient) -> None:
 async def test_update_split_on_finalized_month_returns_409(
     client: AsyncClient,
 ) -> None:
-    _, txs = await _setup_transactions(client)
+    _, txs, cookies = await _setup_transactions(client)
 
     await client.post(
-        "/api/v1/reconciliation/finalize", json={"year": 2026, "month": 1}
+        "/api/v1/reconciliation/finalize",
+        json={"year": 2026, "month": 1},
+        cookies=cookies,
     )
 
     response = await client.patch(
         "/api/v1/transactions/splits",
         json={"splits": [{"transaction_id": txs[0]["id"], "payer_percentage": 70}]},
+        cookies=cookies,
     )
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "PERIOD_FINALIZED"
@@ -75,6 +82,7 @@ async def test_update_split_on_finalized_month_returns_409(
 async def test_update_split_missing_transaction_returns_404(
     client: AsyncClient,
 ) -> None:
+    _, _, cookies = await _setup_transactions(client)
     response = await client.patch(
         "/api/v1/transactions/splits",
         json={
@@ -85,6 +93,7 @@ async def test_update_split_missing_transaction_returns_404(
                 }
             ]
         },
+        cookies=cookies,
     )
     assert response.status_code == 404
 
@@ -92,6 +101,7 @@ async def test_update_split_missing_transaction_returns_404(
 async def test_update_split_invalid_percentage_returns_422(
     client: AsyncClient,
 ) -> None:
+    _, _, cookies = await _setup_transactions(client)
     response = await client.patch(
         "/api/v1/transactions/splits",
         json={
@@ -102,6 +112,7 @@ async def test_update_split_invalid_percentage_returns_422(
                 }
             ]
         },
+        cookies=cookies,
     )
     assert response.status_code == 422
 
@@ -109,18 +120,22 @@ async def test_update_split_invalid_percentage_returns_422(
 async def test_update_split_empty_list_returns_422(
     client: AsyncClient,
 ) -> None:
+    _, _, cookies = await _setup_transactions(client)
     response = await client.patch(
         "/api/v1/transactions/splits",
         json={"splits": []},
+        cookies=cookies,
     )
     assert response.status_code == 422
 
 
 async def test_settlement_updates_after_split_change(client: AsyncClient) -> None:
     """Changing a split should affect the reconciliation settlement."""
-    _, txs = await _setup_transactions(client)
+    _, txs, cookies = await _setup_transactions(client)
 
-    resp_before = await client.get("/api/v1/reconciliation?year=2026&month=1")
+    resp_before = await client.get(
+        "/api/v1/reconciliation?year=2026&month=1", cookies=cookies
+    )
     settlement_before = resp_before.json()["settlement"]
 
     # Change the restaurant from 50/50 to 100/0 (payer covers everything)
@@ -130,9 +145,12 @@ async def test_settlement_updates_after_split_change(client: AsyncClient) -> Non
         json={
             "splits": [{"transaction_id": restaurant_tx["id"], "payer_percentage": 100}]
         },
+        cookies=cookies,
     )
 
-    resp_after = await client.get("/api/v1/reconciliation?year=2026&month=1")
+    resp_after = await client.get(
+        "/api/v1/reconciliation?year=2026&month=1", cookies=cookies
+    )
     settlement_after = resp_after.json()["settlement"]
 
     # Settlement should have changed

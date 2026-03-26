@@ -57,17 +57,18 @@ describe("SettingsPage", () => {
   it("has aria-labelledby on each section", () => {
     renderWithProviders(<SettingsPage />);
     const sections = screen.getAllByRole("region");
-    expect(sections).toHaveLength(3);
+    expect(sections).toHaveLength(4);
 
     expect(sections[0]).toHaveAttribute(
       "aria-labelledby",
       "settings-appearance",
     );
-    expect(sections[1]).toHaveAttribute(
+    expect(sections[1]).toHaveAttribute("aria-labelledby", "settings-account");
+    expect(sections[2]).toHaveAttribute(
       "aria-labelledby",
       "settings-category-mappings",
     );
-    expect(sections[2]).toHaveAttribute("aria-labelledby", "settings-people");
+    expect(sections[3]).toHaveAttribute("aria-labelledby", "settings-people");
   });
 
   it("shows empty state when no categories exist", async () => {

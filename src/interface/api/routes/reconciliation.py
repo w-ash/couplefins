@@ -1,7 +1,7 @@
 import datetime
 from datetime import UTC
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from src.application.runner import execute_use_case
 from src.application.use_cases.finalize_period import (
@@ -18,6 +18,7 @@ from src.application.use_cases.unfinalize_period import (
 )
 from src.domain.exceptions import ValidationError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
+from src.interface.api.dependencies import get_current_user
 from src.interface.api.schemas.reconciliation import (
     FinalizePeriodRequest,
     PeriodStatusResponse,
@@ -25,7 +26,7 @@ from src.interface.api.schemas.reconciliation import (
     UnfinalizePeriodRequest,
 )
 
-router = APIRouter(tags=["reconciliation"])
+router = APIRouter(tags=["reconciliation"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/reconciliation")

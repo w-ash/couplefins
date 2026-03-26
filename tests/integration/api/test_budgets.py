@@ -1,11 +1,14 @@
 from httpx import AsyncClient
 import pytest
 
-from tests.integration.conftest import setup_couple, upload_csv
+from tests.integration.conftest import setup_and_login, upload_csv
 
 
 async def test_budget_overview_empty(client: AsyncClient) -> None:
-    response = await client.get("/api/v1/budgets/overview?year=2026&month=1")
+    _, cookies = await setup_and_login(client)
+    response = await client.get(
+        "/api/v1/budgets/overview?year=2026&month=1", cookies=cookies
+    )
     assert response.status_code == 200
     data = response.json()
     assert data["year"] == 2026
@@ -15,8 +18,9 @@ async def test_budget_overview_empty(client: AsyncClient) -> None:
 
 
 async def test_create_budget(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
     group_resp = await client.post(
-        "/api/v1/category-groups", json={"name": "Food & Dining"}
+        "/api/v1/category-groups", json={"name": "Food & Dining"}, cookies=cookies
     )
     group_id = group_resp.json()["id"]
 
@@ -27,6 +31,7 @@ async def test_create_budget(client: AsyncClient) -> None:
             "monthly_amount": 500.0,
             "effective_from": "2026-01-01",
         },
+        cookies=cookies,
     )
     assert response.status_code == 201
     data = response.json()
@@ -37,8 +42,9 @@ async def test_create_budget(client: AsyncClient) -> None:
 
 
 async def test_update_budget(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
     group_resp = await client.post(
-        "/api/v1/category-groups", json={"name": "Home Expenses"}
+        "/api/v1/category-groups", json={"name": "Home Expenses"}, cookies=cookies
     )
     group_id = group_resp.json()["id"]
 
@@ -49,19 +55,24 @@ async def test_update_budget(client: AsyncClient) -> None:
             "monthly_amount": 500.0,
             "effective_from": "2026-01-01",
         },
+        cookies=cookies,
     )
     budget_id = create_resp.json()["id"]
 
     response = await client.put(
         f"/api/v1/budgets/{budget_id}",
         json={"monthly_amount": 600.0},
+        cookies=cookies,
     )
     assert response.status_code == 200
     assert response.json()["monthly_amount"] == pytest.approx(600.0)
 
 
 async def test_delete_budget(client: AsyncClient) -> None:
-    group_resp = await client.post("/api/v1/category-groups", json={"name": "Shopping"})
+    _, cookies = await setup_and_login(client)
+    group_resp = await client.post(
+        "/api/v1/category-groups", json={"name": "Shopping"}, cookies=cookies
+    )
     group_id = group_resp.json()["id"]
 
     create_resp = await client.post(
@@ -71,21 +82,26 @@ async def test_delete_budget(client: AsyncClient) -> None:
             "monthly_amount": 300.0,
             "effective_from": "2026-01-01",
         },
+        cookies=cookies,
     )
     budget_id = create_resp.json()["id"]
 
-    response = await client.delete(f"/api/v1/budgets/{budget_id}")
+    response = await client.delete(f"/api/v1/budgets/{budget_id}", cookies=cookies)
     assert response.status_code == 204
 
 
 async def test_delete_nonexistent_budget_returns_404(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
     fake_id = "00000000-0000-0000-0000-000000000000"
-    response = await client.delete(f"/api/v1/budgets/{fake_id}")
+    response = await client.delete(f"/api/v1/budgets/{fake_id}", cookies=cookies)
     assert response.status_code == 404
 
 
 async def test_list_budgets(client: AsyncClient) -> None:
-    group_resp = await client.post("/api/v1/category-groups", json={"name": "Health"})
+    _, cookies = await setup_and_login(client)
+    group_resp = await client.post(
+        "/api/v1/category-groups", json={"name": "Health"}, cookies=cookies
+    )
     group_id = group_resp.json()["id"]
 
     await client.post(
@@ -95,9 +111,10 @@ async def test_list_budgets(client: AsyncClient) -> None:
             "monthly_amount": 200.0,
             "effective_from": "2026-01-01",
         },
+        cookies=cookies,
     )
 
-    response = await client.get("/api/v1/budgets")
+    response = await client.get("/api/v1/budgets", cookies=cookies)
     assert response.status_code == 200
     budgets = response.json()
     assert len(budgets) >= 1
@@ -105,17 +122,18 @@ async def test_list_budgets(client: AsyncClient) -> None:
 
 
 async def test_overview_with_budget_and_spending(client: AsyncClient) -> None:
-    persons = await setup_couple(client)
+    persons, cookies = await setup_and_login(client)
     alice_id = persons[0]["id"]
 
     group_resp = await client.post(
-        "/api/v1/category-groups", json={"name": "Food & Dining"}
+        "/api/v1/category-groups", json={"name": "Food & Dining"}, cookies=cookies
     )
     group_id = group_resp.json()["id"]
 
     await client.put(
         "/api/v1/category-mappings",
         json={"mappings": [{"category": "Dining Out", "group_id": group_id}]},
+        cookies=cookies,
     )
 
     await client.post(
@@ -125,15 +143,18 @@ async def test_overview_with_budget_and_spending(client: AsyncClient) -> None:
             "monthly_amount": 500.0,
             "effective_from": "2026-01-01",
         },
+        cookies=cookies,
     )
 
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
         "2026-01-15,Restaurant,Dining Out,Chase,,,-50.00,shared\n"
     )
-    await upload_csv(client, alice_id, csv)
+    await upload_csv(client, alice_id, csv, cookies=cookies)
 
-    response = await client.get("/api/v1/budgets/overview?year=2026&month=1")
+    response = await client.get(
+        "/api/v1/budgets/overview?year=2026&month=1", cookies=cookies
+    )
     assert response.status_code == 200
     data = response.json()
 

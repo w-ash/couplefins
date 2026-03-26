@@ -1,38 +1,25 @@
-import { useEffect, useState } from "react";
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 
 interface IdentityState {
   currentPersonId: string | null;
+  currentPersonName: string | null;
+  setFromAuthResponse: (person: { id: string; name: string }) => void;
   setCurrentPersonId: (id: string) => void;
   clearIdentity: () => void;
 }
 
-export const useIdentityStore = create<IdentityState>()(
-  persist(
-    (set) => ({
-      currentPersonId: null,
-      setCurrentPersonId: (id) => set({ currentPersonId: id }),
-      clearIdentity: () => set({ currentPersonId: null }),
-    }),
-    {
-      name: "couplefins:currentPersonId",
-      partialize: (state) => ({ currentPersonId: state.currentPersonId }),
-    },
-  ),
-);
+export const useIdentityStore = create<IdentityState>()((set) => ({
+  currentPersonId: null,
+  currentPersonName: null,
+  setFromAuthResponse: (person) =>
+    set({ currentPersonId: person.id, currentPersonName: person.name }),
+  setCurrentPersonId: (id) => set({ currentPersonId: id }),
+  clearIdentity: () => set({ currentPersonId: null, currentPersonName: null }),
+}));
 
-export function useIdentityHydrated() {
-  const [hydrated, setHydrated] = useState(
-    useIdentityStore.persist.hasHydrated(),
-  );
-
-  useEffect(() => {
-    const unsub = useIdentityStore.persist.onFinishHydration(() =>
-      setHydrated(true),
-    );
-    return unsub;
-  }, []);
-
-  return hydrated;
+// One-time cleanup of legacy localStorage key
+try {
+  localStorage.removeItem("couplefins:currentPersonId");
+} catch {
+  // SSR or restricted storage — ignore
 }

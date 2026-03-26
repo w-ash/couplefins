@@ -1,7 +1,7 @@
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from src.application.runner import execute_use_case
 from src.application.use_cases.bulk_modify_tags import (
@@ -22,6 +22,7 @@ from src.application.use_cases.update_transaction_splits import (
     UpdateTransactionSplitsCommand,
     UpdateTransactionSplitsUseCase,
 )
+from src.interface.api.dependencies import get_current_user
 from src.interface.api.schemas.transactions import (
     BulkModifyTagsRequest,
     BulkModifyTagsResponse,
@@ -35,7 +36,7 @@ from src.interface.api.schemas.transactions import (
     UpdateTransactionResponse,
 )
 
-router = APIRouter(tags=["transactions"])
+router = APIRouter(tags=["transactions"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/tags")

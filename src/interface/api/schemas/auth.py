@@ -15,5 +15,11 @@ class ResetPartnerPasswordRequest(BaseModel):
     new_password: str
 
 
+class SetInitialPasswordRequest(BaseModel):
+    name: str
+    new_password: str
+
+
 class AuthPersonResponse(BaseModel):
     name: str
+    has_password: bool

@@ -10,4 +10,6 @@ export interface SetupCoupleRequest {
   name1: string;
   /** @maxLength 50 */
   name2: string;
+  password1: string;
+  password2: string;
 }

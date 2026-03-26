@@ -1,9 +1,7 @@
 import { NavLink } from "react-router";
-import { useGetPersons } from "@/api/generated/persons/persons";
-import { useIdentityStore } from "@/lib/identity";
 import { SECONDARY_ROUTES } from "@/lib/navigation";
 import { BottomSheet } from "./BottomSheet";
-import { PersonSwitcher } from "./PersonSwitcher";
+import { LoggedInUser } from "./LoggedInUser";
 
 export function MoreSheet({
   open,
@@ -12,11 +10,6 @@ export function MoreSheet({
   open: boolean;
   onClose: () => void;
 }) {
-  const { data: response } = useGetPersons();
-  const persons = response?.data;
-  const currentPersonId = useIdentityStore((s) => s.currentPersonId);
-  const setCurrentPersonId = useIdentityStore((s) => s.setCurrentPersonId);
-
   return (
     <BottomSheet open={open} onClose={onClose}>
       <div className="space-y-0.5">
@@ -39,22 +32,13 @@ export function MoreSheet({
         ))}
       </div>
 
-      {/* Identity toggle */}
-      {persons && persons.length >= 2 && currentPersonId && (
-        <div className="mt-3 space-y-0.5 border-t border-border pt-3">
-          <p className="mb-1.5 px-3 text-xs font-medium text-muted-foreground">
-            Viewing as
-          </p>
-          <PersonSwitcher
-            persons={persons}
-            currentPersonId={currentPersonId}
-            onSwitch={(id) => {
-              setCurrentPersonId(id);
-              onClose();
-            }}
-          />
-        </div>
-      )}
+      {/* Logged-in user + logout */}
+      <div className="mt-3 border-t border-border pt-3">
+        <p className="mb-1.5 px-3 text-xs font-medium text-muted-foreground">
+          Logged in as
+        </p>
+        <LoggedInUser />
+      </div>
     </BottomSheet>
   );
 }

@@ -1,17 +1,22 @@
 from httpx import AsyncClient
 
+from tests.integration.conftest import setup_and_login
+
 
 async def test_list_category_groups(client: AsyncClient) -> None:
-    response = await client.get("/api/v1/category-groups")
+    _, cookies = await setup_and_login(client)
+    response = await client.get("/api/v1/category-groups", cookies=cookies)
     assert response.status_code == 200
     groups = response.json()
     assert isinstance(groups, list)
 
 
 async def test_create_category_group(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
     response = await client.post(
         "/api/v1/category-groups",
         json={"name": "Test Group"},
+        cookies=cookies,
     )
     assert response.status_code == 201
     data = response.json()
@@ -21,41 +26,53 @@ async def test_create_category_group(client: AsyncClient) -> None:
 
 
 async def test_update_category_group(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
     create = await client.post(
         "/api/v1/category-groups",
         json={"name": "Old Name"},
+        cookies=cookies,
     )
     group_id = create.json()["id"]
 
     response = await client.put(
         f"/api/v1/category-groups/{group_id}",
         json={"name": "New Name"},
+        cookies=cookies,
     )
     assert response.status_code == 200
     assert response.json()["name"] == "New Name"
 
 
 async def test_delete_category_group(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
     create = await client.post(
         "/api/v1/category-groups",
         json={"name": "To Delete"},
+        cookies=cookies,
     )
     group_id = create.json()["id"]
 
-    response = await client.delete(f"/api/v1/category-groups/{group_id}")
+    response = await client.delete(
+        f"/api/v1/category-groups/{group_id}", cookies=cookies
+    )
     assert response.status_code == 204
 
 
 async def test_delete_nonexistent_group_returns_404(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
     fake_id = "00000000-0000-0000-0000-000000000000"
-    response = await client.delete(f"/api/v1/category-groups/{fake_id}")
+    response = await client.delete(
+        f"/api/v1/category-groups/{fake_id}", cookies=cookies
+    )
     assert response.status_code == 404
 
 
 async def test_bulk_update_mappings(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
     create = await client.post(
         "/api/v1/category-groups",
         json={"name": "Mapping Group"},
+        cookies=cookies,
     )
     group_id = create.json()["id"]
 
@@ -67,6 +84,7 @@ async def test_bulk_update_mappings(client: AsyncClient) -> None:
                 {"category": "Dining Out", "group_id": group_id},
             ]
         },
+        cookies=cookies,
     )
     assert response.status_code == 200
     assert response.json()["updated"] == 2
@@ -75,6 +93,7 @@ async def test_bulk_update_mappings(client: AsyncClient) -> None:
 async def test_unmapped_categories_empty_when_no_transactions(
     client: AsyncClient,
 ) -> None:
-    response = await client.get("/api/v1/category-mappings/unmapped")
+    _, cookies = await setup_and_login(client)
+    response = await client.get("/api/v1/category-mappings/unmapped", cookies=cookies)
     assert response.status_code == 200
     assert response.json() == []

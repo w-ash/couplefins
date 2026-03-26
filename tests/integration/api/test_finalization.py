@@ -1,12 +1,14 @@
 from httpx import AsyncClient
 
-from tests.integration.conftest import setup_couple
+from tests.integration.conftest import setup_and_login
 
 
 async def test_finalize_creates_period(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
     response = await client.post(
         "/api/v1/reconciliation/finalize",
         json={"year": 2026, "month": 1, "notes": "Reviewed together"},
+        cookies=cookies,
     )
     assert response.status_code == 200
     data = response.json()
@@ -16,22 +18,32 @@ async def test_finalize_creates_period(client: AsyncClient) -> None:
 
 
 async def test_finalize_already_finalized_returns_422(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
     await client.post(
-        "/api/v1/reconciliation/finalize", json={"year": 2026, "month": 2}
+        "/api/v1/reconciliation/finalize",
+        json={"year": 2026, "month": 2},
+        cookies=cookies,
     )
     response = await client.post(
-        "/api/v1/reconciliation/finalize", json={"year": 2026, "month": 2}
+        "/api/v1/reconciliation/finalize",
+        json={"year": 2026, "month": 2},
+        cookies=cookies,
     )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
 async def test_unfinalize_period(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
     await client.post(
-        "/api/v1/reconciliation/finalize", json={"year": 2026, "month": 3}
+        "/api/v1/reconciliation/finalize",
+        json={"year": 2026, "month": 3},
+        cookies=cookies,
     )
     response = await client.post(
-        "/api/v1/reconciliation/unfinalize", json={"year": 2026, "month": 3}
+        "/api/v1/reconciliation/unfinalize",
+        json={"year": 2026, "month": 3},
+        cookies=cookies,
     )
     assert response.status_code == 200
     data = response.json()
@@ -40,15 +52,20 @@ async def test_unfinalize_period(client: AsyncClient) -> None:
 
 
 async def test_unfinalize_not_finalized_returns_422(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
     response = await client.post(
-        "/api/v1/reconciliation/unfinalize", json={"year": 2026, "month": 4}
+        "/api/v1/reconciliation/unfinalize",
+        json={"year": 2026, "month": 4},
+        cookies=cookies,
     )
     assert response.status_code == 422
 
 
 async def test_period_status_not_finalized(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
     response = await client.get(
-        "/api/v1/reconciliation/period-status?year=2026&month=5"
+        "/api/v1/reconciliation/period-status?year=2026&month=5",
+        cookies=cookies,
     )
     assert response.status_code == 200
     data = response.json()
@@ -57,12 +74,15 @@ async def test_period_status_not_finalized(client: AsyncClient) -> None:
 
 
 async def test_period_status_finalized(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
     await client.post(
         "/api/v1/reconciliation/finalize",
         json={"year": 2026, "month": 6, "notes": "Done"},
+        cookies=cookies,
     )
     response = await client.get(
-        "/api/v1/reconciliation/period-status?year=2026&month=6"
+        "/api/v1/reconciliation/period-status?year=2026&month=6",
+        cookies=cookies,
     )
     assert response.status_code == 200
     data = response.json()
@@ -71,11 +91,13 @@ async def test_period_status_finalized(client: AsyncClient) -> None:
 
 
 async def test_upload_to_finalized_month_returns_409(client: AsyncClient) -> None:
-    persons = await setup_couple(client)
+    persons, cookies = await setup_and_login(client)
     alice_id = persons[0]["id"]
 
     await client.post(
-        "/api/v1/reconciliation/finalize", json={"year": 2026, "month": 1}
+        "/api/v1/reconciliation/finalize",
+        json={"year": 2026, "month": 1},
+        cookies=cookies,
     )
 
     csv = (
@@ -88,6 +110,7 @@ async def test_upload_to_finalized_month_returns_409(client: AsyncClient) -> Non
         "/api/v1/uploads/",
         data={"person_id": alice_id},
         files={"file": ("test.csv", io.BytesIO(csv.encode()), "text/csv")},
+        cookies=cookies,
     )
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "PERIOD_FINALIZED"
@@ -96,11 +119,15 @@ async def test_upload_to_finalized_month_returns_409(client: AsyncClient) -> Non
 async def test_reconciliation_includes_finalization_status(
     client: AsyncClient,
 ) -> None:
+    _, cookies = await setup_and_login(client)
     await client.post(
         "/api/v1/reconciliation/finalize",
         json={"year": 2026, "month": 7, "notes": "July done"},
+        cookies=cookies,
     )
-    response = await client.get("/api/v1/reconciliation?year=2026&month=7")
+    response = await client.get(
+        "/api/v1/reconciliation?year=2026&month=7", cookies=cookies
+    )
     assert response.status_code == 200
     data = response.json()
     assert data["is_finalized"] is True
@@ -108,10 +135,13 @@ async def test_reconciliation_includes_finalization_status(
 
 
 async def test_dashboard_includes_finalization_status(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
     await client.post(
-        "/api/v1/reconciliation/finalize", json={"year": 2026, "month": 8}
+        "/api/v1/reconciliation/finalize",
+        json={"year": 2026, "month": 8},
+        cookies=cookies,
     )
-    response = await client.get("/api/v1/dashboard?year=2026&month=8")
+    response = await client.get("/api/v1/dashboard?year=2026&month=8", cookies=cookies)
     assert response.status_code == 200
     data = response.json()
     assert data["is_finalized"] is True

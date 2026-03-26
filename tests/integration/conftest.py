@@ -73,7 +73,37 @@ async def setup_couple(
     return resp.json()
 
 
-async def upload_csv(client: AsyncClient, person_id: str, csv_text: str) -> dict:
+async def login_as(
+    client: AsyncClient,
+    name: str = "Alice",
+    password: str = "password123",
+) -> dict[str, str]:
+    """Log in and return cookies dict for subsequent requests."""
+    resp = await client.post(
+        "/api/v1/auth/login",
+        json={"name": name, "password": password},
+    )
+    assert resp.status_code == 200, f"Login failed: {resp.text}"
+    return dict(resp.cookies)
+
+
+async def setup_and_login(
+    client: AsyncClient,
+    password1: str = "password123",
+    password2: str = "password456",
+) -> tuple[list[dict], dict[str, str]]:
+    """Create couple, log in as Alice, return (persons, cookies)."""
+    persons = await setup_couple(client, password1=password1, password2=password2)
+    cookies = await login_as(client, "Alice", password1)
+    return persons, cookies
+
+
+async def upload_csv(
+    client: AsyncClient,
+    person_id: str,
+    csv_text: str,
+    cookies: dict[str, str] | None = None,
+) -> dict:
     """Upload a CSV string for a person and return the response JSON."""
     import io
 
@@ -81,5 +111,6 @@ async def upload_csv(client: AsyncClient, person_id: str, csv_text: str) -> dict
         "/api/v1/uploads/",
         data={"person_id": person_id},
         files={"file": ("test.csv", io.BytesIO(csv_text.encode()), "text/csv")},
+        cookies=cookies,
     )
     return resp.json()

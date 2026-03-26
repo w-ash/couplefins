@@ -1,13 +1,16 @@
 import { Loader2 } from "lucide-react";
+import { useEffect } from "react";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
-import { useGetPersons } from "./api/generated/persons/persons";
+import { ApiError, setOnUnauthorized } from "./api/client";
+import { useGetMe, useListAuthPersons } from "./api/generated/auth/auth";
 import { Button } from "./components/Button";
 import { AppLayout } from "./layouts/AppLayout";
-import { useIdentityHydrated, useIdentityStore } from "./lib/identity";
+import { useIdentityStore } from "./lib/identity";
 import { BudgetPage } from "./pages/BudgetPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { InsightsPage } from "./pages/InsightsPage";
-import { ProfilePicker } from "./pages/ProfilePicker";
+import { LoginPage } from "./pages/LoginPage";
+import { SetInitialPasswordPage } from "./pages/SetInitialPasswordPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SettleUpPage } from "./pages/SettleUpPage";
 import { SetupPage } from "./pages/SetupPage";
@@ -30,53 +33,94 @@ const router = createBrowserRouter([
   },
 ]);
 
-export function App() {
-  const {
-    data: response,
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useGetPersons();
-  const persons = response?.data;
-  const currentPersonId = useIdentityStore((s) => s.currentPersonId);
-  const hasHydrated = useIdentityHydrated();
+function is401(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401;
+}
 
-  if (isLoading || !hasHydrated) {
-    return (
-      <output
-        aria-label="Loading CoupleFins"
-        className="flex min-h-screen items-center justify-center bg-background"
-      >
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
-        <span className="sr-only">Loading...</span>
-      </output>
-    );
+function LoadingScreen() {
+  return (
+    <output
+      aria-label="Loading CoupleFins"
+      className="flex min-h-screen items-center justify-center bg-background"
+    >
+      <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      <span className="sr-only">Loading...</span>
+    </output>
+  );
+}
+
+export function App() {
+  const currentPersonId = useIdentityStore((s) => s.currentPersonId);
+
+  // Primary: check if we're already authenticated
+  const meQuery = useGetMe({ query: { retry: false } });
+
+  // Secondary: only when not authenticated, determine which page to show
+  const authPersonsQuery = useListAuthPersons({
+    query: { enabled: meQuery.isError && is401(meQuery.error) },
+  });
+
+  // Populate identity from /auth/me response
+  useEffect(() => {
+    if (meQuery.data?.data) {
+      const person = meQuery.data.data;
+      useIdentityStore.getState().setFromAuthResponse(person);
+    }
+  }, [meQuery.data]);
+
+  // Wire up global 401 handler
+  useEffect(() => {
+    setOnUnauthorized(() => {
+      useIdentityStore.getState().clearIdentity();
+      meQuery.refetch();
+    });
+  }, [meQuery.refetch]);
+
+  // Loading
+  if (meQuery.isLoading) return <LoadingScreen />;
+
+  // Authenticated
+  if (meQuery.isSuccess && currentPersonId) {
+    return <RouterProvider router={router} />;
   }
 
-  if (isError) {
+  // Not authenticated — determine sub-state
+  if (meQuery.isError && is401(meQuery.error)) {
+    if (authPersonsQuery.isLoading) return <LoadingScreen />;
+
+    const persons = authPersonsQuery.data?.data ?? [];
+
+    if (persons.length < 2) {
+      return <SetupPage />;
+    }
+
+    if (persons.some((p) => !p.has_password)) {
+      return (
+        <SetInitialPasswordPage
+          persons={persons}
+          onSuccess={() => meQuery.refetch()}
+        />
+      );
+    }
+
+    return <LoginPage persons={persons} onSuccess={() => meQuery.refetch()} />;
+  }
+
+  // Non-401 error (network, 500, etc.)
+  if (meQuery.isError) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-6">
         <p className="text-sm text-destructive-muted-foreground">
-          {error instanceof Error
-            ? error.message
+          {meQuery.error instanceof Error
+            ? meQuery.error.message
             : "Could not connect to the server"}
         </p>
-        <Button variant="secondary" size="sm" onClick={() => refetch()}>
+        <Button variant="secondary" size="sm" onClick={() => meQuery.refetch()}>
           Try Again
         </Button>
       </div>
     );
   }
 
-  if (!persons || persons.length < 2) {
-    return <SetupPage />;
-  }
-
-  const isValidIdentity = persons.some((p) => p.id === currentPersonId);
-  if (!currentPersonId || !isValidIdentity) {
-    return <ProfilePicker persons={persons} />;
-  }
-
-  return <RouterProvider router={router} />;
+  return <LoadingScreen />;
 }

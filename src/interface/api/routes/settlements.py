@@ -1,7 +1,7 @@
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from src.application.runner import execute_use_case
 from src.application.use_cases.delete_settlement import (
@@ -24,6 +24,7 @@ from src.application.use_cases.record_waived_settlement import (
     RecordWaivedSettlementCommand,
     RecordWaivedSettlementUseCase,
 )
+from src.interface.api.dependencies import get_current_user
 from src.interface.api.schemas.settlements import (
     DeleteSettlementResponse,
     MarkTransactionRequest,
@@ -34,7 +35,7 @@ from src.interface.api.schemas.settlements import (
     SettleUpDataResponse,
 )
 
-router = APIRouter(tags=["settlements"])
+router = APIRouter(tags=["settlements"], dependencies=[Depends(get_current_user)])
 
 
 @router.post("/settlements", status_code=201)

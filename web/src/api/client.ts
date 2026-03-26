@@ -17,6 +17,12 @@ export class ApiError extends Error {
   }
 }
 
+let onUnauthorized: (() => void) | null = null;
+
+export function setOnUnauthorized(fn: () => void) {
+  onUnauthorized = fn;
+}
+
 export async function customFetch<T>(
   url: string,
   init: RequestInit = {},
@@ -30,6 +36,9 @@ export async function customFetch<T>(
   const body = await response.json();
 
   if (!response.ok) {
+    if (response.status === 401) {
+      onUnauthorized?.();
+    }
     const error = body?.error;
     throw new ApiError(
       response.status,

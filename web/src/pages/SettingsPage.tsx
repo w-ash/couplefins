@@ -1,4 +1,5 @@
 import { Settings } from "lucide-react";
+import { AccountSettings } from "@/components/AccountSettings";
 import { Card } from "@/components/Card";
 import { CategoryMappingEditor } from "@/components/CategoryMappingEditor";
 import { PageHeader } from "@/components/PageHeader";
@@ -32,6 +33,20 @@ export function SettingsPage() {
             </div>
             <ThemeToggle />
           </div>
+        </Card>
+
+        {/* Account */}
+        <Card as="section" aria-labelledby="settings-account">
+          <h2
+            id="settings-account"
+            className="mb-1 font-medium text-lg text-foreground"
+          >
+            Account
+          </h2>
+          <p className="mb-4 text-xs text-muted-foreground">
+            Manage passwords for you and your partner
+          </p>
+          <AccountSettings />
         </Card>
 
         {/* Category Mappings */}

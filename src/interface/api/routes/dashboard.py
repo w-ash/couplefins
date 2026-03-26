@@ -1,15 +1,16 @@
 from datetime import UTC, datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from src.application.runner import execute_use_case
 from src.application.use_cases.get_dashboard import (
     GetDashboardCommand,
     GetDashboardUseCase,
 )
+from src.interface.api.dependencies import get_current_user
 from src.interface.api.schemas.dashboard import DashboardResponse
 
-router = APIRouter(tags=["dashboard"])
+router = APIRouter(tags=["dashboard"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/dashboard")

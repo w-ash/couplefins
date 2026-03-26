@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -13,8 +14,12 @@ from src.application.use_cases.auth.reset_partner_password import (
     ResetPartnerPasswordCommand,
     ResetPartnerPasswordUseCase,
 )
+from src.application.use_cases.auth.set_initial_password import (
+    SetInitialPasswordCommand,
+    SetInitialPasswordUseCase,
+)
 from src.application.use_cases.list_persons import list_persons
-from src.config.settings import get_settings
+from src.config.settings import AuthConfig, get_settings
 from src.domain.entities.person import Person
 from src.infrastructure.auth.password import hash_password, verify_password
 from src.infrastructure.auth.tokens import create_access_token
@@ -24,45 +29,56 @@ from src.interface.api.schemas.auth import (
     ChangePasswordRequest,
     LoginRequest,
     ResetPartnerPasswordRequest,
+    SetInitialPasswordRequest,
 )
 from src.interface.api.schemas.persons import PersonResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _make_token_factory(auth: AuthConfig) -> Callable[[UUID], str]:
+    def _create(person_id: UUID) -> str:
+        return create_access_token(
+            person_id, auth.jwt_secret, auth.token_expiry_minutes
+        )
+
+    return _create
+
+
+def _set_session_cookie(response: JSONResponse, token: str, auth: AuthConfig) -> None:
+    response.set_cookie(
+        key=auth.cookie_name,
+        value=token,
+        httponly=True,
+        secure=auth.cookie_secure,
+        samesite=auth.cookie_samesite,
+        max_age=auth.token_expiry_minutes * 60,
+        path="/",
+    )
+
+
 @router.get("/persons")
 async def list_auth_persons() -> list[AuthPersonResponse]:
     result = await execute_use_case(list_persons)
-    return [AuthPersonResponse(name=p.name) for p in result.persons]
+    return [
+        AuthPersonResponse(name=p.name, has_password=bool(p.password_hash))
+        for p in result.persons
+    ]
 
 
 @router.post("/login")
 async def login(body: LoginRequest) -> JSONResponse:
-    settings = get_settings()
-
-    def _create_token(person_id: UUID) -> str:
-        return create_access_token(
-            person_id, settings.auth.jwt_secret, settings.auth.token_expiry_minutes
-        )
-
+    auth = get_settings().auth
     command = LoginCommand(name=body.name, password=body.password)
     result = await execute_use_case(
         lambda uow: LoginUseCase(
             verify_password=verify_password,
-            create_token=_create_token,
+            create_token=_make_token_factory(auth),
         ).execute(command, uow)
     )
     data = PersonResponse.from_domain(result.person)
     response = JSONResponse(content=data.model_dump(mode="json"))
-    response.set_cookie(
-        key=settings.auth.cookie_name,
-        value=result.token,
-        httponly=True,
-        secure=settings.auth.cookie_secure,
-        samesite=settings.auth.cookie_samesite,
-        max_age=settings.auth.token_expiry_minutes * 60,
-        path="/",
-    )
+    _set_session_cookie(response, result.token, auth)
     return response
 
 
@@ -71,6 +87,22 @@ async def logout() -> JSONResponse:
     settings = get_settings()
     response = JSONResponse(content={"ok": True})
     response.delete_cookie(key=settings.auth.cookie_name, path="/")
+    return response
+
+
+@router.post("/set-initial-password")
+async def set_initial_password(body: SetInitialPasswordRequest) -> JSONResponse:
+    auth = get_settings().auth
+    command = SetInitialPasswordCommand(name=body.name, new_password=body.new_password)
+    result = await execute_use_case(
+        lambda uow: SetInitialPasswordUseCase(
+            hash_password=hash_password,
+            create_token=_make_token_factory(auth),
+        ).execute(command, uow)
+    )
+    data = PersonResponse.from_domain(result.person)
+    response = JSONResponse(content=data.model_dump(mode="json"))
+    _set_session_cookie(response, result.token, auth)
     return response
 
 
