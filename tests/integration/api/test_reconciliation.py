@@ -147,3 +147,73 @@ async def test_partial_range_returns_422(client: AsyncClient) -> None:
         "/api/v1/reconciliation?start_date=2026-01-01", cookies=cookies
     )
     assert response.status_code == 422
+
+
+PERSONAL_CSV = (
+    "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+    '2026-01-15,Coffee,Dining Out,Chase,COFFEE,,"-5.00",\n'
+)
+
+
+async def test_reconciliation_personal_scope(client: AsyncClient) -> None:
+    persons, cookies = await setup_and_login(client)
+    alice_id = persons[0]["id"]
+
+    # Upload shared + personal transactions for Alice
+    csv = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        '2026-01-15,Restaurant,Dining Out,Chase,REST,,"-100.00",shared\n'
+        '2026-01-16,Coffee,Dining Out,Chase,COFFEE,,"-5.00",\n'
+    )
+    await upload_csv(client, alice_id, csv, cookies=cookies)
+
+    # Personal scope: only Alice's non-household txs
+    response = await client.get(
+        f"/api/v1/reconciliation?year=2026&month=1&scope=personal&person_id={alice_id}",
+        cookies=cookies,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["transaction_count"] == 0  # personal txs have payer_percentage=100
+    assert len(data["transactions"]) == 1  # the coffee tx (non-household)
+
+
+async def test_reconciliation_all_scope(client: AsyncClient) -> None:
+    persons, cookies = await setup_and_login(client)
+    alice_id = persons[0]["id"]
+
+    csv = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        '2026-01-15,Restaurant,Dining Out,Chase,REST,,"-100.00",shared\n'
+        '2026-01-16,Coffee,Dining Out,Chase,COFFEE,,"-5.00",\n'
+    )
+    await upload_csv(client, alice_id, csv, cookies=cookies)
+
+    response = await client.get(
+        f"/api/v1/reconciliation?year=2026&month=1&scope=all&person_id={alice_id}",
+        cookies=cookies,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    # Both shared restaurant and personal coffee
+    assert len(data["transactions"]) == 2
+
+
+async def test_reconciliation_default_scope_unchanged(client: AsyncClient) -> None:
+    persons, cookies = await setup_and_login(client)
+    alice_id = persons[0]["id"]
+
+    csv = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        '2026-01-15,Restaurant,Dining Out,Chase,REST,,"-100.00",shared\n'
+        '2026-01-16,Coffee,Dining Out,Chase,COFFEE,,"-5.00",\n'
+    )
+    await upload_csv(client, alice_id, csv, cookies=cookies)
+
+    response = await client.get(
+        "/api/v1/reconciliation?year=2026&month=1", cookies=cookies
+    )
+    assert response.status_code == 200
+    data = response.json()
+    # Default household scope: only shared restaurant
+    assert len(data["transactions"]) == 1

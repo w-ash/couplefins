@@ -14,6 +14,7 @@ class SaveBudgetRequest(BaseModel):
     group_id: UUID
     monthly_amount: Decimal
     effective_from: date
+    person_id: UUID | None = None
 
     @field_validator("monthly_amount")
     @classmethod
@@ -35,6 +36,7 @@ class BudgetResponse(BaseModel):
     group_id: UUID
     monthly_amount: float
     effective_from: date
+    person_id: UUID | None = None
 
     @classmethod
     def from_domain(cls, budget: CategoryGroupBudget) -> BudgetResponse:
@@ -43,6 +45,7 @@ class BudgetResponse(BaseModel):
             group_id=budget.group_id,
             monthly_amount=float(budget.monthly_amount),
             effective_from=budget.effective_from,
+            person_id=budget.person_id,
         )
 
 
@@ -73,6 +76,8 @@ class GroupBudgetStatusResponse(BaseModel):
     ytd_health: HealthStatus | None
     average_monthly_spending: float
     categories: list[CategorySpendResponse]
+    shared_spending: float | None = None
+    personal_spending: float | None = None
 
 
 class BudgetOverviewResponse(BaseModel):
@@ -127,6 +132,12 @@ class BudgetOverviewResponse(BaseModel):
                         )
                         for c in s.categories
                     ],
+                    shared_spending=float(s.shared_spending)
+                    if s.shared_spending is not None
+                    else None,
+                    personal_spending=float(s.personal_spending)
+                    if s.personal_spending is not None
+                    else None,
                 )
                 for s in overview.group_statuses
             ],

@@ -11,3 +11,4 @@ class CategoryGroupBudget:
     group_id: UUID
     monthly_amount: Decimal
     effective_from: date
+    person_id: UUID | None = None

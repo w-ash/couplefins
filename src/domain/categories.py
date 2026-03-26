@@ -87,7 +87,13 @@ def compute_category_breakdowns(
             )
         )
 
-    # Group into CategoryGroupBreakdown
+    return group_category_breakdowns(category_breakdowns)
+
+
+def group_category_breakdowns(
+    category_breakdowns: list[CategoryBreakdown],
+) -> list[CategoryGroupBreakdown]:
+    """Roll up per-category breakdowns into per-group breakdowns, sorted by total."""
     groups: dict[UUID | None, list[CategoryBreakdown]] = {}
     for cb in category_breakdowns:
         groups.setdefault(cb.group_id, []).append(cb)

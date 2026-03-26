@@ -3,9 +3,12 @@ from decimal import Decimal
 from uuid import UUID
 
 from src.domain.budget import (
+    _compute_person_share,
     _is_budget_relevant,
+    _is_personal_budget_relevant,
     compute_average_monthly_spending,
     compute_budget_overview,
+    compute_personal_budget_overview,
     compute_ytd_budget,
     determine_health,
     resolve_effective_budget,
@@ -425,3 +428,274 @@ def test_breakdown_personal_not_in_set_excluded_from_personal_amounts() -> None:
     assert cat.total_amount == Decimal(50)
     assert cat.household_amount == Decimal(0)
     assert cat.personal_amounts == {}
+
+
+# --- _compute_person_share ---
+
+ALICE = UUID("bbbbbbbb-0000-0000-0000-000000000001")
+BOB = UUID("bbbbbbbb-0000-0000-0000-000000000002")
+
+
+def test_person_share_payer_shared_50_50() -> None:
+    tx = make_transaction(
+        amount=Decimal(-100), payer_percentage=50, payer_person_id=ALICE
+    )
+    assert _compute_person_share(tx, ALICE) == Decimal("50.00")
+
+
+def test_person_share_non_payer_shared_50_50() -> None:
+    tx = make_transaction(
+        amount=Decimal(-100), payer_percentage=50, payer_person_id=ALICE
+    )
+    assert _compute_person_share(tx, BOB) == Decimal("50.00")
+
+
+def test_person_share_payer_custom_split() -> None:
+    tx = make_transaction(
+        amount=Decimal(-200), payer_percentage=70, payer_person_id=ALICE
+    )
+    assert _compute_person_share(tx, ALICE) == Decimal("140.00")
+
+
+def test_person_share_non_payer_custom_split() -> None:
+    tx = make_transaction(
+        amount=Decimal(-200), payer_percentage=70, payer_person_id=ALICE
+    )
+    assert _compute_person_share(tx, BOB) == Decimal("60.00")
+
+
+def test_person_share_spotted_payer() -> None:
+    tx = make_transaction(
+        amount=Decimal(-30), payer_percentage=0, payer_person_id=ALICE
+    )
+    assert _compute_person_share(tx, ALICE) == Decimal("0.00")
+
+
+def test_person_share_spotted_beneficiary() -> None:
+    tx = make_transaction(
+        amount=Decimal(-30), payer_percentage=0, payer_person_id=ALICE
+    )
+    assert _compute_person_share(tx, BOB) == Decimal("30.00")
+
+
+def test_person_share_household_no_split_payer() -> None:
+    tx = make_transaction(
+        amount=Decimal(-60), payer_percentage=100, payer_person_id=ALICE
+    )
+    assert _compute_person_share(tx, ALICE) == Decimal("60.00")
+
+
+def test_person_share_household_no_split_non_payer() -> None:
+    tx = make_transaction(
+        amount=Decimal(-60), payer_percentage=100, payer_person_id=ALICE
+    )
+    assert _compute_person_share(tx, BOB) == Decimal("0.00")
+
+
+# --- _is_personal_budget_relevant ---
+
+
+def test_personal_relevant_household_tx() -> None:
+    tx = make_transaction(household=True, payer_person_id=ALICE)
+    assert _is_personal_budget_relevant(tx, BOB) is True
+
+
+def test_personal_relevant_own_personal_tx() -> None:
+    tx = make_transaction(household=False, payer_person_id=ALICE)
+    assert _is_personal_budget_relevant(tx, ALICE) is True
+
+
+def test_personal_irrelevant_other_personal_tx() -> None:
+    tx = make_transaction(household=False, payer_person_id=ALICE)
+    assert _is_personal_budget_relevant(tx, BOB) is False
+
+
+def test_personal_irrelevant_excluded() -> None:
+    tx = make_transaction(household=True, is_excluded=True)
+    assert _is_personal_budget_relevant(tx, ALICE) is False
+
+
+def test_personal_irrelevant_settlement() -> None:
+    tx = make_transaction(household=True, is_settlement=True)
+    assert _is_personal_budget_relevant(tx, ALICE) is False
+
+
+# --- compute_personal_budget_overview ---
+
+
+def test_personal_overview_mixed_shared_and_personal() -> None:
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    groups = [make_category_group(id=food_gid, name="Food & Dining")]
+    budgets = [
+        make_category_group_budget(
+            group_id=food_gid,
+            effective_from=date(2026, 1, 1),
+            monthly_amount=Decimal(400),
+            person_id=ALICE,
+        ),
+    ]
+    lookup = {"Groceries": (food_gid, "Food & Dining")}
+
+    txs = [
+        # Shared 50/50 paid by Alice: Alice's share = $50
+        make_transaction(
+            category="Groceries",
+            amount=Decimal(-100),
+            payer_percentage=50,
+            household=True,
+            payer_person_id=ALICE,
+            date=date(2026, 1, 10),
+        ),
+        # Shared 50/50 paid by Bob: Alice's share = $30
+        make_transaction(
+            category="Groceries",
+            amount=Decimal(-60),
+            payer_percentage=50,
+            household=True,
+            payer_person_id=BOB,
+            date=date(2026, 1, 12),
+        ),
+        # Alice's personal grocery run: $40
+        make_transaction(
+            category="Groceries",
+            amount=Decimal(-40),
+            payer_percentage=100,
+            household=False,
+            payer_person_id=ALICE,
+            date=date(2026, 1, 15),
+        ),
+        # Bob's personal (should not appear for Alice)
+        make_transaction(
+            category="Groceries",
+            amount=Decimal(-25),
+            payer_percentage=100,
+            household=False,
+            payer_person_id=BOB,
+            date=date(2026, 1, 16),
+        ),
+    ]
+
+    overview = compute_personal_budget_overview(
+        budgets, txs, lookup, groups, 2026, 1, ALICE
+    )
+
+    assert len(overview.group_statuses) == 1
+    status = overview.group_statuses[0]
+    # shared: $50 (Alice pays 100 @ 50%) + $30 (Bob pays 60 @ 50%) = $80
+    assert status.shared_spending == Decimal("80.00")
+    # personal: $40 (Alice's own tx)
+    assert status.personal_spending == Decimal("40.00")
+    # total = $120
+    assert status.monthly_spent == Decimal("120.00")
+    assert status.monthly_budget == Decimal(400)
+    assert status.monthly_health == "on_track"
+
+
+def test_personal_overview_empty_txs() -> None:
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    groups = [make_category_group(id=food_gid, name="Food & Dining")]
+
+    overview = compute_personal_budget_overview([], [], {}, groups, 2026, 1, ALICE)
+
+    assert overview.group_statuses == []
+    assert overview.total_monthly_spent == Decimal(0)
+
+
+def test_personal_overview_excludes_excluded_txs() -> None:
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    groups = [make_category_group(id=food_gid, name="Food & Dining")]
+    lookup = {"Groceries": (food_gid, "Food & Dining")}
+
+    txs = [
+        make_transaction(
+            category="Groceries",
+            amount=Decimal(-100),
+            household=True,
+            payer_person_id=ALICE,
+            is_excluded=True,
+            date=date(2026, 1, 10),
+        ),
+    ]
+
+    overview = compute_personal_budget_overview([], txs, lookup, groups, 2026, 1, ALICE)
+    assert overview.group_statuses == []
+
+
+def test_personal_overview_partner_household_creates_share() -> None:
+    """Alice should have a share of Bob's household payments."""
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    groups = [make_category_group(id=food_gid, name="Food & Dining")]
+    budgets = [
+        make_category_group_budget(
+            group_id=food_gid,
+            effective_from=date(2026, 1, 1),
+            monthly_amount=Decimal(500),
+            person_id=ALICE,
+        ),
+    ]
+    lookup = {"Groceries": (food_gid, "Food & Dining")}
+
+    txs = [
+        # Bob pays $200 shared 50/50: Alice's share = $100
+        make_transaction(
+            category="Groceries",
+            amount=Decimal(-200),
+            payer_percentage=50,
+            household=True,
+            payer_person_id=BOB,
+            date=date(2026, 1, 10),
+        ),
+    ]
+
+    overview = compute_personal_budget_overview(
+        budgets, txs, lookup, groups, 2026, 1, ALICE
+    )
+
+    status = overview.group_statuses[0]
+    assert status.shared_spending == Decimal("100.00")
+    assert status.personal_spending == Decimal(0)
+    assert status.monthly_spent == Decimal("100.00")
+
+
+def test_personal_overview_ytd_across_months() -> None:
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    groups = [make_category_group(id=food_gid, name="Food & Dining")]
+    budgets = [
+        make_category_group_budget(
+            group_id=food_gid,
+            effective_from=date(2026, 1, 1),
+            monthly_amount=Decimal(300),
+            person_id=ALICE,
+        ),
+    ]
+    lookup = {"Groceries": (food_gid, "Food & Dining")}
+
+    txs = [
+        make_transaction(
+            category="Groceries",
+            amount=Decimal(-100),
+            payer_percentage=50,
+            household=True,
+            payer_person_id=ALICE,
+            date=date(2026, 1, 15),
+        ),
+        make_transaction(
+            category="Groceries",
+            amount=Decimal(-80),
+            payer_percentage=100,
+            household=False,
+            payer_person_id=ALICE,
+            date=date(2026, 2, 15),
+        ),
+    ]
+
+    overview = compute_personal_budget_overview(
+        budgets, txs, lookup, groups, 2026, 2, ALICE
+    )
+
+    status = overview.group_statuses[0]
+    # Monthly (Feb): personal $80
+    assert status.monthly_spent == Decimal("80.00")
+    # YTD (Jan+Feb): $50 (Jan shared) + $80 (Feb personal) = $130
+    assert status.ytd_spent == Decimal("130.00")
+    assert status.ytd_budget == Decimal(600)

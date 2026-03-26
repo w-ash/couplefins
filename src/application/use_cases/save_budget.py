@@ -15,6 +15,7 @@ class SaveBudgetCommand:
     group_id: uuid.UUID
     monthly_amount: Decimal = field(validator=positive_decimal)
     effective_from: date
+    person_id: uuid.UUID | None = None
 
 
 @define(frozen=True, slots=True)
@@ -32,11 +33,17 @@ class SaveBudgetUseCase:
             if group is None:
                 raise NotFoundError(f"Category group {command.group_id} not found")
 
+            if command.person_id is not None:
+                person = await uow.persons.get_by_id(command.person_id)
+                if person is None:
+                    raise NotFoundError(f"Person {command.person_id} not found")
+
             budget = CategoryGroupBudget(
                 id=uuid.uuid4(),
                 group_id=command.group_id,
                 monthly_amount=command.monthly_amount,
                 effective_from=command.effective_from,
+                person_id=command.person_id,
             )
             saved = await uow.category_group_budgets.save(budget)
             await uow.commit()

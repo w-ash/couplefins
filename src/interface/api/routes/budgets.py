@@ -1,3 +1,4 @@
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -30,9 +31,14 @@ router = APIRouter(tags=["budgets"], dependencies=[Depends(get_current_user)])
 
 @router.get("/budgets/overview")
 async def get_budget_overview(
-    year: int = Query(...), month: int = Query(...)
+    year: int = Query(...),
+    month: int = Query(...),
+    scope: Literal["household", "personal"] = Query("household"),
+    person_id: UUID | None = Query(None),
 ) -> BudgetOverviewResponse:
-    command = GetBudgetOverviewCommand(year=year, month=month)
+    command = GetBudgetOverviewCommand(
+        year=year, month=month, scope=scope, person_id=person_id
+    )
     result = await execute_use_case(
         lambda uow: GetBudgetOverviewUseCase().execute(command, uow)
     )
@@ -51,6 +57,7 @@ async def post_budget(body: SaveBudgetRequest) -> BudgetResponse:
         group_id=body.group_id,
         monthly_amount=body.monthly_amount,
         effective_from=body.effective_from,
+        person_id=body.person_id,
     )
     result = await execute_use_case(
         lambda uow: SaveBudgetUseCase().execute(command, uow)

@@ -1,4 +1,6 @@
 from datetime import date, datetime
+from typing import Literal
+from uuid import UUID
 
 from attrs import define
 
@@ -23,26 +25,52 @@ from src.domain.entities.transaction import Transaction
 from src.domain.reconciliation import ReconciliationSummary, reconcile
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
+ReconciliationScope = Literal["household", "personal", "all"]
+
 
 @define(frozen=True, slots=True)
 class GetReconciliationCommand:
     start_date: date
     end_date: date
     single_month: tuple[int, int] | None
+    scope: ReconciliationScope = "household"
+    person_id: UUID | None = None
 
     @classmethod
-    def from_month(cls, year: int, month: int) -> GetReconciliationCommand:
+    def from_month(
+        cls,
+        year: int,
+        month: int,
+        *,
+        scope: ReconciliationScope = "household",
+        person_id: UUID | None = None,
+    ) -> GetReconciliationCommand:
         start, end = month_bounds(year, month)
         return cls(
             start_date=start,
             end_date=end,
             single_month=(year, month),
+            scope=scope,
+            person_id=person_id,
         )
 
     @classmethod
-    def from_range(cls, start_date: date, end_date: date) -> GetReconciliationCommand:
+    def from_range(
+        cls,
+        start_date: date,
+        end_date: date,
+        *,
+        scope: ReconciliationScope = "household",
+        person_id: UUID | None = None,
+    ) -> GetReconciliationCommand:
         single = detect_single_month(start_date, end_date)
-        return cls(start_date=start_date, end_date=end_date, single_month=single)
+        return cls(
+            start_date=start_date,
+            end_date=end_date,
+            single_month=single,
+            scope=scope,
+            person_id=person_id,
+        )
 
 
 @define(frozen=True, slots=True)
@@ -66,9 +94,7 @@ class GetReconciliationUseCase:
     ) -> GetReconciliationResult:
         async with uow:
             ctx = await load_reconciliation_context(uow)
-            transactions = await uow.transactions.get_household_by_date_range(
-                command.start_date, command.end_date
-            )
+            transactions = await self._fetch_transactions(command, uow)
             uploads = (
                 await uow.uploads.get_by_person_ids_with_transactions_in_date_range(
                     ctx.person_ids, command.start_date, command.end_date
@@ -109,3 +135,32 @@ class GetReconciliationUseCase:
                 month=command.single_month[1] if command.single_month else None,
                 latest_transaction_month=latest_month,
             )
+
+    @staticmethod
+    async def _fetch_transactions(
+        command: GetReconciliationCommand, uow: UnitOfWorkProtocol
+    ) -> list[Transaction]:
+        if command.scope == "personal" and command.person_id is not None:
+            txs = await uow.transactions.get_by_person_and_date_range(
+                command.person_id, command.start_date, command.end_date
+            )
+            return [tx for tx in txs if not tx.household]
+
+        if command.scope == "all" and command.person_id is not None:
+            household_txs = await uow.transactions.get_household_by_date_range(
+                command.start_date, command.end_date
+            )
+            person_txs = await uow.transactions.get_by_person_and_date_range(
+                command.person_id, command.start_date, command.end_date
+            )
+            household_ids = {tx.id for tx in household_txs}
+            personal_non_household = [
+                tx
+                for tx in person_txs
+                if not tx.household and tx.id not in household_ids
+            ]
+            return household_txs + personal_non_household
+
+        return await uow.transactions.get_household_by_date_range(
+            command.start_date, command.end_date
+        )

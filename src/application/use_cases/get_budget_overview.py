@@ -1,10 +1,17 @@
+from typing import Literal
+from uuid import UUID
+
 from attrs import define, field
 
 from src.application.use_cases._shared.command_validators import (
     month_range,
     positive_int,
 )
-from src.domain.budget import BudgetOverview, compute_budget_overview
+from src.domain.budget import (
+    BudgetOverview,
+    compute_budget_overview,
+    compute_personal_budget_overview,
+)
 from src.domain.categories import (
     build_category_lookup,
     get_personal_included_categories,
@@ -12,6 +19,7 @@ from src.domain.categories import (
 from src.domain.entities.category import Category
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.entities.person import Person
+from src.domain.exceptions import ValidationError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -19,6 +27,12 @@ from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 class GetBudgetOverviewCommand:
     year: int = field(validator=positive_int)
     month: int = field(validator=month_range)
+    scope: Literal["household", "personal"] = "household"
+    person_id: UUID | None = None
+
+    def __attrs_post_init__(self) -> None:
+        if self.scope == "personal" and self.person_id is None:
+            raise ValidationError("person_id is required for personal scope")
 
 
 @define(frozen=True, slots=True)
@@ -35,28 +49,43 @@ class GetBudgetOverviewUseCase:
         self, command: GetBudgetOverviewCommand, uow: UnitOfWorkProtocol
     ) -> GetBudgetOverviewResult:
         async with uow:
-            budgets = await uow.category_group_budgets.get_all()
             categories = await uow.categories.get_all()
             category_groups = await uow.category_groups.get_all()
             persons = await uow.persons.get_all()
-
-            personal_cats = get_personal_included_categories(categories)
-            if personal_cats:
-                year_txs = await uow.transactions.get_by_year(command.year)
-            else:
-                year_txs = await uow.transactions.get_household_by_year(command.year)
-
             category_lookup = build_category_lookup(categories, category_groups)
 
-            overview = compute_budget_overview(
-                budgets,
-                year_txs,
-                category_lookup,
-                category_groups,
-                command.year,
-                command.month,
-                personal_categories=personal_cats,
-            )
+            if command.scope == "personal" and command.person_id is not None:
+                budgets = await uow.category_group_budgets.get_by_person(
+                    command.person_id
+                )
+                year_txs = await uow.transactions.get_by_year(command.year)
+                overview = compute_personal_budget_overview(
+                    budgets,
+                    year_txs,
+                    category_lookup,
+                    category_groups,
+                    command.year,
+                    command.month,
+                    command.person_id,
+                )
+            else:
+                budgets = await uow.category_group_budgets.get_by_person(None)
+                personal_cats = get_personal_included_categories(categories)
+                if personal_cats:
+                    year_txs = await uow.transactions.get_by_year(command.year)
+                else:
+                    year_txs = await uow.transactions.get_household_by_year(
+                        command.year
+                    )
+                overview = compute_budget_overview(
+                    budgets,
+                    year_txs,
+                    category_lookup,
+                    category_groups,
+                    command.year,
+                    command.month,
+                    personal_categories=personal_cats,
+                )
 
             return GetBudgetOverviewResult(
                 overview=overview,

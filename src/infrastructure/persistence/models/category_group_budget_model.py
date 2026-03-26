@@ -7,7 +7,7 @@ from src.infrastructure.persistence.models.base import Base
 class CategoryGroupBudgetModel(Base):
     __tablename__ = "category_group_budgets"
     __table_args__: tuple[UniqueConstraint] = (
-        UniqueConstraint("group_id", "effective_from"),
+        UniqueConstraint("group_id", "effective_from", "person_id"),
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
@@ -16,3 +16,6 @@ class CategoryGroupBudgetModel(Base):
     )
     monthly_amount: Mapped[str] = mapped_column(String, nullable=False)
     effective_from: Mapped[str] = mapped_column(String, nullable=False)
+    person_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("persons.id"), nullable=True, default=None
+    )

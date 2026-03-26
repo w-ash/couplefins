@@ -1,5 +1,6 @@
 import datetime
 from datetime import UTC
+from uuid import UUID
 
 from fastapi import APIRouter, Depends
 
@@ -11,6 +12,7 @@ from src.application.use_cases.finalize_period import (
 from src.application.use_cases.get_reconciliation import (
     GetReconciliationCommand,
     GetReconciliationUseCase,
+    ReconciliationScope,
 )
 from src.application.use_cases.unfinalize_period import (
     UnfinalizePeriodCommand,
@@ -30,25 +32,38 @@ router = APIRouter(tags=["reconciliation"], dependencies=[Depends(get_current_us
 
 
 @router.get("/reconciliation")
-async def get_reconciliation(
+async def get_reconciliation(  # noqa: PLR0913, PLR0917
     start_date: datetime.date | None = None,
     end_date: datetime.date | None = None,
     year: int | None = None,
     month: int | None = None,
+    scope: str | None = None,
+    person_id: UUID | None = None,
 ) -> ReconciliationResponse:
-    command = _build_command(start_date, end_date, year, month)
+    command = _build_command(start_date, end_date, year, month, scope, person_id)
     result = await execute_use_case(
         lambda uow: GetReconciliationUseCase().execute(command, uow)
     )
     return ReconciliationResponse.from_result(result)
 
 
-def _build_command(
+_VALID_SCOPES: set[ReconciliationScope] = {"household", "personal", "all"}
+
+
+def _build_command(  # noqa: PLR0913, PLR0917
     start_date: datetime.date | None,
     end_date: datetime.date | None,
     year: int | None,
     month: int | None,
+    scope: str | None,
+    person_id: UUID | None,
 ) -> GetReconciliationCommand:
+    resolved_scope: ReconciliationScope = "household"
+    if scope is not None:
+        if scope not in _VALID_SCOPES:
+            raise ValidationError(f"Invalid scope: {scope}")
+        resolved_scope = scope  # type: ignore[assignment]
+
     has_range = start_date is not None or end_date is not None
     has_ym = year is not None or month is not None
 
@@ -62,10 +77,17 @@ def _build_command(
             raise ValidationError("Both start_date and end_date are required.")
         if start_date > end_date:
             raise ValidationError("start_date must be <= end_date.")
-        return GetReconciliationCommand.from_range(start_date, end_date)
+        return GetReconciliationCommand.from_range(
+            start_date, end_date, scope=resolved_scope, person_id=person_id
+        )
 
     now = datetime.datetime.now(UTC).date()
-    return GetReconciliationCommand.from_month(year or now.year, month or now.month)
+    return GetReconciliationCommand.from_month(
+        year or now.year,
+        month or now.month,
+        scope=resolved_scope,
+        person_id=person_id,
+    )
 
 
 @router.post("/reconciliation/finalize")
