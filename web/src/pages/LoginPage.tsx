@@ -87,7 +87,7 @@ export function LoginPage({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loginMutation.isPending}
-                className={`w-full ${baseInputClass} placeholder:text-placeholder disabled:cursor-not-allowed disabled:opacity-50`}
+                className={`w-full ${baseInputClass}`}
               />
             </div>
 

@@ -1,8 +1,9 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { LogOut } from "lucide-react";
 import { useLogout } from "@/api/generated/auth/auth";
+import { useGetPersons } from "@/api/generated/persons/persons";
 import { useIdentityStore } from "@/lib/identity";
-import { getPersonAccentColor } from "@/types/person";
+import { usePersonMaps } from "@/lib/persons";
 
 export function LoggedInUser({
   compact,
@@ -10,7 +11,10 @@ export function LoggedInUser({
   /** Tighter spacing for sidebar (desktop). Omit for touch-friendly sizing (mobile). */
   compact?: boolean;
 }) {
+  const currentPersonId = useIdentityStore((s) => s.currentPersonId);
   const currentPersonName = useIdentityStore((s) => s.currentPersonName);
+  const { data: personsResponse } = useGetPersons();
+  const { getPersonColor } = usePersonMaps(personsResponse?.data);
   const queryClient = useQueryClient();
 
   const logoutMutation = useLogout({
@@ -27,7 +31,7 @@ export function LoggedInUser({
   return (
     <div className={`flex items-center gap-2 ${compact ? "" : "px-3 py-1"}`}>
       <div
-        className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${getPersonAccentColor(0)}`}
+        className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${getPersonColor(currentPersonId ?? "")}`}
       >
         {currentPersonName.charAt(0).toUpperCase()}
       </div>

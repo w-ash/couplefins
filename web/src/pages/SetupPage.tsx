@@ -7,7 +7,7 @@ import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { InlineError } from "@/components/InlineError";
 import { baseInputClass } from "@/lib/input-styles";
-import { MIN_PASSWORD_LENGTH } from "@/lib/password";
+import { getPasswordErrors, MIN_PASSWORD_LENGTH } from "@/lib/password";
 
 export function SetupPage() {
   const queryClient = useQueryClient();
@@ -43,15 +43,9 @@ export function SetupPage() {
     name1.trim() !== "" &&
     name1.trim().toLowerCase() === name2.trim().toLowerCase();
 
-  const pw1TooShort =
-    password1.length > 0 && password1.length < MIN_PASSWORD_LENGTH;
-  const pw2TooShort =
-    password2.length > 0 && password2.length < MIN_PASSWORD_LENGTH;
-  const canSubmit =
-    name1.trim() &&
-    name2.trim() &&
-    password1.length >= MIN_PASSWORD_LENGTH &&
-    password2.length >= MIN_PASSWORD_LENGTH;
+  const pw1 = getPasswordErrors(password1);
+  const pw2 = getPasswordErrors(password2);
+  const canSubmit = name1.trim() && name2.trim() && pw1.isValid && pw2.isValid;
 
   return (
     <div className="min-h-screen bg-background">
@@ -85,7 +79,7 @@ export function SetupPage() {
               placeholder="e.g. Alice"
               required
               disabled={mutation.isPending}
-              className={`w-full ${baseInputClass} placeholder:text-placeholder disabled:cursor-not-allowed disabled:opacity-50`}
+              className={`w-full ${baseInputClass}`}
             />
           </div>
 
@@ -104,9 +98,9 @@ export function SetupPage() {
               value={password1}
               onChange={(e) => setPassword1(e.target.value)}
               disabled={mutation.isPending}
-              className={`w-full ${baseInputClass} placeholder:text-placeholder disabled:cursor-not-allowed disabled:opacity-50`}
+              className={`w-full ${baseInputClass}`}
             />
-            {pw1TooShort && (
+            {pw1.tooShort && (
               <p className="mt-1 text-xs text-muted-foreground">
                 At least {MIN_PASSWORD_LENGTH} characters
               </p>
@@ -131,7 +125,7 @@ export function SetupPage() {
               placeholder="e.g. Bob"
               required
               disabled={mutation.isPending}
-              className={`w-full ${baseInputClass} placeholder:text-placeholder disabled:cursor-not-allowed disabled:opacity-50`}
+              className={`w-full ${baseInputClass}`}
             />
           </div>
 
@@ -150,9 +144,9 @@ export function SetupPage() {
               value={password2}
               onChange={(e) => setPassword2(e.target.value)}
               disabled={mutation.isPending}
-              className={`w-full ${baseInputClass} placeholder:text-placeholder disabled:cursor-not-allowed disabled:opacity-50`}
+              className={`w-full ${baseInputClass}`}
             />
-            {pw2TooShort && (
+            {pw2.tooShort && (
               <p className="mt-1 text-xs text-muted-foreground">
                 At least {MIN_PASSWORD_LENGTH} characters
               </p>

@@ -41,7 +41,7 @@ export function ResponsivePopover({
         <div
           className={
             popoverClassName ??
-            "absolute left-0 top-full z-40 mt-1.5 min-w-56 overflow-hidden rounded-lg border border-border bg-popover shadow-lg"
+            "absolute left-0 top-full z-50 mt-1.5 min-w-56 overflow-hidden rounded-lg border border-border bg-popover shadow-lg"
           }
         >
           {children(close)}

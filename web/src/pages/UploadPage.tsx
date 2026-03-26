@@ -627,7 +627,7 @@ export function UploadPage() {
               onChange={(e) => setPersonId(e.target.value)}
               required
               disabled={isFormDisabled}
-              className={`w-full min-h-11 ${selectInputClass} disabled:cursor-not-allowed disabled:opacity-50`}
+              className={`w-full min-h-11 ${selectInputClass}`}
             >
               <option value="">Select person...</option>
               {persons?.map((p) => (

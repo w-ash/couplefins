@@ -48,7 +48,7 @@
 | v0.11.0 | Auth backend (name+password, JWT cookies, protected routes) | Completed (2026-03-24) | M |
 | v0.11.1 | Auth frontend (login page, setup flow, session management) | Completed (2026-03-25) | M |
 | v0.11.2 | Personal budget backend (per-person limits, spending computation) | Completed (2026-03-26) | M |
-| v0.11.3 | Scope UI (budget toggle, transaction scope filter) | Planned | L |
+| v0.11.3 | Scope UI (budget toggle, transaction scope filter) | Completed (2026-03-26) | L |
 | v1.0.0 | Infrastructure investigation (benchmarks, DB audit, storage evaluation) | Planned | M |
 | v1.0.1 | Query & storage optimization (SQLite-native improvements) | Planned | M |
 | v1.0.2 | Database migration — PostgreSQL or normalized tags (conditional) | Planned | L |

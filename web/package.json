@@ -14,11 +14,13 @@
     "check": "biome check src/ && tsc --noEmit && vite build",
     "format": "biome check --write src/",
     "pregenerate": "cd .. && uv run python scripts/export_openapi.py",
-    "generate": "orval"
+    "generate": "orval",
+    "screenshots": "playwright test"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",
     "@faker-js/faker": "^10.3.0",
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4.2.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

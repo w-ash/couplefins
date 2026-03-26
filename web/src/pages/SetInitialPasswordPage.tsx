@@ -7,7 +7,7 @@ import { InlineError } from "@/components/InlineError";
 import { PersonPicker, SelectedPersonBadge } from "@/components/PersonPicker";
 import { useIdentityStore } from "@/lib/identity";
 import { baseInputClass, inputErrorClass } from "@/lib/input-styles";
-import { MIN_PASSWORD_LENGTH } from "@/lib/password";
+import { getPasswordErrors, MIN_PASSWORD_LENGTH } from "@/lib/password";
 
 export function SetInitialPasswordPage({
   persons,
@@ -51,12 +51,11 @@ export function SetInitialPasswordPage({
     mutation.reset();
   }
 
-  const tooShort = password.length > 0 && password.length < MIN_PASSWORD_LENGTH;
-  const mismatch = confirmPassword.length > 0 && password !== confirmPassword;
-  const canSubmit =
-    password.length >= MIN_PASSWORD_LENGTH &&
-    confirmPassword === password &&
-    !mutation.isPending;
+  const { tooShort, mismatch, isValid } = getPasswordErrors(
+    password,
+    confirmPassword,
+  );
+  const canSubmit = isValid && !mutation.isPending;
 
   const selectedIndex = persons.findIndex((p) => p.name === selectedName);
 
@@ -99,7 +98,7 @@ export function SetInitialPasswordPage({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={mutation.isPending}
-                className={`w-full ${baseInputClass} ${tooShort ? inputErrorClass : ""} placeholder:text-placeholder disabled:cursor-not-allowed disabled:opacity-50`}
+                className={`w-full ${baseInputClass} ${tooShort ? inputErrorClass : ""}`}
               />
               {tooShort && (
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -122,7 +121,7 @@ export function SetInitialPasswordPage({
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 disabled={mutation.isPending}
-                className={`w-full ${baseInputClass} ${mismatch ? inputErrorClass : ""} placeholder:text-placeholder disabled:cursor-not-allowed disabled:opacity-50`}
+                className={`w-full ${baseInputClass} ${mismatch ? inputErrorClass : ""}`}
               />
               {mismatch && (
                 <p className="mt-1 text-xs text-negative">

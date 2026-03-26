@@ -369,7 +369,7 @@ export function Combobox({
           ref={listboxRef}
           id={listboxId}
           role="listbox"
-          className="absolute left-0 top-full z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-border bg-popover py-1 shadow-lg"
+          className="absolute left-0 top-full z-50 mt-1.5 max-h-60 w-full overflow-y-auto rounded-lg border border-border bg-popover py-1 shadow-lg"
         >
           {groups.map((group) => {
             const header = group.name ? (
@@ -444,7 +444,7 @@ export function Combobox({
       )}
 
       {open && totalItems === 0 && query && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-full rounded-lg border border-border bg-popover px-3 py-2 text-sm text-muted-foreground shadow-lg">
+        <div className="absolute left-0 top-full z-50 mt-1.5 w-full rounded-lg border border-border bg-popover px-3 py-2 text-sm text-muted-foreground shadow-lg">
           No matches
         </div>
       )}

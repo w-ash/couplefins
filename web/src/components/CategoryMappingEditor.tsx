@@ -398,7 +398,7 @@ function AddGroupForm() {
         onChange={(e) => setName(e.target.value)}
         placeholder="New group name..."
         aria-label="New group name"
-        className={`min-w-0 flex-1 ${baseInputClass} placeholder:text-placeholder`}
+        className={`min-w-0 flex-1 ${baseInputClass}`}
       />
       <Button
         type="submit"

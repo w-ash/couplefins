@@ -6,7 +6,7 @@ import {
 import { useGetPersons } from "@/api/generated/persons/persons";
 import { useIdentityStore } from "@/lib/identity";
 import { baseInputClass, inputErrorClass } from "@/lib/input-styles";
-import { MIN_PASSWORD_LENGTH } from "@/lib/password";
+import { getPasswordErrors, MIN_PASSWORD_LENGTH } from "@/lib/password";
 import { Button } from "./Button";
 import { InlineError } from "./InlineError";
 
@@ -30,21 +30,17 @@ function ChangeMyPassword() {
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSuccess(false);
-    if (!currentPassword || newPassword !== confirmPassword) return;
+    if (!canSubmit) return;
     mutation.mutate({
       data: { current_password: currentPassword, new_password: newPassword },
     });
   }
 
-  const tooShort =
-    newPassword.length > 0 && newPassword.length < MIN_PASSWORD_LENGTH;
-  const mismatch =
-    confirmPassword.length > 0 && newPassword !== confirmPassword;
-  const canSubmit =
-    currentPassword &&
-    newPassword.length >= MIN_PASSWORD_LENGTH &&
-    confirmPassword === newPassword &&
-    !mutation.isPending;
+  const { tooShort, mismatch, isValid } = getPasswordErrors(
+    newPassword,
+    confirmPassword,
+  );
+  const canSubmit = currentPassword && isValid && !mutation.isPending;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -62,7 +58,7 @@ function ChangeMyPassword() {
           value={currentPassword}
           onChange={(e) => setCurrentPassword(e.target.value)}
           disabled={mutation.isPending}
-          className={`w-full ${baseInputClass} disabled:cursor-not-allowed disabled:opacity-50`}
+          className={`w-full ${baseInputClass}`}
         />
       </div>
       <div>
@@ -79,7 +75,7 @@ function ChangeMyPassword() {
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           disabled={mutation.isPending}
-          className={`w-full ${baseInputClass} ${tooShort ? inputErrorClass : ""} disabled:cursor-not-allowed disabled:opacity-50`}
+          className={`w-full ${baseInputClass} ${tooShort ? inputErrorClass : ""}`}
         />
         {tooShort && (
           <p className="mt-1 text-xs text-muted-foreground">
@@ -101,7 +97,7 @@ function ChangeMyPassword() {
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
           disabled={mutation.isPending}
-          className={`w-full ${baseInputClass} ${mismatch ? inputErrorClass : ""} disabled:cursor-not-allowed disabled:opacity-50`}
+          className={`w-full ${baseInputClass} ${mismatch ? inputErrorClass : ""}`}
         />
         {mismatch && (
           <p className="mt-1 text-xs text-negative">Passwords don't match</p>
@@ -153,18 +149,15 @@ function ResetPartnerPassword() {
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSuccess(false);
-    if (newPassword !== confirmPassword) return;
+    if (!canSubmit) return;
     mutation.mutate({ data: { new_password: newPassword } });
   }
 
-  const tooShort =
-    newPassword.length > 0 && newPassword.length < MIN_PASSWORD_LENGTH;
-  const mismatch =
-    confirmPassword.length > 0 && newPassword !== confirmPassword;
-  const canSubmit =
-    newPassword.length >= MIN_PASSWORD_LENGTH &&
-    confirmPassword === newPassword &&
-    !mutation.isPending;
+  const { tooShort, mismatch, isValid } = getPasswordErrors(
+    newPassword,
+    confirmPassword,
+  );
+  const canSubmit = isValid && !mutation.isPending;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -186,7 +179,7 @@ function ResetPartnerPassword() {
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           disabled={mutation.isPending}
-          className={`w-full ${baseInputClass} ${tooShort ? inputErrorClass : ""} disabled:cursor-not-allowed disabled:opacity-50`}
+          className={`w-full ${baseInputClass} ${tooShort ? inputErrorClass : ""}`}
         />
         {tooShort && (
           <p className="mt-1 text-xs text-muted-foreground">
@@ -208,7 +201,7 @@ function ResetPartnerPassword() {
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
           disabled={mutation.isPending}
-          className={`w-full ${baseInputClass} ${mismatch ? inputErrorClass : ""} disabled:cursor-not-allowed disabled:opacity-50`}
+          className={`w-full ${baseInputClass} ${mismatch ? inputErrorClass : ""}`}
         />
         {mismatch && (
           <p className="mt-1 text-xs text-negative">Passwords don't match</p>
