@@ -10,4 +10,5 @@ export interface BudgetResponse {
   group_id: string;
   monthly_amount: number;
   effective_from: string;
+  person_id?: string | null;
 }

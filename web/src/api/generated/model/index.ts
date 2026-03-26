@@ -35,6 +35,7 @@ export * from './deleteSettlementResponse';
 export * from './fieldDiffResponse';
 export * from './finalizePeriodRequest';
 export * from './getBudgetOverviewParams';
+export * from './getBudgetOverviewScope';
 export * from './getDashboardParams';
 export * from './getPeriodStatusParams';
 export * from './getReconciliationParams';

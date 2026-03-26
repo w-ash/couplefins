@@ -10,4 +10,6 @@ start_date?: string | null;
 end_date?: string | null;
 year?: number | null;
 month?: number | null;
+scope?: string | null;
+person_id?: string | null;
 };

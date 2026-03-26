@@ -24,6 +24,7 @@ import { SegmentedControl } from "@/components/SegmentedControl";
 import { StatsGrid } from "@/components/StatsGrid";
 import { useDialogSync } from "@/hooks/useDialogSync";
 import {
+  type BudgetScope,
   type SortMode,
   useBudgetFilters,
   type ViewMode,
@@ -31,6 +32,7 @@ import {
 import { useGroupIconMap } from "@/lib/categories";
 import { getCategoryGroupIcon } from "@/lib/category-icons";
 import { formatCurrency, useMonthYear } from "@/lib/format";
+import { useIdentityStore } from "@/lib/identity";
 import { baseInputClass } from "@/lib/input-styles";
 import { PAGE_PADDING } from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
@@ -165,16 +167,26 @@ function SpentBudgetLabel({
   budget,
   remaining,
   hasBudget,
+  breakdown,
 }: {
   spent: number;
   budget: number | null;
   remaining: number | null;
   hasBudget: boolean;
+  breakdown?: { shared: number; personal: number } | null;
 }) {
+  const breakdownEl = breakdown ? (
+    <span className="block text-xs text-muted-foreground">
+      (shared: {formatCurrency(breakdown.shared)} · personal:{" "}
+      {formatCurrency(breakdown.personal)})
+    </span>
+  ) : null;
+
   if (!hasBudget || budget == null) {
     return (
       <span className="text-sm tabular-nums text-foreground">
         {formatCurrency(spent)}
+        {breakdownEl}
       </span>
     );
   }
@@ -192,6 +204,7 @@ function SpentBudgetLabel({
           {formatCurrency(remaining)}
         </span>
       )}
+      {breakdownEl}
     </span>
   );
 }
@@ -199,6 +212,7 @@ function SpentBudgetLabel({
 function BudgetGroupRow({
   status,
   viewMode,
+  breakdown,
   icon,
   onUpdate,
   onDelete,
@@ -207,6 +221,7 @@ function BudgetGroupRow({
 }: {
   status: GroupBudgetStatusResponse;
   viewMode: ViewMode;
+  breakdown: { shared: number; personal: number } | null;
   icon: string | null;
   onUpdate: (budgetId: string, amount: number) => void;
   onDelete: (budgetId: string) => void;
@@ -284,6 +299,7 @@ function BudgetGroupRow({
                 budget={budget}
                 remaining={remaining}
                 hasBudget={hasBudget}
+                breakdown={breakdown}
               />
             </div>
           </div>
@@ -302,6 +318,7 @@ function BudgetGroupRow({
               budget={budget}
               remaining={remaining}
               hasBudget={hasBudget}
+              breakdown={breakdown}
             />
           </div>
         </button>
@@ -704,9 +721,19 @@ const SORT_OPTIONS: { value: SortMode; label: string }[] = [
 export function BudgetPage() {
   const { year, month } = useMonthYear();
   const queryClient = useQueryClient();
-  const { viewMode, setViewMode, sortMode, setSortMode } = useBudgetFilters();
+  const currentPersonId = useIdentityStore((s) => s.currentPersonId);
+  const { scope, setScope, viewMode, setViewMode, sortMode, setSortMode } =
+    useBudgetFilters();
 
-  const budgetOverviewParams = useMemo(() => ({ year, month }), [year, month]);
+  const budgetOverviewParams = useMemo(
+    () => ({
+      year,
+      month,
+      scope,
+      ...(scope === "personal" ? { person_id: currentPersonId ?? "" } : {}),
+    }),
+    [year, month, scope, currentPersonId],
+  );
   const queryKey = getGetBudgetOverviewQueryKey(budgetOverviewParams);
 
   const {
@@ -776,6 +803,15 @@ export function BudgetPage() {
     };
   }, [data, sortMode, viewMode]);
 
+  const toBreakdown = (
+    s: GroupBudgetStatusResponse,
+  ): { shared: number; personal: number } | null =>
+    scope === "personal" &&
+    s.shared_spending != null &&
+    s.personal_spending != null
+      ? { shared: s.shared_spending, personal: s.personal_spending }
+      : null;
+
   return (
     <div className={`mx-auto max-w-4xl ${PAGE_PADDING}`}>
       <PageHeader icon={<PieChart className="size-6" />} title="Budget">
@@ -784,6 +820,14 @@ export function BudgetPage() {
 
       {/* Controls */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <SegmentedControl<BudgetScope>
+          options={[
+            { value: "household", label: "Household" },
+            { value: "personal", label: "My Budget" },
+          ]}
+          value={scope}
+          onChange={setScope}
+        />
         <SegmentedControl
           options={[
             { value: "monthly", label: "Monthly" },
@@ -810,7 +854,11 @@ export function BudgetPage() {
             <PageEmpty
               icon={<PieChart />}
               heading="No budgets yet"
-              description="Add a budget above to start tracking shared spending."
+              description={
+                scope === "personal"
+                  ? "Add a budget above to start tracking your personal spending."
+                  : "Add a budget above to start tracking shared spending."
+              }
             />
           ) : (
             <>
@@ -824,6 +872,7 @@ export function BudgetPage() {
                       key={status.group_id}
                       status={status}
                       viewMode={viewMode}
+                      breakdown={toBreakdown(status)}
                       icon={groupIconMap.get(status.group_id) ?? null}
                       onUpdate={handleUpdate}
                       onDelete={handleDelete}
@@ -849,6 +898,7 @@ export function BudgetPage() {
                         key={status.group_id}
                         status={status}
                         viewMode={viewMode}
+                        breakdown={toBreakdown(status)}
                         icon={groupIconMap.get(status.group_id) ?? null}
                         onUpdate={handleUpdate}
                         onDelete={handleDelete}
@@ -871,6 +921,9 @@ export function BudgetPage() {
                   group_id: groupId,
                   monthly_amount: amount,
                   effective_from: effectiveFrom,
+                  ...(scope === "personal"
+                    ? { person_id: currentPersonId ?? "" }
+                    : {}),
                 },
               })
             }

@@ -4,8 +4,11 @@
  * Couplefins
  * OpenAPI spec version: 0.1.0
  */
+import type { GetBudgetOverviewScope } from './getBudgetOverviewScope';
 
 export type GetBudgetOverviewParams = {
 year: number;
 month: number;
+scope?: GetBudgetOverviewScope;
+person_id?: string | null;
 };

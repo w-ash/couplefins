@@ -7,6 +7,14 @@ import {
   TYPE_LABELS,
 } from "@/lib/transaction-classification";
 
+export type TransactionScope = "household" | "personal" | "all";
+
+export const TRANSACTION_SCOPES = new Set<TransactionScope>([
+  "household",
+  "personal",
+  "all",
+]);
+
 export type SortField = "date" | "merchant" | "amount" | "group";
 export type SortDir = "asc" | "desc";
 

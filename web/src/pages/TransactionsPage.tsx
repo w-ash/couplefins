@@ -61,6 +61,7 @@ import {
 import { TransactionSearch } from "@/components/TransactionSearch";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { UploadStatusRow } from "@/components/UploadStatusRow";
+import { useEnumParam } from "@/hooks/useEnumParam";
 import { useSetToggle } from "@/hooks/useSetToggle";
 import { useTemporary } from "@/hooks/useTemporary";
 import { useGroupIconMap } from "@/lib/categories";
@@ -74,6 +75,7 @@ import {
   formatSplit,
   plural,
 } from "@/lib/format";
+import { useIdentityStore } from "@/lib/identity";
 import { PAGE_PADDING } from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
 import {
@@ -84,6 +86,8 @@ import {
 import type { SortField, SortState } from "@/lib/transaction-filters";
 import {
   cycleSortState,
+  TRANSACTION_SCOPES,
+  type TransactionScope,
   type TypeFilter,
   useTransactionFilters,
 } from "@/lib/transaction-filters";
@@ -673,6 +677,12 @@ function TransactionRow({
 export function TransactionsPage() {
   const { startDate, endDate, setDateRange, singleMonth } = useDateRange();
   const queryClient = useQueryClient();
+  const currentPersonId = useIdentityStore((s) => s.currentPersonId);
+  const [scope, setScope] = useEnumParam(
+    "scope",
+    TRANSACTION_SCOPES,
+    "household",
+  );
 
   const { data: personsResponse } = useGetPersons();
   const persons = personsResponse?.data;
@@ -684,8 +694,13 @@ export function TransactionsPage() {
   const availableTags = tagsResponse?.data ?? [];
 
   const reconciliationParams = useMemo(
-    () => ({ start_date: startDate, end_date: endDate }),
-    [startDate, endDate],
+    () => ({
+      start_date: startDate,
+      end_date: endDate,
+      scope,
+      ...(scope !== "household" ? { person_id: currentPersonId ?? "" } : {}),
+    }),
+    [startDate, endDate, scope, currentPersonId],
   );
   const {
     data: reconciliationResponse,
@@ -820,6 +835,20 @@ export function TransactionsPage() {
                 filteredCount={filters.filtered.length}
                 totalCount={filters.totalCount}
               />
+
+              <div className="w-full overflow-x-auto sm:w-auto sm:overflow-visible">
+                <SegmentedControl<TransactionScope>
+                  options={[
+                    { value: "household", label: "Household" },
+                    { value: "personal", label: "Personal" },
+                    { value: "all", label: "All" },
+                  ]}
+                  value={scope}
+                  onChange={setScope}
+                  size="sm"
+                  shape="pill"
+                />
+              </div>
 
               <div className="w-full overflow-x-auto sm:w-auto sm:overflow-visible">
                 <SegmentedControl<TypeFilter>
