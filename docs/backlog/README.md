@@ -49,17 +49,17 @@
 | v0.11.1 | Auth frontend (login page, setup flow, session management) | Completed (2026-03-25) | M |
 | v0.11.2 | Personal budget backend (per-person limits, spending computation) | Completed (2026-03-26) | M |
 | v0.11.3 | Scope UI (budget toggle, transaction scope filter) | Completed (2026-03-26) | L |
-| v1.0.0 | Infrastructure investigation (benchmarks, DB audit, storage evaluation) | Planned | M |
-| v1.0.1 | Query & storage optimization (SQLite-native improvements) | Planned | M |
-| v1.0.2 | Database migration — PostgreSQL or normalized tags (conditional) | Planned | L |
-| v1.0.3 | Production readiness — Docker, backups, observability (conditional) | Planned | M |
+| v1.0.0 | PostgreSQL migration — Neon, asyncpg, JSONB+GIN, data migration | Completed (2026-03-27) | M |
+| v1.0.1 | Multi-user readiness — smart polling, SSE event bus, index audit | Planned | M |
+| v1.0.2 | Query optimization — PostgreSQL-native improvements | Planned | M |
 
 ## Infrastructure Readiness
 
 | Capability | v0.1.x | v0.2.x | v0.3.x | v0.4.x | v0.5.x | v0.6.x | v0.7.x | v0.8.x | v0.9.x | v0.10.x | v0.11.x | v1.0.x |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | FastAPI backend | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| SQLite + SQLAlchemy | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| SQLite + aiosqlite | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+| PostgreSQL 18 (Neon) + asyncpg | — | — | — | — | — | — | — | — | — | — | — | ✅ |
 | CSV parsing | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | React frontend | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Upload flow | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -100,14 +100,11 @@
 | Login page + session management | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
 | Personal budgets (per-person limits + spending computation) | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
 | Budget + transaction scope toggles | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
-| Performance benchmarks + query optimization | — | — | — | — | — | — | — | — | — | — | — | ✅ |
-| Server-side tag filtering | — | — | — | — | — | — | — | — | — | — | — | ✅ |
-| PostgreSQL / normalized storage (conditional) | — | — | — | — | — | — | — | — | — | — | — | ✅ |
-| Docker + backups + observability (conditional) | — | — | — | — | — | — | — | — | — | — | — | ✅ |
+| JSONB tag queries + server-side filtering | — | — | — | — | — | — | — | — | — | — | — | ✅ |
 
 ## Key Technical Decisions
 
-- **Database**: SQLite via SQLAlchemy async (aiosqlite)
+- **Database**: SQLite via aiosqlite (v0.1–v0.11). PostgreSQL 18 on Neon via asyncpg (v1.0+). JSONB+GIN for tag storage. Runs locally, connects to Neon over the network.
 - **Backend**: FastAPI with Clean Architecture (domain / application / infrastructure / interface)
 - **Frontend**: React 19 + Tailwind v4 + Tanstack Query, Orval codegen from OpenAPI
 - **Auth**: Name + password with argon2id hashing + JWT httpOnly cookies (v0.11.0). No email infrastructure, no OAuth. Password recovery via partner reset from Settings + CLI fallback. Prior to v0.11.0: no auth, two named profiles selected on upload.

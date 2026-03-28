@@ -1,7 +1,7 @@
 from typing import Literal
 
 from pydantic import BaseModel
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _cache: dict[str, Settings] = {}
 
@@ -9,8 +9,12 @@ _CACHE_KEY = "settings"
 
 
 class DatabaseConfig(BaseModel):
-    url: str = "sqlite+aiosqlite:///data/couplefins.db"
+    url: str = "postgresql+asyncpg://localhost:5432/couplefins"
     echo: bool = False
+
+    @property
+    def sync_url(self) -> str:
+        return self.url.replace("+asyncpg", "+psycopg")
 
 
 class AuthConfig(BaseModel):
@@ -22,7 +26,12 @@ class AuthConfig(BaseModel):
 
 
 class Settings(BaseSettings):
-    model_config = {"env_nested_delimiter": "__"}
+    model_config = SettingsConfigDict(
+        env_nested_delimiter="__",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     database: DatabaseConfig = DatabaseConfig()
     auth: AuthConfig = AuthConfig()

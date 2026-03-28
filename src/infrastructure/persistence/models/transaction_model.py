@@ -1,4 +1,5 @@
 from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infrastructure.persistence.models.base import Base
@@ -6,7 +7,7 @@ from src.infrastructure.persistence.models.base import Base
 
 class TransactionModel(Base):
     __tablename__ = "transactions"
-    __table_args__: tuple[UniqueConstraint, Index, Index, Index] = (
+    __table_args__: tuple[UniqueConstraint | Index, ...] = (
         UniqueConstraint(
             "date",
             "amount",
@@ -19,6 +20,7 @@ class TransactionModel(Base):
         Index("ix_transactions_household_date", "household", "date"),
         Index("ix_transactions_upload_id", "upload_id"),
         Index("ix_transactions_person_date", "payer_person_id", "date"),
+        Index("ix_transactions_tags_gin", "tags", postgresql_using="gin"),
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
@@ -33,7 +35,7 @@ class TransactionModel(Base):
     occurrence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     notes: Mapped[str] = mapped_column(String, nullable=False)
     amount: Mapped[str] = mapped_column(String, nullable=False)
-    tags_json: Mapped[str] = mapped_column(String, nullable=False)
+    tags: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     household: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     payer_person_id: Mapped[str] = mapped_column(
         String, ForeignKey("persons.id"), nullable=False

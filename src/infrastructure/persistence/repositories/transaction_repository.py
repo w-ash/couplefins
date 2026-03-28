@@ -1,10 +1,8 @@
 from datetime import date
 from decimal import Decimal
-import json
-from typing import cast
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, select, update
+from sqlalchemy import ColumnElement, func, select, text, update
 
 from src.domain.entities.transaction import Transaction
 from src.infrastructure.persistence.models.transaction_model import TransactionModel
@@ -30,7 +28,7 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             occurrence=model.occurrence,
             notes=model.notes,
             amount=Decimal(model.amount),
-            tags=tuple(cast(list[str], json.loads(model.tags_json))),
+            tags=tuple(model.tags),
             payer_person_id=UUID(model.payer_person_id),
             payer_percentage=model.payer_percentage,
             household=model.household,
@@ -57,7 +55,7 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             "occurrence": entity.occurrence,
             "notes": entity.notes,
             "amount": str(entity.amount),
-            "tags_json": json.dumps(list(entity.tags)),
+            "tags": list(entity.tags),
             "household": entity.household,
             "payer_person_id": str(entity.payer_person_id),
             "payer_percentage": entity.payer_percentage,
@@ -166,9 +164,10 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         return date.fromisoformat(value) if value else None
 
     async def get_distinct_tags(self) -> list[str]:
-        stmt = select(TransactionModel.tags_json).distinct()
+        stmt = (
+            select(func.jsonb_array_elements_text(TransactionModel.tags).label("tag"))
+            .distinct()
+            .order_by(text("tag"))
+        )
         result = await self._session.execute(stmt)
-        tags: set[str] = set()
-        for tags_json in result.scalars():
-            tags.update(cast(list[str], json.loads(tags_json)))
-        return sorted(tags)
+        return list(result.scalars())

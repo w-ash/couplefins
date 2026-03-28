@@ -15,6 +15,51 @@ Each person exports their Monarch CSV, uploads it, and reviews their shared tran
 - Python 3.14+
 - [uv](https://docs.astral.sh/uv/) for dependency management
 - Node.js 22+ and [pnpm](https://pnpm.io/) for the web UI
+- PostgreSQL 18 — either a [Neon](https://neon.tech) account (recommended) or a local install
+
+## Database Setup
+
+The app uses PostgreSQL via SQLAlchemy async (asyncpg). You need a running PostgreSQL instance — either remote on Neon or local on your machine.
+
+### Option A: Neon (recommended)
+
+1. Create a free project at [neon.tech](https://neon.tech)
+2. Copy the connection string from the Neon dashboard
+3. Set it in `.env`:
+   ```
+   DATABASE__URL=postgresql+asyncpg://user:pass@ep-xxxx.us-east-2.aws.neon.tech/couplefins?sslmode=require
+   ```
+
+Neon handles connection pooling, backups, and branching. The app connects over the network — no local database files.
+
+### Option B: Local PostgreSQL
+
+1. Install PostgreSQL 18 (`brew install postgresql@18` on macOS)
+2. Create a database:
+   ```bash
+   createdb couplefins
+   ```
+3. Set it in `.env`:
+   ```
+   DATABASE__URL=postgresql+asyncpg://localhost:5432/couplefins
+   ```
+
+### Running migrations
+
+After setting `DATABASE__URL`, create the schema:
+
+```bash
+uv run alembic upgrade head
+```
+
+### Test database
+
+Integration tests use the same `DATABASE__URL` from your environment. Unit tests don't need a database. To run integration tests:
+
+```bash
+uv run pytest tests/integration/ -x    # Requires DATABASE__URL
+uv run pytest tests/unit/ -x           # No database needed
+```
 
 ## Quick Start
 
@@ -26,7 +71,7 @@ uv sync
 
 # Set up environment
 cp .env.example .env
-# Edit .env with your values
+# Edit .env with your DATABASE__URL (see Database Setup above)
 
 # Run database migrations
 uv run alembic upgrade head
@@ -66,7 +111,7 @@ pnpm --prefix web check && pnpm --prefix web test
 src/
 ├── domain/          # Pure business logic, entities, repository protocols
 ├── application/     # Use case orchestration (Command/Result/UseCase pattern)
-├── infrastructure/  # SQLAlchemy repos (SQLite/aiosqlite), CSV parsing
+├── infrastructure/  # SQLAlchemy repos (PostgreSQL/asyncpg), CSV parsing
 ├── interface/       # FastAPI route handlers
 └── config/          # Settings, constants, logging
 

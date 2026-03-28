@@ -20,8 +20,7 @@ from src.infrastructure.persistence.models.person_model import PersonModel
 
 def _reset_password(name: str) -> None:
     settings = get_settings()
-    sync_url = settings.database.url.replace("+aiosqlite", "")
-    engine = create_engine(sync_url)
+    engine = create_engine(settings.database.sync_url)
 
     with Session(engine) as session:
         stmt = select(PersonModel).where(func.lower(PersonModel.name) == name.lower())

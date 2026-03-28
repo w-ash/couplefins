@@ -24,7 +24,7 @@ Implementation roadmap: @docs/backlog/README.md
 
 - **Domain** (`src/domain/`): Pure logic, entities, repository Protocols. Zero external imports.
 - **Application** (`src/application/`): Use case orchestration via `execute_use_case()`. Constructor injection.
-- **Infrastructure** (`src/infrastructure/`): SQLAlchemy repos (SQLite/aiosqlite), CSV parsing. Implements domain Protocols.
+- **Infrastructure** (`src/infrastructure/`): SQLAlchemy repos (PostgreSQL/asyncpg via Neon), CSV parsing. Implements domain Protocols.
 - **Interface** (`src/interface/api/`): Thin FastAPI handlers (5-10 lines), delegates to use cases.
 - **Frontend** (`web/`): React 19 + Tailwind v4 + Tanstack Query. Orval codegen from OpenAPI spec.
 

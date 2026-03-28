@@ -18,5 +18,5 @@ Ideas and features without version assignment. Move to a version file when ready
 - Keyboard shortcuts for common actions
 
 ## Infrastructure
-- User authentication (if sharing with others)
-- Database, deployment, and performance work moved to [v1.0.x](v1.0.x.md)
+- Docker containerization (if deploying beyond local laptops)
+- Structured logging + health check (loguru JSON output, request timing middleware)

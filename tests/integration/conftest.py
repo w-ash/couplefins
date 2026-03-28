@@ -1,23 +1,44 @@
 from collections.abc import AsyncGenerator
 import os
-import pathlib
-import tempfile
 
 from httpx import ASGITransport, AsyncClient
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
-from src.infrastructure.persistence.models.base import Base
+# Import from models/__init__ (not models.base) to ensure all models register with Base.metadata
+from src.infrastructure.persistence.models import Base
+
+
+def _get_test_db_url() -> str:
+    url = os.environ.get("DATABASE__URL", "")
+    if not url:
+        pytest.skip("DATABASE__URL not set — skipping integration tests")
+    return url
+
+
+async def _truncate_all(engine: AsyncEngine) -> None:
+    async with engine.begin() as conn:
+        await conn.execute(
+            text("TRUNCATE " + ", ".join(Base.metadata.tables) + " CASCADE")
+        )
 
 
 @pytest.fixture
 async def db_session() -> AsyncGenerator[AsyncSession]:
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    url = _get_test_db_url()
+    engine = create_async_engine(url, echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     async with session_factory() as session:
         yield session
+    await _truncate_all(engine)
     await engine.dispose()
 
 
@@ -25,15 +46,14 @@ async def db_session() -> AsyncGenerator[AsyncSession]:
 async def client() -> AsyncGenerator[AsyncClient]:
     from src.config.settings import reset_settings
     from src.infrastructure.persistence.database.db_connection import (
+        _get_engine,
         dispose_engine,
         reset_engine_cache,
     )
     from src.interface.api.app import create_app
 
-    # Use a temp file DB so tables persist across connections
-    fd, db_path = tempfile.mkstemp(suffix=".db")
-    os.close(fd)
-    os.environ["DATABASE__URL"] = f"sqlite+aiosqlite:///{db_path}"
+    url = _get_test_db_url()
+    os.environ["DATABASE__URL"] = url
     reset_settings()
     reset_engine_cache()
 
@@ -48,11 +68,9 @@ async def client() -> AsyncGenerator[AsyncClient]:
     ) as ac:
         yield ac
 
-    # Clean up
+    await _truncate_all(_get_engine())
     await dispose_engine()
     reset_settings()
-    os.environ.pop("DATABASE__URL", None)
-    pathlib.Path(db_path).unlink()  # noqa: ASYNC240
 
 
 async def setup_couple(
