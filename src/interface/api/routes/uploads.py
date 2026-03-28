@@ -8,6 +8,7 @@ from src.application.use_cases.get_upload_history import get_upload_history
 from src.application.use_cases.preview_csv import PreviewCsvCommand, PreviewCsvUseCase
 from src.application.use_cases.upload_csv import UploadCsvCommand, UploadCsvUseCase
 from src.domain.exceptions import ValidationError
+from src.infrastructure.events.event_bus import event_bus
 from src.interface.api.dependencies import get_current_user
 from src.interface.api.schemas.uploads import (
     PreviewUploadResponse,
@@ -75,4 +76,5 @@ async def post_upload(
     result = await execute_use_case(
         lambda uow: UploadCsvUseCase().execute(command, uow)
     )
+    event_bus.broadcast("uploads")
     return UploadSummaryResponse.from_result(result)

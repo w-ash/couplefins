@@ -22,6 +22,7 @@ from src.application.use_cases.update_transaction_splits import (
     UpdateTransactionSplitsCommand,
     UpdateTransactionSplitsUseCase,
 )
+from src.infrastructure.events.event_bus import event_bus
 from src.interface.api.dependencies import get_current_user
 from src.interface.api.schemas.transactions import (
     BulkModifyTagsRequest,
@@ -59,6 +60,7 @@ async def update_splits(body: UpdateSplitsRequest) -> UpdateSplitsResponse:
     result = await execute_use_case(
         lambda uow: UpdateTransactionSplitsUseCase().execute(command, uow)
     )
+    event_bus.broadcast("transactions")
     return UpdateSplitsResponse(updated_count=result.updated_count)
 
 
@@ -79,6 +81,7 @@ async def bulk_update_transactions(body: BulkUpdateRequest) -> BulkUpdateRespons
     result = await execute_use_case(
         lambda uow: BulkUpdateTransactionsUseCase().execute(command, uow)
     )
+    event_bus.broadcast("transactions")
     return BulkUpdateResponse(updated_count=result.updated_count)
 
 
@@ -92,6 +95,7 @@ async def bulk_modify_tags(body: BulkModifyTagsRequest) -> BulkModifyTagsRespons
     result = await execute_use_case(
         lambda uow: BulkModifyTagsUseCase().execute(command, uow)
     )
+    event_bus.broadcast("transactions")
     return BulkModifyTagsResponse(updated_count=result.updated_count)
 
 
@@ -117,6 +121,7 @@ async def update_transaction(
     result = await execute_use_case(
         lambda uow: BulkUpdateTransactionsUseCase().execute(command, uow)
     )
+    event_bus.broadcast("transactions")
     tx_id = (
         result.updated_transactions[0].id
         if result.updated_transactions

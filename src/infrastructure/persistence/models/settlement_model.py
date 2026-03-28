@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infrastructure.persistence.models.base import Base
@@ -6,7 +6,7 @@ from src.infrastructure.persistence.models.base import Base
 
 class SettlementModel(Base):
     __tablename__ = "settlements"
-    __table_args__: tuple[UniqueConstraint] = (
+    __table_args__: tuple[UniqueConstraint | Index, ...] = (
         UniqueConstraint(
             "year",
             "month",
@@ -14,6 +14,7 @@ class SettlementModel(Base):
             "settled_at",
             name="uq_settlements_period_person_time",
         ),
+        Index("ix_settlements_year_month", "year", "month"),
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)

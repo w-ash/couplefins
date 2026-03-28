@@ -162,7 +162,12 @@ function MonthHistory({
 }
 
 export function DashboardPage() {
-  const { data: response, isLoading, error, refetch } = useGetDashboard();
+  const {
+    data: response,
+    isLoading,
+    error,
+    refetch,
+  } = useGetDashboard(undefined, { query: { refetchInterval: 5_000 } });
   const data = response?.status === 200 ? response.data : undefined;
 
   const { personNames, getPersonName, getPersonColor } = usePersonMaps(

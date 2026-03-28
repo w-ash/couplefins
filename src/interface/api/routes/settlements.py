@@ -24,6 +24,7 @@ from src.application.use_cases.record_waived_settlement import (
     RecordWaivedSettlementCommand,
     RecordWaivedSettlementUseCase,
 )
+from src.infrastructure.events.event_bus import event_bus
 from src.interface.api.dependencies import get_current_user
 from src.interface.api.schemas.settlements import (
     DeleteSettlementResponse,
@@ -54,6 +55,7 @@ async def record_settlement(body: RecordSettlementRequest) -> SettlementResponse
     result = await execute_use_case(
         lambda uow: RecordSettlementUseCase().execute(command, uow)
     )
+    event_bus.broadcast("settlements")
     return SettlementResponse.from_domain(result.settlement)
 
 
@@ -69,6 +71,7 @@ async def waive_settlement(body: RecordWaivedSettlementRequest) -> SettlementRes
     result = await execute_use_case(
         lambda uow: RecordWaivedSettlementUseCase().execute(command, uow)
     )
+    event_bus.broadcast("settlements")
     return SettlementResponse.from_domain(result.settlement)
 
 
@@ -87,6 +90,7 @@ async def delete_settlement(settlement_id: UUID) -> DeleteSettlementResponse:
     result = await execute_use_case(
         lambda uow: DeleteSettlementUseCase().execute(command, uow)
     )
+    event_bus.broadcast("settlements")
     return DeleteSettlementResponse(deleted=result.deleted)
 
 
@@ -102,6 +106,7 @@ async def mark_transaction_as_settlement(
     result = await execute_use_case(
         lambda uow: MarkTransactionAsSettlementUseCase().execute(command, uow)
     )
+    event_bus.broadcast("settlements")
     return MarkTransactionResponse(
         transaction_id=result.transaction_id,
         is_settlement=result.is_settlement,

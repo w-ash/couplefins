@@ -409,7 +409,10 @@ export function SettleUpPage() {
     isLoading,
     error,
     refetch,
-  } = useGetSettleUpData({ year, month });
+  } = useGetSettleUpData(
+    { year, month },
+    { query: { refetchInterval: 5_000 } },
+  );
   const data =
     settleUpResponse?.status === 200 ? settleUpResponse.data : undefined;
 

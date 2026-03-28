@@ -707,7 +707,9 @@ export function TransactionsPage() {
     isLoading,
     error,
     refetch,
-  } = useGetReconciliation(reconciliationParams);
+  } = useGetReconciliation(reconciliationParams, {
+    query: { refetchInterval: 5_000 },
+  });
   const data =
     reconciliationResponse?.status === 200
       ? reconciliationResponse.data

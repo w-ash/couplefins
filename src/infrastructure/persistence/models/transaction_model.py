@@ -1,4 +1,12 @@
-from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,6 +29,12 @@ class TransactionModel(Base):
         Index("ix_transactions_upload_id", "upload_id"),
         Index("ix_transactions_person_date", "payer_person_id", "date"),
         Index("ix_transactions_tags_gin", "tags", postgresql_using="gin"),
+        Index(
+            "ix_transactions_non_settlement_date",
+            "household",
+            "date",
+            postgresql_where=text("NOT is_settlement"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)

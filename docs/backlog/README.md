@@ -50,7 +50,7 @@
 | v0.11.2 | Personal budget backend (per-person limits, spending computation) | Completed (2026-03-26) | M |
 | v0.11.3 | Scope UI (budget toggle, transaction scope filter) | Completed (2026-03-26) | L |
 | v1.0.0 | PostgreSQL migration — Neon, asyncpg, JSONB+GIN, data migration | Completed (2026-03-27) | M |
-| v1.0.1 | Multi-user readiness — smart polling, SSE event bus, index audit | Planned | M |
+| v1.0.1 | Multi-user readiness — smart polling, SSE event bus, index audit | Completed (2026-03-28) | M |
 | v1.0.2 | Query optimization — PostgreSQL-native improvements | Planned | M |
 
 ## Infrastructure Readiness
@@ -101,6 +101,9 @@
 | Personal budgets (per-person limits + spending computation) | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
 | Budget + transaction scope toggles | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
 | JSONB tag queries + server-side filtering | — | — | — | — | — | — | — | — | — | — | — | ✅ |
+| Smart polling (together-session pages) | — | — | — | — | — | — | — | — | — | — | — | ✅ |
+| SSE event bus (cross-user sync) | — | — | — | — | — | — | — | — | — | — | — | ✅ |
+| PostgreSQL index optimization | — | — | — | — | — | — | — | — | — | — | — | ✅ |
 
 ## Key Technical Decisions
 
@@ -119,4 +122,5 @@
 - **Category groups**: ~75 Monarch categories roll up into ~12 groups (e.g., "Groceries & Home Supplies" → "Food & Dining"). Budgets are set at the group level. Initial mapping seeded from JSON fixture on startup. New categories auto-created during CSV upload with `group_id=None` (unmapped). Users assign them to groups via Settings UI.
 - **Adjustment export**: Pure domain functions (no stored adjustment entities). Deterministic dedup IDs via UUID5 for idempotent Monarch re-import. `couplefins-adjustment` tag for filtering.
 - **Use case pattern**: Every use case has 3 objects — `Command` (frozen attrs, validated at construction), `Result` (frozen attrs), `UseCase` (`@define(slots=True)`, stateless). Uniform signature: `execute(self, command, uow) -> Result`. UoW passed to execute (not constructor). Transaction scoped via `async with uow:`. Even parameterless queries get an empty Command. Shared validators in `_shared/command_validators.py`.
+- **Real-time sync**: SSE via FastAPI `EventSourceResponse` (v1.0.1+). In-memory `EventBus` broadcasts entity names after mutations; frontend `useRealtimeSync` hook connects via `EventSource` and invalidates TanStack Query caches. 5-second `refetchInterval` polling on together-session pages (Dashboard, Settle Up, Transactions) as fallback. No WebSockets, no Redis, no Neon LISTEN/NOTIFY.
 - **Tooling**: uv, Ruff, BasedPyright, pytest, Biome

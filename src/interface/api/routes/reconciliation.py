@@ -20,6 +20,7 @@ from src.application.use_cases.unfinalize_period import (
 )
 from src.domain.exceptions import ValidationError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
+from src.infrastructure.events.event_bus import event_bus
 from src.interface.api.dependencies import get_current_user
 from src.interface.api.schemas.reconciliation import (
     FinalizePeriodRequest,
@@ -96,6 +97,7 @@ async def finalize_period(body: FinalizePeriodRequest) -> PeriodStatusResponse:
     result = await execute_use_case(
         lambda uow: FinalizePeriodUseCase().execute(command, uow)
     )
+    event_bus.broadcast("reconciliation")
     return PeriodStatusResponse.from_domain(result.period)
 
 
@@ -105,6 +107,7 @@ async def unfinalize_period(body: UnfinalizePeriodRequest) -> PeriodStatusRespon
     result = await execute_use_case(
         lambda uow: UnfinalizePeriodUseCase().execute(command, uow)
     )
+    event_bus.broadcast("reconciliation")
     return PeriodStatusResponse.from_domain(result.period)
 
 

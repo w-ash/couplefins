@@ -1,8 +1,11 @@
 import { Outlet } from "react-router";
 import { BottomNav } from "@/components/BottomNav";
 import { Sidebar } from "@/components/Sidebar";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 
 export function AppLayout() {
+  useRealtimeSync();
+
   return (
     <div className="flex min-h-screen">
       <a href="#main-content" className="skip-to-content">

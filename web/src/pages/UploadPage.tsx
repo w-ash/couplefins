@@ -33,6 +33,7 @@ import { Card } from "@/components/Card";
 import { FileDropZone } from "@/components/FileDropZone";
 import { PageHeader } from "@/components/PageHeader";
 import { StepIndicator } from "@/components/StepIndicator";
+import { TagReferenceGuide } from "@/components/TagReferenceGuide";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { UploadError } from "@/components/UploadError";
 import { UploadHistory } from "@/components/UploadHistory";
@@ -681,6 +682,8 @@ export function UploadPage() {
       <div aria-live="polite" aria-atomic="true">
         {error && <UploadError error={error} />}
       </div>
+
+      {step === "form" && <TagReferenceGuide />}
 
       {/* Already up to date */}
       {step === "preview" && preview && nothingToImport && (
