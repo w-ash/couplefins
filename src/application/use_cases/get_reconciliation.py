@@ -35,6 +35,7 @@ class GetReconciliationCommand:
     single_month: tuple[int, int] | None
     scope: ReconciliationScope = "household"
     person_id: UUID | None = None
+    tags: tuple[str, ...] | None = None
 
     @classmethod
     def from_month(
@@ -44,6 +45,7 @@ class GetReconciliationCommand:
         *,
         scope: ReconciliationScope = "household",
         person_id: UUID | None = None,
+        tags: tuple[str, ...] | None = None,
     ) -> GetReconciliationCommand:
         start, end = month_bounds(year, month)
         return cls(
@@ -52,6 +54,7 @@ class GetReconciliationCommand:
             single_month=(year, month),
             scope=scope,
             person_id=person_id,
+            tags=tags,
         )
 
     @classmethod
@@ -62,6 +65,7 @@ class GetReconciliationCommand:
         *,
         scope: ReconciliationScope = "household",
         person_id: UUID | None = None,
+        tags: tuple[str, ...] | None = None,
     ) -> GetReconciliationCommand:
         single = detect_single_month(start_date, end_date)
         return cls(
@@ -70,6 +74,7 @@ class GetReconciliationCommand:
             single_month=single,
             scope=scope,
             person_id=person_id,
+            tags=tags,
         )
 
 
@@ -140,18 +145,20 @@ class GetReconciliationUseCase:
     async def _fetch_transactions(
         command: GetReconciliationCommand, uow: UnitOfWorkProtocol
     ) -> list[Transaction]:
+        tags = command.tags
+
         if command.scope == "personal" and command.person_id is not None:
             txs = await uow.transactions.get_by_person_and_date_range(
-                command.person_id, command.start_date, command.end_date
+                command.person_id, command.start_date, command.end_date, tags=tags
             )
             return [tx for tx in txs if not tx.household]
 
         if command.scope == "all" and command.person_id is not None:
             household_txs = await uow.transactions.get_household_by_date_range(
-                command.start_date, command.end_date
+                command.start_date, command.end_date, tags=tags
             )
             person_txs = await uow.transactions.get_by_person_and_date_range(
-                command.person_id, command.start_date, command.end_date
+                command.person_id, command.start_date, command.end_date, tags=tags
             )
             household_ids = {tx.id for tx in household_txs}
             personal_non_household = [
@@ -162,5 +169,5 @@ class GetReconciliationUseCase:
             return household_txs + personal_non_household
 
         return await uow.transactions.get_household_by_date_range(
-            command.start_date, command.end_date
+            command.start_date, command.end_date, tags=tags
         )

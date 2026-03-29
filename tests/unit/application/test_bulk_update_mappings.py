@@ -13,7 +13,7 @@ from tests.fixtures.mocks import make_mock_uow
 async def test_saves_mappings_and_commits() -> None:
     uow = make_mock_uow()
     group = make_category_group()
-    uow.category_groups.get_by_id.return_value = group
+    uow.category_groups.get_by_ids.return_value = [group]
     uow.categories.get_all.return_value = []
     command = BulkUpdateMappingsCommand(
         mappings=[MappingEntry(category="Groceries", group_id=group.id)]
@@ -36,7 +36,7 @@ async def test_uses_evolve_for_existing_categories() -> None:
     existing = make_category(
         name="Groceries", group_id=make_category_group().id, include_personal=True
     )
-    uow.category_groups.get_by_id.return_value = group
+    uow.category_groups.get_by_ids.return_value = [group]
     uow.categories.get_all.return_value = [existing]
     command = BulkUpdateMappingsCommand(
         mappings=[MappingEntry(category="Groceries", group_id=group.id)]
@@ -52,7 +52,7 @@ async def test_uses_evolve_for_existing_categories() -> None:
 
 async def test_raises_validation_error_for_missing_group() -> None:
     uow = make_mock_uow()
-    uow.category_groups.get_by_id.return_value = None
+    uow.category_groups.get_by_ids.return_value = []
     command = BulkUpdateMappingsCommand(
         mappings=[MappingEntry(category="Groceries", group_id=make_category_group().id)]
     )

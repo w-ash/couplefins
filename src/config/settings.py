@@ -1,4 +1,5 @@
 from typing import Literal
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -15,6 +16,28 @@ class DatabaseConfig(BaseModel):
     @property
     def sync_url(self) -> str:
         return self.url.replace("+asyncpg", "+psycopg")
+
+    @property
+    def is_pooled_endpoint(self) -> bool:
+        return "-pooler" in self.url
+
+    @property
+    def async_url(self) -> str:
+        """URL with sslmode stripped — asyncpg uses the ssl connect_arg instead."""
+        if "sslmode=" not in self.url:
+            return self.url
+        parsed = urlparse(self.url)
+        params = parse_qs(parsed.query)
+        params.pop("sslmode", None)
+        return urlunparse(parsed._replace(query=urlencode(params, doseq=True)))
+
+    @property
+    def async_connect_args(self) -> dict[str, object]:
+        """Connect args for asyncpg, including ssl translated from sslmode."""
+        args: dict[str, object] = {}
+        if "sslmode=" in self.url:
+            args["ssl"] = "require"
+        return args
 
 
 class AuthConfig(BaseModel):

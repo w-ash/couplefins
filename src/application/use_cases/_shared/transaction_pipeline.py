@@ -1,12 +1,12 @@
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from src.domain.constants import SplitDefaults
 from src.domain.entities.transaction import Transaction
 from src.domain.entities.transaction_edit import TransactionEdit
 from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.formatting import FieldValue, field_str
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
+from src.domain.splits import check_payer_percentage
 
 from .finalization import assert_periods_not_finalized
 
@@ -47,8 +47,7 @@ def compute_edit(
 
 
 def validate_payer_percentage(pct: int) -> None:
-    if not (0 <= pct <= SplitDefaults.MAX_PAYER_PERCENTAGE):
-        raise ValidationError(
-            f"payer_percentage must be 0-{SplitDefaults.MAX_PAYER_PERCENTAGE}, "
-            f"got {pct}"
-        )
+    try:
+        check_payer_percentage(pct)
+    except ValueError as e:
+        raise ValidationError(str(e)) from e

@@ -2,13 +2,15 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, func, select, text, update
+from sqlalchemy import ColumnElement, cast, func, select, text, update
+from sqlalchemy.dialects.postgresql import JSONB
 
 from src.domain.entities.transaction import Transaction
 from src.infrastructure.persistence.models.transaction_model import TransactionModel
 from src.infrastructure.persistence.repositories.base import (
     BaseRepository,
     date_month_prefix,
+    date_year_prefix,
 )
 
 
@@ -80,6 +82,12 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         result = await self._session.execute(stmt)
         return [self._to_domain(row) for row in result.scalars().all()]
 
+    @staticmethod
+    def _tag_filter(tags: tuple[str, ...] | None) -> list[ColumnElement[bool]]:
+        if not tags:
+            return []
+        return [TransactionModel.tags.op("@>")(cast(list(tags), JSONB))]
+
     async def get_household_by_period(self, year: int, month: int) -> list[Transaction]:
         return await self._query(
             TransactionModel.date.startswith(date_month_prefix(year, month)),
@@ -89,34 +97,45 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
 
     async def get_household_by_year(self, year: int) -> list[Transaction]:
         return await self._query(
-            TransactionModel.date.startswith(f"{year:04d}-"),
+            TransactionModel.date.startswith(date_year_prefix(year)),
             TransactionModel.household.is_(True),
             TransactionModel.is_settlement.is_(False),
         )
 
     async def get_by_year(self, year: int) -> list[Transaction]:
         return await self._query(
-            TransactionModel.date.startswith(f"{year:04d}-"),
+            TransactionModel.date.startswith(date_year_prefix(year)),
             TransactionModel.is_settlement.is_(False),
         )
 
     async def get_household_by_date_range(
-        self, start_date: date, end_date: date
+        self,
+        start_date: date,
+        end_date: date,
+        *,
+        tags: tuple[str, ...] | None = None,
     ) -> list[Transaction]:
         return await self._query(
             TransactionModel.date >= start_date.isoformat(),
             TransactionModel.date <= end_date.isoformat(),
             TransactionModel.household.is_(True),
             TransactionModel.is_settlement.is_(False),
+            *self._tag_filter(tags),
         )
 
     async def get_by_person_and_date_range(
-        self, person_id: UUID, start_date: date, end_date: date
+        self,
+        person_id: UUID,
+        start_date: date,
+        end_date: date,
+        *,
+        tags: tuple[str, ...] | None = None,
     ) -> list[Transaction]:
         return await self._query(
             TransactionModel.payer_person_id == str(person_id),
             TransactionModel.date >= start_date.isoformat(),
             TransactionModel.date <= end_date.isoformat(),
+            *self._tag_filter(tags),
         )
 
     _IMMUTABLE_KEYS = frozenset({"account", "original_statement", "occurrence"})

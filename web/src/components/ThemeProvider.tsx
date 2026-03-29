@@ -9,6 +9,7 @@ import {
 } from "react";
 import {
   applyTheme,
+  clearStoredTheme,
   getStoredTheme,
   resolveIsDark,
   storeTheme,
@@ -19,6 +20,7 @@ interface ThemeContextValue {
   theme: Theme;
   isDark: boolean;
   setTheme: (theme: Theme) => void;
+  resetToSystem: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -32,6 +34,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     storeTheme(next);
     applyTheme(next);
     setIsDark(resolveIsDark(next));
+  }, []);
+
+  const resetToSystem = useCallback(() => {
+    clearStoredTheme();
+    setThemeState("system");
+    applyTheme("system");
+    setIsDark(resolveIsDark("system"));
   }, []);
 
   // Apply on mount (sync with FOIT script); setTheme owns subsequent changes
@@ -54,8 +63,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [theme]);
 
   const value = useMemo(
-    () => ({ theme, isDark, setTheme }),
-    [theme, isDark, setTheme],
+    () => ({ theme, isDark, setTheme, resetToSystem }),
+    [theme, isDark, setTheme, resetToSystem],
   );
 
   return <ThemeContext value={value}>{children}</ThemeContext>;

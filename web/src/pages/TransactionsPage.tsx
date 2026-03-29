@@ -707,7 +707,7 @@ export function TransactionsPage() {
     isLoading,
     error,
     refetch,
-  } = useGetReconciliation(reconciliationParams, {
+  } = useGetReconciliation(null, reconciliationParams, {
     query: { refetchInterval: 5_000 },
   });
   const data =
@@ -717,7 +717,7 @@ export function TransactionsPage() {
 
   const invalidateReconciliation = useCallback(() => {
     queryClient.invalidateQueries({
-      queryKey: getGetReconciliationQueryKey(reconciliationParams),
+      queryKey: getGetReconciliationQueryKey(null, reconciliationParams),
     });
     queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetTagsQueryKey() });

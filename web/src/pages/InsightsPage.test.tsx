@@ -14,8 +14,18 @@ const baseFields = {
   comparison_monthly_group_spending:
     [] as SpendingTrendsResponse["comparison_monthly_group_spending"],
   persons: [
-    { id: "p1", name: "Alice", adjustment_account: "" },
-    { id: "p2", name: "Bob", adjustment_account: "" },
+    {
+      id: "p1",
+      name: "Alice",
+      adjustment_account: "",
+      theme_preference: "system",
+    },
+    {
+      id: "p2",
+      name: "Bob",
+      adjustment_account: "",
+      theme_preference: "system",
+    },
   ],
 };
 

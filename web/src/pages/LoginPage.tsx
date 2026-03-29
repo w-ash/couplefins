@@ -4,9 +4,10 @@ import { useLogin } from "@/api/generated/auth/auth";
 import type { AuthPersonResponse } from "@/api/generated/model";
 import { Button } from "@/components/Button";
 import { InlineError } from "@/components/InlineError";
+import { PasswordInput } from "@/components/PasswordInput";
 import { PersonPicker, SelectedPersonBadge } from "@/components/PersonPicker";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useIdentityStore } from "@/lib/identity";
-import { baseInputClass } from "@/lib/input-styles";
 
 export function LoginPage({
   persons,
@@ -51,7 +52,10 @@ export function LoginPage({
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-md px-6 py-24">
+      <div className="flex justify-end px-6 pt-4">
+        <ThemeToggle />
+      </div>
+      <div className="mx-auto max-w-md px-6 py-12">
         <div className="mb-8 text-center">
           <div className="mb-4 inline-flex items-center justify-center rounded-full bg-primary-muted p-3">
             <Heart className="size-6 text-primary" />
@@ -79,15 +83,13 @@ export function LoginPage({
               >
                 Password
               </label>
-              <input
+              <PasswordInput
                 ref={passwordRef}
                 id="password"
-                type="password"
                 autoComplete="current-password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={setPassword}
                 disabled={loginMutation.isPending}
-                className={`w-full ${baseInputClass}`}
               />
             </div>
 

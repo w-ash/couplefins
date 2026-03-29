@@ -10,6 +10,7 @@ from src.domain.categories import (
     compute_category_breakdowns,
 )
 from src.domain.constants import CoupleDefaults, SplitDefaults
+from src.domain.date_math import month_bounds
 from src.domain.entities.category import Category
 from src.domain.entities.category_group import CategoryGroup
 from src.domain.entities.person import Person
@@ -141,3 +142,19 @@ def reconcile(  # noqa: PLR0913
         category_group_breakdowns=breakdowns,
         transaction_count=len(shared),
     )
+
+
+def reconcile_all_months(
+    by_month: dict[int, list[Transaction]],
+    persons: list[Person],
+    categories: list[Category],
+    category_groups: list[CategoryGroup],
+    year: int,
+) -> dict[int, ReconciliationSummary]:
+    results: dict[int, ReconciliationSummary] = {}
+    for month, txs in by_month.items():
+        start, end = month_bounds(year, month)
+        results[month] = reconcile(
+            txs, persons, categories, category_groups, start_date=start, end_date=end
+        )
+    return results

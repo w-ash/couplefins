@@ -4,8 +4,8 @@ import attrs
 from attrs import define, field
 
 from src.application.use_cases._shared.command_validators import non_empty_string
+from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.domain.entities.category_group import CategoryGroup
-from src.domain.exceptions import NotFoundError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -27,9 +27,9 @@ class UpdateCategoryGroupUseCase:
         self, command: UpdateCategoryGroupCommand, uow: UnitOfWorkProtocol
     ) -> UpdateCategoryGroupResult:
         async with uow:
-            existing = await uow.category_groups.get_by_id(command.id)
-            if existing is None:
-                raise NotFoundError(f"Category group {command.id} not found")
+            existing = await require_by_id(
+                uow.category_groups.get_by_id, command.id, "Category group"
+            )
 
             updated = attrs.evolve(existing, name=command.name, icon=command.icon)
             saved = await uow.category_groups.save(updated)

@@ -24,7 +24,7 @@ import type {
 
 export const getListAuthPersonsResponseMock = (): AuthPersonResponse[] => (Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({name: faker.string.alpha({length: {min: 10, max: 20}}), has_password: faker.datatype.boolean()})))
 
-export const getGetMeResponseMock = (overrideResponse: Partial<Extract<PersonResponse, object>> = {}): PersonResponse => ({id: faker.string.uuid(), name: faker.string.alpha({length: {min: 10, max: 20}}), adjustment_account: faker.string.alpha({length: {min: 10, max: 20}}), ...overrideResponse})
+export const getGetMeResponseMock = (overrideResponse: Partial<Extract<PersonResponse, object>> = {}): PersonResponse => ({id: faker.string.uuid(), name: faker.string.alpha({length: {min: 10, max: 20}}), adjustment_account: faker.string.alpha({length: {min: 10, max: 20}}), theme_preference: faker.string.alpha({length: {min: 10, max: 20}}), ...overrideResponse})
 
 
 export const getListAuthPersonsMockHandler = (overrideResponse?: AuthPersonResponse[] | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<AuthPersonResponse[]> | AuthPersonResponse[]), options?: RequestHandlerOptions) => {

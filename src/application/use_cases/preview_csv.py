@@ -6,6 +6,7 @@ from attrs import define, field
 from loguru import logger
 
 from src.application.use_cases._shared.command_validators import non_empty_string
+from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.application.use_cases._shared.transactions import (
     classify_against_existing,
     find_all_unmapped_categories,
@@ -13,7 +14,6 @@ from src.application.use_cases._shared.transactions import (
 )
 from src.domain.dedup import FieldDiff
 from src.domain.entities.transaction import Transaction
-from src.domain.exceptions import NotFoundError
 from src.domain.parsing.monarch_csv import parse_monarch_csv
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
@@ -69,9 +69,9 @@ class PreviewCsvUseCase:
         self, command: PreviewCsvCommand, uow: UnitOfWorkProtocol
     ) -> PreviewCsvResult:
         async with uow:
-            person = await uow.persons.get_by_id(command.person_id)
-            if person is None:
-                raise NotFoundError(f"Person {command.person_id} not found")
+            person = await require_by_id(
+                uow.persons.get_by_id, command.person_id, "Person"
+            )
 
             other_names = await get_other_person_names(uow, command.person_id)
             incoming = parse_monarch_csv(

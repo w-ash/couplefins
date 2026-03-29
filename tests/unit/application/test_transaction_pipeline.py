@@ -37,12 +37,14 @@ async def test_fetch_and_validate_checks_finalization() -> None:
     uow = make_mock_uow()
     tx = make_transaction()
     uow.transactions.get_by_ids.return_value = [tx]
-    uow.reconciliation_periods.get_by_period.return_value = make_reconciliation_period(
-        year=tx.date.year,
-        month=tx.date.month,
-        is_finalized=True,
-        finalized_at=datetime.now(UTC),
-    )
+    uow.reconciliation_periods.get_by_periods.return_value = [
+        make_reconciliation_period(
+            year=tx.date.year,
+            month=tx.date.month,
+            is_finalized=True,
+            finalized_at=datetime.now(UTC),
+        )
+    ]
 
     with pytest.raises(PeriodFinalizedError):
         await fetch_and_validate(uow, [tx.id])

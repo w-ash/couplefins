@@ -5,8 +5,8 @@ import uuid
 from attrs import define, field
 
 from src.application.use_cases._shared.command_validators import positive_decimal
+from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.domain.entities.category_group_budget import CategoryGroupBudget
-from src.domain.exceptions import NotFoundError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -29,14 +29,11 @@ class SaveBudgetUseCase:
         self, command: SaveBudgetCommand, uow: UnitOfWorkProtocol
     ) -> SaveBudgetResult:
         async with uow:
-            group = await uow.category_groups.get_by_id(command.group_id)
-            if group is None:
-                raise NotFoundError(f"Category group {command.group_id} not found")
-
+            await require_by_id(
+                uow.category_groups.get_by_id, command.group_id, "Category group"
+            )
             if command.person_id is not None:
-                person = await uow.persons.get_by_id(command.person_id)
-                if person is None:
-                    raise NotFoundError(f"Person {command.person_id} not found")
+                await require_by_id(uow.persons.get_by_id, command.person_id, "Person")
 
             budget = CategoryGroupBudget(
                 id=uuid.uuid4(),

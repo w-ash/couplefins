@@ -4,9 +4,10 @@ import { useSetInitialPassword } from "@/api/generated/auth/auth";
 import type { AuthPersonResponse } from "@/api/generated/model";
 import { Button } from "@/components/Button";
 import { InlineError } from "@/components/InlineError";
+import { PasswordInput } from "@/components/PasswordInput";
 import { PersonPicker, SelectedPersonBadge } from "@/components/PersonPicker";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useIdentityStore } from "@/lib/identity";
-import { baseInputClass, inputErrorClass } from "@/lib/input-styles";
 import { getPasswordErrors, MIN_PASSWORD_LENGTH } from "@/lib/password";
 
 export function SetInitialPasswordPage({
@@ -61,7 +62,10 @@ export function SetInitialPasswordPage({
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-md px-6 py-24">
+      <div className="flex justify-end px-6 pt-4">
+        <ThemeToggle />
+      </div>
+      <div className="mx-auto max-w-md px-6 py-12">
         <div className="mb-8 text-center">
           <div className="mb-4 inline-flex items-center justify-center rounded-full bg-primary-muted p-3">
             <Heart className="size-6 text-primary" />
@@ -90,15 +94,13 @@ export function SetInitialPasswordPage({
                 <KeyRound className="size-4" />
                 Password
               </label>
-              <input
+              <PasswordInput
                 ref={passwordRef}
                 id="new-password"
-                type="password"
-                autoComplete="new-password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={setPassword}
                 disabled={mutation.isPending}
-                className={`w-full ${baseInputClass} ${tooShort ? inputErrorClass : ""}`}
+                hasError={tooShort}
               />
               {tooShort && (
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -114,14 +116,12 @@ export function SetInitialPasswordPage({
               >
                 Confirm password
               </label>
-              <input
+              <PasswordInput
                 id="confirm-password"
-                type="password"
-                autoComplete="new-password"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={setConfirmPassword}
                 disabled={mutation.isPending}
-                className={`w-full ${baseInputClass} ${mismatch ? inputErrorClass : ""}`}
+                hasError={mismatch}
               />
               {mismatch && (
                 <p className="mt-1 text-xs text-negative">

@@ -1,13 +1,24 @@
 import { Settings } from "lucide-react";
+import { useUpdatePerson } from "@/api/generated/persons/persons";
 import { AccountSettings } from "@/components/AccountSettings";
 import { Card } from "@/components/Card";
 import { CategoryMappingEditor } from "@/components/CategoryMappingEditor";
 import { PageHeader } from "@/components/PageHeader";
 import { PersonAccountSettings } from "@/components/PersonAccountSettings";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useIdentityStore } from "@/lib/identity";
 import { PAGE_PADDING } from "@/lib/layout";
+import type { Theme } from "@/lib/theme";
 
 export function SettingsPage() {
+  const personId = useIdentityStore((s) => s.currentPersonId);
+  const updatePerson = useUpdatePerson();
+
+  function persistTheme(theme: Theme) {
+    if (!personId) return;
+    updatePerson.mutate({ personId, data: { theme_preference: theme } });
+  }
+
   return (
     <div className={`mx-auto max-w-3xl ${PAGE_PADDING}`}>
       <PageHeader icon={<Settings className="size-6" />} title="Settings" />
@@ -31,7 +42,7 @@ export function SettingsPage() {
                 Choose light, dark, or match your system
               </p>
             </div>
-            <ThemeToggle />
+            <ThemeToggle onPersist={persistTheme} />
           </div>
         </Card>
 

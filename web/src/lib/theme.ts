@@ -23,6 +23,20 @@ export function storeTheme(theme: Theme): void {
   }
 }
 
+export function clearStoredTheme(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Silently fail
+  }
+}
+
+const VALID_THEMES: Set<string> = new Set<string>(["system", "light", "dark"]);
+
+export function isValidTheme(value: string): value is Theme {
+  return VALID_THEMES.has(value);
+}
+
 export function resolveIsDark(theme: Theme): boolean {
   if (theme === "dark") return true;
   if (theme === "light") return false;

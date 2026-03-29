@@ -3,8 +3,9 @@ from uuid import UUID
 
 from attrs import define, evolve
 
+from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.domain.auth import validate_password_strength
-from src.domain.exceptions import AuthenticationError, NotFoundError
+from src.domain.exceptions import AuthenticationError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -29,9 +30,9 @@ class ChangePasswordUseCase:
         self, command: ChangePasswordCommand, uow: UnitOfWorkProtocol
     ) -> ChangePasswordResult:
         async with uow:
-            person = await uow.persons.get_by_id(command.person_id)
-            if person is None:
-                raise NotFoundError("Person not found")
+            person = await require_by_id(
+                uow.persons.get_by_id, command.person_id, "Person"
+            )
 
             if not person.password_hash or not self.verify_password(
                 command.current_password, person.password_hash

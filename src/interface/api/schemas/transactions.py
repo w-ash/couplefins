@@ -4,19 +4,13 @@ from uuid import UUID
 from pydantic import BaseModel, field_validator
 
 from src.application.use_cases.bulk_modify_tags import TagAction
-from src.domain.constants import SplitDefaults
-
-
-def _check_payer_pct_range(v: int) -> int:
-    if not (0 <= v <= SplitDefaults.MAX_PAYER_PERCENTAGE):
-        raise ValueError(
-            f"payer_percentage must be 0-{SplitDefaults.MAX_PAYER_PERCENTAGE}"
-        )
-    return v
+from src.domain.splits import check_payer_percentage
 
 
 def _validate_payer_pct(v: int | None) -> int | None:
-    return _check_payer_pct_range(v) if v is not None else None
+    if v is not None:
+        check_payer_percentage(v)
+    return v
 
 
 def _validate_non_empty[T](v: list[T], label: str) -> list[T]:
@@ -32,7 +26,8 @@ class SplitEntryRequest(BaseModel):
     @field_validator("payer_percentage")
     @classmethod
     def validate_range(cls, v: int) -> int:
-        return _check_payer_pct_range(v)
+        check_payer_percentage(v)
+        return v
 
 
 class UpdateSplitsRequest(BaseModel):

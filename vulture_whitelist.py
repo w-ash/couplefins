@@ -46,6 +46,16 @@ DashboardResponse.current_month_transaction_count
 DashboardResponse.current_month_person_summaries
 DashboardResponse.current_month_settlement
 
+from src.interface.api.schemas.auth import AuthPersonResponse
+
+AuthPersonResponse.has_password  # serialized to JSON in GET /auth/persons
+
+# --- Domain functions: tested + public API, not yet wired into a use case ---
+
+from src.domain.insights import compute_trailing_average
+
+compute_trailing_average  # tested in test_insights.py, planned for future Insights enhancements
+
 # --- Test-only utility: called from tests/integration/conftest.py ---
 
 from src.config.settings import reset_settings

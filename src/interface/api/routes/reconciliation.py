@@ -40,8 +40,9 @@ async def get_reconciliation(  # noqa: PLR0913, PLR0917
     month: int | None = None,
     scope: str | None = None,
     person_id: UUID | None = None,
+    tags: list[str] | None = None,
 ) -> ReconciliationResponse:
-    command = _build_command(start_date, end_date, year, month, scope, person_id)
+    command = _build_command(start_date, end_date, year, month, scope, person_id, tags)
     result = await execute_use_case(
         lambda uow: GetReconciliationUseCase().execute(command, uow)
     )
@@ -58,12 +59,15 @@ def _build_command(  # noqa: PLR0913, PLR0917
     month: int | None,
     scope: str | None,
     person_id: UUID | None,
+    tags: list[str] | None,
 ) -> GetReconciliationCommand:
     resolved_scope: ReconciliationScope = "household"
     if scope is not None:
         if scope not in _VALID_SCOPES:
             raise ValidationError(f"Invalid scope: {scope}")
         resolved_scope = scope  # type: ignore[assignment]
+
+    resolved_tags = tuple(tags) if tags else None
 
     has_range = start_date is not None or end_date is not None
     has_ym = year is not None or month is not None
@@ -79,7 +83,11 @@ def _build_command(  # noqa: PLR0913, PLR0917
         if start_date > end_date:
             raise ValidationError("start_date must be <= end_date.")
         return GetReconciliationCommand.from_range(
-            start_date, end_date, scope=resolved_scope, person_id=person_id
+            start_date,
+            end_date,
+            scope=resolved_scope,
+            person_id=person_id,
+            tags=resolved_tags,
         )
 
     now = datetime.datetime.now(UTC).date()
@@ -88,6 +96,7 @@ def _build_command(  # noqa: PLR0913, PLR0917
         month or now.month,
         scope=resolved_scope,
         person_id=person_id,
+        tags=resolved_tags,
     )
 
 

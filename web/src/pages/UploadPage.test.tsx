@@ -7,8 +7,18 @@ import { renderWithProviders, screen, waitFor } from "../test/test-utils";
 import { UploadPage } from "./UploadPage";
 
 const persons = [
-  { id: "p1", name: "Alice", adjustment_account: "adj-1" },
-  { id: "p2", name: "Bob", adjustment_account: "adj-2" },
+  {
+    id: "p1",
+    name: "Alice",
+    adjustment_account: "adj-1",
+    theme_preference: "system",
+  },
+  {
+    id: "p2",
+    name: "Bob",
+    adjustment_account: "adj-2",
+    theme_preference: "system",
+  },
 ];
 
 const previewResponseAllNew = {

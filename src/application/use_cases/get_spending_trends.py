@@ -15,9 +15,6 @@ from src.application.use_cases._shared.reconciliation_context import (
     ReconciliationContext,
     load_reconciliation_context,
 )
-from src.application.use_cases._shared.reconciliation_helpers import (
-    reconcile_all_months,
-)
 from src.domain.budget import resolve_effective_budget
 from src.domain.categories import build_category_lookup
 from src.domain.entities.category_group_budget import CategoryGroupBudget
@@ -34,6 +31,7 @@ from src.domain.insights import (
     compute_person_paid_by_month,
     compute_spending_trends,
 )
+from src.domain.reconciliation import reconcile_all_months
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -80,7 +78,9 @@ def _build_settlement_trend(
     settlements: list[Settlement],
 ) -> list[MonthlySettlement]:
     by_month = partition_by_month(year_txs, lambda tx: tx.date.month)
-    month_summaries = reconcile_all_months(by_month, ctx, year)
+    month_summaries = reconcile_all_months(
+        by_month, ctx.persons, ctx.categories, ctx.category_groups, year
+    )
     settlements_by_month = partition_by_month(settlements, lambda s: s.month)
 
     trend: list[MonthlySettlement] = []

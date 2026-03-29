@@ -5,8 +5,8 @@ import attrs
 from attrs import define, field
 
 from src.application.use_cases._shared.command_validators import positive_decimal
+from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.domain.entities.category_group_budget import CategoryGroupBudget
-from src.domain.exceptions import NotFoundError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -27,9 +27,9 @@ class UpdateBudgetUseCase:
         self, command: UpdateBudgetCommand, uow: UnitOfWorkProtocol
     ) -> UpdateBudgetResult:
         async with uow:
-            existing = await uow.category_group_budgets.get_by_id(command.budget_id)
-            if existing is None:
-                raise NotFoundError(f"Budget {command.budget_id} not found")
+            existing = await require_by_id(
+                uow.category_group_budgets.get_by_id, command.budget_id, "Budget"
+            )
 
             updated = attrs.evolve(existing, monthly_amount=command.monthly_amount)
             saved = await uow.category_group_budgets.save(updated)

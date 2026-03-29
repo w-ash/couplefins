@@ -31,11 +31,12 @@ class BulkUpdateMappingsUseCase:
         self, command: BulkUpdateMappingsCommand, uow: UnitOfWorkProtocol
     ) -> BulkUpdateMappingsResult:
         async with uow:
-            group_ids = {entry.group_id for entry in command.mappings}
-            for group_id in group_ids:
-                group = await uow.category_groups.get_by_id(group_id)
-                if group is None:
-                    raise ValidationError(f"Category group {group_id} not found")
+            group_ids = list({entry.group_id for entry in command.mappings})
+            groups = await uow.category_groups.get_by_ids(group_ids)
+            found_ids = {g.id for g in groups}
+            missing = set(group_ids) - found_ids
+            if missing:
+                raise ValidationError(f"Category group {next(iter(missing))} not found")
 
             all_categories = await uow.categories.get_all()
             by_name = {c.name: c for c in all_categories}

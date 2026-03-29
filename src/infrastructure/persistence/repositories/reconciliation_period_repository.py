@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 
 from src.domain.entities.reconciliation_period import ReconciliationPeriod
 from src.infrastructure.persistence.models.reconciliation_period_model import (
@@ -51,6 +51,22 @@ class ReconciliationPeriodRepository(
         result = await self._session.execute(stmt)
         model = result.scalars().first()
         return self._to_domain(model) if model else None
+
+    async def get_by_periods(
+        self, periods: set[tuple[int, int]]
+    ) -> list[ReconciliationPeriod]:
+        if not periods:
+            return []
+        conditions = [
+            and_(
+                ReconciliationPeriodModel.year == year,
+                ReconciliationPeriodModel.month == month,
+            )
+            for year, month in periods
+        ]
+        stmt = select(ReconciliationPeriodModel).where(or_(*conditions))
+        result = await self._session.execute(stmt)
+        return [self._to_domain(m) for m in result.scalars().all()]
 
     async def get_by_year(self, year: int) -> list[ReconciliationPeriod]:
         stmt = select(ReconciliationPeriodModel).where(

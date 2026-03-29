@@ -73,10 +73,9 @@ async def validate_settlement_persons(
     if from_person_id == to_person_id:
         raise ValidationError("from_person_id and to_person_id must differ")
 
-    from_person = await uow.persons.get_by_id(from_person_id)
-    if not from_person:
+    persons = await uow.persons.get_by_ids([from_person_id, to_person_id])
+    found_ids = {p.id for p in persons}
+    if from_person_id not in found_ids:
         raise NotFoundError(f"Person {from_person_id} not found")
-
-    to_person = await uow.persons.get_by_id(to_person_id)
-    if not to_person:
+    if to_person_id not in found_ids:
         raise NotFoundError(f"Person {to_person_id} not found")

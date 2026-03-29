@@ -1,18 +1,18 @@
 from uuid import UUID
 
 import attrs
-from attrs import define, field
+from attrs import define
 
-from src.application.use_cases._shared.command_validators import non_empty_string
+from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.domain.entities.person import Person
-from src.domain.exceptions import NotFoundError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
 @define(frozen=True, slots=True)
 class UpdatePersonCommand:
     id: UUID
-    adjustment_account: str = field(validator=non_empty_string)
+    adjustment_account: str | None = None
+    theme_preference: str | None = None
 
 
 @define(frozen=True, slots=True)
@@ -26,13 +26,18 @@ class UpdatePersonUseCase:
         self, command: UpdatePersonCommand, uow: UnitOfWorkProtocol
     ) -> UpdatePersonResult:
         async with uow:
-            existing = await uow.persons.get_by_id(command.id)
-            if existing is None:
-                raise NotFoundError(f"Person {command.id} not found")
+            existing = await require_by_id(uow.persons.get_by_id, command.id, "Person")
 
-            updated = attrs.evolve(
-                existing, adjustment_account=command.adjustment_account
-            )
+            changes: dict[str, str] = {}
+            if command.adjustment_account is not None:
+                changes["adjustment_account"] = command.adjustment_account
+            if command.theme_preference is not None:
+                changes["theme_preference"] = command.theme_preference
+
+            if not changes:
+                return UpdatePersonResult(person=existing)
+
+            updated = attrs.evolve(existing, **changes)
             saved = await uow.persons.save(updated)
             await uow.commit()
             return UpdatePersonResult(person=saved)

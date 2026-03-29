@@ -16,6 +16,11 @@ from src.interface.api.app import create_app  # noqa: E402
 
 app = create_app()
 spec = app.openapi()
+
+# Strip SSE endpoint — Orval can't validate text/event-stream responses
+paths = spec.get("paths", {})
+paths.pop("/api/v1/events", None)
+
 output = project_root / "web" / "openapi.json"
 output.write_text(json.dumps(spec, indent=2) + "\n")
 print(f"Wrote {output}")

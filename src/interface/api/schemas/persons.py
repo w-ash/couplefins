@@ -23,13 +23,21 @@ class SetupCoupleRequest(BaseModel):
 
 
 class UpdatePersonRequest(BaseModel):
-    adjustment_account: str
+    adjustment_account: str | None = None
+    theme_preference: str | None = None
 
     @field_validator("adjustment_account")
     @classmethod
-    def must_not_be_blank(cls, v: str) -> str:
-        if not v.strip():
+    def must_not_be_blank(cls, v: str | None) -> str | None:
+        if v is not None and not v.strip():
             raise ValueError("Adjustment account must not be blank")
+        return v
+
+    @field_validator("theme_preference")
+    @classmethod
+    def valid_theme(cls, v: str | None) -> str | None:
+        if v is not None and v not in {"system", "light", "dark"}:
+            raise ValueError("theme_preference must be system, light, or dark")
         return v
 
 
@@ -37,6 +45,7 @@ class PersonResponse(BaseModel):
     id: UUID
     name: str
     adjustment_account: str
+    theme_preference: str
 
     @classmethod
     def from_domain(cls, person: Person) -> PersonResponse:
@@ -44,6 +53,7 @@ class PersonResponse(BaseModel):
             id=person.id,
             name=person.name,
             adjustment_account=person.adjustment_account,
+            theme_preference=person.theme_preference,
         )
 
 

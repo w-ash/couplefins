@@ -3,10 +3,9 @@ from collections import defaultdict
 from collections.abc import Callable
 from datetime import date
 
+from src.domain.date_math import month_bounds
 
-def month_bounds(year: int, month: int) -> tuple[date, date]:
-    last_day = calendar.monthrange(year, month)[1]
-    return date(year, month, 1), date(year, month, last_day)
+__all__ = ["detect_single_month", "month_bounds", "partition_by_month"]
 
 
 def detect_single_month(start: date, end: date) -> tuple[int, int] | None:

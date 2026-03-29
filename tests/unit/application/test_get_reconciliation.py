@@ -169,6 +169,40 @@ async def test_multi_month_range_finalization_is_none() -> None:
     uow.reconciliation_periods.get_by_period.assert_not_called()
 
 
+async def test_tags_passed_to_repository() -> None:
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    uow.persons.get_all.return_value = [alice, bob]
+    uow.category_groups.get_all.return_value = []
+    uow.categories.get_all.return_value = []
+    uow.transactions.get_household_by_date_range.return_value = []
+    uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = []
+
+    command = GetReconciliationCommand.from_month(2026, 1, tags=("shared",))
+    await GetReconciliationUseCase().execute(command, uow)
+
+    call_kwargs = uow.transactions.get_household_by_date_range.call_args
+    assert call_kwargs[1]["tags"] == ("shared",)
+
+
+async def test_no_tags_passes_none_to_repository() -> None:
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    uow.persons.get_all.return_value = [alice, bob]
+    uow.category_groups.get_all.return_value = []
+    uow.categories.get_all.return_value = []
+    uow.transactions.get_household_by_date_range.return_value = []
+    uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = []
+
+    command = GetReconciliationCommand.from_month(2026, 1)
+    await GetReconciliationUseCase().execute(command, uow)
+
+    call_kwargs = uow.transactions.get_household_by_date_range.call_args
+    assert call_kwargs[1]["tags"] is None
+
+
 def test_from_range_detects_single_month() -> None:
     command = GetReconciliationCommand.from_range(date(2026, 2, 1), date(2026, 2, 28))
     assert command.single_month == (2026, 2)

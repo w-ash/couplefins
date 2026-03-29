@@ -36,19 +36,26 @@ async def test_raises_when_finalized() -> None:
 
 async def test_batch_passes_when_all_open() -> None:
     uow = make_mock_uow()
+    uow.reconciliation_periods.get_by_periods.return_value = [
+        make_reconciliation_period(month=1, is_finalized=False),
+        make_reconciliation_period(month=2, is_finalized=False),
+    ]
     await assert_periods_not_finalized(uow, {(2026, 1), (2026, 2)})
 
 
-async def test_batch_raises_on_first_finalized() -> None:
+async def test_batch_passes_when_no_periods_exist() -> None:
     uow = make_mock_uow()
+    uow.reconciliation_periods.get_by_periods.return_value = []
+    await assert_periods_not_finalized(uow, {(2026, 1), (2026, 2)})
 
-    def _get_by_period(_year: int, month: int):
-        if month == 2:
-            return make_reconciliation_period(
-                month=2, is_finalized=True, finalized_at=datetime.now(UTC)
-            )
-        return None
 
-    uow.reconciliation_periods.get_by_period.side_effect = _get_by_period
+async def test_batch_raises_on_finalized() -> None:
+    uow = make_mock_uow()
+    uow.reconciliation_periods.get_by_periods.return_value = [
+        make_reconciliation_period(month=1, is_finalized=False),
+        make_reconciliation_period(
+            month=2, is_finalized=True, finalized_at=datetime.now(UTC)
+        ),
+    ]
     with pytest.raises(PeriodFinalizedError, match="2026-02"):
         await assert_periods_not_finalized(uow, {(2026, 1), (2026, 2)})

@@ -51,7 +51,8 @@
 | v0.11.3 | Scope UI (budget toggle, transaction scope filter) | Completed (2026-03-26) | L |
 | v1.0.0 | PostgreSQL migration — Neon, asyncpg, JSONB+GIN, data migration | Completed (2026-03-27) | M |
 | v1.0.1 | Multi-user readiness — smart polling, SSE event bus, index audit | Completed (2026-03-28) | M |
-| v1.0.2 | Query optimization — PostgreSQL-native improvements | Planned | M |
+| v1.0.2 | Query optimization — Neon pool tuning, query batching, tag filtering | Completed (2026-03-28) | M |
+| v1.0.3 | DRY audit, DB-backed theme preference, auth UX, sslmode fix | Completed (2026-03-28) | M |
 
 ## Infrastructure Readiness
 
@@ -104,6 +105,11 @@
 | Smart polling (together-session pages) | — | — | — | — | — | — | — | — | — | — | — | ✅ |
 | SSE event bus (cross-user sync) | — | — | — | — | — | — | — | — | — | — | — | ✅ |
 | PostgreSQL index optimization | — | — | — | — | — | — | — | — | — | — | — | ✅ |
+| Neon pooler-aware connection handling | — | — | — | — | — | — | — | — | — | — | — | ✅ |
+| Sequential query batching | — | — | — | — | — | — | — | — | — | — | — | ✅ |
+| DB-backed theme preference (per-person) | — | — | — | — | — | — | — | — | — | — | — | ✅ |
+| Password visibility toggle + confirm fields | — | — | — | — | — | — | — | — | — | — | — | ✅ |
+| Neon sslmode → asyncpg ssl translation | — | — | — | — | — | — | — | — | — | — | — | ✅ |
 
 ## Key Technical Decisions
 
@@ -114,7 +120,7 @@
 - **User identity**: Post v0.11.x: JWT httpOnly cookie verified by `GET /auth/me` on load. Zustand stores `currentPersonId` in memory (no localStorage persist). Three app states: needs-setup, needs-login, authenticated. Prior to v0.11.x: localStorage via Zustand persist.
 - **Information architecture**: Left sidebar with 7 pages: Dashboard / Transactions / Settle Up / Budget / Insights / Upload / Settings. "Transactions" replaces "Reconciliation" (standard finance-app naming). "Settings" absorbs person config + category management. "History" is not a standalone page — month navigation lives within Dashboard and Transactions. Finalization controls live on the Settle Up page. Insights (v0.7.0) is the together-session spending analysis page — small multiples, comparison cards, settlement trends.
 - **Design system**: Satoshi font (Fontshare) + Geist Mono. Warm neutrals (not pure black/white), teal for positive, coral for negative. CSS custom properties via Tailwind v4 `@theme` for light/dark switching. Defined in `.claude/rules/web-design-system.md`.
-- **Theme**: System preference by default (`prefers-color-scheme`), manual override stored in localStorage. Three-way: system/light/dark. Tailwind v4 class strategy with `@custom-variant dark`. Synchronous `<script>` in `<head>` prevents flash of wrong theme.
+- **Theme**: Per-person preference stored in DB (`theme_preference` on Person entity, default `"system"`). Three-way: system/light/dark. Before login: system preference only. After login: DB value applied, cached in localStorage for FOUC prevention. Tailwind v4 class strategy with `@custom-variant dark`. Synchronous `<script>` in `<head>` reads localStorage cache or falls back to `prefers-color-scheme`. Auth pages include a ThemeToggle for switching before login. Prior to v1.0.3: localStorage-only (no DB persistence).
 - **App shell**: Left sidebar navigation on desktop (industry standard for finance apps). Bottom tab bar on mobile (5 primary + "More" sheet for Upload/Settings/identity). React Router v7 `createBrowserRouter` with layout routes.
 - **CSV source**: Monarch Money export (Date, Merchant, Category, Account, Original Statement, Notes, Amount, Tags)
 - **Transaction classification**: Two orthogonal fields — `payer_percentage: int` (0-100, always set) for settlement, `household: bool` for budget relevance. Settlement: `payer_percentage < 100`. Budget: `household=true`, or category has `include_personal=true`. Neither field implies the other.

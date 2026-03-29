@@ -2,7 +2,7 @@ from uuid import UUID
 
 from attrs import define
 
-from src.domain.exceptions import NotFoundError
+from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -22,9 +22,9 @@ class DeleteBudgetUseCase:
         self, command: DeleteBudgetCommand, uow: UnitOfWorkProtocol
     ) -> DeleteBudgetResult:
         async with uow:
-            existing = await uow.category_group_budgets.get_by_id(command.budget_id)
-            if existing is None:
-                raise NotFoundError(f"Budget {command.budget_id} not found")
+            await require_by_id(
+                uow.category_group_budgets.get_by_id, command.budget_id, "Budget"
+            )
 
             await uow.category_group_budgets.delete(command.budget_id)
             await uow.commit()

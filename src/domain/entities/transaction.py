@@ -4,7 +4,7 @@ from uuid import UUID
 
 from attrs import define
 
-from src.domain.constants import SplitDefaults
+from src.domain.splits import check_payer_percentage
 
 
 @define(frozen=True, slots=True)
@@ -29,7 +29,4 @@ class Transaction:
     original_amount: Decimal | None = None
 
     def __attrs_post_init__(self) -> None:
-        if not (0 <= self.payer_percentage <= SplitDefaults.MAX_PAYER_PERCENTAGE):
-            raise ValueError(
-                f"payer_percentage must be 0-{SplitDefaults.MAX_PAYER_PERCENTAGE}, got {self.payer_percentage}"
-            )
+        check_payer_percentage(self.payer_percentage)

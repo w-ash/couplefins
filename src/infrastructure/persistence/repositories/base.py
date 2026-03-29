@@ -8,6 +8,10 @@ from sqlalchemy.sql.expression import Executable
 from src.infrastructure.persistence.models.base import Base
 
 
+def date_year_prefix(year: int) -> str:
+    return f"{year:04d}-"
+
+
 def date_month_prefix(year: int, month: int) -> str:
     return f"{year:04d}-{month:02d}-"
 

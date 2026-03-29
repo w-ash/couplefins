@@ -165,12 +165,14 @@ async def test_rejects_update_to_finalized_period() -> None:
     uow = make_mock_uow()
     tx = make_transaction()
     uow.transactions.get_by_ids.return_value = [tx]
-    uow.reconciliation_periods.get_by_period.return_value = make_reconciliation_period(
-        year=tx.date.year,
-        month=tx.date.month,
-        is_finalized=True,
-        finalized_at=datetime.now(UTC),
-    )
+    uow.reconciliation_periods.get_by_periods.return_value = [
+        make_reconciliation_period(
+            year=tx.date.year,
+            month=tx.date.month,
+            is_finalized=True,
+            finalized_at=datetime.now(UTC),
+        )
+    ]
     command = _make_command(transaction_ids=[tx.id], tags=["new-tag"])
 
     with pytest.raises(PeriodFinalizedError):

@@ -17,6 +17,7 @@ class PersonRepository(BaseRepository[Person, PersonModel]):
             name=model.name,
             adjustment_account=model.adjustment_account,
             password_hash=model.password_hash,
+            theme_preference=model.theme_preference,
         )
 
     @staticmethod
@@ -26,6 +27,7 @@ class PersonRepository(BaseRepository[Person, PersonModel]):
             name=entity.name,
             adjustment_account=entity.adjustment_account,
             password_hash=entity.password_hash,
+            theme_preference=entity.theme_preference,
         )
 
     async def get_by_name(self, name: str) -> Person | None:

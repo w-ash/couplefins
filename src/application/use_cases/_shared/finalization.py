@@ -26,6 +26,12 @@ async def assert_period_not_finalized(
 async def assert_periods_not_finalized(
     uow: UnitOfWorkProtocol, periods: set[tuple[int, int]]
 ) -> None:
-    """Batch variant — checks multiple (year, month) pairs."""
-    for year, month in periods:
-        await assert_period_not_finalized(uow, year, month)
+    """Batch variant — checks multiple (year, month) pairs in a single query."""
+    if not periods:
+        return
+    existing = await uow.reconciliation_periods.get_by_periods(periods)
+    for period in existing:
+        if period.is_finalized:
+            raise PeriodFinalizedError(
+                f"Period {period.year}-{period.month:02d} is finalized and cannot be modified"
+            )

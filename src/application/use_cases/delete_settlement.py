@@ -2,8 +2,8 @@ import uuid
 
 from attrs import define
 
+from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.application.use_cases._shared.finalization import assert_period_not_finalized
-from src.domain.exceptions import NotFoundError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -23,9 +23,9 @@ class DeleteSettlementUseCase:
         self, command: DeleteSettlementCommand, uow: UnitOfWorkProtocol
     ) -> DeleteSettlementResult:
         async with uow:
-            settlement = await uow.settlements.get_by_id(command.settlement_id)
-            if not settlement:
-                raise NotFoundError(f"Settlement {command.settlement_id} not found")
+            settlement = await require_by_id(
+                uow.settlements.get_by_id, command.settlement_id, "Settlement"
+            )
 
             await assert_period_not_finalized(uow, settlement.year, settlement.month)
 

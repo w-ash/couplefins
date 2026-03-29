@@ -158,14 +158,7 @@ class SpendingTrendsResponse(BaseModel):
                 )
                 for ms in result.settlement_trend
             ],
-            persons=[
-                PersonResponse(
-                    id=p.id,
-                    name=p.name,
-                    adjustment_account=p.adjustment_account,
-                )
-                for p in result.persons
-            ],
+            persons=[PersonResponse.from_domain(p) for p in result.persons],
             comparison_monthly_group_spending=_map_spending(
                 result.comparison_monthly_group_spending
             ),

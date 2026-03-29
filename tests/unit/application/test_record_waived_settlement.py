@@ -16,7 +16,7 @@ class TestRecordWaivedSettlement:
         alice = make_person(name="Alice")
         bob = make_person(name="Bob")
         uow = make_mock_uow()
-        uow.persons.get_by_id.side_effect = lambda id: alice if id == alice.id else bob
+        uow.persons.get_by_ids.return_value = [alice, bob]
         set_passthrough_save(uow)
 
         command = RecordWaivedSettlementCommand(
@@ -36,7 +36,7 @@ class TestRecordWaivedSettlement:
         alice = make_person(name="Alice")
         bob = make_person(name="Bob")
         uow = make_mock_uow()
-        uow.persons.get_by_id.return_value = None
+        uow.persons.get_by_ids.return_value = []
 
         command = RecordWaivedSettlementCommand(
             year=2026,

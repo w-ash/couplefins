@@ -6,5 +6,6 @@
  */
 
 export interface UpdatePersonRequest {
-  adjustment_account: string;
+  adjustment_account?: string | null;
+  theme_preference?: string | null;
 }

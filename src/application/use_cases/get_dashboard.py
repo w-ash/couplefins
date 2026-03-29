@@ -12,9 +12,6 @@ from src.application.use_cases._shared.date_math import month_bounds, partition_
 from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
-from src.application.use_cases._shared.reconciliation_helpers import (
-    reconcile_all_months,
-)
 from src.application.use_cases._shared.transactions import find_all_unmapped_categories
 from src.application.use_cases._shared.upload_status import (
     UploadStatus,
@@ -23,7 +20,12 @@ from src.application.use_cases._shared.upload_status import (
 from src.domain.entities.person import Person
 from src.domain.entities.settlement import Settlement
 from src.domain.entities.transaction import Transaction
-from src.domain.reconciliation import ReconciliationSummary, SettlementResult, reconcile
+from src.domain.reconciliation import (
+    ReconciliationSummary,
+    SettlementResult,
+    reconcile,
+    reconcile_all_months,
+)
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -141,7 +143,9 @@ class GetDashboardUseCase:
             )
 
             # Reconcile each month once, reuse for active month + history
-            month_summaries = reconcile_all_months(by_month, ctx, command.year)
+            month_summaries = reconcile_all_months(
+                by_month, ctx.persons, ctx.categories, ctx.category_groups, command.year
+            )
             start, end = month_bounds(command.year, active_month)
             current_month = month_summaries.get(
                 active_month,

@@ -3,8 +3,8 @@ import uuid
 import attrs
 from attrs import define
 
+from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.domain.entities.settlement_transaction_link import SettlementTransactionLink
-from src.domain.exceptions import NotFoundError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -29,14 +29,14 @@ class MarkTransactionAsSettlementUseCase:
         uow: UnitOfWorkProtocol,
     ) -> MarkTransactionAsSettlementResult:
         async with uow:
-            tx = await uow.transactions.get_by_id(command.transaction_id)
-            if not tx:
-                raise NotFoundError(f"Transaction {command.transaction_id} not found")
+            tx = await require_by_id(
+                uow.transactions.get_by_id, command.transaction_id, "Transaction"
+            )
 
             if command.is_settlement and command.settlement_id:
-                settlement = await uow.settlements.get_by_id(command.settlement_id)
-                if not settlement:
-                    raise NotFoundError(f"Settlement {command.settlement_id} not found")
+                await require_by_id(
+                    uow.settlements.get_by_id, command.settlement_id, "Settlement"
+                )
                 link = SettlementTransactionLink(
                     id=uuid.uuid4(),
                     settlement_id=command.settlement_id,

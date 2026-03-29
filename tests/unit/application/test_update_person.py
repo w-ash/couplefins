@@ -28,6 +28,35 @@ async def test_updates_adjustment_account() -> None:
     uow.commit.assert_called_once()
 
 
+async def test_updates_theme_preference() -> None:
+    uow = make_mock_uow()
+    person = make_person(name="Alice")
+    uow.persons.get_by_id.return_value = person
+    uow.persons.save.return_value = make_person(
+        id=person.id, name="Alice", theme_preference="dark"
+    )
+
+    command = UpdatePersonCommand(id=person.id, theme_preference="dark")
+    result = await UpdatePersonUseCase().execute(command, uow)
+
+    assert result.person.theme_preference == "dark"
+    uow.persons.save.assert_called_once()
+    uow.commit.assert_called_once()
+
+
+async def test_no_changes_skips_save() -> None:
+    uow = make_mock_uow()
+    person = make_person(name="Alice")
+    uow.persons.get_by_id.return_value = person
+
+    command = UpdatePersonCommand(id=person.id)
+    result = await UpdatePersonUseCase().execute(command, uow)
+
+    assert result.person.name == "Alice"
+    uow.persons.save.assert_not_called()
+    uow.commit.assert_not_called()
+
+
 async def test_person_not_found_raises() -> None:
     uow = make_mock_uow()
     uow.persons.get_by_id.return_value = None
@@ -37,8 +66,3 @@ async def test_person_not_found_raises() -> None:
     )
     with pytest.raises(NotFoundError):
         await UpdatePersonUseCase().execute(command, uow)
-
-
-def test_blank_adjustment_account_rejected() -> None:
-    with pytest.raises(ValueError, match="adjustment_account"):
-        UpdatePersonCommand(id=uuid.uuid4(), adjustment_account="   ")

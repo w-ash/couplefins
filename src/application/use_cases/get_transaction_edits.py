@@ -2,8 +2,8 @@ from uuid import UUID
 
 from attrs import define
 
+from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.domain.entities.transaction_edit import TransactionEdit
-from src.domain.exceptions import NotFoundError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -25,9 +25,9 @@ class GetTransactionEditsUseCase:
         uow: UnitOfWorkProtocol,
     ) -> GetTransactionEditsResult:
         async with uow:
-            tx = await uow.transactions.get_by_id(command.transaction_id)
-            if tx is None:
-                raise NotFoundError(f"Transaction {command.transaction_id} not found")
+            await require_by_id(
+                uow.transactions.get_by_id, command.transaction_id, "Transaction"
+            )
             edits = await uow.transaction_edits.get_by_transaction_id(
                 command.transaction_id
             )

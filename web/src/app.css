@@ -287,10 +287,14 @@
 
 @media (prefers-reduced-motion: reduce) {
   .step-enter,
-  .editor-enter,
+  .editor-enter {
+    animation: none;
+  }
+
   .animated-check circle,
   .animated-check path {
-    animation: none !important;
+    animation-duration: 0s;
+    animation-delay: 0s;
     opacity: 1;
     stroke-dashoffset: 0;
   }

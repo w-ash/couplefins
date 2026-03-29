@@ -62,7 +62,9 @@ async def update_person(
     _current_user: Person = Depends(get_current_user),
 ) -> PersonResponse:
     command = UpdatePersonCommand(
-        id=person_id, adjustment_account=body.adjustment_account
+        id=person_id,
+        adjustment_account=body.adjustment_account,
+        theme_preference=body.theme_preference,
     )
     result = await execute_use_case(
         lambda uow: UpdatePersonUseCase().execute(command, uow)

@@ -11,8 +11,13 @@ import {
 import { AdjustmentExportSection } from "./AdjustmentExportSection";
 
 const persons: Person[] = [
-  { id: "p1", name: "Alice", adjustment_account: "Alice Adjustments" },
-  { id: "p2", name: "Bob", adjustment_account: "" },
+  {
+    id: "p1",
+    name: "Alice",
+    adjustment_account: "Alice Adjustments",
+    theme_preference: "system",
+  },
+  { id: "p2", name: "Bob", adjustment_account: "", theme_preference: "system" },
 ];
 
 const previewResponse = {

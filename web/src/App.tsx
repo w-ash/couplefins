@@ -4,8 +4,10 @@ import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { ApiError, setOnUnauthorized } from "./api/client";
 import { useGetMe, useListAuthPersons } from "./api/generated/auth/auth";
 import { Button } from "./components/Button";
+import { useTheme } from "./components/ThemeProvider";
 import { AppLayout } from "./layouts/AppLayout";
 import { useIdentityStore } from "./lib/identity";
+import { isValidTheme } from "./lib/theme";
 import { BudgetPage } from "./pages/BudgetPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { InsightsPage } from "./pages/InsightsPage";
@@ -51,6 +53,7 @@ function LoadingScreen() {
 
 export function App() {
   const currentPersonId = useIdentityStore((s) => s.currentPersonId);
+  const { setTheme, resetToSystem } = useTheme();
 
   // Primary: check if we're already authenticated
   const meQuery = useGetMe({ query: { retry: false } });
@@ -60,21 +63,26 @@ export function App() {
     query: { enabled: meQuery.isError && is401(meQuery.error) },
   });
 
-  // Populate identity from /auth/me response
+  // Populate identity + theme from /auth/me response
   useEffect(() => {
     if (meQuery.data?.data) {
       const person = meQuery.data.data;
       useIdentityStore.getState().setFromAuthResponse(person);
+      const pref = person.theme_preference;
+      if (isValidTheme(pref)) {
+        setTheme(pref);
+      }
     }
-  }, [meQuery.data]);
+  }, [meQuery.data, setTheme]);
 
-  // Wire up global 401 handler
+  // Wire up global 401 handler — clear identity + revert to system theme
   useEffect(() => {
     setOnUnauthorized(() => {
       useIdentityStore.getState().clearIdentity();
+      resetToSystem();
       meQuery.refetch();
     });
-  }, [meQuery.refetch]);
+  }, [meQuery.refetch, resetToSystem]);
 
   // Loading
   if (meQuery.isLoading) return <LoadingScreen />;

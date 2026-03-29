@@ -233,9 +233,11 @@ async def test_rejects_upload_to_finalized_month() -> None:
     uow = make_mock_uow()
     uow.persons.get_by_id.return_value = make_person()
     uow.categories.get_all.return_value = []
-    uow.reconciliation_periods.get_by_period.return_value = make_reconciliation_period(
-        year=2026, month=1, is_finalized=True, finalized_at=datetime.now(UTC)
-    )
+    uow.reconciliation_periods.get_by_periods.return_value = [
+        make_reconciliation_period(
+            year=2026, month=1, is_finalized=True, finalized_at=datetime.now(UTC)
+        )
+    ]
     command = _make_command()
 
     with pytest.raises(PeriodFinalizedError, match="2026-01"):

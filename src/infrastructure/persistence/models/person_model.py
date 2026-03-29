@@ -15,3 +15,6 @@ class PersonModel(Base):
     password_hash: Mapped[str] = mapped_column(
         String, nullable=False, server_default=""
     )
+    theme_preference: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="system"
+    )

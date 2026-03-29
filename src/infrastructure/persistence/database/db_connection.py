@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 
 from alembic import command
 from src.config.settings import get_settings
@@ -20,13 +21,19 @@ _session_factory_cache: list[async_sessionmaker[AsyncSession]] = []
 def _get_engine() -> AsyncEngine:
     if not _engine_cache:
         settings = get_settings()
-        _engine_cache.append(
-            create_async_engine(
-                settings.database.url,
-                echo=settings.database.echo,
-                pool_pre_ping=True,
-            )
-        )
+        connect_args = dict(settings.database.async_connect_args)
+        kwargs: dict[str, object] = {
+            "echo": settings.database.echo,
+            "pool_pre_ping": True,
+        }
+        if settings.database.is_pooled_endpoint:
+            kwargs["poolclass"] = NullPool
+            connect_args["statement_cache_size"] = 0
+        else:
+            kwargs["pool_size"] = 3
+            kwargs["max_overflow"] = 2
+        kwargs["connect_args"] = connect_args
+        _engine_cache.append(create_async_engine(settings.database.async_url, **kwargs))
     return _engine_cache[0]
 
 

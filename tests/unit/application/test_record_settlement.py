@@ -17,7 +17,7 @@ class TestRecordSettlement:
         alice = make_person(name="Alice")
         bob = make_person(name="Bob")
         uow = make_mock_uow()
-        uow.persons.get_by_id.side_effect = lambda id: alice if id == alice.id else bob
+        uow.persons.get_by_ids.return_value = [alice, bob]
         set_passthrough_save(uow)
 
         command = RecordSettlementCommand(
@@ -53,7 +53,7 @@ class TestRecordSettlement:
         alice = make_person(name="Alice")
         bob = make_person(name="Bob")
         uow = make_mock_uow()
-        uow.persons.get_by_id.return_value = None
+        uow.persons.get_by_ids.return_value = []
 
         command = RecordSettlementCommand(
             year=2026,
@@ -71,7 +71,7 @@ class TestRecordSettlement:
         bob = make_person(name="Bob")
         tx = make_transaction(payer_person_id=alice.id)
         uow = make_mock_uow()
-        uow.persons.get_by_id.side_effect = lambda id: alice if id == alice.id else bob
+        uow.persons.get_by_ids.return_value = [alice, bob]
         set_passthrough_save(uow)
         uow.transactions.get_by_ids.return_value = [tx]
         uow.transactions.update_mutable_fields.return_value = tx

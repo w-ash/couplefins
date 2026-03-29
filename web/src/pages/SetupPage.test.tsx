@@ -11,13 +11,26 @@ import { SetupPage } from "./SetupPage";
 
 const VALID_PASSWORD = "password123";
 
+async function fillForm(
+  user: ReturnType<typeof userEvent.setup>,
+  { pw1 = VALID_PASSWORD, pw2 = VALID_PASSWORD } = {},
+) {
+  await user.type(screen.getByLabelText("Person 1"), "Alice");
+  await user.type(screen.getByLabelText("Alice's password"), pw1);
+  await user.type(screen.getAllByLabelText("Confirm password")[0], pw1);
+  await user.type(screen.getByLabelText("Person 2"), "Bob");
+  await user.type(screen.getByLabelText("Bob's password"), pw2);
+  await user.type(screen.getAllByLabelText("Confirm password")[1], pw2);
+}
+
 describe("SetupPage", () => {
-  it("renders the setup form with name and password inputs", () => {
+  it("renders the setup form with name, password, and confirm inputs", () => {
     renderWithProviders(<SetupPage />);
     expect(screen.getByText("Welcome to CoupleFins")).toBeInTheDocument();
     expect(screen.getByLabelText("Person 1")).toBeInTheDocument();
     expect(screen.getByLabelText("Person 2")).toBeInTheDocument();
     expect(screen.getAllByLabelText("Password")).toHaveLength(2);
+    expect(screen.getAllByLabelText("Confirm password")).toHaveLength(2);
     expect(
       screen.getByRole("button", { name: "Get Started" }),
     ).toBeInTheDocument();
@@ -28,7 +41,7 @@ describe("SetupPage", () => {
     expect(screen.getByRole("button", { name: "Get Started" })).toBeDisabled();
   });
 
-  it("disables submit when names are filled but passwords are missing", async () => {
+  it("disables submit when passwords are missing", async () => {
     renderWithProviders(<SetupPage />);
     const user = userEvent.setup();
 
@@ -38,15 +51,30 @@ describe("SetupPage", () => {
     expect(screen.getByRole("button", { name: "Get Started" })).toBeDisabled();
   });
 
-  it("enables submit when both names and valid passwords are filled", async () => {
+  it("disables submit when confirm passwords don't match", async () => {
     renderWithProviders(<SetupPage />);
     const user = userEvent.setup();
 
     await user.type(screen.getByLabelText("Person 1"), "Alice");
-    // After typing name1, the password label becomes "Alice's password"
     await user.type(screen.getByLabelText("Alice's password"), VALID_PASSWORD);
+    await user.type(
+      screen.getAllByLabelText("Confirm password")[0],
+      "different",
+    );
     await user.type(screen.getByLabelText("Person 2"), "Bob");
     await user.type(screen.getByLabelText("Bob's password"), VALID_PASSWORD);
+    await user.type(
+      screen.getAllByLabelText("Confirm password")[1],
+      VALID_PASSWORD,
+    );
+
+    expect(screen.getByRole("button", { name: "Get Started" })).toBeDisabled();
+  });
+
+  it("enables submit when names, passwords, and confirms are valid", async () => {
+    renderWithProviders(<SetupPage />);
+    const user = userEvent.setup();
+    await fillForm(user);
 
     expect(screen.getByRole("button", { name: "Get Started" })).toBeEnabled();
   });
@@ -64,31 +92,23 @@ describe("SetupPage", () => {
   });
 
   it("submits names and passwords to the API in a single request", async () => {
-    let capturedBody: {
-      name1: string;
-      name2: string;
-      password1: string;
-      password2: string;
-    } | null = null;
+    let capturedBody: Record<string, string> | null = null;
     server.use(
       http.post("/api/v1/persons/setup", async ({ request }) => {
-        capturedBody = (await request.json()) as {
-          name1: string;
-          name2: string;
-          password1: string;
-          password2: string;
-        };
+        capturedBody = (await request.json()) as Record<string, string>;
         return HttpResponse.json(
           [
             {
               id: crypto.randomUUID(),
               name: capturedBody.name1,
               adjustment_account: "",
+              theme_preference: "system",
             },
             {
               id: crypto.randomUUID(),
               name: capturedBody.name2,
               adjustment_account: "",
+              theme_preference: "system",
             },
           ],
           { status: 201 },
@@ -98,11 +118,7 @@ describe("SetupPage", () => {
 
     renderWithProviders(<SetupPage />);
     const user = userEvent.setup();
-
-    await user.type(screen.getByLabelText("Person 1"), "Alice");
-    await user.type(screen.getByLabelText("Alice's password"), VALID_PASSWORD);
-    await user.type(screen.getByLabelText("Person 2"), "Bob");
-    await user.type(screen.getByLabelText("Bob's password"), VALID_PASSWORD);
+    await fillForm(user);
     await user.click(screen.getByRole("button", { name: "Get Started" }));
 
     await waitFor(() => {
@@ -127,11 +143,7 @@ describe("SetupPage", () => {
 
     renderWithProviders(<SetupPage />);
     const user = userEvent.setup();
-
-    await user.type(screen.getByLabelText("Person 1"), "Alice");
-    await user.type(screen.getByLabelText("Alice's password"), VALID_PASSWORD);
-    await user.type(screen.getByLabelText("Person 2"), "Bob");
-    await user.type(screen.getByLabelText("Bob's password"), VALID_PASSWORD);
+    await fillForm(user);
     await user.click(screen.getByRole("button", { name: "Get Started" }));
 
     await waitFor(() => {
@@ -164,16 +176,31 @@ describe("SetupPage", () => {
 
     renderWithProviders(<SetupPage />);
     const user = userEvent.setup();
-
-    await user.type(screen.getByLabelText("Person 1"), "Alice");
-    await user.type(screen.getByLabelText("Alice's password"), VALID_PASSWORD);
-    await user.type(screen.getByLabelText("Person 2"), "Bob");
-    await user.type(screen.getByLabelText("Bob's password"), VALID_PASSWORD);
+    await fillForm(user);
     await user.click(screen.getByRole("button", { name: "Get Started" }));
 
     await waitFor(() => {
       const alert = screen.getByRole("alert");
       expect(alert).toHaveTextContent("Name is required");
     });
+  });
+
+  it("toggles password visibility", async () => {
+    renderWithProviders(<SetupPage />);
+    const user = userEvent.setup();
+
+    const toggles = screen.getAllByRole("button", { name: "Show password" });
+    expect(toggles).toHaveLength(4); // 2 passwords + 2 confirms
+
+    const passwordInput = screen.getAllByLabelText("Password")[0];
+    expect(passwordInput).toHaveAttribute("type", "password");
+
+    await user.click(toggles[0]);
+    expect(passwordInput).toHaveAttribute("type", "text");
+    expect(toggles[0]).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(toggles[0]);
+    expect(passwordInput).toHaveAttribute("type", "password");
+    expect(toggles[0]).toHaveAttribute("aria-pressed", "false");
   });
 });

@@ -7,7 +7,12 @@ import { useIdentityStore } from "@/lib/identity";
 import { server } from "@/test/server";
 import { App } from "./App";
 
-const meResponse = { id: "p1", name: "Alice", adjustment_account: "adj-1" };
+const meResponse = {
+  id: "p1",
+  name: "Alice",
+  adjustment_account: "adj-1",
+  theme_preference: "system",
+};
 
 const authPersons = [
   { name: "Alice", has_password: true },

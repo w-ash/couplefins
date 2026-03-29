@@ -14,10 +14,19 @@ class TransactionRepositoryProtocol(Protocol):
     async def get_household_by_year(self, year: int) -> list[Transaction]: ...
     async def get_by_year(self, year: int) -> list[Transaction]: ...
     async def get_household_by_date_range(
-        self, start_date: date, end_date: date
+        self,
+        start_date: date,
+        end_date: date,
+        *,
+        tags: tuple[str, ...] | None = None,
     ) -> list[Transaction]: ...
     async def get_by_person_and_date_range(
-        self, person_id: UUID, start_date: date, end_date: date
+        self,
+        person_id: UUID,
+        start_date: date,
+        end_date: date,
+        *,
+        tags: tuple[str, ...] | None = None,
     ) -> list[Transaction]: ...
     async def save(self, entity: Transaction) -> Transaction: ...
     async def save_batch(self, entities: list[Transaction]) -> list[Transaction]: ...

@@ -8,8 +8,17 @@ const options: { value: Theme; icon: typeof Sun; label: string }[] = [
   { value: "dark", icon: Moon, label: "Dark" },
 ];
 
-export function ThemeToggle() {
+export function ThemeToggle({
+  onPersist,
+}: {
+  onPersist?: (theme: Theme) => void;
+} = {}) {
   const { theme, setTheme } = useTheme();
+
+  function handleChange(value: Theme) {
+    setTheme(value);
+    onPersist?.(value);
+  }
 
   return (
     <fieldset
@@ -30,7 +39,7 @@ export function ThemeToggle() {
             name="theme"
             value={value}
             checked={theme === value}
-            onChange={() => setTheme(value)}
+            onChange={() => handleChange(value)}
             className="sr-only"
           />
           <Icon className="size-4" aria-label={label} />

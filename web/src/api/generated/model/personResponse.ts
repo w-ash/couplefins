@@ -9,4 +9,5 @@ export interface PersonResponse {
   id: string;
   name: string;
   adjustment_account: string;
+  theme_preference: string;
 }

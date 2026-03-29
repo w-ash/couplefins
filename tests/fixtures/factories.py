@@ -20,12 +20,14 @@ def make_person(
     name: str = "Test Person",
     adjustment_account: str = "",
     password_hash: str = "",
+    theme_preference: str = "system",
 ) -> Person:
     return Person(
         id=id or uuid.uuid4(),
         name=name,
         adjustment_account=adjustment_account,
         password_hash=password_hash,
+        theme_preference=theme_preference,
     )
 
 
