@@ -2,7 +2,7 @@ import datetime
 from datetime import UTC
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from src.application.runner import execute_use_case
 from src.application.use_cases.finalize_period import (
@@ -40,7 +40,7 @@ async def get_reconciliation(  # noqa: PLR0913, PLR0917
     month: int | None = None,
     scope: str | None = None,
     person_id: UUID | None = None,
-    tags: list[str] | None = None,
+    tags: list[str] | None = Query(None),
 ) -> ReconciliationResponse:
     command = _build_command(start_date, end_date, year, month, scope, person_id, tags)
     result = await execute_use_case(

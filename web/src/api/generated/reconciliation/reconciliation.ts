@@ -77,16 +77,14 @@ export const getGetReconciliationUrl = (params?: GetReconciliationParams,) => {
   return stringifiedParams.length > 0 ? `/api/v1/reconciliation?${stringifiedParams}` : `/api/v1/reconciliation`
 }
 
-export const getReconciliation = async (stringNull: string[] | null,
-    params?: GetReconciliationParams, options?: RequestInit): Promise<getReconciliationResponse> => {
+export const getReconciliation = async (params?: GetReconciliationParams, options?: RequestInit): Promise<getReconciliationResponse> => {
 
   return customFetch<getReconciliationResponse>(getGetReconciliationUrl(params),
   {
     ...options,
-    method: 'GET',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      stringNull,)
+    method: 'GET'
+
+
   }
 );}
 
@@ -94,25 +92,23 @@ export const getReconciliation = async (stringNull: string[] | null,
 
 
 
-export const getGetReconciliationQueryKey = (stringNull?: string[] | null,
-    params?: GetReconciliationParams,) => {
+export const getGetReconciliationQueryKey = (params?: GetReconciliationParams,) => {
     return [
-    `/api/v1/reconciliation`, ...(params ? [params] : []), stringNull
+    `/api/v1/reconciliation`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetReconciliationQueryOptions = <TData = Awaited<ReturnType<typeof getReconciliation>>, TError = HTTPValidationError>(stringNull: string[] | null,
-    params?: GetReconciliationParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReconciliation>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+export const getGetReconciliationQueryOptions = <TData = Awaited<ReturnType<typeof getReconciliation>>, TError = HTTPValidationError>(params?: GetReconciliationParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReconciliation>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetReconciliationQueryKey(stringNull,params);
+  const queryKey =  queryOptions?.queryKey ?? getGetReconciliationQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getReconciliation>>> = ({ signal }) => getReconciliation(stringNull,params, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getReconciliation>>> = ({ signal }) => getReconciliation(params, { signal, ...requestOptions });
 
 
 
@@ -126,8 +122,7 @@ export type GetReconciliationQueryError = HTTPValidationError
 
 
 export function useGetReconciliation<TData = Awaited<ReturnType<typeof getReconciliation>>, TError = HTTPValidationError>(
- stringNull: string[] | null,
-    params: undefined |  GetReconciliationParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReconciliation>>, TError, TData>> & Pick<
+ params: undefined |  GetReconciliationParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReconciliation>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getReconciliation>>,
           TError,
@@ -137,8 +132,7 @@ export function useGetReconciliation<TData = Awaited<ReturnType<typeof getReconc
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useGetReconciliation<TData = Awaited<ReturnType<typeof getReconciliation>>, TError = HTTPValidationError>(
- stringNull: string[] | null,
-    params?: GetReconciliationParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReconciliation>>, TError, TData>> & Pick<
+ params?: GetReconciliationParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReconciliation>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getReconciliation>>,
           TError,
@@ -148,8 +142,7 @@ export function useGetReconciliation<TData = Awaited<ReturnType<typeof getReconc
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useGetReconciliation<TData = Awaited<ReturnType<typeof getReconciliation>>, TError = HTTPValidationError>(
- stringNull: string[] | null,
-    params?: GetReconciliationParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReconciliation>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ params?: GetReconciliationParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReconciliation>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
@@ -157,12 +150,11 @@ export function useGetReconciliation<TData = Awaited<ReturnType<typeof getReconc
  */
 
 export function useGetReconciliation<TData = Awaited<ReturnType<typeof getReconciliation>>, TError = HTTPValidationError>(
- stringNull: string[] | null,
-    params?: GetReconciliationParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReconciliation>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ params?: GetReconciliationParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getReconciliation>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getGetReconciliationQueryOptions(stringNull,params,options)
+  const queryOptions = getGetReconciliationQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
