@@ -32,6 +32,23 @@ class EventBus:
     def broadcast(self, entity: BroadcastEntity) -> None:
         self._send(json.dumps({"entity": entity}))
 
+    def broadcast_progress(
+        self,
+        operation: str,
+        current: int,
+        total: int,
+        detail: str,
+    ) -> None:
+        self._send(
+            json.dumps({
+                "type": "progress",
+                "operation": operation,
+                "current": current,
+                "total": total,
+                "detail": detail,
+            })
+        )
+
     @staticmethod
     async def stream(queue: asyncio.Queue[str]) -> AsyncGenerator[str]:
         try:

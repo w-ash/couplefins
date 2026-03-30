@@ -2,7 +2,16 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, cast, func, select, text, update
+from sqlalchemy import (
+    ColumnElement,
+    bindparam as sa_bindparam,
+    cast,
+    func,
+    insert,
+    select,
+    text,
+    update,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 
 from src.domain.entities.transaction import Transaction
@@ -76,6 +85,36 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
     @staticmethod
     def _to_model(entity: Transaction) -> TransactionModel:
         return TransactionModel(**TransactionRepository._to_column_values(entity))
+
+    async def save_batch(self, entities: list[Transaction]) -> list[Transaction]:
+        if not entities:
+            return []
+        values = [self._to_column_values(e) for e in entities]
+        await self._session.execute(insert(TransactionModel), values)
+        await self._session.flush()
+        return entities
+
+    async def update_mutable_fields_batch(
+        self, entities: list[Transaction]
+    ) -> list[Transaction]:
+        if not entities:
+            return []
+        exclude = self._IMMUTABLE_KEYS | self._UPLOAD_ONLY_KEYS
+        params: list[dict[str, object]] = []
+        for entity in entities:
+            vals = self._to_column_values(entity)
+            vals["_id"] = vals.pop("id")
+            for k in exclude:
+                del vals[k]
+            params.append(vals)
+        stmt = (
+            update(TransactionModel)
+            .where(TransactionModel.id == sa_bindparam("_id"))
+            .values({col: sa_bindparam(col) for col in params[0] if col != "_id"})
+        )
+        await self._session.execute(stmt, params)
+        await self._session.flush()
+        return entities
 
     async def _query(self, *filters: ColumnElement[bool]) -> list[Transaction]:
         stmt = select(TransactionModel).where(*filters)

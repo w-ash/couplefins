@@ -1,5 +1,6 @@
 import { AlertTriangle } from "lucide-react";
 import { useMemo, useState } from "react";
+import { Link } from "react-router";
 import { useGetCategoryGroups } from "@/api/generated/category-groups/category-groups";
 import { UnmappedCategoryRow } from "@/components/UnmappedCategoryRow";
 import { useGroupOptions } from "@/lib/categories";
@@ -7,9 +8,12 @@ import { useGroupOptions } from "@/lib/categories";
 export function UnmappedCategoriesWarning({
   categories,
   className,
+  compact,
 }: {
   categories: string[];
   className?: string;
+  /** Show a plain list with a Settings link instead of inline Combobox assignment. */
+  compact?: boolean;
 }) {
   const { data: groupsResponse } = useGetCategoryGroups();
   const groups = groupsResponse?.data ?? [];
@@ -34,7 +38,13 @@ export function UnmappedCategoriesWarning({
         {visible.length} unmapped{" "}
         {visible.length === 1 ? "category" : "categories"}
       </p>
-      {groups.length > 0 ? (
+      {compact || groups.length === 0 ? (
+        <ul className="list-disc pl-4 text-sm text-warning-muted-foreground">
+          {visible.map((cat) => (
+            <li key={cat}>{cat}</li>
+          ))}
+        </ul>
+      ) : (
         <div className="space-y-2">
           {visible.map((cat) => (
             <UnmappedCategoryRow
@@ -46,12 +56,14 @@ export function UnmappedCategoriesWarning({
             />
           ))}
         </div>
-      ) : (
-        <ul className="text-sm text-warning-muted-foreground">
-          {visible.map((cat) => (
-            <li key={cat}>{cat}</li>
-          ))}
-        </ul>
+      )}
+      {compact && (
+        <Link
+          to="/settings"
+          className="mt-2 inline-block text-xs font-medium text-warning underline underline-offset-2"
+        >
+          Fix in Settings
+        </Link>
       )}
     </div>
   );

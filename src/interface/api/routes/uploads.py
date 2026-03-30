@@ -74,8 +74,12 @@ async def post_upload(
         filename=file.filename or "upload.csv",
         accepted_change_ids=change_ids,
     )
+
+    def on_progress(current: int, total: int, detail: str) -> None:
+        event_bus.broadcast_progress("upload", current, total, detail)
+
     result = await execute_use_case(
-        lambda uow: UploadCsvUseCase().execute(command, uow)
+        lambda uow: UploadCsvUseCase().execute(command, uow, on_progress)
     )
     event_bus.broadcast("uploads")
     return UploadSummaryResponse.from_result(result)

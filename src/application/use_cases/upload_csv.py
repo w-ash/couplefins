@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from datetime import UTC, datetime
 import uuid
 
@@ -15,9 +16,16 @@ from src.application.use_cases._shared.transactions import (
     get_other_person_names,
 )
 from src.domain.entities.category import Category
+from src.domain.entities.transaction import Transaction
 from src.domain.entities.upload import Upload
 from src.domain.parsing.monarch_csv import parse_monarch_csv
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
+
+type ProgressCallback = Callable[[int, int, str], None]
+
+
+def _noop_progress(_current: int, _total: int, _detail: str) -> None:
+    pass
 
 
 @define(frozen=True, slots=True)
@@ -40,10 +48,15 @@ class UploadCsvResult:
 
 @define(slots=True)
 class UploadCsvUseCase:
-    async def execute(  # noqa: PLR0914
-        self, command: UploadCsvCommand, uow: UnitOfWorkProtocol
+    async def execute(
+        self,
+        command: UploadCsvCommand,
+        uow: UnitOfWorkProtocol,
+        on_progress: ProgressCallback = _noop_progress,
     ) -> UploadCsvResult:
         async with uow:
+            on_progress(1, 4, "Parsing CSV")
+
             person = await require_by_id(
                 uow.persons.get_by_id, command.person_id, "Person"
             )
@@ -54,13 +67,15 @@ class UploadCsvUseCase:
                 command.csv_text, command.person_id, upload_id, person_names=other_names
             )
 
-            affected_periods = {(tx.date.year, tx.date.month) for tx in incoming}
-            await assert_periods_not_finalized(uow, affected_periods)
+            await assert_periods_not_finalized(
+                uow, {(tx.date.year, tx.date.month) for tx in incoming}
+            )
+
+            on_progress(2, 4, "Classifying transactions")
 
             all_categories = await uow.categories.get_all()
             categories_in_csv = {tx.category for tx in incoming}
 
-            # Auto-create Category(group_id=None) for previously unseen categories
             auto_created = [
                 Category(id=uuid.uuid4(), name=cat, group_id=None)
                 for cat in find_new_categories(all_categories, categories_in_csv)
@@ -75,6 +90,8 @@ class UploadCsvUseCase:
                 incoming, command.person_id, uow
             )
 
+            on_progress(3, 4, f"Saving {len(classified)} transactions")
+
             upload = Upload(
                 id=upload_id,
                 person_id=command.person_id,
@@ -87,30 +104,34 @@ class UploadCsvUseCase:
             if new_txs:
                 await uow.transactions.save_batch(new_txs)
 
-            updated_count = 0
+            updated_txs: list[Transaction] = []
             skipped_count = 0
             for c in classified:
                 if c.status == "unchanged":
                     skipped_count += 1
                 elif c.status == "changed":
                     if c.existing_id in command.accepted_change_ids:
-                        updated_tx = attrs.evolve(
-                            c.incoming,
-                            id=c.existing_id,  # type: ignore[arg-type]
-                            upload_id=upload_id,
+                        updated_txs.append(
+                            attrs.evolve(
+                                c.incoming,
+                                id=c.existing_id,  # type: ignore[arg-type]
+                                upload_id=upload_id,
+                            )
                         )
-                        await uow.transactions.update_mutable_fields(updated_tx)
-                        updated_count += 1
                     else:
                         skipped_count += 1
 
+            if updated_txs:
+                await uow.transactions.update_mutable_fields_batch(updated_txs)
+
             await uow.commit()
+            on_progress(4, 4, "Complete")
 
             logger.info(
                 "Uploaded {} ({} new, {} updated, {} skipped) for person {}",
                 command.filename,
                 len(new_txs),
-                updated_count,
+                len(updated_txs),
                 skipped_count,
                 person.name,
             )
@@ -119,7 +140,7 @@ class UploadCsvUseCase:
                 upload_id=upload_id,
                 filename=command.filename,
                 new_count=len(new_txs),
-                updated_count=updated_count,
+                updated_count=len(updated_txs),
                 skipped_count=skipped_count,
                 unmapped_categories=unmapped,
             )

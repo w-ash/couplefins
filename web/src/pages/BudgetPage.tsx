@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, PieChart, Plus } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   getGetBudgetOverviewQueryKey,
   useDeleteBudget,
@@ -20,6 +20,7 @@ import { ExpandChevron } from "@/components/ExpandChevron";
 import { MonthPicker } from "@/components/MonthPicker";
 import { PageHeader } from "@/components/PageHeader";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
+import { ProgressBar } from "@/components/ProgressBar";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { StatsGrid } from "@/components/StatsGrid";
 import { useDialogSync } from "@/hooks/useDialogSync";
@@ -108,27 +109,6 @@ function SummaryStats({
         },
       ]}
     />
-  );
-}
-
-function ProgressBar({ pct, barColor }: { pct: number; barColor: string }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    requestAnimationFrame(() => setMounted(true));
-  }, []);
-
-  return (
-    <div className="flex items-center gap-2">
-      <div className="h-2 flex-1 rounded-full bg-muted">
-        <div
-          className={`h-2 rounded-full transition-[width] duration-500 ease-out ${barColor}`}
-          style={{ width: mounted ? `${pct}%` : "0%" }}
-        />
-      </div>
-      <span className="w-8 text-right text-xs tabular-nums text-muted-foreground">
-        {Math.round(pct)}%
-      </span>
-    </div>
   );
 }
 
@@ -290,7 +270,11 @@ function BudgetGroupRow({
             <GroupHeader {...headerProps} />
             {hasBudget && budget != null && (
               <div className="mt-1.5">
-                <ProgressBar pct={pct} barColor={healthStyle.barColor} />
+                <ProgressBar
+                  pct={pct}
+                  barColor={healthStyle.barColor}
+                  showLabel
+                />
               </div>
             )}
             <div className="mt-1">
@@ -308,7 +292,11 @@ function BudgetGroupRow({
           <div className="hidden min-w-0 flex-1 space-y-1.5 sm:block">
             <GroupHeader {...headerProps} />
             {hasBudget && budget != null && (
-              <ProgressBar pct={pct} barColor={healthStyle.barColor} />
+              <ProgressBar
+                pct={pct}
+                barColor={healthStyle.barColor}
+                showLabel
+              />
             )}
           </div>
 

@@ -124,7 +124,9 @@ async def test_updates_accepted_changes() -> None:
     assert result.new_count == 0
     assert result.updated_count == 1
     assert result.skipped_count == 0
-    uow.transactions.update_mutable_fields.assert_called_once()
+    uow.transactions.update_mutable_fields_batch.assert_called_once()
+    batch = uow.transactions.update_mutable_fields_batch.call_args[0][0]
+    assert len(batch) == 1
 
 
 async def test_skips_rejected_changes() -> None:
