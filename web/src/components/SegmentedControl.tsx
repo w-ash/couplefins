@@ -90,7 +90,7 @@ export function SegmentedControl<T extends string>({
             ref={(el) => {
               if (el) labelRefs.current.set(option.value, el);
             }}
-            className={`relative z-10 flex-1 cursor-pointer select-none text-center has-focus-visible:outline-none has-focus-visible:ring-2 has-focus-visible:ring-ring inline-flex items-center justify-center gap-1.5 ${shapeClass} px-3 ${sizeClass} font-medium transition-colors duration-150 ${
+            className={`relative z-10 flex-1 cursor-pointer select-none whitespace-nowrap text-center has-focus-visible:outline-none has-focus-visible:ring-2 has-focus-visible:ring-ring inline-flex items-center justify-center gap-1.5 ${shapeClass} px-3 ${sizeClass} font-medium transition-colors duration-150 ${
               isActive
                 ? "text-foreground"
                 : "text-muted-foreground hover:text-foreground"

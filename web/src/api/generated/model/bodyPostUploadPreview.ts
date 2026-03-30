@@ -7,5 +7,4 @@
 
 export interface BodyPostUploadPreview {
   file: Blob;
-  person_id: string;
 }

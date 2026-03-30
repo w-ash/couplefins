@@ -32,7 +32,7 @@ import {
 import { useGroupIconMap } from "@/lib/categories";
 import { getCategoryGroupIcon } from "@/lib/category-icons";
 import { formatCurrency, useMonthYear } from "@/lib/format";
-import { useIdentityStore } from "@/lib/identity";
+
 import { baseInputClass } from "@/lib/input-styles";
 import { PAGE_PADDING } from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
@@ -721,18 +721,13 @@ const SORT_OPTIONS: { value: SortMode; label: string }[] = [
 export function BudgetPage() {
   const { year, month } = useMonthYear();
   const queryClient = useQueryClient();
-  const currentPersonId = useIdentityStore((s) => s.currentPersonId);
+
   const { scope, setScope, viewMode, setViewMode, sortMode, setSortMode } =
     useBudgetFilters();
 
   const budgetOverviewParams = useMemo(
-    () => ({
-      year,
-      month,
-      scope,
-      ...(scope === "personal" ? { person_id: currentPersonId ?? "" } : {}),
-    }),
-    [year, month, scope, currentPersonId],
+    () => ({ year, month, scope }),
+    [year, month, scope],
   );
   const queryKey = getGetBudgetOverviewQueryKey(budgetOverviewParams);
 
@@ -827,6 +822,7 @@ export function BudgetPage() {
           ]}
           value={scope}
           onChange={setScope}
+          size="sm"
         />
         <SegmentedControl
           options={[
@@ -835,6 +831,7 @@ export function BudgetPage() {
           ]}
           value={viewMode}
           onChange={setViewMode}
+          size="sm"
         />
         <SegmentedControl
           options={SORT_OPTIONS}
@@ -921,9 +918,7 @@ export function BudgetPage() {
                   group_id: groupId,
                   monthly_amount: amount,
                   effective_from: effectiveFrom,
-                  ...(scope === "personal"
-                    ? { person_id: currentPersonId ?? "" }
-                    : {}),
+                  is_personal: scope === "personal",
                 },
               })
             }

@@ -9,9 +9,8 @@ import {
   Minus,
   Plus,
   Upload,
-  Users,
 } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import { Link } from "react-router";
 import type {
   ChangedTransactionResponse,
@@ -49,7 +48,6 @@ import {
   plural,
 } from "@/lib/format";
 import { useIdentityStore } from "@/lib/identity";
-import { selectInputClass } from "@/lib/input-styles";
 import { PAGE_PADDING } from "@/lib/layout";
 import {
   ClassificationBadge,
@@ -451,13 +449,9 @@ function ConfirmedCard({
 export function UploadPage() {
   const queryClient = useQueryClient();
   const invalidateCategories = useInvalidateCategories();
-  const currentPersonId = useIdentityStore((s) => s.currentPersonId);
+  const personId = useIdentityStore((s) => s.currentPersonId) ?? "";
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [headerError, setHeaderError] = useState<string | null>(null);
-  const [personId, setPersonId] = useState(currentPersonId ?? "");
-  useEffect(() => {
-    if (currentPersonId) setPersonId(currentPersonId);
-  }, [currentPersonId]);
   const [step, setStep] = useState<Step>("form");
   const {
     selected: acceptedIds,
@@ -501,9 +495,9 @@ export function UploadPage() {
     },
   });
 
-  function buildFormData(): { file: Blob; person_id: string } | null {
-    if (!selectedFile || !personId) return null;
-    return { file: selectedFile, person_id: personId };
+  function buildFormData(): { file: Blob } | null {
+    if (!selectedFile) return null;
+    return { file: selectedFile };
   }
 
   function handlePreview(e: FormEvent) {
@@ -551,7 +545,6 @@ export function UploadPage() {
     previewMutation.reset();
     uploadMutation.reset();
     clearAccepted();
-    setPersonId(currentPersonId ?? "");
     setSelectedFile(null);
     setHeaderError(null);
   }
@@ -592,54 +585,6 @@ export function UploadPage() {
       <StepIndicator currentStepIndex={stepToIndex(step)} />
 
       <Card as="form" onSubmit={handlePreview} className="space-y-6">
-        {/* Person selector */}
-        <div>
-          <label
-            htmlFor={
-              currentPersonId && personId === currentPersonId
-                ? undefined
-                : "person"
-            }
-            className="mb-1.5 flex items-center gap-1.5 font-medium text-sm text-secondary-foreground"
-          >
-            <Users className="size-4" />
-            Who are you?
-          </label>
-          {currentPersonId && personId === currentPersonId ? (
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center rounded-full bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground">
-                {persons?.find((p) => p.id === currentPersonId)?.name ??
-                  "Unknown"}
-              </span>
-              {!isFormDisabled && (
-                <button
-                  type="button"
-                  onClick={() => setPersonId("")}
-                  className="text-sm text-muted-foreground hover:text-foreground"
-                >
-                  Change
-                </button>
-              )}
-            </div>
-          ) : (
-            <select
-              id="person"
-              value={personId}
-              onChange={(e) => setPersonId(e.target.value)}
-              required
-              disabled={isFormDisabled}
-              className={`w-full min-h-11 ${selectInputClass}`}
-            >
-              <option value="">Select person...</option>
-              {persons?.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-
         {/* File drop zone */}
         <div>
           <span className="mb-1.5 block font-medium text-sm text-secondary-foreground">
@@ -667,7 +612,7 @@ export function UploadPage() {
         {step === "form" && (
           <Button
             type="submit"
-            disabled={!personId || !selectedFile || !!headerError}
+            disabled={!selectedFile || !!headerError}
             loading={previewMutation.isPending}
             loadingText="Parsing..."
             icon={<Eye className="size-4" />}

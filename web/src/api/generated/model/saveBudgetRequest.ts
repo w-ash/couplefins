@@ -9,5 +9,5 @@ export interface SaveBudgetRequest {
   group_id: string;
   monthly_amount: number | string;
   effective_from: string;
-  person_id?: string | null;
+  is_personal?: boolean;
 }

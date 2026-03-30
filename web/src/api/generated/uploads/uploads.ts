@@ -182,7 +182,6 @@ export const getPostUploadPreviewUrl = () => {
 export const postUploadPreview = async (bodyPostUploadPreview: BodyPostUploadPreview, options?: RequestInit): Promise<postUploadPreviewResponse> => {
     const formData = new FormData();
 formData.append(`file`, bodyPostUploadPreview.file);
-formData.append(`person_id`, bodyPostUploadPreview.person_id);
 
   return customFetch<postUploadPreviewResponse>(getPostUploadPreviewUrl(),
   {
@@ -274,7 +273,6 @@ export const getPostUploadUrl = () => {
 export const postUpload = async (bodyPostUpload: BodyPostUpload, options?: RequestInit): Promise<postUploadResponse> => {
     const formData = new FormData();
 formData.append(`file`, bodyPostUpload.file);
-formData.append(`person_id`, bodyPostUpload.person_id);
 if(bodyPostUpload.accepted_change_ids !== undefined) {
  formData.append(`accepted_change_ids`, bodyPostUpload.accepted_change_ids);
  }

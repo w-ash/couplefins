@@ -10,5 +10,4 @@ export type GetBudgetOverviewParams = {
 year: number;
 month: number;
 scope?: GetBudgetOverviewScope;
-person_id?: string | null;
 };

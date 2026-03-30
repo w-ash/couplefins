@@ -75,7 +75,7 @@ import {
   formatSplit,
   plural,
 } from "@/lib/format";
-import { useIdentityStore } from "@/lib/identity";
+
 import { PAGE_PADDING } from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
 import {
@@ -677,7 +677,7 @@ function TransactionRow({
 export function TransactionsPage() {
   const { startDate, endDate, setDateRange, singleMonth } = useDateRange();
   const queryClient = useQueryClient();
-  const currentPersonId = useIdentityStore((s) => s.currentPersonId);
+
   const [scope, setScope] = useEnumParam(
     "scope",
     TRANSACTION_SCOPES,
@@ -698,9 +698,8 @@ export function TransactionsPage() {
       start_date: startDate,
       end_date: endDate,
       scope,
-      ...(scope !== "household" ? { person_id: currentPersonId ?? "" } : {}),
     }),
-    [startDate, endDate, scope, currentPersonId],
+    [startDate, endDate, scope],
   );
   const {
     data: reconciliationResponse,

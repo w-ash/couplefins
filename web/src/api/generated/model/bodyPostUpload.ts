@@ -7,6 +7,5 @@
 
 export interface BodyPostUpload {
   file: Blob;
-  person_id: string;
   accepted_change_ids?: string;
 }

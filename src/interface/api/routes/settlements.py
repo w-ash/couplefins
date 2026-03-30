@@ -24,6 +24,8 @@ from src.application.use_cases.record_waived_settlement import (
     RecordWaivedSettlementCommand,
     RecordWaivedSettlementUseCase,
 )
+from src.domain.entities.person import Person
+from src.domain.exceptions import ValidationError
 from src.infrastructure.events.event_bus import event_bus
 from src.interface.api.dependencies import get_current_user
 from src.interface.api.schemas.settlements import (
@@ -39,8 +41,17 @@ from src.interface.api.schemas.settlements import (
 router = APIRouter(tags=["settlements"], dependencies=[Depends(get_current_user)])
 
 
+def _assert_participant(current_user: Person, from_id: UUID, to_id: UUID) -> None:
+    if current_user.id not in {from_id, to_id}:
+        raise ValidationError("You must be a participant in the settlement")
+
+
 @router.post("/settlements", status_code=201)
-async def record_settlement(body: RecordSettlementRequest) -> SettlementResponse:
+async def record_settlement(
+    body: RecordSettlementRequest,
+    current_user: Person = Depends(get_current_user),
+) -> SettlementResponse:
+    _assert_participant(current_user, body.from_person_id, body.to_person_id)
     command = RecordSettlementCommand(
         year=body.year,
         month=body.month,
@@ -60,7 +71,11 @@ async def record_settlement(body: RecordSettlementRequest) -> SettlementResponse
 
 
 @router.post("/settlements/waive", status_code=201)
-async def waive_settlement(body: RecordWaivedSettlementRequest) -> SettlementResponse:
+async def waive_settlement(
+    body: RecordWaivedSettlementRequest,
+    current_user: Person = Depends(get_current_user),
+) -> SettlementResponse:
+    _assert_participant(current_user, body.from_person_id, body.to_person_id)
     command = RecordWaivedSettlementCommand(
         year=body.year,
         month=body.month,

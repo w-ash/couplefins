@@ -1,35 +1,33 @@
-import { ArrowRight, Tag } from "lucide-react";
+import { Tag } from "lucide-react";
 import { useState } from "react";
 import { Card } from "@/components/Card";
 import { ExpandChevron } from "@/components/ExpandChevron";
-import { ClassificationBadge } from "@/lib/transaction-classification";
 
-const TAG_EXAMPLES = [
+const ROWS = [
   {
-    tag: "shared",
-    type: "shared" as const,
-    description: "Split 50/50 between you",
+    tag: "shared or split",
+    what: "Split 50/50",
+    detail: "Both people share the cost equally",
   },
   {
-    tag: "s70",
-    type: "shared" as const,
-    description: "You pay 70%, partner owes the rest",
+    tag: "shared, s70",
+    what: "Custom split",
+    detail: "You pay 70%, your partner pays 30%",
   },
   {
     tag: "household",
-    type: "household" as const,
-    description: "Counts toward budget, no split",
+    what: "Budget only",
+    detail: "Counts toward your shared budget, but no money changes hands",
   },
   {
     tag: "bob",
-    type: "spotted" as const,
-    otherPersonName: "Bob",
-    description: "You fronted it — Bob pays you back",
+    what: "Spotted",
+    detail: "You fronted the money — your partner pays you back in full",
   },
   {
     tag: null,
-    type: "personal" as const,
-    description: "Not shared, not tracked",
+    what: "Personal",
+    detail: "Your own expense, not shared or tracked",
   },
 ] as const;
 
@@ -46,52 +44,50 @@ export function TagReferenceGuide() {
       >
         <ExpandChevron expanded={expanded} />
         <Tag className="size-4 text-muted-foreground" />
-        How tags work
+        How Monarch tags work
       </button>
 
       {expanded && (
-        <div className="space-y-3 border-t border-border-muted px-5 pb-5">
-          <p className="pt-3 text-sm text-muted-foreground">
-            Tag transactions in Monarch before exporting. Tags control how
-            expenses are classified and split.
+        <div className="border-t border-border-muted px-5 pb-5">
+          <p className="py-3 text-sm text-muted-foreground">
+            Tag transactions in Monarch before exporting. The tag determines how
+            each expense is classified and split.
           </p>
 
-          {TAG_EXAMPLES.map((example) => (
-            <div
-              key={example.tag ?? "none"}
-              className="flex flex-wrap items-center gap-2"
-            >
-              {example.tag ? (
-                <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
-                  {example.tag}
-                </code>
-              ) : (
-                <span className="text-xs italic text-muted-foreground/70">
-                  no tag
-                </span>
-              )}
-              <ArrowRight className="size-3 text-muted-foreground" />
-              <ClassificationBadge
-                type={example.type}
-                otherPersonName={
-                  "otherPersonName" in example
-                    ? example.otherPersonName
-                    : undefined
-                }
-              />
-              <span className="text-sm text-muted-foreground">
-                {example.description}
-              </span>
-            </div>
-          ))}
-
-          <p className="pt-1 text-xs text-muted-foreground">
-            Combine tags for custom splits —{" "}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
-              shared, s70
-            </code>{" "}
-            for a 70/30 split.
-          </p>
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-border-muted text-xs text-muted-foreground">
+                <th className="pb-2 pr-4 font-medium">Tag in Monarch</th>
+                <th className="pb-2 pr-4 font-medium">What happens</th>
+                <th className="hidden pb-2 font-medium sm:table-cell">
+                  Example
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border-muted">
+              {ROWS.map((row) => (
+                <tr key={row.tag ?? "none"}>
+                  <td className="py-2.5 pr-4 align-top">
+                    {row.tag ? (
+                      <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
+                        {row.tag}
+                      </code>
+                    ) : (
+                      <span className="text-xs italic text-muted-foreground/70">
+                        no tag
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2.5 pr-4 align-top font-medium text-foreground">
+                    {row.what}
+                  </td>
+                  <td className="hidden py-2.5 align-top text-muted-foreground sm:table-cell">
+                    {row.detail}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </Card>

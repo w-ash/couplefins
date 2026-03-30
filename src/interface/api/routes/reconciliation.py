@@ -18,6 +18,7 @@ from src.application.use_cases.unfinalize_period import (
     UnfinalizePeriodCommand,
     UnfinalizePeriodUseCase,
 )
+from src.domain.entities.person import Person
 from src.domain.exceptions import ValidationError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 from src.infrastructure.events.event_bus import event_bus
@@ -39,9 +40,10 @@ async def get_reconciliation(  # noqa: PLR0913, PLR0917
     year: int | None = None,
     month: int | None = None,
     scope: str | None = None,
-    person_id: UUID | None = None,
     tags: list[str] | None = Query(None),
+    current_user: Person = Depends(get_current_user),
 ) -> ReconciliationResponse:
+    person_id = current_user.id if scope in {"personal", "all"} else None
     command = _build_command(start_date, end_date, year, month, scope, person_id, tags)
     result = await execute_use_case(
         lambda uow: GetReconciliationUseCase().execute(command, uow)

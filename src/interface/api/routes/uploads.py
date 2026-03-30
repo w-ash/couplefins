@@ -7,6 +7,7 @@ from src.application.runner import execute_use_case
 from src.application.use_cases.get_upload_history import get_upload_history
 from src.application.use_cases.preview_csv import PreviewCsvCommand, PreviewCsvUseCase
 from src.application.use_cases.upload_csv import UploadCsvCommand, UploadCsvUseCase
+from src.domain.entities.person import Person
 from src.domain.exceptions import ValidationError
 from src.infrastructure.events.event_bus import event_bus
 from src.interface.api.dependencies import get_current_user
@@ -42,11 +43,11 @@ async def upload_history() -> UploadHistoryResponse:
 @router.post("/preview")
 async def post_upload_preview(
     file: UploadFile,
-    person_id: UUID = Form(),
+    current_user: Person = Depends(get_current_user),
 ) -> PreviewUploadResponse:
     csv_text = await _decode_csv(file)
 
-    command = PreviewCsvCommand(csv_text=csv_text, person_id=person_id)
+    command = PreviewCsvCommand(csv_text=csv_text, person_id=current_user.id)
     result = await execute_use_case(
         lambda uow: PreviewCsvUseCase().execute(command, uow)
     )
@@ -56,7 +57,7 @@ async def post_upload_preview(
 @router.post("/", status_code=201)
 async def post_upload(
     file: UploadFile,
-    person_id: UUID = Form(),
+    current_user: Person = Depends(get_current_user),
     accepted_change_ids: str = Form(default="[]"),
 ) -> UploadSummaryResponse:
     csv_text = await _decode_csv(file)
@@ -69,7 +70,7 @@ async def post_upload(
 
     command = UploadCsvCommand(
         csv_text=csv_text,
-        person_id=person_id,
+        person_id=current_user.id,
         filename=file.filename or "upload.csv",
         accepted_change_ids=change_ids,
     )

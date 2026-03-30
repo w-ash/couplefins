@@ -19,6 +19,7 @@ from src.application.use_cases.update_person import (
     UpdatePersonUseCase,
 )
 from src.domain.entities.person import Person
+from src.domain.exceptions import ValidationError
 from src.infrastructure.auth.password import hash_password
 from src.interface.api.dependencies import get_current_user
 from src.interface.api.schemas.persons import (
@@ -59,8 +60,10 @@ async def setup_couple(body: SetupCoupleRequest) -> list[PersonResponse]:
 async def update_person(
     person_id: UUID,
     body: UpdatePersonRequest,
-    _current_user: Person = Depends(get_current_user),
+    current_user: Person = Depends(get_current_user),
 ) -> PersonResponse:
+    if person_id != current_user.id:
+        raise ValidationError("You can only update your own profile")
     command = UpdatePersonCommand(
         id=person_id,
         adjustment_account=body.adjustment_account,
