@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import AsyncGenerator
 import contextlib
+import json
 from typing import Literal
 
 type BroadcastEntity = Literal[
@@ -23,10 +24,13 @@ class EventBus:
         with contextlib.suppress(ValueError):
             self._subscribers.remove(queue)
 
-    def broadcast(self, entity: BroadcastEntity) -> None:
+    def _send(self, message: str) -> None:
         for queue in self._subscribers:
             with contextlib.suppress(asyncio.QueueFull):
-                queue.put_nowait(entity)
+                queue.put_nowait(message)
+
+    def broadcast(self, entity: BroadcastEntity) -> None:
+        self._send(json.dumps({"entity": entity}))
 
     @staticmethod
     async def stream(queue: asyncio.Queue[str]) -> AsyncGenerator[str]:

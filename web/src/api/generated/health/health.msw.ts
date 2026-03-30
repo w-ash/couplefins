@@ -17,16 +17,14 @@ import type {
 } from 'msw';
 
 import type {
-  HealthCheck200
+  HealthResponse
 } from '../model';
 
 
-export const getHealthCheckResponseMock = (): HealthCheck200 => ({
-        [faker.string.alphanumeric(5)]: faker.string.alpha({length: {min: 10, max: 20}})
-      })
+export const getHealthCheckResponseMock = (overrideResponse: Partial<Extract<HealthResponse, object>> = {}): HealthResponse => ({status: faker.string.alpha({length: {min: 10, max: 20}}), database_host: faker.string.alpha({length: {min: 10, max: 20}}), database_mode: faker.string.alpha({length: {min: 10, max: 20}}), ...overrideResponse})
 
 
-export const getHealthCheckMockHandler = (overrideResponse?: HealthCheck200 | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<HealthCheck200> | HealthCheck200), options?: RequestHandlerOptions) => {
+export const getHealthCheckMockHandler = (overrideResponse?: HealthResponse | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<HealthResponse> | HealthResponse), options?: RequestHandlerOptions) => {
   return http.get('*/api/v1/health', async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
 
 

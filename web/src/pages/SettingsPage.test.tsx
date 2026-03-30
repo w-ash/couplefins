@@ -14,6 +14,12 @@ const persons = [
   { id: "p2", name: "Bob", adjustment_account: "", theme_preference: "system" },
 ];
 
+const healthResponse = {
+  status: "ok",
+  database_host: "localhost",
+  database_mode: "Local PostgreSQL",
+};
+
 describe("SettingsPage", () => {
   beforeEach(() => {
     server.use(
@@ -22,6 +28,7 @@ describe("SettingsPage", () => {
         HttpResponse.json([]),
       ),
       http.get("/api/v1/persons/", () => HttpResponse.json(persons)),
+      http.get("/api/v1/health", () => HttpResponse.json(healthResponse)),
     );
   });
   it("renders the settings heading", () => {
@@ -29,17 +36,6 @@ describe("SettingsPage", () => {
     expect(
       screen.getByRole("heading", { name: "Settings" }),
     ).toBeInTheDocument();
-  });
-
-  it("renders the appearance section with theme toggle", () => {
-    renderWithProviders(<SettingsPage />);
-    expect(
-      screen.getByRole("heading", { name: "Appearance" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Theme")).toBeInTheDocument();
-    expect(screen.getByLabelText("Light")).toBeInTheDocument();
-    expect(screen.getByLabelText("System")).toBeInTheDocument();
-    expect(screen.getByLabelText("Dark")).toBeInTheDocument();
   });
 
   it("renders the category groups section", () => {
@@ -59,21 +55,20 @@ describe("SettingsPage", () => {
     });
   });
 
-  it("has aria-labelledby on each section", () => {
+  it("has aria-labelledby on each section", async () => {
     renderWithProviders(<SettingsPage />);
-    const sections = screen.getAllByRole("region");
-    expect(sections).toHaveLength(4);
 
-    expect(sections[0]).toHaveAttribute(
-      "aria-labelledby",
-      "settings-appearance",
-    );
-    expect(sections[1]).toHaveAttribute("aria-labelledby", "settings-account");
-    expect(sections[2]).toHaveAttribute(
-      "aria-labelledby",
-      "settings-category-mappings",
-    );
-    expect(sections[3]).toHaveAttribute("aria-labelledby", "settings-people");
+    await waitFor(() => {
+      const sections = screen.getAllByRole("region");
+      expect(sections).toHaveLength(3);
+
+      expect(sections[0]).toHaveAttribute(
+        "aria-labelledby",
+        "settings-category-mappings",
+      );
+      expect(sections[1]).toHaveAttribute("aria-labelledby", "settings-people");
+      expect(sections[2]).toHaveAttribute("aria-labelledby", "settings-system");
+    });
   });
 
   it("shows empty state when no categories exist", async () => {
@@ -84,5 +79,17 @@ describe("SettingsPage", () => {
     });
 
     expect(screen.getByText("Upload a CSV")).toBeInTheDocument();
+  });
+
+  it("shows database info in system section", async () => {
+    renderWithProviders(<SettingsPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "System" }),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Local PostgreSQL")).toBeInTheDocument();
+      expect(screen.getByText("localhost")).toBeInTheDocument();
+    });
   });
 });

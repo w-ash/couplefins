@@ -36,6 +36,7 @@ import { TagReferenceGuide } from "@/components/TagReferenceGuide";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { UploadError } from "@/components/UploadError";
 import { UploadHistory } from "@/components/UploadHistory";
+import { useMutationTimeout } from "@/hooks/useMutationTimeout";
 import { useSetToggle } from "@/hooks/useSetToggle";
 import { useInvalidateCategories } from "@/lib/categories";
 import { validateCsvHeaders } from "@/lib/csv-validation";
@@ -86,6 +87,7 @@ function ActionPanel({
   onBack,
   onToggleAll,
   isUploading,
+  slowHint,
 }: {
   step: "preview" | "review";
   preview: PreviewUploadResponse;
@@ -94,6 +96,7 @@ function ActionPanel({
   onBack: () => void;
   onToggleAll: (accept: boolean) => void;
   isUploading: boolean;
+  slowHint: string | null;
 }) {
   const totalChanged = preview.changed_transactions.length;
 
@@ -157,12 +160,17 @@ function ActionPanel({
           type="button"
           onClick={onConfirm}
           loading={isUploading}
-          loadingText="Importing..."
+          loadingText="Importing\u2026"
           icon={<Check className="size-4" />}
           fullWidth
         >
           Confirm Import
         </Button>
+        {isUploading && slowHint && (
+          <p className="text-center text-xs text-muted-foreground">
+            {slowHint}
+          </p>
+        )}
         <Button
           type="button"
           variant="secondary"
@@ -495,16 +503,23 @@ export function UploadPage() {
     },
   });
 
+  const previewTimeout = useMutationTimeout(previewMutation.isPending);
+  const confirmTimeout = useMutationTimeout(uploadMutation.isPending);
+
   function buildFormData(): { file: Blob } | null {
     if (!selectedFile) return null;
     return { file: selectedFile };
   }
 
-  function handlePreview(e: FormEvent) {
-    e.preventDefault();
+  function doPreview() {
     const body = buildFormData();
     if (!body) return;
     previewMutation.mutate({ data: body });
+  }
+
+  function handlePreview(e: FormEvent) {
+    e.preventDefault();
+    doPreview();
   }
 
   function handleConfirm() {
@@ -542,6 +557,8 @@ export function UploadPage() {
 
   function handleReset() {
     setStep("form");
+    previewTimeout.reset();
+    confirmTimeout.reset();
     previewMutation.reset();
     uploadMutation.reset();
     clearAccepted();
@@ -610,18 +627,55 @@ export function UploadPage() {
 
         {/* Submit */}
         {step === "form" && (
-          <Button
-            type="submit"
-            disabled={!selectedFile || !!headerError}
-            loading={previewMutation.isPending}
-            loadingText="Parsing..."
-            icon={<Eye className="size-4" />}
-            fullWidth
-          >
-            Preview CSV
-          </Button>
+          <div className="space-y-2">
+            <Button
+              type="submit"
+              disabled={!selectedFile || !!headerError}
+              loading={previewMutation.isPending}
+              loadingText="Previewing\u2026"
+              icon={<Eye className="size-4" />}
+              fullWidth
+            >
+              Preview CSV
+            </Button>
+            {previewTimeout.slowHint && (
+              <p className="text-center text-xs text-muted-foreground">
+                {previewTimeout.slowHint}
+              </p>
+            )}
+          </div>
         )}
       </Card>
+
+      {/* Timeout */}
+      {(previewTimeout.timedOut || confirmTimeout.timedOut) && (
+        <Card className="mt-4">
+          <div className="flex items-start gap-3">
+            <CircleAlert className="mt-0.5 size-5 shrink-0 text-destructive-muted-foreground" />
+            <div>
+              <p className="font-medium text-sm text-foreground">
+                {confirmTimeout.timedOut
+                  ? "Import timed out"
+                  : "Preview timed out"}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                The server took too long to respond. This can happen when the
+                database is waking up after being idle. Try again — it's usually
+                faster the second time.
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="mt-3"
+                onClick={confirmTimeout.timedOut ? handleConfirm : doPreview}
+              >
+                {confirmTimeout.timedOut ? "Retry Import" : "Retry Preview"}
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Error */}
       <div aria-live="polite" aria-atomic="true">
@@ -738,6 +792,7 @@ export function UploadPage() {
             onBack={handleBack}
             onToggleAll={toggleAll}
             isUploading={uploadMutation.isPending}
+            slowHint={confirmTimeout.slowHint}
           />
         </div>
       )}

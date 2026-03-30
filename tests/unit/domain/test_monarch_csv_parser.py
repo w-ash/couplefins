@@ -307,3 +307,40 @@ def test_reserved_tag_not_treated_as_person_name() -> None:
     # "shared" is reserved, so it's treated as shared tag, not spotted
     assert tx.household is True
     assert tx.payer_percentage == 50
+
+
+def test_sxx_alone_without_household_tag_is_personal() -> None:
+    csv = _make_csv({"Tags": "s70"})
+    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+
+    assert len(result) == 1
+    tx = result[0]
+    # sXX without a household-setting tag has no effect
+    assert tx.household is False
+    assert tx.payer_percentage == 100
+
+
+def test_person_name_with_sxx_uses_explicit_split() -> None:
+    csv = _make_csv({"Tags": "bob, s30"})
+    result = parse_monarch_csv(
+        csv, PAYER_ID, UPLOAD_ID, person_names=frozenset({"bob"})
+    )
+
+    assert len(result) == 1
+    tx = result[0]
+    # sXX is authoritative even with person-name tag
+    assert tx.household is True
+    assert tx.payer_percentage == 30
+
+
+def test_shared_plus_person_name_uses_shared_default() -> None:
+    csv = _make_csv({"Tags": "shared, bob"})
+    result = parse_monarch_csv(
+        csv, PAYER_ID, UPLOAD_ID, person_names=frozenset({"bob"})
+    )
+
+    assert len(result) == 1
+    tx = result[0]
+    # shared tag takes priority over person-name for default percentage
+    assert tx.household is True
+    assert tx.payer_percentage == 50

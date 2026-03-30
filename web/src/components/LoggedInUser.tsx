@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { LogOut } from "lucide-react";
+import { Link } from "react-router";
 import { useLogout } from "@/api/generated/auth/auth";
 import { useGetPersons } from "@/api/generated/persons/persons";
 import { useIdentityStore } from "@/lib/identity";
@@ -30,14 +31,19 @@ export function LoggedInUser({
 
   return (
     <div className={`flex items-center gap-2 ${compact ? "" : "px-3 py-1"}`}>
-      <div
-        className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${getPersonColor(currentPersonId ?? "")}`}
+      <Link
+        to="/account"
+        className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg transition-colors hover:bg-muted ${compact ? "-mx-1 px-1 py-1" : "py-0.5"}`}
       >
-        {currentPersonName.charAt(0).toUpperCase()}
-      </div>
-      <span className="flex-1 truncate text-sm font-medium text-foreground">
-        {currentPersonName}
-      </span>
+        <div
+          className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${getPersonColor(currentPersonId ?? "")}`}
+        >
+          {currentPersonName.charAt(0).toUpperCase()}
+        </div>
+        <span className="flex-1 truncate text-sm font-medium text-foreground">
+          {currentPersonName}
+        </span>
+      </Link>
       <button
         type="button"
         onClick={() => logoutMutation.mutate()}

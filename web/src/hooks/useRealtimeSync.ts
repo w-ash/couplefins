@@ -9,6 +9,7 @@ import { getGetSpendingTrendsQueryKey } from "@/api/generated/insights/insights"
 import { getGetReconciliationQueryKey } from "@/api/generated/reconciliation/reconciliation";
 import { getGetSettleUpDataQueryKey } from "@/api/generated/settlements/settlements";
 import { getGetTagsQueryKey } from "@/api/generated/transactions/transactions";
+import { subscribe } from "@/lib/event-source";
 
 const ENTITY_QUERY_KEYS: Record<string, readonly (readonly unknown[])[]> = {
   settlements: [
@@ -41,26 +42,15 @@ export function useRealtimeSync(): void {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const eventSource = new EventSource("/api/v1/events");
-
-    eventSource.onmessage = (event: MessageEvent) => {
-      try {
-        const { entity } = JSON.parse(event.data as string) as {
-          entity: string;
-        };
-        const queryKeys = ENTITY_QUERY_KEYS[entity];
-        if (queryKeys) {
-          for (const queryKey of queryKeys) {
-            queryClient.invalidateQueries({ queryKey });
-          }
+    return subscribe((data) => {
+      const entity = data.entity as string | undefined;
+      if (!entity) return;
+      const queryKeys = ENTITY_QUERY_KEYS[entity];
+      if (queryKeys) {
+        for (const queryKey of queryKeys) {
+          queryClient.invalidateQueries({ queryKey });
         }
-      } catch {
-        // Ignore malformed events
       }
-    };
-
-    return () => {
-      eventSource.close();
-    };
+    });
   }, [queryClient]);
 }

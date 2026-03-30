@@ -112,12 +112,9 @@ describe("UploadPage", () => {
     );
   });
 
-  it("renders the upload form without month/year", () => {
+  it("renders the upload form", () => {
     renderWithProviders(<UploadPage />);
     expect(screen.getByText("Upload Transactions")).toBeInTheDocument();
-    expect(screen.getByText("Who are you?")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Month")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Year")).not.toBeInTheDocument();
     expect(
       screen.getByText("Drop your CSV here, or click to browse"),
     ).toBeInTheDocument();
@@ -126,8 +123,7 @@ describe("UploadPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("disables preview button when no person selected", () => {
-    useIdentityStore.setState({ currentPersonId: null });
+  it("disables preview button when no file selected", () => {
     renderWithProviders(<UploadPage />);
     const button = screen.getByRole("button", { name: "Preview CSV" });
     expect(button).toBeDisabled();
@@ -141,11 +137,6 @@ describe("UploadPage", () => {
     );
 
     renderWithProviders(<UploadPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Who are you?")).toBeInTheDocument();
-    });
-
     setFileAndSubmit();
 
     await waitFor(() => {
@@ -165,11 +156,6 @@ describe("UploadPage", () => {
     );
 
     renderWithProviders(<UploadPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Who are you?")).toBeInTheDocument();
-    });
-
     setFileAndSubmit();
 
     await waitFor(() => {
@@ -191,11 +177,6 @@ describe("UploadPage", () => {
     );
 
     renderWithProviders(<UploadPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Who are you?")).toBeInTheDocument();
-    });
-
     setFileAndSubmit();
 
     await waitFor(() => {
@@ -204,11 +185,9 @@ describe("UploadPage", () => {
 
     expect(screen.getByText("Accept All")).toBeInTheDocument();
     expect(screen.getByText("Reject All")).toBeInTheDocument();
-    // The changed field diff values should be shown
     expect(screen.getByText("Old Store")).toBeInTheDocument();
     // "Updated Store" appears in both the merchant label and the diff new value
     expect(screen.getAllByText("Updated Store")).toHaveLength(2);
-    // Checkbox should be checked by default
     const checkbox = screen.getByRole("checkbox");
     expect(checkbox).toBeChecked();
   });
@@ -263,11 +242,6 @@ describe("UploadPage", () => {
     );
 
     renderWithProviders(<UploadPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Who are you?")).toBeInTheDocument();
-    });
-
     setFileAndSubmit();
 
     await waitFor(() => {
@@ -278,10 +252,6 @@ describe("UploadPage", () => {
 
   it("disables Preview button when CSV headers are invalid", async () => {
     renderWithProviders(<UploadPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Who are you?")).toBeInTheDocument();
-    });
 
     const fileInput = document.querySelector(
       'input[type="file"]',
@@ -303,10 +273,6 @@ describe("UploadPage", () => {
 
   it("clears header error when valid file is selected", async () => {
     renderWithProviders(<UploadPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Who are you?")).toBeInTheDocument();
-    });
 
     const fileInput = document.querySelector(
       'input[type="file"]',
@@ -373,11 +339,8 @@ describe("UploadPage", () => {
     );
 
     renderWithProviders(<UploadPage />);
-    await waitFor(() => {
-      expect(screen.getByText("Who are you?")).toBeInTheDocument();
-    });
-
     setFileAndSubmit();
+
     await waitFor(() => {
       expect(
         screen.getByRole("button", { name: "Confirm Import" }),
@@ -389,9 +352,7 @@ describe("UploadPage", () => {
       expect(screen.getByText("Upload Complete")).toBeInTheDocument();
     });
 
-    // Animated check SVG should be present
     expect(document.querySelector(".animated-check")).toBeInTheDocument();
-    // Stats should show
     expect(screen.getByText("2")).toBeInTheDocument();
     expect(screen.getByText("New")).toBeInTheDocument();
   });
@@ -417,11 +378,8 @@ describe("UploadPage", () => {
     );
 
     renderWithProviders(<UploadPage />);
-    await waitFor(() => {
-      expect(screen.getByText("Who are you?")).toBeInTheDocument();
-    });
-
     setFileAndSubmit();
+
     await waitFor(() => {
       expect(
         screen.getByRole("button", { name: "Confirm Import" }),
@@ -458,11 +416,8 @@ describe("UploadPage", () => {
     );
 
     renderWithProviders(<UploadPage />);
-    await waitFor(() => {
-      expect(screen.getByText("Who are you?")).toBeInTheDocument();
-    });
-
     setFileAndSubmit();
+
     await waitFor(() => {
       expect(
         screen.getByRole("button", { name: "Confirm Import" }),
@@ -474,14 +429,12 @@ describe("UploadPage", () => {
       expect(screen.getByText("Upload Complete")).toBeInTheDocument();
     });
 
-    // With empty upload history, partner hasn't uploaded
     expect(
       screen.getByRole("button", { name: /Upload Bob's CSV/ }),
     ).toBeInTheDocument();
   });
 
   it("hides partner prompt when partner has uploaded for same month", async () => {
-    // Upload history shows Bob uploaded for January 2026
     server.use(
       http.get("/api/v1/uploads/history", () =>
         HttpResponse.json({
@@ -519,11 +472,8 @@ describe("UploadPage", () => {
     );
 
     renderWithProviders(<UploadPage />);
-    await waitFor(() => {
-      expect(screen.getByText("Who are you?")).toBeInTheDocument();
-    });
-
     setFileAndSubmit();
+
     await waitFor(() => {
       expect(
         screen.getByRole("button", { name: "Confirm Import" }),
@@ -535,7 +485,6 @@ describe("UploadPage", () => {
       expect(screen.getByText("Upload Complete")).toBeInTheDocument();
     });
 
-    // Partner has uploaded for the same month — no prompt
     expect(
       screen.queryByRole("button", { name: /Upload Bob's CSV/ }),
     ).not.toBeInTheDocument();
@@ -557,11 +506,6 @@ describe("UploadPage", () => {
     );
 
     renderWithProviders(<UploadPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Who are you?")).toBeInTheDocument();
-    });
-
     setFileAndSubmit();
 
     await waitFor(() => {
@@ -570,7 +514,6 @@ describe("UploadPage", () => {
       expect(alert).toHaveTextContent("Row 5 (Amazon)");
     });
 
-    // Should render as list items
     const listItems = screen.getByRole("alert").querySelectorAll("li");
     expect(listItems).toHaveLength(2);
   });

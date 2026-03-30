@@ -99,9 +99,16 @@ function PersonAccountRow({ person }: { person: Person }) {
   );
 }
 
-export function PersonAccountSettings() {
+export function PersonAccountSettings({
+  filterToPersonId,
+}: {
+  filterToPersonId?: string;
+}) {
   const { data: response, isLoading, isError } = useGetPersons();
-  const persons = response?.data ?? [];
+  const allPersons = response?.data ?? [];
+  const persons = filterToPersonId
+    ? allPersons.filter((p) => p.id === filterToPersonId)
+    : allPersons;
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Loading profiles...</p>;

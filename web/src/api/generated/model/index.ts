@@ -45,6 +45,7 @@ export * from './groupBudgetStatusResponse';
 export * from './groupComparisonItem';
 export * from './groupSummaryItem';
 export * from './healthCheck200';
+export * from './healthResponse';
 export * from './hTTPValidationError';
 export * from './loginRequest';
 export * from './mappingEntryRequest';

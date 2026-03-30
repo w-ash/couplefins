@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import pytest
 
@@ -14,7 +15,8 @@ def test_subscribe_and_broadcast(bus: EventBus) -> None:
     queue = bus.subscribe()
     bus.broadcast("settlements")
 
-    assert queue.get_nowait() == "settlements"
+    msg = json.loads(queue.get_nowait())
+    assert msg == {"entity": "settlements"}
 
 
 def test_broadcast_delivers_to_all_subscribers(bus: EventBus) -> None:
@@ -23,7 +25,8 @@ def test_broadcast_delivers_to_all_subscribers(bus: EventBus) -> None:
     bus.broadcast("transactions")
 
     for q in (q1, q2):
-        assert q.get_nowait() == "transactions"
+        msg = json.loads(q.get_nowait())
+        assert msg == {"entity": "transactions"}
 
 
 def test_unsubscribe_stops_delivery(bus: EventBus) -> None:
@@ -48,16 +51,16 @@ def test_broadcast_drops_message_on_full_queue(bus: EventBus) -> None:
     assert queue.qsize() == 1  # only the filler, broadcast was dropped
 
 
-async def test_stream_yields_entity_names(bus: EventBus) -> None:
+async def test_stream_yields_messages(bus: EventBus) -> None:
     queue = bus.subscribe()
     bus.broadcast("reconciliation")
 
-    entities: list[str] = []
-    async for entity in bus.stream(queue):
-        entities.append(entity)
+    messages: list[str] = []
+    async for message in bus.stream(queue):
+        messages.append(message)
         break  # only read one
 
-    assert entities == ["reconciliation"]
+    assert json.loads(messages[0]) == {"entity": "reconciliation"}
 
 
 def test_no_subscribers_broadcast_is_noop(bus: EventBus) -> None:

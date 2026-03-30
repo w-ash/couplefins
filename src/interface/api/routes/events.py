@@ -13,7 +13,7 @@ router = APIRouter(tags=["events"], dependencies=[Depends(get_current_user)])
 async def sse_events() -> AsyncIterable[ServerSentEvent]:
     queue = event_bus.subscribe()
     try:
-        async for entity in event_bus.stream(queue):
-            yield ServerSentEvent(data={"entity": entity})
+        async for message in event_bus.stream(queue):
+            yield ServerSentEvent(data=message)
     finally:
         event_bus.unsubscribe(queue)
