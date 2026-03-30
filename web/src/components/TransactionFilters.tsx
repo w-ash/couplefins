@@ -2,9 +2,7 @@ import { ChevronDown, Search, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CategoryGroupBreakdownResponse } from "@/api/generated/model";
 import { ResponsivePopover } from "@/components/ResponsivePopover";
-import { TYPE_LABELS } from "@/lib/transaction-classification";
 import type { TransactionFilters as TransactionFiltersType } from "@/lib/transaction-filters";
-import { getPersonAccentColor } from "@/types/person";
 
 function FilterButton({ label, count }: { label: string; count: number }) {
   return (
@@ -38,7 +36,6 @@ export function PayerFilter({
       const next = new Set(activeSet);
       if (next.has(id)) next.delete(id);
       else next.add(id);
-      // If all are selected, clear (= no filter)
       if (next.size === persons.length) onChange([]);
       else onChange([...next]);
     },
@@ -46,24 +43,29 @@ export function PayerFilter({
   );
 
   return (
-    <div className="flex items-center gap-1.5">
-      {persons.map((p, i) => {
-        const active = activeSet.size === 0 || activeSet.has(p.id);
-        const color = getPersonAccentColor(i);
-        return (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => toggle(p.id)}
-            className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-              active ? color : "bg-muted/50 text-muted-foreground/50"
-            }`}
-          >
-            {p.name}
-          </button>
-        );
-      })}
-    </div>
+    <ResponsivePopover
+      trigger={<FilterButton label="Paid by" count={activePayers.length} />}
+      title="Filter by payer"
+    >
+      {() => (
+        <div className="p-1">
+          {persons.map((p) => (
+            <label
+              key={p.id}
+              className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-popover-foreground hover:bg-accent"
+            >
+              <input
+                type="checkbox"
+                checked={activeSet.has(p.id)}
+                onChange={() => toggle(p.id)}
+                className="accent-primary"
+              />
+              {p.name}
+            </label>
+          ))}
+        </div>
+      )}
+    </ResponsivePopover>
   );
 }
 
@@ -343,11 +345,11 @@ export function ActiveFilterPills({
 }) {
   const pills: ActiveFilter[] = [];
 
-  if (filters.type !== "all") {
+  if (filters.scope !== "all") {
     pills.push({
-      key: "type",
-      label: `Type: ${filters.type === "excluded" ? "Excluded" : TYPE_LABELS[filters.type]}`,
-      onRemove: () => filters.setType("all"),
+      key: "scope",
+      label: filters.scope === "household" ? "Household" : "Personal",
+      onRemove: () => filters.setScope("all"),
     });
   }
 

@@ -274,7 +274,8 @@ def test_person_name_tag_spotted() -> None:
 
     assert len(result) == 1
     tx = result[0]
-    assert tx.household is True
+    # Person-name alone = spotted (payer fronted 100%) but NOT household
+    assert tx.household is False
     assert tx.payer_percentage == 0
 
 
@@ -320,7 +321,7 @@ def test_sxx_alone_without_household_tag_is_personal() -> None:
     assert tx.payer_percentage == 100
 
 
-def test_person_name_with_sxx_uses_explicit_split() -> None:
+def test_person_name_with_sxx_without_household_tag() -> None:
     csv = _make_csv({"Tags": "bob, s30"})
     result = parse_monarch_csv(
         csv, PAYER_ID, UPLOAD_ID, person_names=frozenset({"bob"})
@@ -328,12 +329,25 @@ def test_person_name_with_sxx_uses_explicit_split() -> None:
 
     assert len(result) == 1
     tx = result[0]
-    # sXX is authoritative even with person-name tag
+    # Person-name + sXX without shared/household tag = personal, spotted
+    assert tx.household is False
+    assert tx.payer_percentage == 0
+
+
+def test_household_plus_person_name_is_household_spotted() -> None:
+    csv = _make_csv({"Tags": "household, bob"})
+    result = parse_monarch_csv(
+        csv, PAYER_ID, UPLOAD_ID, person_names=frozenset({"bob"})
+    )
+
+    assert len(result) == 1
+    tx = result[0]
+    # household sets budget relevance, person-name makes it spotted (0%)
     assert tx.household is True
-    assert tx.payer_percentage == 30
+    assert tx.payer_percentage == 0
 
 
-def test_shared_plus_person_name_uses_shared_default() -> None:
+def test_shared_plus_person_name_is_household_spotted() -> None:
     csv = _make_csv({"Tags": "shared, bob"})
     result = parse_monarch_csv(
         csv, PAYER_ID, UPLOAD_ID, person_names=frozenset({"bob"})
@@ -341,6 +355,6 @@ def test_shared_plus_person_name_uses_shared_default() -> None:
 
     assert len(result) == 1
     tx = result[0]
-    # shared tag takes priority over person-name for default percentage
+    # shared sets household, person-name makes it spotted (0%)
     assert tx.household is True
-    assert tx.payer_percentage == 50
+    assert tx.payer_percentage == 0

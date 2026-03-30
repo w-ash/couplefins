@@ -14,7 +14,6 @@ import type {
   BulkModifyTagsRequest,
   BulkUpdateRequest,
   CategoryGroupBreakdownResponse,
-  ReconciliationResponse,
   TransactionResponse,
   UpdateTransactionRequest,
 } from "@/api/generated/model";
@@ -61,7 +60,6 @@ import {
 import { TransactionSearch } from "@/components/TransactionSearch";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { UploadStatusRow } from "@/components/UploadStatusRow";
-import { useEnumParam } from "@/hooks/useEnumParam";
 import { useSetToggle } from "@/hooks/useSetToggle";
 import { useTemporary } from "@/hooks/useTemporary";
 import { useGroupIconMap } from "@/lib/categories";
@@ -78,44 +76,37 @@ import {
 
 import { PAGE_PADDING } from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
-import {
-  ClassificationBadge,
-  deriveTransactionType,
-  TYPE_OPTIONS,
-} from "@/lib/transaction-classification";
 import type { SortField, SortState } from "@/lib/transaction-filters";
 import {
   cycleSortState,
-  TRANSACTION_SCOPES,
   type TransactionScope,
-  type TypeFilter,
   useTransactionFilters,
 } from "@/lib/transaction-filters";
 
 const checkboxTouchTarget =
   "flex min-h-11 min-w-8 items-center justify-center sm:min-h-0 sm:min-w-0";
 
+type ScopedStats = ReturnType<typeof computeStats>;
+
 function SummaryStats({
-  data,
+  label,
+  stats,
   getPersonName,
 }: {
-  data: ReconciliationResponse;
+  label: string;
+  stats: ScopedStats;
   getPersonName: (id: string) => string;
 }) {
-  const excludedCount = data.transactions.filter((tx) => tx.is_excluded).length;
   return (
     <StatsGrid
       stats={[
-        {
-          label: "Total shared",
-          value: formatCurrency(data.net_shared_spending),
-        },
-        ...data.person_summaries.map((ps) => ({
-          label: `${getPersonName(ps.person_id)} paid`,
-          value: formatCurrency(ps.total_paid),
+        { label, value: formatCurrency(stats.netSpending) },
+        ...[...stats.personPaid].map(([personId, total]) => ({
+          label: `${getPersonName(personId)} paid`,
+          value: formatCurrency(total),
         })),
-        ...(excludedCount > 0
-          ? [{ label: "Excluded", value: String(excludedCount) }]
+        ...(stats.excludedCount > 0
+          ? [{ label: "Excluded", value: String(stats.excludedCount) }]
           : []),
       ]}
     />
@@ -197,7 +188,7 @@ function CategoryGroupBreakdownTable({
         )}
       </h2>
       <p className="mb-4 text-xs text-muted-foreground">
-        See where your shared spending goes
+        See where your spending goes
       </p>
       <table className="w-full text-sm">
         <thead>
@@ -225,16 +216,77 @@ function CategoryGroupBreakdownTable({
   );
 }
 
-function buildCategoryGroupLookup(
-  breakdowns: CategoryGroupBreakdownResponse[],
-): Map<string, string> {
-  const lookup = new Map<string, string>();
-  for (const group of breakdowns) {
-    for (const cat of group.categories) {
-      lookup.set(cat.category, group.group_name);
+function computeStats(transactions: TransactionResponse[]) {
+  let netSpending = 0;
+  let hasRefunds = false;
+  let excludedCount = 0;
+  const personPaid = new Map<string, number>();
+
+  for (const tx of transactions) {
+    if (tx.is_excluded) {
+      excludedCount++;
+      continue;
+    }
+    netSpending += tx.amount;
+    if (tx.amount > 0) hasRefunds = true;
+    personPaid.set(
+      tx.payer_person_id,
+      (personPaid.get(tx.payer_person_id) ?? 0) + tx.amount,
+    );
+  }
+
+  return { netSpending, hasRefunds, excludedCount, personPaid };
+}
+
+function computeBreakdowns(
+  transactions: TransactionResponse[],
+  catToGroup: Map<string, { id: string; name: string }>,
+): CategoryGroupBreakdownResponse[] {
+  const acc = new Map<
+    string,
+    {
+      id: string | null;
+      cats: Map<string, { total: number; count: number }>;
+    }
+  >();
+
+  for (const tx of transactions) {
+    if (tx.is_excluded) continue;
+    const group = catToGroup.get(tx.category);
+    const groupName = group?.name ?? "Uncategorized";
+
+    let g = acc.get(groupName);
+    if (!g) {
+      g = { id: group?.id ?? null, cats: new Map() };
+      acc.set(groupName, g);
+    }
+    const cat = g.cats.get(tx.category);
+    if (cat) {
+      cat.total += tx.amount;
+      cat.count++;
+    } else {
+      g.cats.set(tx.category, { total: tx.amount, count: 1 });
     }
   }
-  return lookup;
+
+  return [...acc.entries()]
+    .map(([name, { id, cats }]) => ({
+      group_id: id,
+      group_name: name,
+      total_amount: [...cats.values()].reduce((sum, c) => sum + c.total, 0),
+      transaction_count: [...cats.values()].reduce(
+        (sum, c) => sum + c.count,
+        0,
+      ),
+      categories: [...cats.entries()].map(([cat, { total, count }]) => ({
+        category: cat,
+        group_id: id,
+        group_name: name,
+        total_amount: total,
+        transaction_count: count,
+      })),
+    }))
+    .sort((a, b) => a.total_amount - b.total_amount);
 }
 
 function SortIndicator({ field, sort }: { field: SortField; sort: SortState }) {
@@ -468,9 +520,6 @@ function TransactionTable({
               <th className="hidden pb-2 pr-4 font-medium sm:table-cell">
                 Paid by
               </th>
-              <th className="hidden pb-2 pr-4 font-medium sm:table-cell">
-                Type
-              </th>
               <SortableHeader
                 field="amount"
                 sort={sort}
@@ -585,7 +634,6 @@ function TransactionRow({
     [...personNames].find(([id]) => id !== tx.payer_person_id)?.[1] ?? "Other";
   const categoryGroup = categoryGroups.get(tx.category) ?? "Uncategorized";
   const strikethrough = tx.is_excluded ? "line-through" : "";
-  const txType = deriveTransactionType(tx.household, tx.payer_percentage);
   return (
     <>
       <tr
@@ -614,9 +662,6 @@ function TransactionRow({
           <span className="flex items-center gap-1.5">
             {tx.merchant}
             {isSaved && <Check className="size-3.5 text-positive" />}
-            <span className="sm:hidden">
-              <ClassificationBadge type={txType} otherPersonName={otherName} />
-            </span>
           </span>
         </td>
         <td
@@ -629,9 +674,6 @@ function TransactionRow({
         </td>
         <td className="hidden py-2 pr-4 sm:table-cell">
           <PersonBadge name={payerName} accentColor={payerColor} size="xs" />
-        </td>
-        <td className="hidden py-2 pr-4 sm:table-cell">
-          <ClassificationBadge type={txType} otherPersonName={otherName} />
         </td>
         <td
           className={`py-2 pr-4 text-right tabular-nums ${amountColorClass(tx.amount)}`}
@@ -678,12 +720,6 @@ export function TransactionsPage() {
   const { startDate, endDate, setDateRange, singleMonth } = useDateRange();
   const queryClient = useQueryClient();
 
-  const [scope, setScope] = useEnumParam(
-    "scope",
-    TRANSACTION_SCOPES,
-    "household",
-  );
-
   const { data: personsResponse } = useGetPersons();
   const persons = personsResponse?.data;
 
@@ -693,13 +729,10 @@ export function TransactionsPage() {
   const { data: tagsResponse } = useGetTags();
   const availableTags = tagsResponse?.data ?? [];
 
+  // Scope filtering is client-side for instant switching
   const reconciliationParams = useMemo(
-    () => ({
-      start_date: startDate,
-      end_date: endDate,
-      scope,
-    }),
-    [startDate, endDate, scope],
+    () => ({ start_date: startDate, end_date: endDate, scope: "all" as const }),
+    [startDate, endDate],
   );
   const {
     data: reconciliationResponse,
@@ -735,14 +768,29 @@ export function TransactionsPage() {
   });
 
   const { personNames, getPersonName, getPersonColor } = usePersonMaps(persons);
-  const categoryGroupLookup = useMemo(
-    () =>
-      data
-        ? buildCategoryGroupLookup(data.category_group_breakdowns)
-        : new Map<string, string>(),
-    [data],
-  );
+
+  const catToGroupInfo = useMemo(() => {
+    const lookup = new Map<string, { id: string; name: string }>();
+    for (const g of categoryGroups ?? []) {
+      for (const cat of g.categories) {
+        lookup.set(cat.name, { id: g.id, name: g.name });
+      }
+    }
+    return lookup;
+  }, [categoryGroups]);
+  const categoryGroupLookup = useMemo(() => {
+    const lookup = new Map<string, string>();
+    for (const [cat, info] of catToGroupInfo) lookup.set(cat, info.name);
+    return lookup;
+  }, [catToGroupInfo]);
   const groupIconMap = useGroupIconMap();
+
+  const allTransactions = data?.transactions ?? [];
+  const stats = useMemo(() => computeStats(allTransactions), [allTransactions]);
+  const breakdowns = useMemo(
+    () => computeBreakdowns(allTransactions, catToGroupInfo),
+    [allTransactions, catToGroupInfo],
+  );
 
   const categoryOptions: ComboboxOption[] = useMemo(
     () =>
@@ -766,10 +814,7 @@ export function TransactionsPage() {
     [personNames],
   );
 
-  const filters = useTransactionFilters(
-    data?.transactions ?? [],
-    categoryGroupLookup,
-  );
+  const filters = useTransactionFilters(allTransactions, categoryGroupLookup);
 
   const periodLabel = formatRangeLabel(startDate, endDate);
   const isFinalized = data?.is_finalized === true;
@@ -798,10 +843,10 @@ export function TransactionsPage() {
             getPersonColor={getPersonColor}
           />
 
-          {data.transaction_count === 0 ? (
+          {data.transactions.length === 0 ? (
             <PageEmpty
               icon={<Upload />}
-              heading={`No shared transactions for ${periodLabel}`}
+              heading={`No transactions for ${periodLabel}`}
               description="Upload a CSV to see transactions."
               action={
                 <EmptyStateActions
@@ -816,10 +861,14 @@ export function TransactionsPage() {
             />
           ) : (
             <>
-              <SummaryStats data={data} getPersonName={getPersonName} />
+              <SummaryStats
+                label="Total spending"
+                stats={stats}
+                getPersonName={getPersonName}
+              />
               <CategoryGroupBreakdownTable
-                breakdowns={data.category_group_breakdowns}
-                hasRefunds={data.total_shared_refunds > 0}
+                breakdowns={breakdowns}
+                hasRefunds={stats.hasRefunds}
                 groupIconMap={groupIconMap}
               />
               {singleMonth && (
@@ -837,41 +886,24 @@ export function TransactionsPage() {
                 totalCount={filters.totalCount}
               />
 
-              <div className="w-full overflow-x-auto sm:w-auto sm:overflow-visible">
+              <div className="flex flex-wrap items-center gap-2">
                 <SegmentedControl<TransactionScope>
                   options={[
+                    { value: "all", label: "All" },
                     { value: "household", label: "Household" },
                     { value: "personal", label: "Personal" },
-                    { value: "all", label: "All" },
                   ]}
-                  value={scope}
-                  onChange={setScope}
-                  size="sm"
+                  value={filters.scope}
+                  onChange={filters.setScope}
                   shape="pill"
                 />
-              </div>
-
-              <div className="w-full overflow-x-auto sm:w-auto sm:overflow-visible">
-                <SegmentedControl<TypeFilter>
-                  options={[
-                    { value: "all" as const, label: "All" },
-                    ...TYPE_OPTIONS,
-                    { value: "excluded" as const, label: "Excluded" },
-                  ]}
-                  value={filters.type}
-                  onChange={filters.setType}
-                  size="sm"
-                  shape="pill"
-                />
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
                 <PayerFilter
                   persons={personEntries}
                   activePayers={filters.payers}
                   onChange={filters.setPayers}
                 />
                 <CategoryFilter
-                  breakdowns={data.category_group_breakdowns}
+                  breakdowns={breakdowns}
                   activeCategories={filters.categories}
                   onChange={filters.setCategories}
                 />
@@ -888,6 +920,12 @@ export function TransactionsPage() {
               </div>
 
               <ActiveFilterPills filters={filters} personNames={personNames} />
+
+              {filters.filtered.length === 0 && filters.totalCount > 0 && (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  No transactions match the current filters.
+                </p>
+              )}
 
               <TransactionTable
                 transactions={filters.filtered}

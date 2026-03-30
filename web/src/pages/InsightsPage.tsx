@@ -318,7 +318,7 @@ export function InsightsPage() {
         <PageEmpty
           icon={<TrendingUp />}
           heading="No spending data"
-          description={`No shared expenses found for ${year}. Upload a CSV to get started.`}
+          description={`No household expenses found for ${year}. Upload a CSV to get started.`}
         />
       )}
 

@@ -67,6 +67,8 @@ const reconciliationResponse = {
       tags: ["shared"],
       payer_person_id: "p1",
       payer_percentage: 50,
+      household: true,
+      is_excluded: false,
       original_date: null,
       original_amount: null,
     },
@@ -81,6 +83,8 @@ const reconciliationResponse = {
       tags: ["shared"],
       payer_person_id: "p2",
       payer_percentage: 50,
+      household: true,
+      is_excluded: false,
       original_date: null,
       original_amount: null,
     },
@@ -163,7 +167,7 @@ describe("TransactionsPage", () => {
     renderWithProviders(<TransactionsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Total shared")).toBeInTheDocument();
+      expect(screen.getByText("Total spending")).toBeInTheDocument();
     });
   });
 
@@ -187,7 +191,7 @@ describe("TransactionsPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("heading", { name: /No shared transactions for/ }),
+        screen.getByRole("heading", { name: /No transactions for/ }),
       ).toBeInTheDocument();
     });
   });

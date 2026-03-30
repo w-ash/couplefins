@@ -208,7 +208,7 @@ export function DashboardPage() {
         <PageEmpty
           icon={<Upload />}
           heading={`No data for ${monthLabel}`}
-          description="Upload a CSV to see your shared spending."
+          description="Upload a CSV to see your household spending."
           action={
             <Link
               to="/upload"

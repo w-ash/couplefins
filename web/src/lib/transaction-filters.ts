@@ -1,19 +1,10 @@
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router";
 import type { TransactionResponse } from "@/api/generated/model";
-import {
-  deriveTransactionType,
-  type TransactionType,
-  TYPE_LABELS,
-} from "@/lib/transaction-classification";
 
 export type TransactionScope = "household" | "personal" | "all";
 
-export const TRANSACTION_SCOPES = new Set<TransactionScope>([
-  "household",
-  "personal",
-  "all",
-]);
+const VALID_SCOPES = new Set<string>(["household", "personal", "all"]);
 
 export type SortField = "date" | "merchant" | "amount" | "group";
 export type SortDir = "asc" | "desc";
@@ -36,17 +27,9 @@ export function cycleSortState(
   return DEFAULT_SORT;
 }
 
-export type TypeFilter = TransactionType | "all" | "excluded";
-
-const VALID_TYPES = new Set<string>([
-  "all",
-  ...Object.keys(TYPE_LABELS),
-  "excluded",
-]);
-
 interface FilterState {
+  scope: TransactionScope;
   query: string;
-  type: TypeFilter;
   payers: string[];
   categories: string[];
   tags: string[];
@@ -74,8 +57,8 @@ function serializeSort(s: SortState): string | null {
   return `${s.field}:${s.dir}`;
 }
 
-function parseType(raw: string | null): TypeFilter {
-  if (raw && VALID_TYPES.has(raw)) return raw as TypeFilter;
+function parseScope(raw: string | null): TransactionScope {
+  if (raw && VALID_SCOPES.has(raw)) return raw as TransactionScope;
   return "all";
 }
 
@@ -90,8 +73,8 @@ export function useTransactionFilters(
     const cParam = searchParams.getAll("cat");
     const tParam = searchParams.getAll("tag");
     return {
+      scope: parseScope(searchParams.get("scope")),
       query: searchParams.get("q") ?? "",
-      type: parseType(searchParams.get("type")),
       payers: pParam,
       categories: cParam,
       tags: tParam,
@@ -110,14 +93,14 @@ export function useTransactionFilters(
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
+          if ("scope" in updates) {
+            if (updates.scope && updates.scope !== "all")
+              next.set("scope", updates.scope);
+            else next.delete("scope");
+          }
           if ("query" in updates) {
             if (updates.query) next.set("q", updates.query);
             else next.delete("q");
-          }
-          if ("type" in updates) {
-            if (updates.type && updates.type !== "all")
-              next.set("type", updates.type);
-            else next.delete("type");
           }
           if ("payers" in updates) {
             next.delete("payer");
@@ -154,13 +137,13 @@ export function useTransactionFilters(
     [setSearchParams],
   );
 
-  const setQuery = useCallback(
-    (q: string) => setFilter({ query: q }),
+  const setScope = useCallback(
+    (s: TransactionScope) => setFilter({ scope: s }),
     [setFilter],
   );
 
-  const setType = useCallback(
-    (t: TypeFilter) => setFilter({ type: t }),
+  const setQuery = useCallback(
+    (q: string) => setFilter({ query: q }),
     [setFilter],
   );
 
@@ -192,8 +175,8 @@ export function useTransactionFilters(
 
   const clearAll = useCallback(() => {
     setFilter({
+      scope: "all",
       query: "",
-      type: "all",
       payers: [],
       categories: [],
       tags: [],
@@ -214,16 +197,11 @@ export function useTransactionFilters(
   const filtered = useMemo(() => {
     let result = transactions;
 
-    // Type filter
-    if (state.type === "excluded") {
-      result = result.filter((tx) => tx.is_excluded);
-    } else if (state.type !== "all") {
-      result = result.filter(
-        (tx) =>
-          !tx.is_excluded &&
-          deriveTransactionType(tx.household, tx.payer_percentage) ===
-            state.type,
-      );
+    // Scope filter (household / personal)
+    if (state.scope === "household") {
+      result = result.filter((tx) => tx.household);
+    } else if (state.scope === "personal") {
+      result = result.filter((tx) => !tx.household);
     }
 
     // Search
@@ -269,8 +247,8 @@ export function useTransactionFilters(
   }, [transactions, state, categoryGroups]);
 
   const activeFilterCount =
+    (state.scope !== "all" ? 1 : 0) +
     (state.query ? 1 : 0) +
-    (state.type !== "all" ? 1 : 0) +
     (state.payers.length > 0 ? 1 : 0) +
     (state.categories.length > 0 ? 1 : 0) +
     (state.tags.length > 0 ? 1 : 0) +
@@ -279,16 +257,16 @@ export function useTransactionFilters(
   return {
     filtered,
     totalCount: transactions.length,
+    scope: state.scope,
     query: state.query,
-    type: state.type,
     payers: state.payers,
     categories: state.categories,
     tags: state.tags,
     minAmount: state.minAmount,
     maxAmount: state.maxAmount,
     sort: state.sort,
+    setScope,
     setQuery,
-    setType,
     setPayers,
     setCategories,
     setTags,

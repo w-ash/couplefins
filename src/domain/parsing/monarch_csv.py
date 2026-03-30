@@ -124,43 +124,33 @@ def _is_settlement(tags: tuple[str, ...]) -> bool:
 def _classify(tags: tuple[str, ...], person_names: frozenset[str]) -> tuple[bool, int]:
     """Classify a transaction from its tags into (household, payer_percentage).
 
-    A household-setting tag (shared/split, household, or person-name) must be present
-    for the transaction to be classified as household. When present, sXX is authoritative
-    for payer_percentage (highest wins if multiple). Without a household tag, sXX alone
-    has no effect.
+    household is set by shared/split or household tags — budget relevance.
+    Person-name tags set payer_percentage=0 (spotted) but do NOT imply household.
+    sXX is authoritative for payer_percentage when a household tag is present.
     """
     lower_tags = [tag.lower() for tag in tags]
 
-    # 1. Extract sXX — authoritative split percentage (highest wins)
     explicit_split = _extract_max_split_percentage(lower_tags)
-
-    # 2. Check for shared/split tag
     has_shared = any(t in SharedTags.TAGS for t in lower_tags)
-
-    # 3. Check for household tag
     has_household = any(t in HouseholdTags.TAGS for t in lower_tags)
-
-    # 4. Check for person-name tag (spotted)
     has_person_name = _has_person_name_tag(lower_tags, person_names)
 
-    # Determine household flag
-    household = has_shared or has_household or has_person_name
+    household = has_shared or has_household
 
-    if not household:
-        return False, 100
-
-    # Determine payer_percentage — sXX is authoritative
-    if explicit_split is not None:
+    if explicit_split is not None and household:
         return True, explicit_split
+
+    if household and has_person_name:
+        return True, 0
 
     if has_shared:
         return True, SplitDefaults.DEFAULT_PAYER_PERCENTAGE
 
-    if has_person_name:
-        return True, 0
+    if has_household:
+        return True, 100
 
-    # household tag only — no split implied
-    return True, 100
+    # Person-name tag alone = spotted but not household
+    return (False, 0) if has_person_name else (False, 100)
 
 
 def _extract_max_split_percentage(lower_tags: list[str]) -> int | None:
