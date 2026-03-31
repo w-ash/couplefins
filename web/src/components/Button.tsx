@@ -5,13 +5,13 @@ type Variant = "primary" | "secondary" | "destructive";
 type Size = "default" | "sm";
 
 const base =
-  "inline-flex items-center justify-center gap-2 rounded-lg font-medium shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 rounded-lg font-medium shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:enabled:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50";
 
 const variants: Record<Variant, string> = {
-  primary: "bg-primary text-primary-foreground hover:bg-primary/90",
+  primary: "bg-primary text-primary-foreground hover:bg-primary/80",
   secondary:
     "border border-input bg-card text-secondary-foreground hover:bg-muted",
-  destructive: "bg-destructive text-primary-foreground hover:bg-destructive/90",
+  destructive: "bg-destructive text-primary-foreground hover:bg-destructive/80",
 };
 
 const sizes: Record<Size, string> = {

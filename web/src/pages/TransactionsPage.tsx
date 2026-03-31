@@ -13,7 +13,6 @@ import { getGetDashboardQueryKey } from "@/api/generated/dashboard/dashboard";
 import type {
   BulkModifyTagsRequest,
   BulkUpdateRequest,
-  CategoryGroupBreakdownResponse,
   TransactionResponse,
   UpdateTransactionRequest,
 } from "@/api/generated/model";
@@ -29,7 +28,6 @@ import {
   useGetTags,
   useUpdateTransaction,
 } from "@/api/generated/transactions/transactions";
-import { AdjustmentExportSection } from "@/components/AdjustmentExportSection";
 import {
   type BulkChanges,
   BulkEditToolbar,
@@ -38,7 +36,6 @@ import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import type { ComboboxOption } from "@/components/Combobox";
 import { DateRangePicker } from "@/components/DateRangePicker";
-import { ExpandChevron } from "@/components/ExpandChevron";
 import { PageHeader } from "@/components/PageHeader";
 import {
   EmptyStateActions,
@@ -59,11 +56,8 @@ import {
 } from "@/components/TransactionFilters";
 import { TransactionSearch } from "@/components/TransactionSearch";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
-import { UploadStatusRow } from "@/components/UploadStatusRow";
 import { useSetToggle } from "@/hooks/useSetToggle";
 import { useTemporary } from "@/hooks/useTemporary";
-import { useGroupIconMap } from "@/lib/categories";
-import { getCategoryGroupIcon } from "@/lib/category-icons";
 import { formatRangeLabel, useDateRange } from "@/lib/date-range";
 import {
   amountColorClass,
@@ -86,7 +80,7 @@ import {
 const checkboxTouchTarget =
   "flex min-h-11 min-w-8 items-center justify-center sm:min-h-0 sm:min-w-0";
 
-type ScopedStats = ReturnType<typeof computeStats>;
+type FilteredStats = ReturnType<typeof computeStats>;
 
 function SummaryStats({
   label,
@@ -94,7 +88,7 @@ function SummaryStats({
   getPersonName,
 }: {
   label: string;
-  stats: ScopedStats;
+  stats: FilteredStats;
   getPersonName: (id: string) => string;
 }) {
   return (
@@ -113,112 +107,8 @@ function SummaryStats({
   );
 }
 
-function CategoryGroupRow({
-  group,
-  icon,
-}: {
-  group: CategoryGroupBreakdownResponse;
-  icon: string | null;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const Icon = getCategoryGroupIcon(icon);
-
-  return (
-    <>
-      <tr
-        className="border-b border-border-muted cursor-pointer hover:bg-muted/50"
-        onClick={() => setExpanded(!expanded)}
-      >
-        <td className="py-2.5 pr-4">
-          <button
-            type="button"
-            aria-expanded={expanded}
-            aria-label={`${expanded ? "Collapse" : "Expand"} ${group.group_name}`}
-            className="flex items-center gap-1.5 text-sm font-medium text-foreground"
-          >
-            <ExpandChevron expanded={expanded} />
-            <Icon className="size-4 text-muted-foreground" />
-            {group.group_name}
-          </button>
-        </td>
-        <td className="py-2.5 pr-4 text-right text-sm tabular-nums text-foreground">
-          {formatCurrency(group.total_amount)}
-        </td>
-        <td className="py-2.5 text-right text-sm tabular-nums text-muted-foreground">
-          {group.transaction_count}
-        </td>
-      </tr>
-      {expanded &&
-        group.categories.map((cat) => (
-          <tr key={cat.category} className="border-b border-border-muted">
-            <td className="py-1.5 pl-8 pr-4 text-sm text-muted-foreground">
-              {cat.category}
-            </td>
-            <td className="py-1.5 pr-4 text-right text-sm tabular-nums text-muted-foreground">
-              {formatCurrency(cat.total_amount)}
-            </td>
-            <td className="py-1.5 text-right text-sm tabular-nums text-muted-foreground">
-              {cat.transaction_count}
-            </td>
-          </tr>
-        ))}
-    </>
-  );
-}
-
-function CategoryGroupBreakdownTable({
-  breakdowns,
-  hasRefunds,
-  groupIconMap,
-}: {
-  breakdowns: CategoryGroupBreakdownResponse[];
-  hasRefunds: boolean;
-  groupIconMap: Map<string, string | null>;
-}) {
-  if (breakdowns.length === 0) return null;
-
-  return (
-    <Card>
-      <h2 className="mb-1 font-medium text-lg text-foreground">
-        Category Breakdown
-        {hasRefunds && (
-          <span className="ml-2 text-xs font-normal text-muted-foreground">
-            includes refunds
-          </span>
-        )}
-      </h2>
-      <p className="mb-4 text-xs text-muted-foreground">
-        See where your spending goes
-      </p>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-border text-left text-muted-foreground">
-            <th className="pb-2 pr-4 font-medium">Group</th>
-            <th className="pb-2 pr-4 text-right font-medium">Total</th>
-            <th className="pb-2 text-right font-medium">Txns</th>
-          </tr>
-        </thead>
-        <tbody>
-          {breakdowns.map((group) => (
-            <CategoryGroupRow
-              key={group.group_id ?? "uncategorized"}
-              group={group}
-              icon={
-                group.group_id
-                  ? (groupIconMap.get(group.group_id) ?? null)
-                  : null
-              }
-            />
-          ))}
-        </tbody>
-      </table>
-    </Card>
-  );
-}
-
 function computeStats(transactions: TransactionResponse[]) {
   let netSpending = 0;
-  let hasRefunds = false;
   let excludedCount = 0;
   const personPaid = new Map<string, number>();
 
@@ -228,65 +118,13 @@ function computeStats(transactions: TransactionResponse[]) {
       continue;
     }
     netSpending += tx.amount;
-    if (tx.amount > 0) hasRefunds = true;
     personPaid.set(
       tx.payer_person_id,
       (personPaid.get(tx.payer_person_id) ?? 0) + tx.amount,
     );
   }
 
-  return { netSpending, hasRefunds, excludedCount, personPaid };
-}
-
-function computeBreakdowns(
-  transactions: TransactionResponse[],
-  catToGroup: Map<string, { id: string; name: string }>,
-): CategoryGroupBreakdownResponse[] {
-  const acc = new Map<
-    string,
-    {
-      id: string | null;
-      cats: Map<string, { total: number; count: number }>;
-    }
-  >();
-
-  for (const tx of transactions) {
-    if (tx.is_excluded) continue;
-    const group = catToGroup.get(tx.category);
-    const groupName = group?.name ?? "Uncategorized";
-
-    let g = acc.get(groupName);
-    if (!g) {
-      g = { id: group?.id ?? null, cats: new Map() };
-      acc.set(groupName, g);
-    }
-    const cat = g.cats.get(tx.category);
-    if (cat) {
-      cat.total += tx.amount;
-      cat.count++;
-    } else {
-      g.cats.set(tx.category, { total: tx.amount, count: 1 });
-    }
-  }
-
-  return [...acc.entries()]
-    .map(([name, { id, cats }]) => ({
-      group_id: id,
-      group_name: name,
-      total_amount: [...cats.values()].reduce((sum, c) => sum + c.total, 0),
-      transaction_count: [...cats.values()].reduce(
-        (sum, c) => sum + c.count,
-        0,
-      ),
-      categories: [...cats.entries()].map(([cat, { total, count }]) => ({
-        category: cat,
-        group_id: id,
-        group_name: name,
-        total_amount: total,
-        transaction_count: count,
-      })),
-    }))
-    .sort((a, b) => a.total_amount - b.total_amount);
+  return { netSpending, excludedCount, personPaid };
 }
 
 function SortIndicator({ field, sort }: { field: SortField; sort: SortState }) {
@@ -317,7 +155,7 @@ function SortableHeader({
 }) {
   return (
     <th
-      className={`pb-2 pr-4 font-medium cursor-pointer select-none transition-colors hover:text-foreground ${align === "right" ? "text-right" : ""} ${extraClassName ?? ""}`}
+      className={`pb-2 pr-4 font-medium whitespace-nowrap cursor-pointer select-none transition-colors hover:text-foreground ${align === "right" ? "text-right" : ""} ${extraClassName ?? ""}`}
       title={title}
       onClick={() => onSort(cycleSortState(sort, field))}
     >
@@ -506,7 +344,7 @@ function TransactionTable({
               <SortableHeader field="merchant" sort={sort} onSort={onSort}>
                 Merchant
               </SortableHeader>
-              <th className="hidden pb-2 pr-4 font-medium sm:table-cell">
+              <th className="hidden whitespace-nowrap pb-2 pr-4 font-medium sm:table-cell">
                 Category
               </th>
               <SortableHeader
@@ -517,7 +355,7 @@ function TransactionTable({
               >
                 Group
               </SortableHeader>
-              <th className="hidden pb-2 pr-4 font-medium sm:table-cell">
+              <th className="hidden whitespace-nowrap pb-2 pr-4 font-medium sm:table-cell">
                 Paid by
               </th>
               <SortableHeader
@@ -529,7 +367,7 @@ function TransactionTable({
                 Amount
               </SortableHeader>
               <th
-                className="hidden pb-2 pr-4 text-right font-medium sm:table-cell"
+                className="hidden whitespace-nowrap pb-2 pr-4 text-right font-medium sm:table-cell"
                 title="How the expense is divided between you"
               >
                 Split
@@ -537,7 +375,7 @@ function TransactionTable({
               {personEntries.map((p) => (
                 <th
                   key={p.id}
-                  className="hidden pb-2 text-right font-medium sm:table-cell"
+                  className="hidden whitespace-nowrap pb-2 text-right font-medium sm:table-cell"
                 >
                   {p.name}
                 </th>
@@ -769,28 +607,15 @@ export function TransactionsPage() {
 
   const { personNames, getPersonName, getPersonColor } = usePersonMaps(persons);
 
-  const catToGroupInfo = useMemo(() => {
-    const lookup = new Map<string, { id: string; name: string }>();
+  const categoryGroupLookup = useMemo(() => {
+    const lookup = new Map<string, string>();
     for (const g of categoryGroups ?? []) {
-      for (const cat of g.categories) {
-        lookup.set(cat.name, { id: g.id, name: g.name });
-      }
+      for (const cat of g.categories) lookup.set(cat.name, g.name);
     }
     return lookup;
   }, [categoryGroups]);
-  const categoryGroupLookup = useMemo(() => {
-    const lookup = new Map<string, string>();
-    for (const [cat, info] of catToGroupInfo) lookup.set(cat, info.name);
-    return lookup;
-  }, [catToGroupInfo]);
-  const groupIconMap = useGroupIconMap();
 
   const allTransactions = data?.transactions ?? [];
-  const stats = useMemo(() => computeStats(allTransactions), [allTransactions]);
-  const breakdowns = useMemo(
-    () => computeBreakdowns(allTransactions, catToGroupInfo),
-    [allTransactions, catToGroupInfo],
-  );
 
   const categoryOptions: ComboboxOption[] = useMemo(
     () =>
@@ -815,6 +640,10 @@ export function TransactionsPage() {
   );
 
   const filters = useTransactionFilters(allTransactions, categoryGroupLookup);
+  const filteredStats = useMemo(
+    () => computeStats(filters.filtered),
+    [filters.filtered],
+  );
 
   const periodLabel = formatRangeLabel(startDate, endDate);
   const isFinalized = data?.is_finalized === true;
@@ -837,12 +666,7 @@ export function TransactionsPage() {
       {error && <PageError error={error} onRetry={() => refetch()} />}
 
       {data && (
-        <div className="space-y-6">
-          <UploadStatusRow
-            statuses={data.upload_statuses}
-            getPersonColor={getPersonColor}
-          />
-
+        <div className="space-y-4">
           {data.transactions.length === 0 ? (
             <PageEmpty
               icon={<Upload />}
@@ -861,23 +685,10 @@ export function TransactionsPage() {
             />
           ) : (
             <>
-              <SummaryStats
-                label="Total spending"
-                stats={stats}
-                getPersonName={getPersonName}
+              <UnmappedCategoriesWarning
+                categories={data.unmapped_categories}
+                compact
               />
-              <CategoryGroupBreakdownTable
-                breakdowns={breakdowns}
-                hasRefunds={stats.hasRefunds}
-                groupIconMap={groupIconMap}
-              />
-              {singleMonth && (
-                <AdjustmentExportSection
-                  persons={persons ?? []}
-                  year={singleMonth.year}
-                  month={singleMonth.month}
-                />
-              )}
 
               <TransactionSearch
                 value={filters.query}
@@ -903,7 +714,7 @@ export function TransactionsPage() {
                   onChange={filters.setPayers}
                 />
                 <CategoryFilter
-                  breakdowns={breakdowns}
+                  groups={categoryGroups ?? []}
                   activeCategories={filters.categories}
                   onChange={filters.setCategories}
                 />
@@ -925,6 +736,14 @@ export function TransactionsPage() {
                 <p className="py-8 text-center text-sm text-muted-foreground">
                   No transactions match the current filters.
                 </p>
+              )}
+
+              {filters.filtered.length > 0 && (
+                <SummaryStats
+                  label="Total spending"
+                  stats={filteredStats}
+                  getPersonName={getPersonName}
+                />
               )}
 
               <TransactionTable
@@ -953,9 +772,6 @@ export function TransactionsPage() {
                   bulkUpdateMutation.isPending ||
                   bulkTagsMutation.isPending
                 }
-              />
-              <UnmappedCategoriesWarning
-                categories={data.unmapped_categories}
               />
             </>
           )}

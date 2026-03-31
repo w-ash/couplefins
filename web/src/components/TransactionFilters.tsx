@@ -1,6 +1,7 @@
 import { ChevronDown, Search, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { CategoryGroupBreakdownResponse } from "@/api/generated/model";
+import type { CategoryGroupResponse } from "@/api/generated/model";
+import { Button } from "@/components/Button";
 import { ResponsivePopover } from "@/components/ResponsivePopover";
 import type { TransactionFilters as TransactionFiltersType } from "@/lib/transaction-filters";
 
@@ -72,11 +73,11 @@ export function PayerFilter({
 // ─── Category filter ───
 
 export function CategoryFilter({
-  breakdowns,
+  groups,
   activeCategories,
   onChange,
 }: {
-  breakdowns: CategoryGroupBreakdownResponse[];
+  groups: CategoryGroupResponse[];
   activeCategories: string[];
   onChange: (categories: string[]) => void;
 }) {
@@ -97,8 +98,8 @@ export function CategoryFilter({
   );
 
   const toggleGroup = useCallback(
-    (group: CategoryGroupBreakdownResponse) => {
-      const cats = group.categories.map((c) => c.category);
+    (group: CategoryGroupResponse) => {
+      const cats = group.categories.map((c) => c.name);
       const allSelected = cats.every((c) => activeSet.has(c));
       const next = new Set(activeSet);
       for (const c of cats) {
@@ -135,22 +136,22 @@ export function CategoryFilter({
             </div>
           </div>
           <div className="p-1">
-            {breakdowns.map((group) => {
+            {groups.map((group) => {
               const visibleCats = group.categories.filter((c) =>
-                c.category.toLowerCase().includes(q),
+                c.name.toLowerCase().includes(q),
               );
               if (
                 visibleCats.length === 0 &&
-                !group.group_name.toLowerCase().includes(q)
+                !group.name.toLowerCase().includes(q)
               )
                 return null;
-              const groupCats = group.categories.map((c) => c.category);
+              const groupCats = group.categories.map((c) => c.name);
               const allSelected = groupCats.every((c) => activeSet.has(c));
               const someSelected =
                 !allSelected && groupCats.some((c) => activeSet.has(c));
 
               return (
-                <div key={group.group_id ?? "uncat"}>
+                <div key={group.id}>
                   <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm font-medium text-popover-foreground hover:bg-accent">
                     <input
                       type="checkbox"
@@ -161,20 +162,20 @@ export function CategoryFilter({
                       onChange={() => toggleGroup(group)}
                       className="accent-primary"
                     />
-                    {group.group_name}
+                    {group.name}
                   </label>
                   {visibleCats.map((cat) => (
                     <label
-                      key={cat.category}
+                      key={cat.name}
                       className="flex cursor-pointer items-center gap-2 rounded-md py-0.5 pl-7 pr-2 text-sm text-popover-foreground hover:bg-accent"
                     >
                       <input
                         type="checkbox"
-                        checked={activeSet.has(cat.category)}
-                        onChange={() => toggleCategory(cat.category)}
+                        checked={activeSet.has(cat.name)}
+                        onChange={() => toggleCategory(cat.name)}
                         className="accent-primary"
                       />
-                      {cat.category}
+                      {cat.name}
                     </label>
                   ))}
                 </div>
@@ -301,26 +302,25 @@ export function AmountRangeFilter({
             />
           </div>
           <div className="mt-2 flex justify-end gap-2">
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => {
                 onChange(null, null);
                 close();
               }}
-              className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
             >
               Clear
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              size="sm"
               onClick={() => {
                 apply();
                 close();
               }}
-              className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
             >
               Apply
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -410,7 +410,7 @@ export function ActiveFilterPills({
           <button
             type="button"
             onClick={pill.onRemove}
-            className="ml-0.5 rounded-full p-1 hover:bg-primary/20"
+            className="ml-0.5 rounded-full p-1 hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <X className="size-3" />
           </button>
@@ -420,7 +420,7 @@ export function ActiveFilterPills({
         <button
           type="button"
           onClick={filters.clearAll}
-          className="text-xs text-muted-foreground hover:text-foreground"
+          className="rounded text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Clear all
         </button>

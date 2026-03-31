@@ -82,6 +82,6 @@ describe("FinalizationBanner", () => {
         isPending={true}
       />,
     );
-    expect(screen.getByRole("button", { name: /lock month/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /locking/i })).toBeDisabled();
   });
 });

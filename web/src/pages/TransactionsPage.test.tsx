@@ -195,36 +195,4 @@ describe("TransactionsPage", () => {
       ).toBeInTheDocument();
     });
   });
-
-  it("shows upload status when one person hasn't uploaded", async () => {
-    const partialResponse = {
-      ...reconciliationResponse,
-      upload_statuses: [
-        {
-          person_id: "p1",
-          person_name: "Alice",
-          has_uploaded: true,
-          upload_count: 1,
-        },
-        {
-          person_id: "p2",
-          person_name: "Bob",
-          has_uploaded: false,
-          upload_count: 0,
-        },
-      ],
-    };
-    server.use(
-      http.get("/api/v1/reconciliation", () =>
-        HttpResponse.json(partialResponse),
-      ),
-    );
-
-    renderWithProviders(<TransactionsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("uploaded")).toBeInTheDocument();
-      expect(screen.getByText("not yet")).toBeInTheDocument();
-    });
-  });
 });

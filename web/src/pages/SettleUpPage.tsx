@@ -1,5 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, HandCoins, Loader2, Trash2, Upload } from "lucide-react";
+import {
+  CheckCircle2,
+  Download,
+  HandCoins,
+  Loader2,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { useCallback, useState } from "react";
 import { getGetDashboardQueryKey } from "@/api/generated/dashboard/dashboard";
 import type {
@@ -19,6 +26,7 @@ import {
   useRecordSettlement,
   useWaiveSettlement,
 } from "@/api/generated/settlements/settlements";
+import { AdjustmentExportDialog } from "@/components/AdjustmentExportDialog";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { FinalizationBanner } from "@/components/FinalizationBanner";
@@ -445,6 +453,8 @@ export function SettleUpPage() {
     data.transaction_count === 0 &&
     data.recorded_settlements.length === 0;
 
+  const [exportOpen, setExportOpen] = useState(false);
+
   return (
     <div className={`mx-auto max-w-4xl ${PAGE_PADDING}`}>
       <PageHeader icon={<HandCoins className="size-6" />} title="Settle Up">
@@ -523,6 +533,22 @@ export function SettleUpPage() {
             onDelete={(id) => deleteMutation.mutate({ settlementId: id })}
             isDeleting={deleteMutation.isPending}
             isFinalized={data.is_finalized}
+          />
+
+          <button
+            type="button"
+            onClick={() => setExportOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Download className="size-3.5" />
+            Export adjustments to Monarch
+          </button>
+
+          <AdjustmentExportDialog
+            open={exportOpen}
+            onClose={() => setExportOpen(false)}
+            year={year}
+            month={month}
           />
         </div>
       )}

@@ -1,4 +1,5 @@
-import { Loader2, Lock, LockOpen } from "lucide-react";
+import { Lock, LockOpen } from "lucide-react";
+import { Button } from "@/components/Button";
 
 interface FinalizationBannerProps {
   isFinalized: boolean;
@@ -38,19 +39,16 @@ export function FinalizationBanner({
             )}
           </span>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<LockOpen className="size-3" />}
           onClick={onUnfinalize}
-          disabled={isPending}
-          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 min-h-8 text-xs font-medium text-primary-muted-foreground/70 transition-colors hover:bg-primary-muted hover:text-primary-muted-foreground disabled:opacity-50"
+          loading={isPending}
+          loadingText="Unlocking"
         >
-          {isPending ? (
-            <Loader2 className="size-3 animate-spin" />
-          ) : (
-            <LockOpen className="size-3" />
-          )}
           Unlock Month
-        </button>
+        </Button>
       </div>
     );
   }
@@ -65,19 +63,15 @@ export function FinalizationBanner({
           Lock it once you've both reviewed and settled up.
         </p>
       </div>
-      <button
-        type="button"
+      <Button
+        size="sm"
+        icon={<LockOpen className="size-3" />}
         onClick={onFinalize}
-        disabled={isPending}
-        className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
+        loading={isPending}
+        loadingText="Locking"
       >
-        {isPending ? (
-          <Loader2 className="size-3 animate-spin" />
-        ) : (
-          <Lock className="size-3" />
-        )}
         Lock Month
-      </button>
+      </Button>
     </div>
   );
 }
