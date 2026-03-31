@@ -4,7 +4,7 @@ import uuid
 
 import attrs
 from attrs import define, field
-from loguru import logger
+import structlog
 
 from src.application.use_cases._shared.command_validators import non_empty_string
 from src.application.use_cases._shared.entity_lookup import require_by_id
@@ -20,6 +20,8 @@ from src.domain.entities.transaction import Transaction
 from src.domain.entities.upload import Upload
 from src.domain.parsing.monarch_csv import parse_monarch_csv
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
+
+logger = structlog.get_logger()
 
 type ProgressCallback = Callable[[int, int, str], None]
 
@@ -128,12 +130,12 @@ class UploadCsvUseCase:
             on_progress(4, 4, "Complete")
 
             logger.info(
-                "Uploaded {} ({} new, {} updated, {} skipped) for person {}",
-                command.filename,
-                len(new_txs),
-                len(updated_txs),
-                skipped_count,
-                person.name,
+                "csv_uploaded",
+                filename=command.filename,
+                new=len(new_txs),
+                updated=len(updated_txs),
+                skipped=skipped_count,
+                person=person.name,
             )
 
             return UploadCsvResult(

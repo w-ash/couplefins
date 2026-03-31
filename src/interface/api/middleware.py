@@ -1,6 +1,9 @@
+import time
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from loguru import logger
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
+import structlog
 
 from src.domain.exceptions import (
     AuthenticationError,
@@ -11,6 +14,8 @@ from src.domain.exceptions import (
     ValidationError,
 )
 
+logger = structlog.get_logger()
+
 _DOMAIN_ERROR_MAP: dict[type[DomainError], tuple[int, str]] = {
     NotFoundError: (404, "NOT_FOUND"),
     ValidationError: (422, "VALIDATION_ERROR"),
@@ -20,13 +25,47 @@ _DOMAIN_ERROR_MAP: dict[type[DomainError], tuple[int, str]] = {
 }
 
 
+class RequestLoggingMiddleware:
+    def __init__(self, app: ASGIApp) -> None:
+        self._app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+
+        structlog.contextvars.clear_contextvars()
+        method: str = scope["method"]
+        path: str = scope["path"]
+        structlog.contextvars.bind_contextvars(method=method, path=path)
+
+        start = time.perf_counter()
+        status_code = 500
+
+        async def send_wrapper(message: Message) -> None:
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message["status"]
+            await send(message)
+
+        try:
+            await self._app(scope, receive, send_wrapper)
+        finally:
+            duration_ms = round((time.perf_counter() - start) * 1000, 1)
+            logger.info(
+                "request_completed",
+                status_code=status_code,
+                duration_ms=duration_ms,
+            )
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     for exc_type, (status_code, error_code) in _DOMAIN_ERROR_MAP.items():
         _register_domain_handler(app, exc_type, status_code, error_code)
 
     @app.exception_handler(Exception)
     async def internal_error(_: Request, _exc: Exception) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
-        logger.opt(exception=True).error("Unhandled exception")
+        logger.error("unhandled_exception", exc_info=True)  # noqa: LOG014 — inside FastAPI exception handler
         return JSONResponse(
             status_code=500,
             content={

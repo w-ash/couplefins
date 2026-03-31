@@ -12,7 +12,7 @@ Implementation roadmap: @docs/backlog/README.md
 
 ## Core Principles (YOU MUST FOLLOW)
 
-- **Python 3.14+** — PEP 695 generics, PEP 604 unions, PEP 649 deferred annotations, `datetime.now(UTC)`, loguru not stdlib logging, `from __future__ import annotations` is banned
+- **Python 3.14+** — PEP 695 generics, PEP 604 unions, PEP 649 deferred annotations, `datetime.now(UTC)`, structlog not stdlib logging, `from __future__ import annotations` is banned
 - **Ruthlessly DRY** — no code duplication
 - **Immutable Domain** — pure transformations, no side effects in domain layer
 - **Batch-First** — design for collections, single items are degenerate cases

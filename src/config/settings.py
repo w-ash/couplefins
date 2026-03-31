@@ -9,6 +9,11 @@ _cache: dict[str, Settings] = {}
 _CACHE_KEY = "settings"
 
 
+class LoggingConfig(BaseModel):
+    output: Literal["json", "console"] = "console"
+    level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+
+
 class DatabaseConfig(BaseModel):
     url: str = "postgresql+asyncpg://localhost:5432/couplefins"
     echo: bool = False
@@ -56,6 +61,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    logging: LoggingConfig = LoggingConfig()
     database: DatabaseConfig = DatabaseConfig()
     auth: AuthConfig = AuthConfig()
     cors_origins: list[str] = ["http://localhost:5174"]

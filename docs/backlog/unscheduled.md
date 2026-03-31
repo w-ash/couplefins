@@ -19,4 +19,3 @@ Ideas and features without version assignment. Move to a version file when ready
 
 ## Infrastructure
 - Docker containerization (if deploying beyond local laptops)
-- Structured logging + health check (loguru JSON output, request timing middleware)

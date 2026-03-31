@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from loguru import logger
+import structlog
 
 from src.application.runner import execute_use_case
 from src.application.use_cases.seed_category_groups import seed_category_groups
@@ -14,7 +14,10 @@ from src.infrastructure.persistence.database.db_connection import (
     dispose_engine,
     init_db,
 )
-from src.interface.api.middleware import register_exception_handlers
+from src.interface.api.middleware import (
+    RequestLoggingMiddleware,
+    register_exception_handlers,
+)
 from src.interface.api.routes.auth import router as auth_router
 from src.interface.api.routes.budgets import router as budgets_router
 from src.interface.api.routes.category_groups import router as category_groups_router
@@ -28,15 +31,17 @@ from src.interface.api.routes.settlements import router as settlements_router
 from src.interface.api.routes.transactions import router as transactions_router
 from src.interface.api.routes.uploads import router as uploads_router
 
+logger = structlog.get_logger()
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     setup_logging()
     await init_db()
     await execute_use_case(seed_category_groups)
-    logger.info("Application started")
+    logger.info("application_started")
     yield
-    logger.info("Application shutting down")
+    logger.info("application_shutting_down")
     await dispose_engine()
 
 
@@ -58,6 +63,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    app.add_middleware(RequestLoggingMiddleware)
     register_exception_handlers(app)
     app.include_router(auth_router, prefix=AppConfig.API_V1_PREFIX)
     app.include_router(health_router, prefix=AppConfig.API_V1_PREFIX)

@@ -53,6 +53,7 @@
 | v1.0.1 | Multi-user readiness — smart polling, SSE event bus, index audit | Completed (2026-03-28) | M |
 | v1.0.2 | Query optimization — Neon pool tuning, query batching, tag filtering | Completed (2026-03-28) | M |
 | v1.0.3 | DRY audit, DB-backed theme preference, auth UX, sslmode fix | Completed (2026-03-28) | M |
+| v1.0.4 | Structured logging — loguru → structlog, request middleware, JSON logs | Completed (2026-03-30) | S |
 
 ## Infrastructure Readiness
 
@@ -110,6 +111,7 @@
 | DB-backed theme preference (per-person) | — | — | — | — | — | — | — | — | — | — | — | ✅ |
 | Password visibility toggle + confirm fields | — | — | — | — | — | — | — | — | — | — | — | ✅ |
 | Neon sslmode → asyncpg ssl translation | — | — | — | — | — | — | — | — | — | — | — | ✅ |
+| Structured logging (structlog + request middleware) | — | — | — | — | — | — | — | — | — | — | — | ✅ |
 
 ## Key Technical Decisions
 
@@ -129,4 +131,5 @@
 - **Adjustment export**: Pure domain functions (no stored adjustment entities). Deterministic dedup IDs via UUID5 for idempotent Monarch re-import. `couplefins-adjustment` tag for filtering.
 - **Use case pattern**: Every use case has 3 objects — `Command` (frozen attrs, validated at construction), `Result` (frozen attrs), `UseCase` (`@define(slots=True)`, stateless). Uniform signature: `execute(self, command, uow) -> Result`. UoW passed to execute (not constructor). Transaction scoped via `async with uow:`. Even parameterless queries get an empty Command. Shared validators in `_shared/command_validators.py`.
 - **Real-time sync**: SSE via FastAPI `EventSourceResponse` (v1.0.1+). In-memory `EventBus` broadcasts entity names after mutations; frontend `useRealtimeSync` hook connects via `EventSource` and invalidates TanStack Query caches. 5-second `refetchInterval` polling on together-session pages (Dashboard, Settle Up, Transactions) as fallback. No WebSockets, no Redis, no Neon LISTEN/NOTIFY.
+- **Logging**: structlog (v1.0.4+) with `ProcessorFormatter` stdlib bridge. Console output switchable between `ConsoleRenderer` (dev) and `JSONRenderer` (prod) via `LOGGING__OUTPUT`. File sink always JSON (`logs/couplefins.log`, 10MB rotation). ASGI `RequestLoggingMiddleware` binds method/path to contextvars and logs `request_completed` with status + duration. Prior to v1.0.4: loguru with custom `_InterceptHandler`.
 - **Tooling**: uv, Ruff, BasedPyright, pytest, Biome

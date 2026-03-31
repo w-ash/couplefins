@@ -3,12 +3,14 @@ from typing import TypedDict
 import uuid
 
 from attrs import define
-from loguru import logger
 from pydantic import TypeAdapter
+import structlog
 
 from src.domain.entities.category import Category
 from src.domain.entities.category_group import CategoryGroup
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
+
+logger = structlog.get_logger()
 
 FIXTURE_PATH = (
     Path(__file__).resolve().parent.parent.parent.parent
@@ -46,10 +48,7 @@ class SeedCategoryGroupsUseCase:
         async with uow:
             existing_count = await uow.category_groups.count()
             if existing_count > 0:
-                logger.info(
-                    "Category groups already seeded ({} groups), skipping",
-                    existing_count,
-                )
+                logger.info("category_groups_skipped", existing_count=existing_count)
                 return SeedCategoryGroupsResult(
                     groups_created=0, categories_created=0, skipped=True
                 )
@@ -76,9 +75,9 @@ class SeedCategoryGroupsUseCase:
             await uow.categories.save_batch(categories)
             await uow.commit()
             logger.info(
-                "Seeded {} category groups with {} categories",
-                len(groups),
-                len(categories),
+                "category_groups_seeded",
+                groups=len(groups),
+                categories=len(categories),
             )
             return SeedCategoryGroupsResult(
                 groups_created=len(groups),

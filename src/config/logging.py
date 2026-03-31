@@ -1,46 +1,71 @@
 import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 import sys
-from typing import override
 
-from loguru import logger
+import structlog
 
+from src.config.settings import get_settings
 
-class _InterceptHandler(logging.Handler):
-    @override
-    def emit(self, record: logging.LogRecord) -> None:
-        try:
-            level: str | int = logger.level(record.levelname).name
-        except ValueError:
-            level = record.levelno
-        frame, depth = logging.currentframe(), 2
-        while frame and (frame.f_code.co_filename == logging.__file__):
-            frame = frame.f_back
-            depth += 1
-        logger.opt(depth=depth, exception=record.exc_info).log(
-            level, record.getMessage()
-        )
+_shared_processors: list[structlog.types.Processor] = [
+    structlog.contextvars.merge_contextvars,
+    structlog.stdlib.filter_by_level,
+    structlog.stdlib.add_logger_name,
+    structlog.stdlib.add_log_level,
+    structlog.processors.TimeStamper(fmt="iso"),
+    structlog.processors.StackInfoRenderer(),
+    structlog.processors.UnicodeDecoder(),
+]
 
 
-def setup_logging(*, verbose: bool = False) -> None:
-    logger.remove()
-
-    level = "DEBUG" if verbose else "INFO"
-
-    logger.add(
-        sys.stderr,
-        level=level,
-        colorize=True,
-        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level:<8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+def _make_formatter(
+    renderer: structlog.types.Processor,
+) -> structlog.stdlib.ProcessorFormatter:
+    return structlog.stdlib.ProcessorFormatter(
+        foreign_pre_chain=_shared_processors,
+        processors=[
+            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+            renderer,
+        ],
     )
 
-    logger.add(
-        "logs/couplefins.log",
-        level="DEBUG",
-        serialize=True,
-        rotation="10 MB",
-        retention="1 week",
-        compression="gz",
-        enqueue=True,
+
+def setup_logging() -> None:
+    settings = get_settings().logging
+
+    console_renderer: structlog.types.Processor = (
+        structlog.processors.JSONRenderer()
+        if settings.output == "json"
+        else structlog.dev.ConsoleRenderer()
     )
 
-    logging.basicConfig(handlers=[_InterceptHandler()], level=0, force=True)
+    structlog.configure(
+        processors=[
+            *_shared_processors,
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
+        wrapper_class=structlog.stdlib.BoundLogger,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
+
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(_make_formatter(console_renderer))
+
+    log_dir = Path("logs")
+    log_dir.mkdir(exist_ok=True)
+    file_handler = RotatingFileHandler(
+        log_dir / "couplefins.log",
+        maxBytes=10 * 1024 * 1024,  # 10 MB
+        backupCount=5,
+    )
+    file_handler.setFormatter(_make_formatter(structlog.processors.JSONRenderer()))
+
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.addHandler(console_handler)
+    root.addHandler(file_handler)
+    root.setLevel(settings.level)
+
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)

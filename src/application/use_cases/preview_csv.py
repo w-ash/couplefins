@@ -3,7 +3,7 @@ from decimal import Decimal
 import uuid
 
 from attrs import define, field
-from loguru import logger
+import structlog
 
 from src.application.use_cases._shared.command_validators import non_empty_string
 from src.application.use_cases._shared.entity_lookup import require_by_id
@@ -16,6 +16,8 @@ from src.domain.dedup import FieldDiff
 from src.domain.entities.transaction import Transaction
 from src.domain.parsing.monarch_csv import parse_monarch_csv
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
+
+logger = structlog.get_logger()
 
 _SENTINEL_UPLOAD_ID = uuid.UUID(int=0)
 
@@ -86,7 +88,7 @@ class PreviewCsvUseCase:
             unmapped = find_all_unmapped_categories(all_categories, tx_categories)
 
             if not incoming:
-                logger.info("Previewed 0 transactions for person {}", person.name)
+                logger.info("csv_previewed", transaction_count=0, person=person.name)
                 return PreviewCsvResult(
                     new_transactions=[],
                     unchanged_count=0,
@@ -113,12 +115,12 @@ class PreviewCsvUseCase:
             ]
 
             logger.info(
-                "Previewed {} transactions ({} new, {} unchanged, {} changed) for person {}",
-                len(incoming),
-                len(new_txs),
-                unchanged_count,
-                len(changed_txs),
-                person.name,
+                "csv_previewed",
+                transaction_count=len(incoming),
+                new=len(new_txs),
+                unchanged=unchanged_count,
+                changed=len(changed_txs),
+                person=person.name,
             )
 
             return PreviewCsvResult(
