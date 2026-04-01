@@ -3,11 +3,11 @@ from decimal import Decimal
 from uuid import UUID
 
 from src.domain.budget import (
-    _compute_person_share,
     _is_budget_relevant,
     _is_personal_budget_relevant,
     compute_average_monthly_spending,
     compute_budget_overview,
+    compute_person_share,
     compute_personal_budget_overview,
     compute_ytd_budget,
     determine_health,
@@ -430,7 +430,7 @@ def test_breakdown_personal_not_in_set_excluded_from_personal_amounts() -> None:
     assert cat.personal_amounts == {}
 
 
-# --- _compute_person_share ---
+# --- compute_person_share ---
 
 ALICE = UUID("bbbbbbbb-0000-0000-0000-000000000001")
 BOB = UUID("bbbbbbbb-0000-0000-0000-000000000002")
@@ -440,56 +440,56 @@ def test_person_share_payer_shared_50_50() -> None:
     tx = make_transaction(
         amount=Decimal(-100), payer_percentage=50, payer_person_id=ALICE
     )
-    assert _compute_person_share(tx, ALICE) == Decimal("50.00")
+    assert compute_person_share(tx, ALICE) == Decimal("50.00")
 
 
 def test_person_share_non_payer_shared_50_50() -> None:
     tx = make_transaction(
         amount=Decimal(-100), payer_percentage=50, payer_person_id=ALICE
     )
-    assert _compute_person_share(tx, BOB) == Decimal("50.00")
+    assert compute_person_share(tx, BOB) == Decimal("50.00")
 
 
 def test_person_share_payer_custom_split() -> None:
     tx = make_transaction(
         amount=Decimal(-200), payer_percentage=70, payer_person_id=ALICE
     )
-    assert _compute_person_share(tx, ALICE) == Decimal("140.00")
+    assert compute_person_share(tx, ALICE) == Decimal("140.00")
 
 
 def test_person_share_non_payer_custom_split() -> None:
     tx = make_transaction(
         amount=Decimal(-200), payer_percentage=70, payer_person_id=ALICE
     )
-    assert _compute_person_share(tx, BOB) == Decimal("60.00")
+    assert compute_person_share(tx, BOB) == Decimal("60.00")
 
 
 def test_person_share_spotted_payer() -> None:
     tx = make_transaction(
         amount=Decimal(-30), payer_percentage=0, payer_person_id=ALICE
     )
-    assert _compute_person_share(tx, ALICE) == Decimal("0.00")
+    assert compute_person_share(tx, ALICE) == Decimal("0.00")
 
 
 def test_person_share_spotted_beneficiary() -> None:
     tx = make_transaction(
         amount=Decimal(-30), payer_percentage=0, payer_person_id=ALICE
     )
-    assert _compute_person_share(tx, BOB) == Decimal("30.00")
+    assert compute_person_share(tx, BOB) == Decimal("30.00")
 
 
 def test_person_share_household_no_split_payer() -> None:
     tx = make_transaction(
         amount=Decimal(-60), payer_percentage=100, payer_person_id=ALICE
     )
-    assert _compute_person_share(tx, ALICE) == Decimal("60.00")
+    assert compute_person_share(tx, ALICE) == Decimal("60.00")
 
 
 def test_person_share_household_no_split_non_payer() -> None:
     tx = make_transaction(
         amount=Decimal(-60), payer_percentage=100, payer_person_id=ALICE
     )
-    assert _compute_person_share(tx, BOB) == Decimal("0.00")
+    assert compute_person_share(tx, BOB) == Decimal("0.00")
 
 
 # --- _is_personal_budget_relevant ---

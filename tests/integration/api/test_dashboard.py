@@ -64,7 +64,7 @@ async def test_dashboard_ytd_aggregation(client: AsyncClient) -> None:
     data = response.json()
 
     # YTD should include Jan ($100 + $60) + Feb ($20) = $180
-    assert data["ytd_total_shared_spending"] == pytest.approx(180.0)
+    assert data["household_spending_ytd"] == pytest.approx(180.0)
 
 
 async def test_dashboard_defaults_to_current_month(client: AsyncClient) -> None:

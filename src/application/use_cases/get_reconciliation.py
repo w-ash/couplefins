@@ -1,9 +1,11 @@
 from datetime import date, datetime
-from typing import Literal
 from uuid import UUID
 
 from attrs import define
 
+from src.application.use_cases._shared.command_validators import (
+    Scope as ReconciliationScope,
+)
 from src.application.use_cases._shared.date_math import (
     detect_single_month,
     month_bounds,
@@ -24,8 +26,6 @@ from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
 from src.domain.reconciliation import ReconciliationSummary, reconcile
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
-
-ReconciliationScope = Literal["household", "personal", "all"]
 
 
 @define(frozen=True, slots=True)

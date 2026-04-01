@@ -4,7 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Project Does
 
-Couplefins is a shared finance reconciliation tool for couples. Each person uses their own Monarch Money account, tags shared expenses, and exports monthly CSVs. This app replaces their spreadsheet for reconciling who owes whom and tracking shared budgets by category.
+Couplefins is a household finance tool for couples. Each person uses their own Monarch Money account, tags household expenses, and exports monthly CSVs. The app handles two core use cases:
+
+1. **Settlement** — "Who owes whom?" Each transaction has a `payer_percentage` (0-100). When < 100, the difference is owed to the payer. Monthly settlement sums these across all transactions.
+2. **Budgeting** — "Are we on track?" Each transaction has a `household` flag (bool). When true, it counts toward the household budget. Categories can also opt in personal spending via `include_personal`.
+
+These two fields are orthogonal — a transaction can be household without being split (concert tickets each person bought), or split without being household (unusual, but the fields are independent). There is no `TransactionType` enum; "shared", "spotted", and "household-no-split" are human descriptions of field combinations, not stored types.
+
+The Monarch CSV `shared` tag maps to `household=true` with a default 50/50 split on import. "Shared" is a tag name, not a domain concept — the domain concept is "household."
 
 Domain details: @docs/domain.md
 User goals and monthly workflow: @docs/user-flows.md

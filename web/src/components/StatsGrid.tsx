@@ -1,6 +1,7 @@
 interface Stat {
   label: string;
   value: string;
+  description?: string;
   valueClassName?: string;
 }
 
@@ -12,7 +13,7 @@ export function StatsGrid({ stats }: { stats: Stat[] }) {
       {stats.map((stat) => (
         <div
           key={stat.label}
-          className="rounded-lg border border-border bg-card p-4 shadow-sm"
+          className="flex flex-col justify-between rounded-lg border border-border bg-card p-4 shadow-sm"
         >
           <p className="text-xs font-medium text-muted-foreground">
             {stat.label}
@@ -22,6 +23,11 @@ export function StatsGrid({ stats }: { stats: Stat[] }) {
           >
             {stat.value}
           </p>
+          {stat.description && (
+            <p className="mt-1 text-[11px] leading-tight text-muted-foreground/70">
+              {stat.description}
+            </p>
+          )}
         </div>
       ))}
     </div>

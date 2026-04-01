@@ -1,6 +1,9 @@
 from decimal import Decimal
+from typing import Literal
 
 from attrs import Attribute
+
+Scope = Literal["household", "personal", "all"]
 
 _MAX_MONTH = 12
 

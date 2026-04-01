@@ -251,8 +251,8 @@ def compute_budget_overview(  # noqa: PLR0913, PLR0917
     return _assemble_overview(statuses, year, month)
 
 
-def _compute_person_share(tx: Transaction, person_id: UUID) -> Decimal:
-    """Compute what one person's share is for a transaction."""
+def compute_person_share(tx: Transaction, person_id: UUID) -> Decimal:
+    """One person's share of a transaction."""
     payer_share, other_share = compute_shares(tx.amount, tx.payer_percentage)
     return payer_share if tx.payer_person_id == person_id else other_share
 
@@ -287,7 +287,7 @@ def _compute_personal_breakdowns(
     for tx in txs:
         gid, _ = category_lookup.get(tx.category, (None, uncategorized))
         if tx.household:
-            share = _compute_person_share(tx, person_id)
+            share = compute_person_share(tx, person_id)
             cat_total[tx.category] += share
             cat_count[tx.category] += 1
             cat_household[tx.category] += share

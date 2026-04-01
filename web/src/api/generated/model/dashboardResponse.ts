@@ -4,13 +4,18 @@
  * Couplefins
  * OpenAPI spec version: 0.1.0
  */
+import type { BudgetAlertResponse } from './budgetAlertResponse';
 import type { DashboardPersonResponse } from './dashboardPersonResponse';
+import type { DashboardResponseScope } from './dashboardResponseScope';
 import type { MonthHistoryEntryResponse } from './monthHistoryEntryResponse';
 import type { OwedAmountResponse } from './owedAmountResponse';
+import type { PersonalMonthHistoryEntryResponse } from './personalMonthHistoryEntryResponse';
 import type { PersonSummaryResponse } from './personSummaryResponse';
 import type { UploadStatusResponse } from './uploadStatusResponse';
 
 export interface DashboardResponse {
+  scope: DashboardResponseScope;
+  current_person_id: string | null;
   current_month_year: number;
   current_month_month: number;
   current_month_total_shared_spending: number;
@@ -19,7 +24,8 @@ export interface DashboardResponse {
   current_month_person_summaries: PersonSummaryResponse[];
   current_month_settlement: OwedAmountResponse | null;
   upload_statuses: UploadStatusResponse[];
-  ytd_total_shared_spending: number;
+  household_spending_month: number;
+  household_spending_ytd: number;
   ytd_settlement: OwedAmountResponse | null;
   ytd_total_settled: number;
   month_history: MonthHistoryEntryResponse[];
@@ -27,4 +33,12 @@ export interface DashboardResponse {
   unmapped_categories: string[];
   is_finalized: boolean;
   finalized_at: string | null;
+  my_spending_month?: number | null;
+  my_household_share_month?: number | null;
+  my_personal_spending_month?: number | null;
+  my_spending_ytd?: number | null;
+  personal_month_history?: PersonalMonthHistoryEntryResponse[] | null;
+  budget_alerts?: BudgetAlertResponse[] | null;
+  total_all_spending_month?: number | null;
+  total_all_spending_ytd?: number | null;
 }

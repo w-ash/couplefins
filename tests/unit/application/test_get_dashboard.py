@@ -76,7 +76,7 @@ async def test_empty_month_zeroed_summary() -> None:
 
     assert result.current_month.transaction_count == 0
     assert result.current_month.total_shared_spending == Decimal(0)
-    assert result.ytd_total_shared_spending == Decimal(0)
+    assert result.household_spending_ytd == Decimal(0)
     assert result.month_history == []
 
 
@@ -154,7 +154,7 @@ async def test_ytd_aggregates_across_months() -> None:
     result = await GetDashboardUseCase().execute(_make_command(), uow)
 
     # YTD = $100 + $60 + $40 = $200
-    assert result.ytd_total_shared_spending == Decimal("200.00")
+    assert result.household_spending_ytd == Decimal("200.00")
     # YTD settlement: Alice paid $160, Bob paid $40. Each share = $100.
     # Alice overpaid by $60 → Bob owes Alice $60.
     assert result.ytd_settlement is not None
@@ -190,7 +190,7 @@ async def test_ytd_excludes_future_months() -> None:
     result = await GetDashboardUseCase().execute(_make_command(), uow)
 
     # YTD should only include January, not April
-    assert result.ytd_total_shared_spending == Decimal("100.00")
+    assert result.household_spending_ytd == Decimal("100.00")
     # Current month (March) should be empty
     assert result.current_month.transaction_count == 0
 

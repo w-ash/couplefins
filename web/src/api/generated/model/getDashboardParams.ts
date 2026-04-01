@@ -4,8 +4,10 @@
  * Couplefins
  * OpenAPI spec version: 0.1.0
  */
+import type { GetDashboardScope } from './getDashboardScope';
 
 export type GetDashboardParams = {
 year?: number | null;
 month?: number | null;
+scope?: GetDashboardScope;
 };
