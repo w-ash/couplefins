@@ -37,6 +37,7 @@ import {
   MONTHS,
   SHORT_MONTHS,
 } from "@/lib/format";
+import { getHealthStyle } from "@/lib/health-styles";
 import { actionLinkClass } from "@/lib/input-styles";
 import { PAGE_PADDING } from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
@@ -187,17 +188,6 @@ function QuickActions({ scope }: { scope: DashboardScope }) {
 
 // --- Budget Alerts (personal scope only) ---
 
-const HEALTH_COLORS: Record<string, { bar: string; text: string }> = {
-  near_limit: {
-    bar: "bg-warning",
-    text: "text-warning-muted-foreground",
-  },
-  over_budget: {
-    bar: "bg-destructive",
-    text: "text-destructive-muted-foreground",
-  },
-};
-
 function BudgetAlerts({ alerts }: { alerts: BudgetAlertResponse[] }) {
   if (alerts.length === 0) return null;
   return (
@@ -220,24 +210,21 @@ function BudgetAlerts({ alerts }: { alerts: BudgetAlertResponse[] }) {
                   150,
                 )
               : 100;
-          const colors = HEALTH_COLORS[alert.health] ?? {
-            bar: "bg-muted",
-            text: "text-muted-foreground",
-          };
+          const style = getHealthStyle(alert.health);
           const Icon = alert.health === "over_budget" ? AlertCircle : Clock;
           return (
             <div key={alert.group_id}>
               <div className="mb-1 flex items-center justify-between text-sm">
                 <span className="flex items-center gap-1.5 font-medium text-foreground">
-                  <Icon className={`size-3.5 ${colors.text}`} />
+                  <Icon className={`size-3.5 ${style.color}`} />
                   {alert.group_name}
                 </span>
-                <span className={`tabular-nums ${colors.text}`}>
+                <span className={`tabular-nums ${style.color}`}>
                   {formatCurrency(alert.monthly_spent)} /{" "}
                   {formatCurrency(alert.monthly_budget)}
                 </span>
               </div>
-              <ProgressBar pct={Math.min(pct, 100)} barColor={colors.bar} />
+              <ProgressBar pct={Math.min(pct, 100)} barColor={style.barColor} />
             </div>
           );
         })}

@@ -34,45 +34,11 @@ import { useGroupIconMap } from "@/lib/categories";
 import { getCategoryGroupIcon } from "@/lib/category-icons";
 import { formatCurrency, useMonthYear } from "@/lib/format";
 
+import { getHealthStyle } from "@/lib/health-styles";
 import { baseInputClass } from "@/lib/input-styles";
 import { PAGE_PADDING } from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
 import { getPersonBarColor } from "@/types/person";
-
-const HEALTH_STYLES: Record<
-  string,
-  { color: string; barColor: string; label: string; iconColor: string }
-> = {
-  on_track: {
-    color: "text-positive",
-    barColor: "bg-primary",
-    label: "On track",
-    iconColor: "text-positive",
-  },
-  near_limit: {
-    color: "text-warning-muted-foreground",
-    barColor: "bg-warning",
-    label: "Near limit",
-    iconColor: "text-warning",
-  },
-  over_budget: {
-    color: "text-destructive-muted-foreground",
-    barColor: "bg-destructive",
-    label: "Over budget",
-    iconColor: "text-destructive",
-  },
-};
-
-const DEFAULT_HEALTH = {
-  color: "text-muted-foreground",
-  barColor: "bg-muted",
-  label: "",
-  iconColor: "",
-};
-
-function getHealthStyle(health: string | null) {
-  return health ? (HEALTH_STYLES[health] ?? DEFAULT_HEALTH) : DEFAULT_HEALTH;
-}
 
 function HealthIcon({ health }: { health: string | null }) {
   const style = getHealthStyle(health);

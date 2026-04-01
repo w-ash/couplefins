@@ -386,8 +386,11 @@ class GetDashboardUseCase:
                 ),
             )
 
+            ytd_household_txs = [
+                tx for tx in household_txs if tx.date.month <= active_month
+            ]
             ytd_summary = reconcile(
-                [tx for tx in household_txs if tx.date.month <= active_month],
+                ytd_household_txs,
                 ctx.persons,
                 ctx.categories,
                 ctx.category_groups,
@@ -396,11 +399,10 @@ class GetDashboardUseCase:
             )
 
             # True household spending (all household=true, including no-split)
-            active_month_household = by_month_household.get(active_month, [])
-            household_spending_month = _compute_all_spending(active_month_household)
-            household_spending_ytd = _compute_all_spending([
-                tx for tx in household_txs if tx.date.month <= active_month
-            ])
+            household_spending_month = _compute_all_spending(
+                by_month_household.get(active_month, [])
+            )
+            household_spending_ytd = _compute_all_spending(ytd_household_txs)
 
             uploads = await uow.uploads.get_by_person_ids_with_transactions_in_period(
                 ctx.person_ids, command.year, active_month
