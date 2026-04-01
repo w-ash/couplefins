@@ -50,6 +50,14 @@ from src.interface.api.schemas.auth import AuthPersonResponse
 
 AuthPersonResponse.has_password  # serialized to JSON in GET /auth/persons
 
+from src.interface.api.routes.health import HealthResponse
+
+HealthResponse.version  # serialized to JSON in GET /health
+HealthResponse.schema_version
+HealthResponse.schema_ok
+HealthResponse.database_host
+HealthResponse.database_mode
+
 # --- Domain functions: tested + public API, not yet wired into a use case ---
 
 from src.domain.insights import compute_trailing_average

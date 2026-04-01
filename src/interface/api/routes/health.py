@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from sqlalchemy import text
 
+from src.config.constants import AppConfig
 from src.config.settings import get_settings
 from src.infrastructure.persistence.database.db_connection import get_session
 
@@ -12,6 +13,10 @@ router = APIRouter(tags=["health"])
 
 class HealthResponse(BaseModel):
     status: str
+    version: str
+    schema_version: str
+    schema_current: str
+    schema_ok: bool
     database_host: str
     database_mode: str
 
@@ -30,6 +35,15 @@ async def health_check() -> HealthResponse:
         mode = "Local PostgreSQL"
 
     async with get_session() as session:
-        await session.execute(text("SELECT 1"))
+        row = await session.execute(text("SELECT version_num FROM alembic_version"))
+        schema_current = row.scalar_one_or_none() or "unknown"
 
-    return HealthResponse(status="ok", database_host=host, database_mode=mode)
+    return HealthResponse(
+        status="ok",
+        version=AppConfig.APP_VERSION,
+        schema_version=AppConfig.SCHEMA_VERSION,
+        schema_current=schema_current,
+        schema_ok=schema_current == AppConfig.SCHEMA_VERSION,
+        database_host=host,
+        database_mode=mode,
+    )

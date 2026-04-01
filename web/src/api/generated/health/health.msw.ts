@@ -21,7 +21,7 @@ import type {
 } from '../model';
 
 
-export const getHealthCheckResponseMock = (overrideResponse: Partial<Extract<HealthResponse, object>> = {}): HealthResponse => ({status: faker.string.alpha({length: {min: 10, max: 20}}), database_host: faker.string.alpha({length: {min: 10, max: 20}}), database_mode: faker.string.alpha({length: {min: 10, max: 20}}), ...overrideResponse})
+export const getHealthCheckResponseMock = (overrideResponse: Partial<Extract<HealthResponse, object>> = {}): HealthResponse => ({status: faker.string.alpha({length: {min: 10, max: 20}}), version: faker.string.alpha({length: {min: 10, max: 20}}), schema_version: faker.string.alpha({length: {min: 10, max: 20}}), schema_current: faker.string.alpha({length: {min: 10, max: 20}}), schema_ok: faker.datatype.boolean(), database_host: faker.string.alpha({length: {min: 10, max: 20}}), database_mode: faker.string.alpha({length: {min: 10, max: 20}}), ...overrideResponse})
 
 
 export const getHealthCheckMockHandler = (overrideResponse?: HealthResponse | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<HealthResponse> | HealthResponse), options?: RequestHandlerOptions) => {

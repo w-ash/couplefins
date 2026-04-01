@@ -7,6 +7,10 @@
 
 export interface HealthResponse {
   status: string;
+  version: string;
+  schema_version: string;
+  schema_current: string;
+  schema_ok: boolean;
   database_host: string;
   database_mode: string;
 }

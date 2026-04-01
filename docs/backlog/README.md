@@ -134,6 +134,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.0.3 | DRY audit, DB-backed theme preference, auth UX, sslmode fix | Completed (2026-03-28) | M |
 | v1.0.4 | Structured logging — loguru → structlog, request middleware, JSON logs | Completed (2026-03-30) | S |
 | v1.1.0 | Notes, discuss elevation, case-insensitive tags, editor & layout polish | Completed (2026-03-31) | M |
+| v1.1.1 | Schema version guard — health endpoint versioning, upgrade screen | Completed (2026-03-31) | S |
 
 ## Infrastructure Readiness
 
@@ -198,6 +199,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | Case-insensitive tags (normalize at input boundaries) | — | — | — | — | — | — | — | — | — | — | — | — | ✅ |
 | Two-dimension transaction editor (household/personal + split %) | — | — | — | — | — | — | — | — | — | — | — | — | ✅ |
 | Wider content area (`max-w-5xl`, responsive Group column) | — | — | — | — | — | — | — | — | — | — | — | — | ✅ |
+| Schema version guard (health check gate + upgrade screen) | — | — | — | — | — | — | — | — | — | — | — | — | ✅ |
 
 ## Key Technical Decisions
 
@@ -222,4 +224,5 @@ pnpm --prefix web check && pnpm --prefix web test
 - **Tags**: Normalized to lowercase at all input boundaries (v1.1.0): CSV parser, tag add/remove, tag update, server-side filter queries. Alembic migration `0004` lowercased existing data. Frontend `hasDiscussTag()` uses case-insensitive comparison as defense-in-depth. `DISCUSS_TAG` constant centralizes the tag name.
 - **Transaction editor**: Two-dimension model (v1.1.0): Household/Personal toggle ("Scope") + always-editable split percentage. Replaces the prior 4-way segmented control (Personal/Shared/Spotted/Household) which obscured the actual data model. Split display uses percentage format (`50%`) instead of ratio (`50/50`).
 - **Content layout**: Data pages use `max-w-5xl` (1024px) since v1.1.0. Settings/Account at `max-w-3xl`, auth pages at `max-w-md`. Transaction table Group column hides below `xl` (1280px viewport). Table has `pl-4`/`pr-4` on first/last columns for proper padding with expanded-row backgrounds.
+- **Schema version guard**: `GET /health` returns `APP_VERSION`, `SCHEMA_VERSION` (expected Alembic head), `schema_current` (actual from `alembic_version` table), and `schema_ok` (boolean match). Frontend gates on `schema_ok` before running the auth flow. On mismatch, shows an `UpgradeScreen` distinguishing code-behind-schema (pull + restart) from schema-behind-code (restart to run migrations). Prevents cryptic SQLAlchemy errors when two laptops are at different code versions against the same Neon database.
 - **Tooling**: uv, Ruff, BasedPyright, pytest, Biome
