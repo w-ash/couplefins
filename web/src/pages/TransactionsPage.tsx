@@ -9,7 +9,8 @@ import {
   StickyNote,
   Upload,
 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
 import { useGetCategoryGroups } from "@/api/generated/category-groups/category-groups";
 import { getGetDashboardQueryKey } from "@/api/generated/dashboard/dashboard";
 import type {
@@ -61,7 +62,11 @@ import { TransactionSearch } from "@/components/TransactionSearch";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { useSetToggle } from "@/hooks/useSetToggle";
 import { useTemporary } from "@/hooks/useTemporary";
-import { formatRangeLabel, useDateRange } from "@/lib/date-range";
+import {
+  formatRangeLabel,
+  monthStartEnd,
+  useDateRange,
+} from "@/lib/date-range";
 import {
   amountColorClass,
   computeShares,
@@ -574,8 +579,14 @@ function TransactionRow({
 }
 
 export function TransactionsPage() {
+  const [searchParams] = useSearchParams();
   const { startDate, endDate, setDateRange, singleMonth } = useDateRange();
   const queryClient = useQueryClient();
+  const didAutoRedirect = useRef(false);
+
+  // True when the user navigated here without explicit date params (fresh page load)
+  const hasExplicitDateParams =
+    searchParams.has("startDate") || searchParams.has("year");
 
   const { data: personsResponse } = useGetPersons();
   const persons = personsResponse?.data;
@@ -603,6 +614,24 @@ export function TransactionsPage() {
     reconciliationResponse?.status === 200
       ? reconciliationResponse.data
       : undefined;
+
+  // Auto-redirect to the most recent month with data when landing without date params
+  const latestMonth = data?.latest_transaction_month;
+  const shouldRedirectToLatest =
+    !hasExplicitDateParams &&
+    !didAutoRedirect.current &&
+    data !== undefined &&
+    data.transactions.length === 0 &&
+    latestMonth != null &&
+    (latestMonth.year !== singleMonth?.year ||
+      latestMonth.month !== singleMonth?.month);
+
+  useEffect(() => {
+    if (shouldRedirectToLatest && latestMonth) {
+      didAutoRedirect.current = true;
+      setDateRange(monthStartEnd(latestMonth.year, latestMonth.month));
+    }
+  }, [shouldRedirectToLatest, latestMonth, setDateRange]);
 
   const invalidateReconciliation = useCallback(() => {
     queryClient.invalidateQueries({
@@ -680,11 +709,13 @@ export function TransactionsPage() {
         />
       </PageHeader>
 
-      {isLoading && <PageLoading label="Loading transactions..." />}
+      {(isLoading || shouldRedirectToLatest) && (
+        <PageLoading label="Loading transactions..." />
+      )}
 
       {error && <PageError error={error} onRetry={() => refetch()} />}
 
-      {data && (
+      {data && !shouldRedirectToLatest && (
         <div className="space-y-4">
           {data.transactions.length === 0 ? (
             <PageEmpty

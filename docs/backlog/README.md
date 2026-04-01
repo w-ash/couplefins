@@ -1,5 +1,84 @@
 # Project Roadmap
 
+## Getting Started (macOS)
+
+### Prerequisites
+
+Install these if you don't have them:
+
+```bash
+# Homebrew (skip if already installed)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Python 3.14 via uv (Python version manager + package manager)
+brew install uv
+
+# Node.js 22+ via fnm (fast Node version manager)
+brew install fnm
+fnm install 22
+fnm use 22
+
+# pnpm (frontend package manager)
+brew install pnpm
+```
+
+### Clone and set up
+
+```bash
+# 1. Clone
+git clone git@github.com:w-ash/couplefins.git
+cd couplefins
+
+# 2. Install Python dependencies (creates .venv automatically)
+uv sync
+
+# 3. Create your .env from the example
+cp .env.example .env
+```
+
+Edit `.env` and set your Neon PostgreSQL connection string:
+
+```
+DATABASE__URL=postgresql+asyncpg://user:pass@ep-xxxx.us-west-2.aws.neon.tech/dbname?sslmode=require
+```
+
+To get a connection string: create a free project at [neon.tech](https://neon.tech), copy the connection string from the dashboard, and replace `postgresql://` with `postgresql+asyncpg://`.
+
+```bash
+# 4. Run database migrations
+uv run alembic upgrade head
+
+# 5. Install frontend dependencies
+pnpm --prefix web install
+
+# 6. Generate TypeScript API client from OpenAPI spec
+pnpm --prefix web generate
+```
+
+### Run the app
+
+```bash
+make dev
+```
+
+This starts both servers concurrently:
+- **API**: http://localhost:8001 (FastAPI with hot reload)
+- **Web**: http://localhost:5174 (Vite dev server)
+
+On first load, the app shows a setup screen to create both person profiles.
+
+### Verify everything works
+
+```bash
+# Backend: lint, type check, dead code, tests
+uv run ruff check . --fix && uv run ruff format . && uv run basedpyright src/ && uv run vulture && uv run pytest
+
+# Frontend: lint, type check, build, tests
+pnpm --prefix web check && pnpm --prefix web test
+```
+
+---
+
 ## Version Matrix
 
 | Version | Goal | Status | Effort |
