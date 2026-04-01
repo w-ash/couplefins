@@ -19,11 +19,7 @@ import {
   parsePercent,
 } from "@/lib/format";
 import { baseInputClass, inputErrorClass } from "@/lib/input-styles";
-import {
-  deriveTransactionType,
-  type TransactionType,
-  TYPE_OPTIONS,
-} from "@/lib/transaction-classification";
+import type { TransactionScope } from "@/lib/transaction-filters";
 
 interface TransactionEditorProps {
   tx: TransactionResponse;
@@ -47,6 +43,7 @@ const fieldLabels: Record<string, string> = {
   date: "Date",
   amount: "Amount",
   category: "Category",
+  notes: "Notes",
   tags: "Tags",
   payer_percentage: "Split",
   household: "Type",
@@ -105,53 +102,21 @@ export function TransactionEditor({
   onSave,
   onCancel,
 }: TransactionEditorProps) {
-  const originalType = deriveTransactionType(tx.household, tx.payer_percentage);
-
   const [date, setDate] = useState(tx.date);
   const [amount, setAmount] = useState(String(tx.amount));
   const [category, setCategory] = useState(tx.category);
   const [tags, setTags] = useState<string[]>([...tx.tags]);
+  const [notes, setNotes] = useState(tx.notes);
   const [split, setSplit] = useState(String(tx.payer_percentage));
   const [household, setHousehold] = useState(tx.household);
   const [isExcluded, setIsExcluded] = useState(tx.is_excluded);
   const firstInputRef = useRef<HTMLInputElement>(null);
 
-  const currentType = deriveTransactionType(
-    household,
-    parsePercent(split) ?? tx.payer_percentage,
-  );
-  const splitEditable = currentType === "shared";
+  const scopeValue: TransactionScope = household ? "household" : "personal";
 
   useEffect(() => {
     firstInputRef.current?.focus();
   }, []);
-
-  const handleTypeChange = useCallback(
-    (type: TransactionType) => {
-      switch (type) {
-        case "personal":
-          setHousehold(false);
-          setSplit("100");
-          break;
-        case "shared":
-          setHousehold(true);
-          // Restore original split if the tx was originally shared, otherwise default 50
-          setSplit(
-            originalType === "shared" ? String(tx.payer_percentage) : "50",
-          );
-          break;
-        case "spotted":
-          setHousehold(true);
-          setSplit("0");
-          break;
-        case "household":
-          setHousehold(true);
-          setSplit("100");
-          break;
-      }
-    },
-    [originalType, tx.payer_percentage],
-  );
 
   const parsedAmount = Number.parseFloat(amount);
   const parsedSplit = parsePercent(split);
@@ -171,12 +136,14 @@ export function TransactionEditor({
     tags.length !== tx.tags.length || tags.some((t, i) => t !== tx.tags[i]);
 
   const excludedChanged = isExcluded !== tx.is_excluded;
+  const notesChanged = notes !== tx.notes;
 
   const hasChanges =
     date !== tx.date ||
     (isAmountValid && parsedAmount !== tx.amount) ||
     category !== tx.category ||
     tagsChanged ||
+    notesChanged ||
     householdChanged ||
     excludedChanged ||
     (parsedSplit !== null && parsedSplit !== tx.payer_percentage);
@@ -188,6 +155,7 @@ export function TransactionEditor({
       fields.amount = parsedAmount;
     if (category !== tx.category) fields.category = category;
     if (tagsChanged) fields.tags = tags;
+    if (notesChanged) fields.notes = notes;
     if (parsedSplit !== null && parsedSplit !== tx.payer_percentage)
       fields.payer_percentage = parsedSplit;
     if (householdChanged) fields.household = household;
@@ -198,6 +166,8 @@ export function TransactionEditor({
     category,
     tags,
     tagsChanged,
+    notes,
+    notesChanged,
     tx,
     parsedAmount,
     parsedSplit,
@@ -230,24 +200,15 @@ export function TransactionEditor({
       onKeyDown={handleKeyDown}
       onSubmit={(e) => e.preventDefault()}
     >
-      <div className="mb-3 flex items-center gap-2 text-sm">
-        <span className="font-medium text-foreground">{tx.merchant}</span>
-        <span className="text-muted-foreground">&middot;</span>
-        <span className="tabular-nums text-foreground">
-          {formatCurrency(tx.amount)}
-        </span>
-        <span className="text-muted-foreground">&middot;</span>
-        <span className="tabular-nums text-muted-foreground">
-          {formatDate(tx.date)}
-        </span>
-      </div>
-
       <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
-        <span className="w-16 shrink-0">Type</span>
-        <SegmentedControl<TransactionType>
-          options={TYPE_OPTIONS}
-          value={currentType}
-          onChange={handleTypeChange}
+        <span className="w-16 shrink-0">Scope</span>
+        <SegmentedControl<TransactionScope>
+          options={[
+            { value: "household", label: "Household" },
+            { value: "personal", label: "Personal" },
+          ]}
+          value={scopeValue}
+          onChange={(v) => setHousehold(v === "household")}
           size="sm"
           shape="pill"
         />
@@ -324,31 +285,41 @@ export function TransactionEditor({
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-4">
-        <label
-          htmlFor="tx-split"
-          className="flex items-center gap-2 text-sm text-muted-foreground"
-        >
-          <span className="w-16 shrink-0">Split</span>
-          <PercentInput
-            id="tx-split"
-            value={split}
-            onChange={setSplit}
-            disabled={saving || !splitEditable}
-            error={splitHasError}
-          />
-        </label>
+      <label className="mt-3 flex items-start gap-2 text-sm text-muted-foreground">
+        <span className="mt-2 w-16 shrink-0">Notes</span>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+          className={`${baseInputClass} flex-1 resize-y`}
+          disabled={saving}
+        />
+      </label>
 
+      <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+        <span className="w-16 shrink-0">Split</span>
+        <PercentInput
+          id="tx-split"
+          value={split}
+          onChange={setSplit}
+          disabled={saving}
+          error={splitHasError}
+        />
         <div aria-live="polite">
           {!splitHasError && isSplitValid ? (
-            <span className="text-sm tabular-nums text-muted-foreground">
+            <span className="tabular-nums">
               {payerName}: {formatCurrency(payerShare)} &middot; {otherName}:{" "}
               {formatCurrency(otherShare)}
             </span>
           ) : null}
         </div>
+      </div>
 
-        <label className="flex items-center gap-2 py-2 sm:py-0 text-sm text-muted-foreground">
+      <div className="mt-3 flex flex-wrap items-center gap-4">
+        <label
+          className="flex items-center gap-2 text-sm text-muted-foreground"
+          title="Excluded transactions don't count toward settlement or budget"
+        >
           <input
             type="checkbox"
             checked={isExcluded}
@@ -356,7 +327,7 @@ export function TransactionEditor({
             disabled={saving}
             className="size-4 accent-primary"
           />
-          Exclude from reconciliation
+          Exclude
         </label>
 
         <div className="flex w-full gap-2 sm:ml-auto sm:w-auto">

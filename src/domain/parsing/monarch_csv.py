@@ -114,7 +114,7 @@ def parse_monarch_csv(
 def _parse_tags(tags_str: str) -> tuple[str, ...]:
     if not tags_str or not tags_str.strip():
         return ()
-    return tuple(tag.strip() for tag in tags_str.split(",") if tag.strip())
+    return tuple(tag.strip().lower() for tag in tags_str.split(",") if tag.strip())
 
 
 def _is_settlement(tags: tuple[str, ...]) -> bool:

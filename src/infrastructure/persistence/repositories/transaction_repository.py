@@ -125,7 +125,7 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
     def _tag_filter(tags: tuple[str, ...] | None) -> list[ColumnElement[bool]]:
         if not tags:
             return []
-        return [TransactionModel.tags.op("@>")(cast(list(tags), JSONB))]
+        return [TransactionModel.tags.op("@>")(cast([t.lower() for t in tags], JSONB))]
 
     async def get_household_by_period(self, year: int, month: int) -> list[Transaction]:
         return await self._query(

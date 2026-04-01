@@ -3,6 +3,8 @@ import type { TransactionResponse } from "@/api/generated/model";
 import {
   cycleSortState,
   DEFAULT_SORT,
+  DISCUSS_TAG,
+  hasDiscussTag,
   type SortState,
   sortList,
 } from "@/lib/transaction-filters";
@@ -155,5 +157,52 @@ describe("sortList", () => {
     const original = [...txs];
     sortList(txs, { field: "merchant", dir: "asc" }, groups);
     expect(txs.map((t) => t.id)).toEqual(original.map((t) => t.id));
+  });
+});
+
+// ─── Notes & Discuss filter helpers ───
+
+describe("notes and discuss counts", () => {
+  const txs = [
+    makeTx({ id: "1", notes: "dinner plans", tags: ["shared"] }),
+    makeTx({ id: "2", notes: "", tags: [DISCUSS_TAG, "shared"] }),
+    makeTx({ id: "3", notes: "ask about this", tags: [DISCUSS_TAG] }),
+    makeTx({ id: "4", notes: "", tags: ["shared"] }),
+  ];
+
+  it("counts transactions with non-empty notes", () => {
+    const count = txs.filter((tx) => tx.notes !== "").length;
+    expect(count).toBe(2);
+  });
+
+  it("counts transactions with discuss tag", () => {
+    const count = txs.filter((tx) => hasDiscussTag(tx)).length;
+    expect(count).toBe(2);
+  });
+
+  it("hasNotes filter returns only annotated transactions", () => {
+    const filtered = txs.filter((tx) => tx.notes !== "");
+    expect(filtered.map((t) => t.id)).toEqual(["1", "3"]);
+  });
+
+  it("discuss filter returns only flagged transactions", () => {
+    const filtered = txs.filter((tx) => hasDiscussTag(tx));
+    expect(filtered.map((t) => t.id)).toEqual(["2", "3"]);
+  });
+
+  it("discuss tag matching is case-insensitive", () => {
+    const mixed = [
+      makeTx({ id: "a", tags: ["Discuss"] }),
+      makeTx({ id: "b", tags: ["DISCUSS"] }),
+      makeTx({ id: "c", tags: ["discuss"] }),
+      makeTx({ id: "d", tags: ["shared"] }),
+    ];
+    const filtered = mixed.filter((tx) => hasDiscussTag(tx));
+    expect(filtered.map((t) => t.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("both filters combined returns intersection", () => {
+    const filtered = txs.filter((tx) => tx.notes !== "" && hasDiscussTag(tx));
+    expect(filtered.map((t) => t.id)).toEqual(["3"]);
   });
 });

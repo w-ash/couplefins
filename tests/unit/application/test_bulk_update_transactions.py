@@ -442,3 +442,37 @@ async def test_result_includes_updated_transactions() -> None:
 
     assert len(result.updated_transactions) == 2
     assert all(t.category == "Fast Food" for t in result.updated_transactions)
+
+
+# --- Notes editing ---
+
+
+async def test_updates_notes_for_single_transaction() -> None:
+    uow = make_mock_uow()
+    tx = make_transaction(notes="old note")
+    uow.transactions.get_by_ids.return_value = [tx]
+    command = BulkUpdateTransactionsCommand(transaction_ids=[tx.id], notes="new note")
+
+    result = await BulkUpdateTransactionsUseCase().execute(command, uow)
+
+    assert result.updated_count == 1
+    updated = uow.transactions.update_mutable_fields.call_args[0][0]
+    assert updated.notes == "new note"
+    edits = uow.transaction_edits.save_batch.call_args[0][0]
+    assert len(edits) == 1
+    assert edits[0].field_name == "notes"
+    assert edits[0].old_value == "old note"
+    assert edits[0].new_value == "new note"
+
+
+async def test_notes_no_edit_when_unchanged() -> None:
+    uow = make_mock_uow()
+    tx = make_transaction(notes="same note")
+    uow.transactions.get_by_ids.return_value = [tx]
+    command = BulkUpdateTransactionsCommand(transaction_ids=[tx.id], notes="same note")
+
+    result = await BulkUpdateTransactionsUseCase().execute(command, uow)
+
+    assert result.updated_count == 0
+    uow.transactions.update_mutable_fields.assert_not_called()
+    uow.transaction_edits.save_batch.assert_not_called()

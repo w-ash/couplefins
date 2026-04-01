@@ -32,6 +32,7 @@ class BulkUpdateTransactionsCommand:
     date: date | None = None
     amount: Decimal | None = None
     category: str | None = None
+    notes: str | None = None
     tags: tuple[str, ...] | None = None
     payer_percentage: int | _Unset = field(default=_Unset.UNSET)
     household: bool | _Unset = field(default=_Unset.UNSET)
@@ -55,8 +56,10 @@ def _collect_updates(
         updates["amount"] = command.amount
     if command.category is not None:
         updates["category"] = command.category
+    if command.notes is not None:
+        updates["notes"] = command.notes
     if command.tags is not None:
-        updates["tags"] = command.tags
+        updates["tags"] = tuple(t.lower() for t in command.tags)
     if not isinstance(command.payer_percentage, _Unset):
         updates["payer_percentage"] = command.payer_percentage
     if not isinstance(command.household, _Unset):
@@ -97,6 +100,7 @@ _EDIT_FIELDS = (
     "date",
     "amount",
     "category",
+    "notes",
     "tags",
     "payer_percentage",
     "household",
@@ -139,6 +143,7 @@ class BulkUpdateTransactionsUseCase:
                     ("date", tx.date),
                     ("amount", tx.amount),
                     ("category", tx.category),
+                    ("notes", tx.notes),
                     ("tags", tx.tags),
                     ("payer_percentage", tx.payer_percentage),
                     ("household", tx.household),

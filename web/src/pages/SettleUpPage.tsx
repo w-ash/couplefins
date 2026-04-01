@@ -456,7 +456,7 @@ export function SettleUpPage() {
   const [exportOpen, setExportOpen] = useState(false);
 
   return (
-    <div className={`mx-auto max-w-4xl ${PAGE_PADDING}`}>
+    <div className={`mx-auto max-w-5xl ${PAGE_PADDING}`}>
       <PageHeader icon={<HandCoins className="size-6" />} title="Settle Up">
         <MonthPicker />
       </PageHeader>

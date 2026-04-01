@@ -11,4 +11,5 @@ export interface BulkUpdateRequest {
   payer_percentage?: number | null;
   household?: boolean | null;
   is_excluded?: boolean | null;
+  notes?: string | null;
 }

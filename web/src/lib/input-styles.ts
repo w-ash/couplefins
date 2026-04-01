@@ -5,7 +5,7 @@ export const baseInputClass = `${inputCoreClass} min-h-11 py-2`;
 
 export const selectInputClass = `${inputCoreClass} min-h-11 py-1.5`;
 
-export const percentInputClass = `w-16 tabular-nums ${baseInputClass}`;
+export const percentInputClass = `w-20 tabular-nums ${baseInputClass}`;
 
 export const triggerButtonClass =
   "inline-flex items-center gap-2 rounded-lg border border-input bg-card px-3 py-1.5 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted";

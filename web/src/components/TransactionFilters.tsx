@@ -328,6 +328,48 @@ export function AmountRangeFilter({
   );
 }
 
+// ─── Quick-filter chip (toggle, no popover) ───
+
+export function QuickFilterChip({
+  icon,
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2.5 text-sm shadow-sm transition-colors sm:py-1.5 ${
+        active
+          ? "border-primary/30 bg-primary/10 text-primary"
+          : "border-input bg-card text-secondary-foreground hover:bg-muted"
+      }`}
+    >
+      {icon}
+      {label}
+      {count > 0 && (
+        <span
+          className={`inline-flex size-5 items-center justify-center rounded-full text-[11px] font-medium ${
+            active
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
 // ─── Active filter pills ───
 
 interface ActiveFilter {
@@ -394,6 +436,22 @@ export function ActiveFilterPills({
       key: "amount",
       label: `Amount: ${parts.join(", ")}`,
       onRemove: () => filters.setAmountRange(null, null),
+    });
+  }
+
+  if (filters.hasNotes) {
+    pills.push({
+      key: "hasNotes",
+      label: "Has Notes",
+      onRemove: () => filters.setHasNotes(false),
+    });
+  }
+
+  if (filters.discuss) {
+    pills.push({
+      key: "discuss",
+      label: "Discuss",
+      onRemove: () => filters.setDiscuss(false),
     });
   }
 

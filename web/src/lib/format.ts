@@ -58,8 +58,7 @@ export function getDeltaColorClass(pct: number): string {
 }
 
 export function formatSplit(payerPercentage: number | null): string {
-  const payer = payerPercentage ?? 50;
-  return `${payer}/${100 - payer}`;
+  return `${payerPercentage ?? 50}%`;
 }
 
 export function parsePercent(value: string): number | null {

@@ -173,6 +173,21 @@ Making sure the data is right before settling. This is solo prep work — each p
 - Given a transaction, then I can toggle it to "excluded" so it doesn't count toward settlement or budget
 - Given an excluded transaction, then it's visually distinct and can be re-included
 
+**US-REVIEW-9** (v1.1.x): As a partner, I want to see and edit transaction notes so I can add context during solo prep.
+
+- Given a transaction with notes imported from Monarch, then I see a `StickyNote` icon in the collapsed row indicating notes exist
+- Given I expand the transaction, then I see the notes in a textarea and can edit them
+- Given I edit a note and save, then the change is tracked in the audit trail like any other field edit
+- Given the transaction table, then I can filter to "Has Notes" via a quick-filter chip to see only annotated transactions
+
+**US-REVIEW-10** (v1.1.x): As a partner, I want to flag transactions for discussion so my partner sees them during our together session.
+
+- Given a transaction I want to discuss, then I can add a "discuss" tag (via the existing tag editor)
+- Given a transaction tagged "discuss", then I see a prominent `MessageCircleQuestion` icon in the collapsed row — more eye-catching than the notes icon
+- Given the transaction table, then I can filter to "Discuss" via a quick-filter chip that shows a count badge of flagged transactions
+- Given I expand a flagged transaction, then I see a "Mark Discussed" button that removes the tag in one click
+- Given I mark a transaction as discussed, then the icon disappears and the discuss count decrements
+
 ---
 
 ### Understanding Where We Stand

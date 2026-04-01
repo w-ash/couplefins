@@ -2,6 +2,12 @@ import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router";
 import type { TransactionResponse } from "@/api/generated/model";
 
+export const DISCUSS_TAG = "discuss";
+
+export function hasDiscussTag(tx: TransactionResponse): boolean {
+  return tx.tags.some((t) => t.toLowerCase() === DISCUSS_TAG);
+}
+
 export type TransactionScope = "household" | "personal" | "all";
 
 const VALID_SCOPES = new Set<string>(["household", "personal", "all"]);
@@ -35,6 +41,8 @@ interface FilterState {
   tags: string[];
   minAmount: number | null;
   maxAmount: number | null;
+  hasNotes: boolean;
+  discuss: boolean;
   sort: SortState;
 }
 
@@ -84,6 +92,8 @@ export function useTransactionFilters(
       maxAmount: searchParams.get("maxAmt")
         ? Number(searchParams.get("maxAmt"))
         : null,
+      hasNotes: searchParams.get("hasNotes") === "1",
+      discuss: searchParams.get("discuss") === "1",
       sort: parseSort(searchParams.get("sort")),
     };
   }, [searchParams]);
@@ -123,6 +133,14 @@ export function useTransactionFilters(
             if (updates.maxAmount != null)
               next.set("maxAmt", String(updates.maxAmount));
             else next.delete("maxAmt");
+          }
+          if ("hasNotes" in updates) {
+            if (updates.hasNotes) next.set("hasNotes", "1");
+            else next.delete("hasNotes");
+          }
+          if ("discuss" in updates) {
+            if (updates.discuss) next.set("discuss", "1");
+            else next.delete("discuss");
           }
           if ("sort" in updates) {
             const s = serializeSort(updates.sort ?? DEFAULT_SORT);
@@ -168,6 +186,16 @@ export function useTransactionFilters(
     [setFilter],
   );
 
+  const setHasNotes = useCallback(
+    (v: boolean) => setFilter({ hasNotes: v }),
+    [setFilter],
+  );
+
+  const setDiscuss = useCallback(
+    (v: boolean) => setFilter({ discuss: v }),
+    [setFilter],
+  );
+
   const setSort = useCallback(
     (s: SortState) => setFilter({ sort: s }),
     [setFilter],
@@ -182,6 +210,8 @@ export function useTransactionFilters(
       tags: [],
       minAmount: null,
       maxAmount: null,
+      hasNotes: false,
+      discuss: false,
       sort: DEFAULT_SORT,
     });
   }, [setFilter]);
@@ -233,6 +263,14 @@ export function useTransactionFilters(
       result = result.filter((tx) => tx.tags.some((t) => tagSet.has(t)));
     }
 
+    // Notes / Discuss quick-filters
+    if (state.hasNotes) {
+      result = result.filter((tx) => tx.notes !== "");
+    }
+    if (state.discuss) {
+      result = result.filter((tx) => hasDiscussTag(tx));
+    }
+
     // Amount range (absolute value)
     const { minAmount, maxAmount } = state;
     if (minAmount != null) {
@@ -246,13 +284,25 @@ export function useTransactionFilters(
     return sortList(result, state.sort, categoryGroups);
   }, [transactions, state, categoryGroups]);
 
+  const { notesCount, discussCount } = useMemo(() => {
+    let notes = 0;
+    let discuss = 0;
+    for (const tx of transactions) {
+      if (tx.notes !== "") notes++;
+      if (hasDiscussTag(tx)) discuss++;
+    }
+    return { notesCount: notes, discussCount: discuss };
+  }, [transactions]);
+
   const activeFilterCount =
     (state.scope !== "all" ? 1 : 0) +
     (state.query ? 1 : 0) +
     (state.payers.length > 0 ? 1 : 0) +
     (state.categories.length > 0 ? 1 : 0) +
     (state.tags.length > 0 ? 1 : 0) +
-    (state.minAmount != null || state.maxAmount != null ? 1 : 0);
+    (state.minAmount != null || state.maxAmount != null ? 1 : 0) +
+    (state.hasNotes ? 1 : 0) +
+    (state.discuss ? 1 : 0);
 
   return {
     filtered,
@@ -264,13 +314,19 @@ export function useTransactionFilters(
     tags: state.tags,
     minAmount: state.minAmount,
     maxAmount: state.maxAmount,
+    hasNotes: state.hasNotes,
+    discuss: state.discuss,
     sort: state.sort,
+    notesCount,
+    discussCount,
     setScope,
     setQuery,
     setPayers,
     setCategories,
     setTags,
     setAmountRange,
+    setHasNotes,
+    setDiscuss,
     setSort,
     clearAll,
     activeFilterCount,

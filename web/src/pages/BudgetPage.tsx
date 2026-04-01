@@ -796,7 +796,7 @@ export function BudgetPage() {
       : null;
 
   return (
-    <div className={`mx-auto max-w-4xl ${PAGE_PADDING}`}>
+    <div className={`mx-auto max-w-5xl ${PAGE_PADDING}`}>
       <PageHeader icon={<PieChart className="size-6" />} title="Budget">
         <MonthPicker />
       </PageHeader>

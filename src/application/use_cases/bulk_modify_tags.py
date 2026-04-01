@@ -37,7 +37,7 @@ def _add_tags(existing: tuple[str, ...], new_tags: list[str]) -> tuple[str, ...]
 
 
 def _remove_tags(existing: tuple[str, ...], remove: set[str]) -> tuple[str, ...]:
-    return tuple(t for t in existing if t not in remove)
+    return tuple(t for t in existing if t.lower() not in remove)
 
 
 @define(slots=True)
@@ -59,13 +59,14 @@ class BulkModifyTagsUseCase:
             edits: list[TransactionEdit] = []
             now = datetime.now(UTC)
             updated_count = 0
-            remove_set = set(command.tags)
+            normalized_tags = [t.lower() for t in command.tags]
+            remove_set = set(normalized_tags)
 
             for tx_id in command.transaction_ids:
                 tx = transactions[tx_id]
 
                 if command.action == TagAction.ADD:
-                    new_tags = _add_tags(tx.tags, command.tags)
+                    new_tags = _add_tags(tx.tags, normalized_tags)
                 else:
                     new_tags = _remove_tags(tx.tags, remove_set)
 

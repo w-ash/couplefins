@@ -183,7 +183,7 @@ export function DashboardPage() {
     data.month_history.length === 0;
 
   return (
-    <div className={`mx-auto max-w-4xl ${PAGE_PADDING}`}>
+    <div className={`mx-auto max-w-5xl ${PAGE_PADDING}`}>
       <PageHeader
         icon={<LayoutDashboard className="size-6" />}
         title="Dashboard"

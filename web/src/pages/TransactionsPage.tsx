@@ -4,7 +4,9 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  MessageCircleQuestion,
   Pencil,
+  StickyNote,
   Upload,
 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
@@ -52,6 +54,7 @@ import {
   AmountRangeFilter,
   CategoryFilter,
   PayerFilter,
+  QuickFilterChip,
   TagFilter,
 } from "@/components/TransactionFilters";
 import { TransactionSearch } from "@/components/TransactionSearch";
@@ -73,6 +76,7 @@ import { usePersonMaps } from "@/lib/persons";
 import type { SortField, SortState } from "@/lib/transaction-filters";
 import {
   cycleSortState,
+  hasDiscussTag,
   type TransactionScope,
   useTransactionFilters,
 } from "@/lib/transaction-filters";
@@ -320,7 +324,7 @@ function TransactionTable({
       )}
 
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full border-spacing-0 text-sm [&_td:first-child]:pl-4 [&_td:last-child]:pr-4 [&_th:first-child]:pl-4 [&_th:last-child]:pr-4">
           <thead>
             <tr className="border-b border-border text-left text-muted-foreground">
               {bulkMode && (
@@ -351,7 +355,7 @@ function TransactionTable({
                 field="group"
                 sort={sort}
                 onSort={onSort}
-                className="hidden sm:table-cell"
+                className="hidden xl:table-cell"
               >
                 Group
               </SortableHeader>
@@ -471,6 +475,7 @@ function TransactionRow({
   const otherName =
     [...personNames].find(([id]) => id !== tx.payer_person_id)?.[1] ?? "Other";
   const categoryGroup = categoryGroups.get(tx.category) ?? "Uncategorized";
+  const hasDiscuss = hasDiscussTag(tx);
   const strikethrough = tx.is_excluded ? "line-through" : "";
   return (
     <>
@@ -500,6 +505,20 @@ function TransactionRow({
           <span className="flex items-center gap-1.5">
             {tx.merchant}
             {isSaved && <Check className="size-3.5 text-positive" />}
+            {tx.notes && (
+              <span title={tx.notes.slice(0, 80)} className="shrink-0">
+                <StickyNote
+                  className="size-3.5 text-muted-foreground"
+                  aria-label="Has notes"
+                />
+              </span>
+            )}
+            {hasDiscuss && (
+              <MessageCircleQuestion
+                className="size-3.5 shrink-0 text-amber-500 dark:text-amber-400"
+                aria-label="Flagged for discussion"
+              />
+            )}
           </span>
         </td>
         <td
@@ -507,7 +526,7 @@ function TransactionRow({
         >
           {tx.category}
         </td>
-        <td className="hidden py-2 pr-4 text-muted-foreground sm:table-cell">
+        <td className="hidden py-2 pr-4 text-muted-foreground xl:table-cell">
           {categoryGroup}
         </td>
         <td className="hidden py-2 pr-4 sm:table-cell">
@@ -534,7 +553,7 @@ function TransactionRow({
       </tr>
       {isExpanded && (
         <tr className="border-b border-border-muted bg-muted/30">
-          <td colSpan={colCount} className="px-4">
+          <td colSpan={colCount} className="px-6">
             <div className="editor-enter">
               <TransactionEditor
                 tx={tx}
@@ -649,7 +668,7 @@ export function TransactionsPage() {
   const isFinalized = data?.is_finalized === true;
 
   return (
-    <div className={`mx-auto max-w-4xl ${PAGE_PADDING}`}>
+    <div className={`mx-auto max-w-5xl ${PAGE_PADDING}`}>
       <PageHeader
         icon={<ArrowLeftRight className="size-6" />}
         title="Transactions"
@@ -727,6 +746,20 @@ export function TransactionsPage() {
                   minAmount={filters.minAmount}
                   maxAmount={filters.maxAmount}
                   onChange={filters.setAmountRange}
+                />
+                <QuickFilterChip
+                  icon={<StickyNote className="size-3.5" />}
+                  label="Notes"
+                  count={filters.notesCount}
+                  active={filters.hasNotes}
+                  onClick={() => filters.setHasNotes(!filters.hasNotes)}
+                />
+                <QuickFilterChip
+                  icon={<MessageCircleQuestion className="size-3.5" />}
+                  label="Discuss"
+                  count={filters.discussCount}
+                  active={filters.discuss}
+                  onClick={() => filters.setDiscuss(!filters.discuss)}
                 />
               </div>
 

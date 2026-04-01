@@ -76,6 +76,7 @@ async def bulk_update_transactions(body: BulkUpdateRequest) -> BulkUpdateRespons
     command = BulkUpdateTransactionsCommand(
         transaction_ids=list(body.transaction_ids),
         category=body.category,
+        notes=body.notes,
         **kwargs,  # type: ignore[arg-type]
     )
     result = await execute_use_case(
@@ -115,6 +116,7 @@ async def update_transaction(
         date=body.date,
         amount=Decimal(str(body.amount)) if body.amount is not None else None,
         category=body.category,
+        notes=body.notes,
         tags=tuple(body.tags) if body.tags is not None else None,
         **extras,  # type: ignore[arg-type]
     )
