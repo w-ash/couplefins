@@ -8,7 +8,7 @@
 export interface MonthHistoryEntryResponse {
   year: number;
   month: number;
-  total_shared_spending: number;
+  total_household_spending: number;
   settlement_amount: number;
   settlement_from_person_id: string | null;
   settlement_to_person_id: string | null;

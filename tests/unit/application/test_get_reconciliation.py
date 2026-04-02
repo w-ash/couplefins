@@ -57,7 +57,7 @@ async def test_happy_path_both_uploaded() -> None:
     assert result.summary.start_date == date(2026, 1, 1)
     assert result.summary.end_date == date(2026, 1, 31)
     assert result.summary.transaction_count == 2
-    assert result.summary.total_shared_spending == Decimal("160.00")
+    assert result.summary.total_household_spending == Decimal("160.00")
     assert result.summary.settlement is not None
     assert all(s.has_uploaded for s in result.upload_statuses)
     assert len(result.transactions) == 2
@@ -109,7 +109,7 @@ async def test_empty_month_no_transactions() -> None:
     result = await GetReconciliationUseCase().execute(_make_command(), uow)
 
     assert result.summary.transaction_count == 0
-    assert result.summary.total_shared_spending == Decimal(0)
+    assert result.summary.total_household_spending == Decimal(0)
     assert result.summary.settlement is not None
     assert result.summary.settlement.amount == Decimal(0)
     assert result.transactions == []

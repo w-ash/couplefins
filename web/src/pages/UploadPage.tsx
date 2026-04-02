@@ -51,12 +51,6 @@ import {
 } from "@/lib/format";
 import { useIdentityStore } from "@/lib/identity";
 import { PAGE_PADDING } from "@/lib/layout";
-import {
-  ClassificationBadge,
-  deriveTransactionType,
-  type TransactionType,
-  TYPE_LABELS,
-} from "@/lib/transaction-classification";
 
 const PREVIEW_LIMIT = 5;
 const MAX_CSV_SIZE = 10 * 1024 * 1024;
@@ -193,29 +187,34 @@ function ActionPanel({
   );
 }
 
-function typeBreakdown(
-  transactions: { household: boolean; payer_percentage: number }[],
-): string {
-  const counts = new Map<TransactionType, number>();
+function typeBreakdown(transactions: { household: boolean }[]): string {
+  let householdCount = 0;
+  let personalCount = 0;
   for (const tx of transactions) {
-    const t = deriveTransactionType(tx.household, tx.payer_percentage);
-    counts.set(t, (counts.get(t) ?? 0) + 1);
+    if (tx.household) householdCount++;
+    else personalCount++;
   }
   const parts: string[] = [];
-  for (const type of ["shared", "spotted", "household", "personal"] as const) {
-    const count = counts.get(type);
-    if (count) parts.push(`${count} ${TYPE_LABELS[type].toLowerCase()}`);
-  }
+  if (householdCount) parts.push(`${householdCount} household`);
+  if (personalCount) parts.push(`${personalCount} personal`);
   return parts.join(", ");
 }
 
-function PreviewCard({
-  preview,
-  otherPersonName,
-}: {
-  preview: PreviewUploadResponse;
-  otherPersonName?: string;
-}) {
+function ScopeBadge({ household }: { household: boolean }) {
+  return (
+    <span
+      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+        household
+          ? "bg-primary-muted text-primary-muted-foreground"
+          : "bg-muted/50 text-muted-foreground/50"
+      }`}
+    >
+      {household ? "Household" : "Personal"}
+    </span>
+  );
+}
+
+function PreviewCard({ preview }: { preview: PreviewUploadResponse }) {
   const visibleNew = preview.new_transactions.slice(0, PREVIEW_LIMIT);
   const remainingCount = Math.max(
     0,
@@ -255,10 +254,7 @@ function PreviewCard({
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span className="tabular-nums">{formatDate(tx.date)}</span>
               <span>{tx.category}</span>
-              <ClassificationBadge
-                type={deriveTransactionType(tx.household, tx.payer_percentage)}
-                otherPersonName={otherPersonName}
-              />
+              <ScopeBadge household={tx.household} />
               {tx.household && tx.payer_percentage < 100 && (
                 <span className="tabular-nums">
                   {formatSplit(tx.payer_percentage)}
@@ -278,7 +274,7 @@ function PreviewCard({
               <th className="pb-2 pr-4 font-medium">Merchant</th>
               <th className="pb-2 pr-4 font-medium">Category</th>
               <th className="pb-2 pr-4 text-right font-medium">Amount</th>
-              <th className="pb-2 pr-4 font-medium">Type</th>
+              <th className="pb-2 pr-4 font-medium">Scope</th>
               <th className="pb-2 font-medium">Split</th>
             </tr>
           </thead>
@@ -302,13 +298,7 @@ function PreviewCard({
                   {formatCurrency(tx.amount)}
                 </td>
                 <td className="py-2 pr-4">
-                  <ClassificationBadge
-                    type={deriveTransactionType(
-                      tx.household,
-                      tx.payer_percentage,
-                    )}
-                    otherPersonName={otherPersonName}
-                  />
+                  <ScopeBadge household={tx.household} />
                 </td>
                 <td className="py-2 text-muted-foreground tabular-nums">
                   {tx.household && tx.payer_percentage < 100 ? (
@@ -352,7 +342,7 @@ function ConfirmedCard({
     ? `${MONTHS[uploadMonth.month - 1]} ${uploadMonth.year}`
     : null;
 
-  const sharedCount = preview
+  const householdCount = preview
     ? preview.new_transactions.filter((tx) => tx.household).length +
       preview.changed_transactions.filter((ct) => ct.incoming.household).length
     : summary.new_count + summary.updated_count;
@@ -384,7 +374,7 @@ function ConfirmedCard({
           </h2>
           {monthLabel && (
             <p className="text-sm text-muted-foreground">
-              {plural("shared transaction", sharedCount)} for {monthLabel}
+              {plural("household transaction", householdCount)} for {monthLabel}
             </p>
           )}
         </div>
@@ -680,10 +670,7 @@ export function UploadPage() {
           <div className="space-y-6">
             {/* Preview summary + capped transaction table */}
             {step === "preview" && hasNewTransactions && (
-              <PreviewCard
-                preview={preview}
-                otherPersonName={persons?.find((p) => p.id !== personId)?.name}
-              />
+              <PreviewCard preview={preview} />
             )}
 
             {/* Review — changed transactions with checkboxes */}

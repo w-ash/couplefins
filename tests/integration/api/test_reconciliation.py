@@ -34,7 +34,7 @@ async def test_full_reconciliation_both_uploaded(client: AsyncClient) -> None:
     assert data["start_date"] == "2026-01-01"
     assert data["end_date"] == "2026-01-31"
     assert data["transaction_count"] == 3
-    assert data["total_shared_spending"] == pytest.approx(200.0)
+    assert data["total_household_spending"] == pytest.approx(200.0)
     assert data["settlement"] is not None
     assert data["settlement"]["amount"] > 0
     assert len(data["transactions"]) == 3
@@ -71,7 +71,7 @@ async def test_empty_month_no_data(client: AsyncClient) -> None:
 
     data = response.json()
     assert data["transaction_count"] == 0
-    assert data["total_shared_spending"] == pytest.approx(0.0)
+    assert data["total_household_spending"] == pytest.approx(0.0)
     assert data["transactions"] == []
     assert data["settlement"]["amount"] == pytest.approx(0.0)
 
@@ -123,7 +123,7 @@ async def test_date_range_query(client: AsyncClient) -> None:
     assert data["start_date"] == "2026-01-01"
     assert data["end_date"] == "2026-02-28"
     assert data["transaction_count"] == 2
-    assert data["total_shared_spending"] == pytest.approx(160.0)
+    assert data["total_household_spending"] == pytest.approx(160.0)
     # Multi-month range → year/month are None, is_finalized is None
     assert data["year"] is None
     assert data["month"] is None

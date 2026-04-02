@@ -127,9 +127,9 @@ class ReconciliationResponse(BaseModel):
     end_date: datetime.date
     year: int | None
     month: int | None
-    total_shared_spending: float
-    total_shared_refunds: float
-    net_shared_spending: float
+    total_household_spending: float
+    total_household_refunds: float
+    net_household_spending: float
     person_summaries: list[PersonSummaryResponse]
     settlement: OwedAmountResponse | None
     category_group_breakdowns: list[CategoryGroupBreakdownResponse]
@@ -150,9 +150,9 @@ class ReconciliationResponse(BaseModel):
             end_date=summary.end_date,
             year=result.year,
             month=result.month,
-            total_shared_spending=float(summary.total_shared_spending),
-            total_shared_refunds=float(summary.total_shared_refunds),
-            net_shared_spending=float(summary.net_shared_spending),
+            total_household_spending=float(summary.total_household_spending),
+            total_household_refunds=float(summary.total_household_refunds),
+            net_household_spending=float(summary.net_household_spending),
             person_summaries=[
                 PersonSummaryResponse.from_domain(ps) for ps in summary.person_summaries
             ],

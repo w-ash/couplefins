@@ -17,7 +17,7 @@ const ROWS = [
   {
     tag: "household",
     what: "Budget only",
-    detail: "Counts toward your shared budget, but no money changes hands",
+    detail: "Counts toward your household budget, but no money changes hands",
   },
   {
     tag: "bob",
@@ -27,7 +27,7 @@ const ROWS = [
   {
     tag: null,
     what: "Personal",
-    detail: "Your own expense, not shared or tracked",
+    detail: "Your own expense, not in the household budget",
   },
 ] as const;
 

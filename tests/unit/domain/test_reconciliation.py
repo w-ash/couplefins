@@ -45,7 +45,7 @@ def test_equal_split_both_paid_equally() -> None:
     )
 
     assert result.transaction_count == 2
-    assert result.total_shared_spending == Decimal("200.00")
+    assert result.total_household_spending == Decimal("200.00")
     assert result.settlement is not None
     assert result.settlement.amount == Decimal(0)
 
@@ -163,9 +163,9 @@ def test_refund_reduces_settlement() -> None:
         end_date=date(2026, 1, 31),
     )
 
-    assert result.total_shared_spending == Decimal("100.00")
-    assert result.total_shared_refunds == Decimal("20.00")
-    assert result.net_shared_spending == Decimal("80.00")
+    assert result.total_household_spending == Decimal("100.00")
+    assert result.total_household_refunds == Decimal("20.00")
+    assert result.net_household_spending == Decimal("80.00")
     assert result.settlement is not None
     # Expense: Alice paid 100, Alice share 50, Bob share 50 → Bob owes 50
     # Refund: Alice received 20, Alice share -10, Bob share -10 → Alice owes 10
@@ -238,9 +238,9 @@ def test_empty_transactions() -> None:
     )
 
     assert result.transaction_count == 0
-    assert result.total_shared_spending == Decimal(0)
-    assert result.total_shared_refunds == Decimal(0)
-    assert result.net_shared_spending == Decimal(0)
+    assert result.total_household_spending == Decimal(0)
+    assert result.total_household_refunds == Decimal(0)
+    assert result.net_household_spending == Decimal(0)
     assert result.settlement is not None
     assert result.settlement.amount == Decimal(0)
     assert result.category_group_breakdowns == []
@@ -266,7 +266,7 @@ def test_single_transaction() -> None:
     )
 
     assert result.transaction_count == 1
-    assert result.total_shared_spending == Decimal("50.00")
+    assert result.total_household_spending == Decimal("50.00")
     assert result.settlement is not None
     assert result.settlement.amount == Decimal("25.00")
     assert result.settlement.from_person_id == bob.id
@@ -432,9 +432,9 @@ def test_all_refunds_no_expenses() -> None:
         end_date=date(2026, 1, 31),
     )
 
-    assert result.total_shared_spending == Decimal(0)
-    assert result.total_shared_refunds == Decimal("80.00")
-    assert result.net_shared_spending == Decimal("-80.00")
+    assert result.total_household_spending == Decimal(0)
+    assert result.total_household_refunds == Decimal("80.00")
+    assert result.net_household_spending == Decimal("-80.00")
     assert result.settlement is not None
     # Alice received 50, share -25. Bob received 30, share -15.
     # Alice: paid -50, share -25 → net = -25 + 50 = 25... let me think.
@@ -475,7 +475,7 @@ def test_personal_transactions_excluded() -> None:
     )
 
     assert result.transaction_count == 1
-    assert result.total_shared_spending == Decimal("100.00")
+    assert result.total_household_spending == Decimal("100.00")
 
 
 def test_excluded_transactions_not_in_settlement() -> None:
@@ -504,4 +504,4 @@ def test_excluded_transactions_not_in_settlement() -> None:
     )
 
     assert result.transaction_count == 1
-    assert result.total_shared_spending == Decimal("60.00")
+    assert result.total_household_spending == Decimal("60.00")

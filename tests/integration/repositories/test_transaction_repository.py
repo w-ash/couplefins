@@ -9,7 +9,7 @@ from src.infrastructure.persistence.repositories.transaction_repository import (
 from tests.fixtures.factories import make_person, make_transaction, make_upload
 
 
-async def _seed_shared_transactions(
+async def _seed_household_transactions(
     repo: TransactionRepository, session: AsyncSession
 ) -> None:
     alice = make_person(name="Alice")
@@ -29,7 +29,7 @@ async def _seed_shared_transactions(
         payer_percentage=50,
         amount=Decimal("-60.00"),
     )
-    non_shared_tx = make_transaction(
+    non_household_tx = make_transaction(
         upload_id=upload.id,
         date=date(2026, 1, 20),
         payer_person_id=alice.id,
@@ -38,15 +38,15 @@ async def _seed_shared_transactions(
         amount=Decimal("-30.00"),
     )
 
-    await repo.save_batch([jan_tx, feb_tx, non_shared_tx])
+    await repo.save_batch([jan_tx, feb_tx, non_household_tx])
     await session.commit()
 
 
-async def test_household_by_date_range_returns_only_shared(
+async def test_household_by_date_range_returns_only_household(
     db_session: AsyncSession,
 ) -> None:
     repo = TransactionRepository(db_session)
-    await _seed_shared_transactions(repo, db_session)
+    await _seed_household_transactions(repo, db_session)
 
     result = await repo.get_household_by_date_range(date(2026, 1, 1), date(2026, 1, 31))
     assert len(result) == 1
@@ -58,7 +58,7 @@ async def test_household_by_date_range_excludes_out_of_range(
     db_session: AsyncSession,
 ) -> None:
     repo = TransactionRepository(db_session)
-    await _seed_shared_transactions(repo, db_session)
+    await _seed_household_transactions(repo, db_session)
 
     result = await repo.get_household_by_date_range(date(2026, 3, 1), date(2026, 3, 31))
     assert result == []

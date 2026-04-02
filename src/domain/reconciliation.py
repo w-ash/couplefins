@@ -36,9 +36,9 @@ class SettlementResult:
 class ReconciliationSummary:
     start_date: date
     end_date: date
-    total_shared_spending: Decimal
-    total_shared_refunds: Decimal
-    net_shared_spending: Decimal
+    total_household_spending: Decimal
+    total_household_refunds: Decimal
+    net_household_spending: Decimal
     person_summaries: list[PersonSummary]
     settlement: SettlementResult | None
     category_group_breakdowns: list[CategoryGroupBreakdown]
@@ -111,7 +111,7 @@ def reconcile(  # noqa: PLR0913
 ) -> ReconciliationSummary:
     person_ids = [p.id for p in persons]
 
-    shared: list[Transaction] = []
+    household: list[Transaction] = []
     total_spending = Decimal(0)
     total_refunds = Decimal(0)
     for tx in transactions:
@@ -119,7 +119,7 @@ def reconcile(  # noqa: PLR0913
             continue
         if tx.payer_percentage == SplitDefaults.MAX_PAYER_PERCENTAGE:
             continue
-        shared.append(tx)
+        household.append(tx)
         abs_amount = abs(tx.amount)
         if tx.amount < 0:
             total_spending += abs_amount
@@ -127,20 +127,20 @@ def reconcile(  # noqa: PLR0913
             total_refunds += abs_amount
 
     category_lookup = build_category_lookup(categories, category_groups)
-    person_summaries = _compute_person_summaries(shared, person_ids)
+    person_summaries = _compute_person_summaries(household, person_ids)
     settlement = _compute_settlement(person_summaries)
-    breakdowns = compute_category_breakdowns(shared, category_lookup)
+    breakdowns = compute_category_breakdowns(household, category_lookup)
 
     return ReconciliationSummary(
         start_date=start_date,
         end_date=end_date,
-        total_shared_spending=total_spending,
-        total_shared_refunds=total_refunds,
-        net_shared_spending=total_spending - total_refunds,
+        total_household_spending=total_spending,
+        total_household_refunds=total_refunds,
+        net_household_spending=total_spending - total_refunds,
         person_summaries=person_summaries,
         settlement=settlement,
         category_group_breakdowns=breakdowns,
-        transaction_count=len(shared),
+        transaction_count=len(household),
     )
 
 

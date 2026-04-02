@@ -199,7 +199,7 @@ def test_mixed_expenses_and_refunds() -> None:
     assert debits == Decimal("-10.00")
 
 
-def test_non_shared_transactions_skipped() -> None:
+def test_non_household_transactions_skipped() -> None:
     alice, _bob = _alice_bob()
     txs = [
         make_transaction(

@@ -76,7 +76,7 @@ class GroupBudgetStatusResponse(BaseModel):
     ytd_health: HealthStatus | None
     average_monthly_spending: float
     categories: list[CategorySpendResponse]
-    shared_spending: float | None = None
+    household_spending: float | None = None
     personal_spending: float | None = None
 
 
@@ -132,8 +132,8 @@ class BudgetOverviewResponse(BaseModel):
                         )
                         for c in s.categories
                     ],
-                    shared_spending=float(s.shared_spending)
-                    if s.shared_spending is not None
+                    household_spending=float(s.household_spending)
+                    if s.household_spending is not None
                     else None,
                     personal_spending=float(s.personal_spending)
                     if s.personal_spending is not None

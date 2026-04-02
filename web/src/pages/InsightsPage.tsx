@@ -498,7 +498,8 @@ export function InsightsPage() {
                 Who's paying
               </h2>
               <p className="mb-4 text-xs text-muted-foreground">
-                See who's been covering more of the shared spending each month
+                See who's been covering more of the household spending each
+                month
               </p>
 
               {/* Category group filter */}

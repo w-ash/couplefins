@@ -40,8 +40,8 @@ from src.interface.api.schemas.dashboard import DashboardResponse
 
 DashboardResponse.current_month_year  # response fields — serialized, never accessed as attributes
 DashboardResponse.current_month_month
-DashboardResponse.current_month_total_shared_spending
-DashboardResponse.current_month_net_shared_spending
+DashboardResponse.current_month_total_household_spending
+DashboardResponse.current_month_net_household_spending
 DashboardResponse.current_month_transaction_count
 DashboardResponse.current_month_person_summaries
 DashboardResponse.current_month_settlement

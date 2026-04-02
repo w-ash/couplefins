@@ -43,7 +43,7 @@ def _make_csv(*rows: dict[str, str]) -> str:
     return buf.getvalue()
 
 
-def test_standard_shared_expense_fifty_fifty() -> None:
+def test_standard_household_expense_fifty_fifty() -> None:
     csv = _make_csv({"Tags": "shared"})
     result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
 
@@ -54,7 +54,7 @@ def test_standard_shared_expense_fifty_fifty() -> None:
     assert tx.tags == ("shared",)
 
 
-def test_non_shared_expense() -> None:
+def test_non_household_expense() -> None:
     csv = _make_csv({"Tags": "personal"})
     result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
 
@@ -347,7 +347,7 @@ def test_household_plus_person_name_is_household_spotted() -> None:
     assert tx.payer_percentage == 0
 
 
-def test_shared_plus_person_name_is_household_spotted() -> None:
+def test_shared_tag_plus_person_name_is_household_spotted() -> None:
     csv = _make_csv({"Tags": "shared, bob"})
     result = parse_monarch_csv(
         csv, PAYER_ID, UPLOAD_ID, person_names=frozenset({"bob"})

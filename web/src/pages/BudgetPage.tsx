@@ -119,11 +119,11 @@ function SpentBudgetLabel({
   budget: number | null;
   remaining: number | null;
   hasBudget: boolean;
-  breakdown?: { shared: number; personal: number } | null;
+  breakdown?: { household: number; personal: number } | null;
 }) {
   const breakdownEl = breakdown ? (
     <span className="block text-xs text-muted-foreground">
-      (shared: {formatCurrency(breakdown.shared)} · personal:{" "}
+      (household: {formatCurrency(breakdown.household)} · personal:{" "}
       {formatCurrency(breakdown.personal)})
     </span>
   ) : null;
@@ -167,7 +167,7 @@ function BudgetGroupRow({
 }: {
   status: GroupBudgetStatusResponse;
   viewMode: ViewMode;
-  breakdown: { shared: number; personal: number } | null;
+  breakdown: { household: number; personal: number } | null;
   icon: string | null;
   onUpdate: (budgetId: string, amount: number) => void;
   onDelete: (budgetId: string) => void;
@@ -754,11 +754,11 @@ export function BudgetPage() {
 
   const toBreakdown = (
     s: GroupBudgetStatusResponse,
-  ): { shared: number; personal: number } | null =>
+  ): { household: number; personal: number } | null =>
     scope === "personal" &&
-    s.shared_spending != null &&
+    s.household_spending != null &&
     s.personal_spending != null
-      ? { shared: s.shared_spending, personal: s.personal_spending }
+      ? { household: s.household_spending, personal: s.personal_spending }
       : null;
 
   return (
@@ -808,7 +808,7 @@ export function BudgetPage() {
               description={
                 scope === "personal"
                   ? "Add a budget above to start tracking your personal spending."
-                  : "Add a budget above to start tracking shared spending."
+                  : "Add a budget above to start tracking household spending."
               }
             />
           ) : (

@@ -18,6 +18,6 @@ export interface GroupBudgetStatusResponse {
   ytd_health: 'on_track' | 'near_limit' | 'over_budget' | null;
   average_monthly_spending: number;
   categories: CategorySpendResponse[];
-  shared_spending?: number | null;
+  household_spending?: number | null;
   personal_spending?: number | null;
 }

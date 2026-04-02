@@ -58,7 +58,7 @@ async def test_happy_path_current_month() -> None:
 
     assert result.current_month.start_date == date(2026, 3, 1)
     assert result.current_month.end_date == date(2026, 3, 31)
-    assert result.current_month.total_shared_spending == Decimal("100.00")
+    assert result.current_month.total_household_spending == Decimal("100.00")
     assert result.current_month.transaction_count == 1
     assert all(s.has_uploaded for s in result.upload_statuses)
 
@@ -75,7 +75,7 @@ async def test_empty_month_zeroed_summary() -> None:
     result = await GetDashboardUseCase().execute(_make_command(), uow)
 
     assert result.current_month.transaction_count == 0
-    assert result.current_month.total_shared_spending == Decimal(0)
+    assert result.current_month.total_household_spending == Decimal(0)
     assert result.household_spending_ytd == Decimal(0)
     assert result.month_history == []
 
@@ -117,9 +117,9 @@ async def test_multi_month_history() -> None:
     assert result.month_history[1].month == 2
     assert result.month_history[2].month == 1
     # Each month has correct spending
-    assert result.month_history[0].total_shared_spending == Decimal("100.00")
-    assert result.month_history[1].total_shared_spending == Decimal("80.00")
-    assert result.month_history[2].total_shared_spending == Decimal("60.00")
+    assert result.month_history[0].total_household_spending == Decimal("100.00")
+    assert result.month_history[1].total_household_spending == Decimal("80.00")
+    assert result.month_history[2].total_household_spending == Decimal("60.00")
 
 
 async def test_ytd_aggregates_across_months() -> None:
@@ -269,7 +269,7 @@ async def test_auto_month_picks_latest_unfinalized_with_txs() -> None:
 
     # Should pick March (latest unfinalized with txs)
     assert result.current_month.start_date == date(2026, 3, 1)
-    assert result.current_month.total_shared_spending == Decimal("100.00")
+    assert result.current_month.total_household_spending == Decimal("100.00")
 
 
 async def test_auto_month_skips_finalized_months() -> None:
@@ -303,7 +303,7 @@ async def test_auto_month_skips_finalized_months() -> None:
 
     # Should pick February (latest unfinalized with txs)
     assert result.current_month.start_date == date(2026, 2, 1)
-    assert result.current_month.total_shared_spending == Decimal("80.00")
+    assert result.current_month.total_household_spending == Decimal("80.00")
 
 
 # ─── Settlement status ───

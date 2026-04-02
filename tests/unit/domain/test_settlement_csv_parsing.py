@@ -23,7 +23,7 @@ class TestSettlementTagParsing:
         txs = parse_monarch_csv(_csv("Settlement"), uuid.uuid4(), uuid.uuid4())
         assert txs[0].is_settlement is True
 
-    def test_settlement_overrides_shared(self) -> None:
+    def test_settlement_overrides_household(self) -> None:
         txs = parse_monarch_csv(_csv("shared, settlement"), uuid.uuid4(), uuid.uuid4())
         assert txs[0].is_settlement is True
         assert txs[0].household is False

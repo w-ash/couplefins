@@ -1,7 +1,7 @@
 [project]
 name = "couplefins"
-version = "1.1.0"
-description = "Shared finance reconciliation tool for couples"
+version = "1.2.1"
+description = "Household finance tool for couples"
 requires-python = ">=3.14,<4.0"
 dependencies = [
     "fastapi>=0.115",

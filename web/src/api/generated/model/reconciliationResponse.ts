@@ -16,9 +16,9 @@ export interface ReconciliationResponse {
   end_date: string;
   year: number | null;
   month: number | null;
-  total_shared_spending: number;
-  total_shared_refunds: number;
-  net_shared_spending: number;
+  total_household_spending: number;
+  total_household_refunds: number;
+  net_household_spending: number;
   person_summaries: PersonSummaryResponse[];
   settlement: OwedAmountResponse | null;
   category_group_breakdowns: CategoryGroupBreakdownResponse[];

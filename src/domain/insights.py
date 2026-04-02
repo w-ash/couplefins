@@ -8,7 +8,7 @@ from src.domain.categories import compute_category_breakdowns
 from src.domain.entities.transaction import Transaction
 
 
-def _shared_expenses(txs: list[Transaction]) -> list[Transaction]:
+def _household_expenses(txs: list[Transaction]) -> list[Transaction]:
     return [tx for tx in txs if tx.household and tx.amount < 0 and not tx.is_excluded]
 
 
@@ -98,7 +98,7 @@ def compute_spending_trends(
     category_lookup: dict[str, tuple[UUID, str]],
     year: int,
 ) -> SpendingTrends:
-    by_month = _group_by_month(_shared_expenses(year_txs))
+    by_month = _group_by_month(_household_expenses(year_txs))
 
     monthly_group_spending: list[MonthlyGroupSpending] = []
     monthly_totals: list[MonthlyTotal] = []
@@ -182,7 +182,7 @@ def compute_trailing_average(
     window: int = 3,
 ) -> dict[UUID | None, Decimal]:
     return _compute_trailing_average_from_expenses(
-        _shared_expenses(year_txs), category_lookup, target_month, window
+        _household_expenses(year_txs), category_lookup, target_month, window
     )
 
 
@@ -192,7 +192,7 @@ def compute_comparison_cards(
     target_month: int,
     window: int = 3,
 ) -> list[GroupComparison]:
-    expenses = _shared_expenses(year_txs)
+    expenses = _household_expenses(year_txs)
     target_txs = [tx for tx in expenses if tx.date.month == target_month]
 
     current_by_group: dict[UUID | None, tuple[str, Decimal]] = {}
@@ -236,7 +236,7 @@ def compute_person_paid_by_month(
     category_lookup: dict[str, tuple[UUID, str]],
 ) -> list[MonthlyPersonPaid]:
     """Per-person paid amounts grouped by month and category group."""
-    expenses = _shared_expenses(year_txs)
+    expenses = _household_expenses(year_txs)
     totals: dict[tuple[int, UUID, UUID | None], Decimal] = defaultdict(Decimal)
 
     for tx in expenses:

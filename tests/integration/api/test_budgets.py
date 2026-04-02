@@ -236,7 +236,7 @@ async def test_personal_budget_overview(client: AsyncClient) -> None:
     assert len(data["group_statuses"]) >= 1
     food = next(s for s in data["group_statuses"] if s["group_name"] == "Food & Dining")
     # Alice's share of $100 @ 50% = $50
-    assert food["shared_spending"] == pytest.approx(50.0)
+    assert food["household_spending"] == pytest.approx(50.0)
     assert food["personal_spending"] == pytest.approx(0.0)
     assert food["monthly_spent"] == pytest.approx(50.0)
     assert food["monthly_budget"] == pytest.approx(400.0)
@@ -251,5 +251,5 @@ async def test_default_scope_backward_compatible(client: AsyncClient) -> None:
     data = response.json()
     # Household scope: shared/personal_spending should be null
     for status in data["group_statuses"]:
-        assert status["shared_spending"] is None
+        assert status["household_spending"] is None
         assert status["personal_spending"] is None

@@ -55,7 +55,7 @@ class GetDashboardCommand:
 class MonthHistoryEntry:
     year: int
     month: int
-    total_shared_spending: Decimal
+    total_household_spending: Decimal
     settlement_amount: Decimal
     settlement_from_person_id: UUID | None
     settlement_to_person_id: UUID | None
@@ -70,7 +70,7 @@ class PersonalMonthHistoryEntry:
     year: int
     month: int
     total_spending: Decimal
-    shared_portion: Decimal
+    household_portion: Decimal
     own_spending: Decimal
 
 
@@ -133,7 +133,7 @@ def _build_month_history(
             MonthHistoryEntry(
                 year=year,
                 month=month,
-                total_shared_spending=summaries[month].total_shared_spending,
+                total_household_spending=summaries[month].total_household_spending,
                 settlement_amount=owed,
                 settlement_from_person_id=settlement.from_person_id
                 if settlement
@@ -175,17 +175,17 @@ def _resolve_active_month(
 def _compute_personal_spending(
     txs: list[Transaction], person_id: UUID
 ) -> tuple[Decimal, Decimal, Decimal]:
-    """Compute (total, shared_portion, own_spending) for one person."""
-    shared_portion = Decimal(0)
+    """Compute (total, household_portion, own_spending) for one person."""
+    household_portion = Decimal(0)
     own_spending = Decimal(0)
     for tx in txs:
         if tx.is_excluded or tx.is_settlement:
             continue
         if tx.household:
-            shared_portion += compute_person_share(tx, person_id)
+            household_portion += compute_person_share(tx, person_id)
         elif tx.payer_person_id == person_id and tx.amount < 0:
             own_spending += abs(tx.amount)
-    return shared_portion + own_spending, shared_portion, own_spending
+    return household_portion + own_spending, household_portion, own_spending
 
 
 def _compute_all_spending(txs: list[Transaction]) -> Decimal:
@@ -303,11 +303,11 @@ def _compute_personal_scope_data(  # noqa: PLR0913, PLR0917
             year=year,
             month=m,
             total_spending=total,
-            shared_portion=shared,
+            household_portion=household_portion,
             own_spending=own,
         )
         for m in sorted(month_results, reverse=True)
-        for total, shared, own in [month_results[m]]
+        for total, household_portion, own in [month_results[m]]
     ]
 
     alerts = _build_budget_alerts(

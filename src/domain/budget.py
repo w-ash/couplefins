@@ -36,7 +36,7 @@ class CategoryGroupBudgetStatus:
     ytd_health: HealthStatus | None
     average_monthly_spending: Decimal
     categories: list[CategoryBreakdown]
-    shared_spending: Decimal | None = None
+    household_spending: Decimal | None = None
     personal_spending: Decimal | None = None
 
 
@@ -271,7 +271,7 @@ def _compute_personal_breakdowns(
     """Compute category breakdowns using person's share amounts.
 
     Returns (breakdowns, spending_split) where spending_split maps
-    group_id → (shared_spending, personal_spending).
+    group_id → (household_spending, personal_spending).
     """
     uncategorized = "Uncategorized"
 
@@ -281,7 +281,7 @@ def _compute_personal_breakdowns(
     cat_personal: dict[str, dict[UUID, Decimal]] = defaultdict(
         lambda: defaultdict(Decimal)
     )
-    group_shared: dict[UUID | None, Decimal] = defaultdict(Decimal)
+    group_household: dict[UUID | None, Decimal] = defaultdict(Decimal)
     group_personal: dict[UUID | None, Decimal] = defaultdict(Decimal)
 
     for tx in txs:
@@ -291,7 +291,7 @@ def _compute_personal_breakdowns(
             cat_total[tx.category] += share
             cat_count[tx.category] += 1
             cat_household[tx.category] += share
-            group_shared[gid] += share
+            group_household[gid] += share
         else:
             amount = abs(tx.amount)
             cat_total[tx.category] += amount
@@ -314,9 +314,9 @@ def _compute_personal_breakdowns(
             )
         )
 
-    all_gids = set(group_shared) | set(group_personal)
+    all_gids = set(group_household) | set(group_personal)
     spending_split = {
-        gid: (group_shared.get(gid, Decimal(0)), group_personal.get(gid, Decimal(0)))
+        gid: (group_household.get(gid, Decimal(0)), group_personal.get(gid, Decimal(0)))
         for gid in all_gids
     }
 
@@ -398,8 +398,10 @@ def compute_personal_budget_overview(  # noqa: PLR0913, PLR0914, PLR0917
             year,
             month,
         )
-        shared, personal = month_split.get(gid, (Decimal(0), Decimal(0)))
-        status = evolve(status, shared_spending=shared, personal_spending=personal)
+        household_spend, personal = month_split.get(gid, (Decimal(0), Decimal(0)))
+        status = evolve(
+            status, household_spending=household_spend, personal_spending=personal
+        )
         if status.monthly_budget is not None or status.monthly_spent > 0:
             statuses.append(status)
 

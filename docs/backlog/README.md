@@ -135,75 +135,77 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.0.4 | Structured logging — loguru → structlog, request middleware, JSON logs | Completed (2026-03-30) | S |
 | v1.1.0 | Notes, discuss elevation, case-insensitive tags, editor & layout polish | Completed (2026-03-31) | M |
 | v1.1.1 | Schema version guard — health endpoint versioning, upgrade screen | Completed (2026-03-31) | S |
-| v1.2.0 | Scoped dashboard — household/personal/all toggle, budget alerts, self-documenting metrics | Planned | M |
-| v1.2.1 | Terminology cleanup — "shared" → "household" throughout codebase, remove `TransactionType` | Planned | M |
+| v1.2.0 | Scoped dashboard — household/personal/all toggle, budget alerts, self-documenting metrics | Completed (2026-04-01) | M |
+| v1.2.1 | Terminology cleanup — "shared" → "household" throughout codebase, remove `TransactionType` | Completed (2026-04-01) | M |
 
 ## Infrastructure Readiness
 
-| Capability | v0.1.x | v0.2.x | v0.3.x | v0.4.x | v0.5.x | v0.6.x | v0.7.x | v0.8.x | v0.9.x | v0.10.x | v0.11.x | v1.0.x | v1.1.x |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| FastAPI backend | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| SQLite + aiosqlite | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | — |
-| PostgreSQL 18 (Neon) + asyncpg | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
-| CSV parsing | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| React frontend | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Upload flow | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Category groups | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Design system (fonts, theme) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Dark/light mode | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| App shell / navigation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| User identity (localStorage) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | — |
-| Reconciliation engine | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Dashboard | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Adjustment export (engine + UI) | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Budget tracking | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Month finalization | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Transaction split editing | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Transaction field editing + audit log | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Date range queries + search/filter | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Settlement tracking | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Settlement history (dashboard) | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Bulk transaction editing (category, tags, split) | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Orval codegen + MSW test mocks | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Spending insights + charts | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| YoY comparison + dark mode charts | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Responsive upload page (mobile) | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Drag-and-drop upload | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Upload history | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Client + server CSV validation | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Insights UX overhaul + per-person spending | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Split continuum + `household` flag (`payer_percentage` non-nullable) | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Spotted detection (person-name tags → 0% split) | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Category entity + `include_personal` budget scope | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Classification UI (filters, editing) | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Transaction exclusion | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Mobile app shell (bottom nav + shared component foundations) | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
-| Content page mobile layouts (responsive columns, form stacking, picker dialogs) | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
-| Settings page overhaul | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
-| Interaction consistency + touch targets (44px) | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
-| Authentication (name + password, JWT cookies) | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
-| Login page + session management | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
-| Personal budgets (per-person limits + spending computation) | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
-| Budget + transaction scope toggles | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
-| JSONB tag queries + server-side filtering | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
-| Smart polling (together-session pages) | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
-| SSE event bus (cross-user sync) | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
-| PostgreSQL index optimization | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
-| Neon pooler-aware connection handling | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
-| Sequential query batching | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
-| DB-backed theme preference (per-person) | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
-| Password visibility toggle + confirm fields | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
-| Neon sslmode → asyncpg ssl translation | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
-| Structured logging (structlog + request middleware) | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
-| Transaction notes (display + edit + audit trail) | — | — | — | — | — | — | — | — | — | — | — | — | ✅ |
-| "Discuss" tag elevation (icon, filter chip) | — | — | — | — | — | — | — | — | — | — | — | — | ✅ |
-| Quick-filter chips ("Has Notes", "Discuss") | — | — | — | — | — | — | — | — | — | — | — | — | ✅ |
-| Case-insensitive tags (normalize at input boundaries) | — | — | — | — | — | — | — | — | — | — | — | — | ✅ |
-| Two-dimension transaction editor (household/personal + split %) | — | — | — | — | — | — | — | — | — | — | — | — | ✅ |
-| Wider content area (`max-w-5xl`, responsive Group column) | — | — | — | — | — | — | — | — | — | — | — | — | ✅ |
-| Schema version guard (health check gate + upgrade screen) | — | — | — | — | — | — | — | — | — | — | — | — | ✅ |
-
-**v1.2.x additions**: Scoped dashboard (household/personal/all toggle, budget alerts, self-documenting metric descriptions), "household" terminology throughout (replaces "shared" as domain term), `TransactionType` removed (was `shared/spotted/household/personal` — now derived from two orthogonal fields).
+| Capability | v0.1.x | v0.2.x | v0.3.x | v0.4.x | v0.5.x | v0.6.x | v0.7.x | v0.8.x | v0.9.x | v0.10.x | v0.11.x | v1.0.x | v1.1.x | v1.2.x |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| FastAPI backend | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| SQLite + aiosqlite | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | — |
+| PostgreSQL 18 (Neon) + asyncpg | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| CSV parsing | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| React frontend | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Upload flow | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Category groups | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Design system (fonts, theme) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Dark/light mode | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| App shell / navigation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| User identity (localStorage) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | — | — |
+| Reconciliation engine | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Dashboard | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Adjustment export (engine + UI) | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Budget tracking | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Month finalization | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Transaction split editing | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Transaction field editing + audit log | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Date range queries + search/filter | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Settlement tracking | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Settlement history (dashboard) | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Bulk transaction editing (category, tags, split) | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Orval codegen + MSW test mocks | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Spending insights + charts | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| YoY comparison + dark mode charts | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Responsive upload page (mobile) | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Drag-and-drop upload | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Upload history | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Client + server CSV validation | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Insights UX overhaul + per-person spending | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Split continuum + `household` flag (`payer_percentage` non-nullable) | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Spotted detection (person-name tags → 0% split) | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Category entity + `include_personal` budget scope | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Classification UI (filters, editing) | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Transaction exclusion | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Mobile app shell (bottom nav + shared component foundations) | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Content page mobile layouts (responsive columns, form stacking, picker dialogs) | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Settings page overhaul | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Interaction consistency + touch targets (44px) | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Authentication (name + password, JWT cookies) | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
+| Login page + session management | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
+| Personal budgets (per-person limits + spending computation) | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
+| Budget + transaction scope toggles | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ |
+| JSONB tag queries + server-side filtering | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Smart polling (together-session pages) | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| SSE event bus (cross-user sync) | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| PostgreSQL index optimization | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Neon pooler-aware connection handling | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Sequential query batching | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| DB-backed theme preference (per-person) | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Password visibility toggle + confirm fields | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Neon sslmode → asyncpg ssl translation | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Structured logging (structlog + request middleware) | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | ✅ |
+| Transaction notes (display + edit + audit trail) | — | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
+| "Discuss" tag elevation (icon, filter chip) | — | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
+| Quick-filter chips ("Has Notes", "Discuss") | — | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
+| Case-insensitive tags (normalize at input boundaries) | — | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
+| Two-dimension transaction editor (household/personal + split %) | — | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
+| Wider content area (`max-w-5xl`, responsive Group column) | — | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
+| Schema version guard (health check gate + upgrade screen) | — | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ |
+| Scoped dashboard (household/personal/all toggle) | — | — | — | — | — | — | — | — | — | — | — | — | — | ✅ |
+| Budget alerts (personal scope) | — | — | — | — | — | — | — | — | — | — | — | — | — | ✅ |
+| Self-documenting metric descriptions | — | — | — | — | — | — | — | — | — | — | — | — | — | ✅ |
+| True household spending metric (all `household=true`, not just splits) | — | — | — | — | — | — | — | — | — | — | — | — | — | ✅ |
 
 ## Key Technical Decisions
 

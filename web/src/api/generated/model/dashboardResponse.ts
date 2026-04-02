@@ -18,8 +18,8 @@ export interface DashboardResponse {
   current_person_id: string | null;
   current_month_year: number;
   current_month_month: number;
-  current_month_total_shared_spending: number;
-  current_month_net_shared_spending: number;
+  current_month_total_household_spending: number;
+  current_month_net_household_spending: number;
   current_month_transaction_count: number;
   current_month_person_summaries: PersonSummaryResponse[];
   current_month_settlement: OwedAmountResponse | null;

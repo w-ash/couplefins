@@ -9,6 +9,6 @@ export interface PersonalMonthHistoryEntryResponse {
   year: number;
   month: number;
   total_spending: number;
-  shared_portion: number;
+  household_portion: number;
   own_spending: number;
 }

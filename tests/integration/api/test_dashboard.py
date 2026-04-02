@@ -31,7 +31,7 @@ async def test_dashboard_with_data(client: AsyncClient) -> None:
     assert data["current_month_year"] == 2026
     assert data["current_month_month"] == 1
     assert data["current_month_transaction_count"] == 3
-    assert data["current_month_total_shared_spending"] == pytest.approx(200.0)
+    assert data["current_month_total_household_spending"] == pytest.approx(200.0)
     assert data["current_month_settlement"] is not None
     assert len(data["upload_statuses"]) == 2
     assert all(s["has_uploaded"] for s in data["upload_statuses"])
@@ -87,6 +87,6 @@ async def test_dashboard_empty_month(client: AsyncClient) -> None:
 
     data = response.json()
     assert data["current_month_transaction_count"] == 0
-    assert data["current_month_total_shared_spending"] == pytest.approx(0.0)
+    assert data["current_month_total_household_spending"] == pytest.approx(0.0)
     assert data["month_history"] == []
     assert all(not s["has_uploaded"] for s in data["upload_statuses"])

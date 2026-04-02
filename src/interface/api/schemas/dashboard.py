@@ -21,7 +21,7 @@ def _opt_float(v: Decimal | None) -> float | None:
 class MonthHistoryEntryResponse(BaseModel):
     year: int
     month: int
-    total_shared_spending: float
+    total_household_spending: float
     settlement_amount: float
     settlement_from_person_id: UUID | None
     settlement_to_person_id: UUID | None
@@ -35,7 +35,7 @@ class PersonalMonthHistoryEntryResponse(BaseModel):
     year: int
     month: int
     total_spending: float
-    shared_portion: float
+    household_portion: float
     own_spending: float
 
 
@@ -57,8 +57,8 @@ class DashboardResponse(BaseModel):
     current_person_id: UUID | None
     current_month_year: int
     current_month_month: int
-    current_month_total_shared_spending: float
-    current_month_net_shared_spending: float
+    current_month_total_household_spending: float
+    current_month_net_household_spending: float
     current_month_transaction_count: int
     current_month_person_summaries: list[PersonSummaryResponse]
     current_month_settlement: OwedAmountResponse | None
@@ -91,8 +91,8 @@ class DashboardResponse(BaseModel):
             current_person_id=result.current_person_id,
             current_month_year=cm.start_date.year,
             current_month_month=cm.start_date.month,
-            current_month_total_shared_spending=float(cm.total_shared_spending),
-            current_month_net_shared_spending=float(cm.net_shared_spending),
+            current_month_total_household_spending=float(cm.total_household_spending),
+            current_month_net_household_spending=float(cm.net_household_spending),
             current_month_transaction_count=cm.transaction_count,
             current_month_person_summaries=[
                 PersonSummaryResponse.from_domain(ps) for ps in cm.person_summaries
@@ -115,7 +115,7 @@ class DashboardResponse(BaseModel):
                 MonthHistoryEntryResponse(
                     year=mh.year,
                     month=mh.month,
-                    total_shared_spending=float(mh.total_shared_spending),
+                    total_household_spending=float(mh.total_household_spending),
                     settlement_amount=float(mh.settlement_amount),
                     settlement_from_person_id=mh.settlement_from_person_id,
                     settlement_to_person_id=mh.settlement_to_person_id,
@@ -142,7 +142,7 @@ class DashboardResponse(BaseModel):
                         year=pmh.year,
                         month=pmh.month,
                         total_spending=float(pmh.total_spending),
-                        shared_portion=float(pmh.shared_portion),
+                        household_portion=float(pmh.household_portion),
                         own_spending=float(pmh.own_spending),
                     )
                     for pmh in result.personal_month_history

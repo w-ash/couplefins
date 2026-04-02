@@ -139,7 +139,7 @@ class TestComputeSpendingTrends:
         assert len(result.monthly_totals) == 1
         assert result.monthly_totals[0].total_amount == Decimal("50.00")
 
-    def test_non_shared_excluded(self) -> None:
+    def test_non_household_excluded(self) -> None:
         _, _, lookup = _setup_groups()
         txs = [
             make_transaction(

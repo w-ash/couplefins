@@ -108,7 +108,7 @@ function PersonalStats({ data }: { data: DashboardResponse }) {
         {
           label: "Personal only",
           value: formatCurrency(data.my_personal_spending_month ?? 0),
-          description: "Non-shared spending I paid",
+          description: "Personal spending I paid",
         },
         {
           label: "My spending YTD",
@@ -323,7 +323,7 @@ function HouseholdMonthHistory({
 }: {
   entries: MonthHistoryEntryResponse[];
   personNames: Map<string, string>;
-  spendingKey: "total_shared_spending" | "total_all_spending";
+  spendingKey: "total_household_spending" | "total_all_spending";
 }) {
   const navigate = useNavigate();
   if (entries.length === 0) return null;
@@ -367,7 +367,7 @@ function HouseholdMonthHistory({
               spendingKey === "total_all_spending" &&
               entry.total_all_spending != null
                 ? entry.total_all_spending
-                : entry.total_shared_spending;
+                : entry.total_household_spending;
 
             return (
               <tr
@@ -458,7 +458,7 @@ function PersonalMonthHistory({
                 </td>
                 <td className="hidden py-2.5 text-right text-muted-foreground sm:table-cell">
                   <span className="tabular-nums">
-                    {formatCurrency(entry.shared_portion)} shared
+                    {formatCurrency(entry.household_portion)} household
                   </span>
                   {entry.own_spending > 0 && (
                     <span className="tabular-nums">
@@ -606,7 +606,9 @@ export function DashboardPage() {
               entries={data.month_history}
               personNames={personNames}
               spendingKey={
-                scope === "all" ? "total_all_spending" : "total_shared_spending"
+                scope === "all"
+                  ? "total_all_spending"
+                  : "total_household_spending"
               }
             />
           )}

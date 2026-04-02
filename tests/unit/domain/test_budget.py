@@ -436,14 +436,14 @@ ALICE = UUID("bbbbbbbb-0000-0000-0000-000000000001")
 BOB = UUID("bbbbbbbb-0000-0000-0000-000000000002")
 
 
-def test_person_share_payer_shared_50_50() -> None:
+def test_person_share_payer_household_50_50() -> None:
     tx = make_transaction(
         amount=Decimal(-100), payer_percentage=50, payer_person_id=ALICE
     )
     assert compute_person_share(tx, ALICE) == Decimal("50.00")
 
 
-def test_person_share_non_payer_shared_50_50() -> None:
+def test_person_share_non_payer_household_50_50() -> None:
     tx = make_transaction(
         amount=Decimal(-100), payer_percentage=50, payer_person_id=ALICE
     )
@@ -523,7 +523,7 @@ def test_personal_irrelevant_settlement() -> None:
 # --- compute_personal_budget_overview ---
 
 
-def test_personal_overview_mixed_shared_and_personal() -> None:
+def test_personal_overview_mixed_household_and_personal() -> None:
     food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
     groups = [make_category_group(id=food_gid, name="Food & Dining")]
     budgets = [
@@ -582,7 +582,7 @@ def test_personal_overview_mixed_shared_and_personal() -> None:
     assert len(overview.group_statuses) == 1
     status = overview.group_statuses[0]
     # shared: $50 (Alice pays 100 @ 50%) + $30 (Bob pays 60 @ 50%) = $80
-    assert status.shared_spending == Decimal("80.00")
+    assert status.household_spending == Decimal("80.00")
     # personal: $40 (Alice's own tx)
     assert status.personal_spending == Decimal("40.00")
     # total = $120
@@ -652,7 +652,7 @@ def test_personal_overview_partner_household_creates_share() -> None:
     )
 
     status = overview.group_statuses[0]
-    assert status.shared_spending == Decimal("100.00")
+    assert status.household_spending == Decimal("100.00")
     assert status.personal_spending == Decimal(0)
     assert status.monthly_spent == Decimal("100.00")
 
