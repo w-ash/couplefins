@@ -14,7 +14,7 @@ from src.application.use_cases._shared.settlement_records import (
     build_settlement,
     validate_settlement_persons,
 )
-from src.domain.entities.settlement import Settlement, SettlementMethod
+from src.domain.entities.settlement import Settlement
 from src.domain.entities.settlement_transaction_link import SettlementTransactionLink
 from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import NotFoundError
@@ -28,7 +28,7 @@ class RecordSettlementCommand:
     amount: Decimal = field(validator=positive_decimal)
     from_person_id: uuid.UUID
     to_person_id: uuid.UUID
-    method: SettlementMethod
+    method: str
     notes: str = ""
     settled_at: datetime | None = None
     linked_transaction_ids: list[uuid.UUID] = field(factory=list)

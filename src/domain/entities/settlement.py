@@ -1,15 +1,8 @@
 from datetime import datetime
 from decimal import Decimal
-from enum import StrEnum
 from uuid import UUID
 
 from attrs import define
-
-
-class SettlementMethod(StrEnum):
-    VENMO = "venmo"
-    ZELLE = "zelle"
-    OTHER = "other"
 
 
 @define(frozen=True, slots=True)
@@ -20,7 +13,7 @@ class Settlement:
     amount: Decimal
     from_person_id: UUID
     to_person_id: UUID
-    method: SettlementMethod | None
+    method: str | None
     is_waived: bool
     notes: str
     settled_at: datetime

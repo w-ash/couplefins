@@ -4,6 +4,7 @@
  * Couplefins
  * OpenAPI spec version: 0.1.0
  */
+import type { LinkedTransactionResponse } from './linkedTransactionResponse';
 
 export interface SettlementResponse {
   id: string;
@@ -18,4 +19,5 @@ export interface SettlementResponse {
   settled_at: string;
   created_at: string;
   linked_transaction_ids: string[];
+  linked_transactions?: LinkedTransactionResponse[];
 }

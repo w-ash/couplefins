@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
-from src.domain.entities.settlement import Settlement, SettlementMethod
+from src.domain.entities.settlement import Settlement
 from src.infrastructure.persistence.models.settlement_model import SettlementModel
 from src.infrastructure.persistence.repositories.base import BaseRepository
 
@@ -21,7 +21,7 @@ class SettlementRepository(BaseRepository[Settlement, SettlementModel]):
             amount=Decimal(model.amount),
             from_person_id=UUID(model.from_person_id),
             to_person_id=UUID(model.to_person_id),
-            method=SettlementMethod(model.method) if model.method else None,
+            method=model.method,
             is_waived=model.is_waived,
             notes=model.notes,
             settled_at=datetime.fromisoformat(model.settled_at),
@@ -37,7 +37,7 @@ class SettlementRepository(BaseRepository[Settlement, SettlementModel]):
             amount=str(entity.amount),
             from_person_id=str(entity.from_person_id),
             to_person_id=str(entity.to_person_id),
-            method=entity.method.value if entity.method else None,
+            method=entity.method,
             is_waived=entity.is_waived,
             notes=entity.notes,
             settled_at=entity.settled_at.isoformat(),

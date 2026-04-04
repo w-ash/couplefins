@@ -7,7 +7,8 @@ from src.domain.entities.category_group import CategoryGroup
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.entities.person import Person
 from src.domain.entities.reconciliation_period import ReconciliationPeriod
-from src.domain.entities.settlement import Settlement, SettlementMethod
+from src.domain.entities.settlement import Settlement
+from src.domain.entities.settlement_merchant import SettlementMerchant
 from src.domain.entities.settlement_transaction_link import SettlementTransactionLink
 from src.domain.entities.transaction import Transaction
 from src.domain.entities.transaction_edit import TransactionEdit
@@ -181,7 +182,7 @@ def make_settlement(
     amount: Decimal = Decimal("50.00"),
     from_person_id: uuid.UUID | None = None,
     to_person_id: uuid.UUID | None = None,
-    method: SettlementMethod | None = SettlementMethod.VENMO,
+    method: str | None = "Venmo",
     is_waived: bool = False,
     notes: str = "",
     settled_at: datetime | None = None,
@@ -212,4 +213,17 @@ def make_settlement_transaction_link(
         id=id or uuid.uuid4(),
         settlement_id=settlement_id or uuid.uuid4(),
         transaction_id=transaction_id or uuid.uuid4(),
+    )
+
+
+def make_settlement_merchant(
+    *,
+    id: uuid.UUID | None = None,
+    name: str = "Venmo",
+    merchant_pattern: str = "venmo",
+) -> SettlementMerchant:
+    return SettlementMerchant(
+        id=id or uuid.uuid4(),
+        name=name,
+        merchant_pattern=merchant_pattern,
     )

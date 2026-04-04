@@ -137,6 +137,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.1.1 | Schema version guard — health endpoint versioning, upgrade screen | Completed (2026-03-31) | S |
 | v1.2.0 | Scoped dashboard — household/personal/all toggle, budget alerts, self-documenting metrics | Completed (2026-04-01) | M |
 | v1.2.1 | Terminology cleanup — "shared" → "household" throughout codebase, remove `TransactionType` | Completed (2026-04-01) | M |
+| v1.2.2 | Settlement transaction linking — candidate matching, Settle Up linking UI | Completed (2026-04-03) | M |
 
 ## Infrastructure Readiness
 
@@ -206,6 +207,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | Budget alerts (personal scope) | — | — | — | — | — | — | — | — | — | — | — | — | — | ✅ |
 | Self-documenting metric descriptions | — | — | — | — | — | — | — | — | — | — | — | — | — | ✅ |
 | True household spending metric (all `household=true`, not just splits) | — | — | — | — | — | — | — | — | — | — | — | — | — | ✅ |
+| Settlement transaction linking (candidate matching + Settle Up UI) | — | — | — | — | — | — | — | — | — | — | — | — | — | ✅ |
 
 ## Key Technical Decisions
 

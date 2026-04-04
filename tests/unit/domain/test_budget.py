@@ -345,6 +345,18 @@ def test_excluded_transaction_not_budget_relevant_even_with_personal_category() 
     assert _is_budget_relevant(tx, frozenset({"Groceries"})) is False
 
 
+def test_settlement_transaction_not_budget_relevant() -> None:
+    tx = make_transaction(household=True, is_settlement=True)
+    assert _is_budget_relevant(tx, frozenset()) is False
+
+
+def test_settlement_transaction_not_budget_relevant_even_with_personal_category() -> (
+    None
+):
+    tx = make_transaction(category="Groceries", household=False, is_settlement=True)
+    assert _is_budget_relevant(tx, frozenset({"Groceries"})) is False
+
+
 # --- category breakdown per-source tracking ---
 
 

@@ -17,6 +17,9 @@ from src.infrastructure.persistence.repositories.person_repository import (
 from src.infrastructure.persistence.repositories.reconciliation_period_repository import (
     ReconciliationPeriodRepository,
 )
+from src.infrastructure.persistence.repositories.settlement_merchant_repository import (
+    SettlementMerchantRepository,
+)
 from src.infrastructure.persistence.repositories.settlement_repository import (
     SettlementRepository,
 )
@@ -45,6 +48,7 @@ class UnitOfWork:
         self.categories = CategoryRepository(session)
         self.category_group_budgets = CategoryGroupBudgetRepository(session)
         self.reconciliation_periods = ReconciliationPeriodRepository(session)
+        self.settlement_merchants = SettlementMerchantRepository(session)
         self.settlements = SettlementRepository(session)
         self.settlement_transaction_links = SettlementTransactionLinkRepository(session)
 

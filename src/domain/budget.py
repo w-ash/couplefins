@@ -87,7 +87,7 @@ def determine_health(spent: Decimal, budget: Decimal) -> HealthStatus:
 
 
 def _is_budget_relevant(tx: Transaction, personal_categories: Set[str]) -> bool:
-    if tx.is_excluded:
+    if tx.is_excluded or tx.is_settlement:
         return False
     return tx.household or tx.category in personal_categories
 

@@ -10,12 +10,6 @@ from src.application.use_cases.bulk_modify_tags import TagAction
 
 TagAction.REMOVE  # deserialized from API request body
 
-from src.domain.entities.settlement import SettlementMethod
-
-SettlementMethod.VENMO  # deserialized from API request + used in test factories
-SettlementMethod.ZELLE  # valid settlement method, serialized to API
-SettlementMethod.OTHER  # valid settlement method, serialized to API
-
 # --- Auth result fields: constructed in use case, consumed by route handler ---
 
 from src.application.use_cases.auth.change_password import ChangePasswordResult
@@ -33,6 +27,13 @@ from src.application.use_cases.seed_category_groups import SeedCategoryGroupsRes
 SeedCategoryGroupsResult.groups_created  # returned from startup seeder
 SeedCategoryGroupsResult.categories_created
 SeedCategoryGroupsResult.skipped
+
+from src.application.use_cases.seed_settlement_merchants import (
+    SeedSettlementMerchantsResult,
+)
+
+SeedSettlementMerchantsResult.merchants_created  # returned from startup seeder
+SeedSettlementMerchantsResult.skipped
 
 # --- Pydantic BaseModel fields: serialized to JSON by FastAPI ---
 

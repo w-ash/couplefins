@@ -4,6 +4,7 @@ import { Card } from "@/components/Card";
 import { CategoryMappingEditor } from "@/components/CategoryMappingEditor";
 import { PageHeader } from "@/components/PageHeader";
 import { PersonAccountSettings } from "@/components/PersonAccountSettings";
+import { SettlementMerchantsEditor } from "@/components/SettlementMerchantsEditor";
 import { PAGE_PADDING } from "@/lib/layout";
 
 export function SettingsPage() {
@@ -42,6 +43,21 @@ export function SettingsPage() {
             Names and Monarch adjustment account names for CSV export
           </p>
           <PersonAccountSettings />
+        </Card>
+
+        {/* Settlement Merchants */}
+        <Card as="section" aria-labelledby="settings-settlement-merchants">
+          <h2
+            id="settings-settlement-merchants"
+            className="mb-1 font-medium text-lg text-foreground"
+          >
+            Settlement Merchants
+          </h2>
+          <p className="mb-4 text-xs text-muted-foreground">
+            Transactions from these merchants can be auto-detected and linked to
+            payments, so they don't inflate your spending totals
+          </p>
+          <SettlementMerchantsEditor />
         </Card>
 
         {/* System */}

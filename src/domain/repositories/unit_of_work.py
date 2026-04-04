@@ -13,6 +13,9 @@ from src.domain.repositories.person_repository import PersonRepositoryProtocol
 from src.domain.repositories.reconciliation_period_repository import (
     ReconciliationPeriodRepositoryProtocol,
 )
+from src.domain.repositories.settlement_merchant_repository import (
+    SettlementMerchantRepositoryProtocol,
+)
 from src.domain.repositories.settlement_repository import (
     SettlementRepositoryProtocol,
 )
@@ -50,6 +53,9 @@ class UnitOfWorkProtocol(Protocol):
 
     @property
     def reconciliation_periods(self) -> ReconciliationPeriodRepositoryProtocol: ...
+
+    @property
+    def settlement_merchants(self) -> SettlementMerchantRepositoryProtocol: ...
 
     @property
     def settlements(self) -> SettlementRepositoryProtocol: ...

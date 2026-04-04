@@ -127,6 +127,14 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             return []
         return [TransactionModel.tags.op("@>")(cast([t.lower() for t in tags], JSONB))]
 
+    async def get_by_date_range(
+        self, start_date: date, end_date: date
+    ) -> list[Transaction]:
+        return await self._query(
+            TransactionModel.date >= start_date.isoformat(),
+            TransactionModel.date <= end_date.isoformat(),
+        )
+
     async def get_household_by_period(self, year: int, month: int) -> list[Transaction]:
         return await self._query(
             TransactionModel.date.startswith(date_month_prefix(year, month)),

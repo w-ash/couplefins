@@ -29,6 +29,9 @@ describe("SettingsPage", () => {
       ),
       http.get("/api/v1/persons/", () => HttpResponse.json(persons)),
       http.get("/api/v1/health", () => HttpResponse.json(healthResponse)),
+      http.get("/api/v1/settings/settlement-merchants", () =>
+        HttpResponse.json([]),
+      ),
     );
   });
   it("renders the settings heading", () => {
@@ -60,14 +63,18 @@ describe("SettingsPage", () => {
 
     await waitFor(() => {
       const sections = screen.getAllByRole("region");
-      expect(sections).toHaveLength(3);
+      expect(sections).toHaveLength(4);
 
       expect(sections[0]).toHaveAttribute(
         "aria-labelledby",
         "settings-category-mappings",
       );
       expect(sections[1]).toHaveAttribute("aria-labelledby", "settings-people");
-      expect(sections[2]).toHaveAttribute("aria-labelledby", "settings-system");
+      expect(sections[2]).toHaveAttribute(
+        "aria-labelledby",
+        "settings-settlement-merchants",
+      );
+      expect(sections[3]).toHaveAttribute("aria-labelledby", "settings-system");
     });
   });
 

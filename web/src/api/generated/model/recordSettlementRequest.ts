@@ -4,7 +4,6 @@
  * Couplefins
  * OpenAPI spec version: 0.1.0
  */
-import type { SettlementMethod } from './settlementMethod';
 
 export interface RecordSettlementRequest {
   year: number;
@@ -12,7 +11,7 @@ export interface RecordSettlementRequest {
   amount: number;
   from_person_id: string;
   to_person_id: string;
-  method: SettlementMethod;
+  method: string;
   notes?: string;
   settled_at?: string | null;
   linked_transaction_ids?: string[];

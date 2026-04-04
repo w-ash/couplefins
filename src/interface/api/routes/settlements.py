@@ -8,6 +8,10 @@ from src.application.use_cases.delete_settlement import (
     DeleteSettlementCommand,
     DeleteSettlementUseCase,
 )
+from src.application.use_cases.find_settlement_candidates import (
+    FindSettlementCandidatesCommand,
+    FindSettlementCandidatesUseCase,
+)
 from src.application.use_cases.get_settle_up_data import (
     GetSettleUpDataCommand,
     GetSettleUpDataUseCase,
@@ -24,6 +28,10 @@ from src.application.use_cases.record_waived_settlement import (
     RecordWaivedSettlementCommand,
     RecordWaivedSettlementUseCase,
 )
+from src.application.use_cases.unlink_settlement_transaction import (
+    UnlinkSettlementTransactionCommand,
+    UnlinkSettlementTransactionUseCase,
+)
 from src.domain.entities.person import Person
 from src.domain.exceptions import ValidationError
 from src.infrastructure.events.event_bus import event_bus
@@ -34,6 +42,7 @@ from src.interface.api.schemas.settlements import (
     MarkTransactionResponse,
     RecordSettlementRequest,
     RecordWaivedSettlementRequest,
+    SettlementCandidateResponse,
     SettlementResponse,
     SettleUpDataResponse,
 )
@@ -100,7 +109,10 @@ async def get_settle_up_data(year: int, month: int) -> SettleUpDataResponse:
 
 
 @router.delete("/settlements/{settlement_id}", status_code=200)
-async def delete_settlement(settlement_id: UUID) -> DeleteSettlementResponse:
+async def delete_settlement(
+    settlement_id: UUID,
+    _current_user: Person = Depends(get_current_user),
+) -> DeleteSettlementResponse:
     command = DeleteSettlementCommand(settlement_id=settlement_id)
     result = await execute_use_case(
         lambda uow: DeleteSettlementUseCase().execute(command, uow)
@@ -112,6 +124,7 @@ async def delete_settlement(settlement_id: UUID) -> DeleteSettlementResponse:
 @router.post("/settlements/mark-transaction", status_code=200)
 async def mark_transaction_as_settlement(
     body: MarkTransactionRequest,
+    _current_user: Person = Depends(get_current_user),
 ) -> MarkTransactionResponse:
     command = MarkTransactionAsSettlementCommand(
         transaction_id=body.transaction_id,
@@ -126,3 +139,32 @@ async def mark_transaction_as_settlement(
         transaction_id=result.transaction_id,
         is_settlement=result.is_settlement,
     )
+
+
+@router.get("/settlements/candidates")
+async def get_settlement_candidates(
+    year: int, month: int, amount: float
+) -> list[SettlementCandidateResponse]:
+    command = FindSettlementCandidatesCommand(
+        year=year, month=month, amount=Decimal(str(amount))
+    )
+    result = await execute_use_case(
+        lambda uow: FindSettlementCandidatesUseCase().execute(command, uow)
+    )
+    return [SettlementCandidateResponse.from_domain(c) for c in result.candidates]
+
+
+@router.delete("/settlements/{settlement_id}/links/{transaction_id}")
+async def unlink_settlement_transaction(
+    settlement_id: UUID,
+    transaction_id: UUID,
+    _current_user: Person = Depends(get_current_user),
+) -> dict[str, bool]:
+    command = UnlinkSettlementTransactionCommand(
+        settlement_id=settlement_id, transaction_id=transaction_id
+    )
+    result = await execute_use_case(
+        lambda uow: UnlinkSettlementTransactionUseCase().execute(command, uow)
+    )
+    event_bus.broadcast("settlements")
+    return {"unlinked": result.unlinked}

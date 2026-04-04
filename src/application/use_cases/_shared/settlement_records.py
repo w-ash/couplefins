@@ -3,9 +3,10 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from attrs import define
+from attrs import define, field
 
-from src.domain.entities.settlement import Settlement, SettlementMethod
+from src.domain.entities.settlement import Settlement
+from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
@@ -17,7 +18,7 @@ def build_settlement(  # noqa: PLR0913
     from_person_id: UUID,
     to_person_id: UUID,
     amount: Decimal,
-    method: SettlementMethod | None,
+    method: str | None,
     is_waived: bool,
     notes: str,
     settled_at: datetime | None = None,
@@ -42,6 +43,7 @@ def build_settlement(  # noqa: PLR0913
 class SettlementRecord:
     settlement: Settlement
     linked_transaction_ids: list[UUID]
+    linked_transactions: list[Transaction] = field(factory=list)
 
 
 async def enrich_with_links(
@@ -55,13 +57,24 @@ async def enrich_with_links(
         settlement_ids
     )
     links_by_settlement: dict[UUID, list[UUID]] = defaultdict(list)
+    all_tx_ids: list[UUID] = []
     for link in all_links:
         links_by_settlement[link.settlement_id].append(link.transaction_id)
+        all_tx_ids.append(link.transaction_id)
+    tx_by_id: dict[UUID, Transaction] = {}
+    if all_tx_ids:
+        txs = await uow.transactions.get_by_ids(all_tx_ids)
+        tx_by_id = {tx.id: tx for tx in txs}
 
     return [
         SettlementRecord(
             settlement=s,
             linked_transaction_ids=links_by_settlement.get(s.id, []),
+            linked_transactions=[
+                tx_by_id[tid]
+                for tid in links_by_settlement.get(s.id, [])
+                if tid in tx_by_id
+            ],
         )
         for s in settlements
     ]

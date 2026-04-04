@@ -13,6 +13,9 @@ from src.domain.repositories.person_repository import PersonRepositoryProtocol
 from src.domain.repositories.reconciliation_period_repository import (
     ReconciliationPeriodRepositoryProtocol,
 )
+from src.domain.repositories.settlement_merchant_repository import (
+    SettlementMerchantRepositoryProtocol,
+)
 from src.domain.repositories.settlement_repository import (
     SettlementRepositoryProtocol,
 )
@@ -37,10 +40,14 @@ def make_mock_uow() -> AsyncMock:
     uow.categories = AsyncMock(spec=CategoryRepositoryProtocol)
     uow.category_group_budgets = AsyncMock(spec=CategoryGroupBudgetRepositoryProtocol)
     uow.reconciliation_periods = AsyncMock(spec=ReconciliationPeriodRepositoryProtocol)
+    uow.settlement_merchants = AsyncMock(spec=SettlementMerchantRepositoryProtocol)
+    uow.settlement_merchants.get_all.return_value = []
+    uow.settlement_merchants.count.return_value = 0
     uow.settlements = AsyncMock(spec=SettlementRepositoryProtocol)
     uow.settlement_transaction_links = AsyncMock(
         spec=SettlementTransactionLinkRepositoryProtocol
     )
+    uow.settlement_transaction_links.get_by_transaction_id.return_value = []
     uow.reconciliation_periods.get_by_period.return_value = None
     uow.reconciliation_periods.get_by_periods.return_value = []
     uow.reconciliation_periods.get_by_year.return_value = []

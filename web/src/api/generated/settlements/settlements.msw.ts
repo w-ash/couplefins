@@ -20,19 +20,27 @@ import type {
   DeleteSettlementResponse,
   MarkTransactionResponse,
   SettleUpDataResponse,
-  SettlementResponse
+  SettlementCandidateResponse,
+  SettlementResponse,
+  UnlinkSettlementTransaction200
 } from '../model';
 
 
-export const getRecordSettlementResponseMock = (overrideResponse: Partial<Extract<SettlementResponse, object>> = {}): SettlementResponse => ({id: faker.string.uuid(), year: faker.number.int(), month: faker.number.int(), amount: faker.number.float({fractionDigits: 2}), from_person_id: faker.string.uuid(), to_person_id: faker.string.uuid(), method: faker.helpers.arrayElement([faker.string.alpha({length: {min: 10, max: 20}}),null,]), is_waived: faker.datatype.boolean(), notes: faker.string.alpha({length: {min: 10, max: 20}}), settled_at: faker.date.past().toISOString().slice(0, 19) + 'Z', created_at: faker.date.past().toISOString().slice(0, 19) + 'Z', linked_transaction_ids: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => (faker.string.uuid())), ...overrideResponse})
+export const getRecordSettlementResponseMock = (overrideResponse: Partial<Extract<SettlementResponse, object>> = {}): SettlementResponse => ({id: faker.string.uuid(), year: faker.number.int(), month: faker.number.int(), amount: faker.number.float({fractionDigits: 2}), from_person_id: faker.string.uuid(), to_person_id: faker.string.uuid(), method: faker.helpers.arrayElement([faker.string.alpha({length: {min: 10, max: 20}}),null,]), is_waived: faker.datatype.boolean(), notes: faker.string.alpha({length: {min: 10, max: 20}}), settled_at: faker.date.past().toISOString().slice(0, 19) + 'Z', created_at: faker.date.past().toISOString().slice(0, 19) + 'Z', linked_transaction_ids: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => (faker.string.uuid())), linked_transactions: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({id: faker.string.uuid(), date: faker.date.past().toISOString().slice(0, 10), merchant: faker.string.alpha({length: {min: 10, max: 20}}), amount: faker.number.float({fractionDigits: 2}), payer_person_id: faker.string.uuid()})), ...overrideResponse})
 
-export const getWaiveSettlementResponseMock = (overrideResponse: Partial<Extract<SettlementResponse, object>> = {}): SettlementResponse => ({id: faker.string.uuid(), year: faker.number.int(), month: faker.number.int(), amount: faker.number.float({fractionDigits: 2}), from_person_id: faker.string.uuid(), to_person_id: faker.string.uuid(), method: faker.helpers.arrayElement([faker.string.alpha({length: {min: 10, max: 20}}),null,]), is_waived: faker.datatype.boolean(), notes: faker.string.alpha({length: {min: 10, max: 20}}), settled_at: faker.date.past().toISOString().slice(0, 19) + 'Z', created_at: faker.date.past().toISOString().slice(0, 19) + 'Z', linked_transaction_ids: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => (faker.string.uuid())), ...overrideResponse})
+export const getWaiveSettlementResponseMock = (overrideResponse: Partial<Extract<SettlementResponse, object>> = {}): SettlementResponse => ({id: faker.string.uuid(), year: faker.number.int(), month: faker.number.int(), amount: faker.number.float({fractionDigits: 2}), from_person_id: faker.string.uuid(), to_person_id: faker.string.uuid(), method: faker.helpers.arrayElement([faker.string.alpha({length: {min: 10, max: 20}}),null,]), is_waived: faker.datatype.boolean(), notes: faker.string.alpha({length: {min: 10, max: 20}}), settled_at: faker.date.past().toISOString().slice(0, 19) + 'Z', created_at: faker.date.past().toISOString().slice(0, 19) + 'Z', linked_transaction_ids: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => (faker.string.uuid())), linked_transactions: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({id: faker.string.uuid(), date: faker.date.past().toISOString().slice(0, 10), merchant: faker.string.alpha({length: {min: 10, max: 20}}), amount: faker.number.float({fractionDigits: 2}), payer_person_id: faker.string.uuid()})), ...overrideResponse})
 
-export const getGetSettleUpDataResponseMock = (overrideResponse: Partial<Extract<SettleUpDataResponse, object>> = {}): SettleUpDataResponse => ({year: faker.number.int(), month: faker.number.int(), owed: faker.helpers.arrayElement([{amount: faker.number.float({fractionDigits: 2}), from_person_id: faker.string.uuid(), to_person_id: faker.string.uuid()},null,]), recorded_settlements: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({id: faker.string.uuid(), year: faker.number.int(), month: faker.number.int(), amount: faker.number.float({fractionDigits: 2}), from_person_id: faker.string.uuid(), to_person_id: faker.string.uuid(), method: faker.helpers.arrayElement([faker.string.alpha({length: {min: 10, max: 20}}),null,]), is_waived: faker.datatype.boolean(), notes: faker.string.alpha({length: {min: 10, max: 20}}), settled_at: faker.date.past().toISOString().slice(0, 19) + 'Z', created_at: faker.date.past().toISOString().slice(0, 19) + 'Z', linked_transaction_ids: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => (faker.string.uuid()))})), remaining_balance: faker.number.float({fractionDigits: 2}), upload_statuses: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({person_id: faker.string.uuid(), person_name: faker.string.alpha({length: {min: 10, max: 20}}), has_uploaded: faker.datatype.boolean(), upload_count: faker.number.int()})), persons: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({id: faker.string.uuid(), name: faker.string.alpha({length: {min: 10, max: 20}})})), is_finalized: faker.datatype.boolean(), finalized_at: faker.helpers.arrayElement([faker.date.past().toISOString().slice(0, 19) + 'Z',null,]), transaction_count: faker.number.int(), latest_transaction_month: faker.helpers.arrayElement([{year: faker.number.int(), month: faker.number.int()},null,]), ...overrideResponse})
+export const getGetSettleUpDataResponseMock = (overrideResponse: Partial<Extract<SettleUpDataResponse, object>> = {}): SettleUpDataResponse => ({year: faker.number.int(), month: faker.number.int(), owed: faker.helpers.arrayElement([{amount: faker.number.float({fractionDigits: 2}), from_person_id: faker.string.uuid(), to_person_id: faker.string.uuid()},null,]), recorded_settlements: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({id: faker.string.uuid(), year: faker.number.int(), month: faker.number.int(), amount: faker.number.float({fractionDigits: 2}), from_person_id: faker.string.uuid(), to_person_id: faker.string.uuid(), method: faker.helpers.arrayElement([faker.string.alpha({length: {min: 10, max: 20}}),null,]), is_waived: faker.datatype.boolean(), notes: faker.string.alpha({length: {min: 10, max: 20}}), settled_at: faker.date.past().toISOString().slice(0, 19) + 'Z', created_at: faker.date.past().toISOString().slice(0, 19) + 'Z', linked_transaction_ids: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => (faker.string.uuid())), linked_transactions: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({id: faker.string.uuid(), date: faker.date.past().toISOString().slice(0, 10), merchant: faker.string.alpha({length: {min: 10, max: 20}}), amount: faker.number.float({fractionDigits: 2}), payer_person_id: faker.string.uuid()}))})), remaining_balance: faker.number.float({fractionDigits: 2}), upload_statuses: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({person_id: faker.string.uuid(), person_name: faker.string.alpha({length: {min: 10, max: 20}}), has_uploaded: faker.datatype.boolean(), upload_count: faker.number.int()})), persons: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({id: faker.string.uuid(), name: faker.string.alpha({length: {min: 10, max: 20}})})), is_finalized: faker.datatype.boolean(), finalized_at: faker.helpers.arrayElement([faker.date.past().toISOString().slice(0, 19) + 'Z',null,]), transaction_count: faker.number.int(), latest_transaction_month: faker.helpers.arrayElement([{year: faker.number.int(), month: faker.number.int()},null,]), ...overrideResponse})
 
 export const getDeleteSettlementResponseMock = (overrideResponse: Partial<Extract<DeleteSettlementResponse, object>> = {}): DeleteSettlementResponse => ({deleted: faker.datatype.boolean(), ...overrideResponse})
 
 export const getMarkTransactionAsSettlementResponseMock = (overrideResponse: Partial<Extract<MarkTransactionResponse, object>> = {}): MarkTransactionResponse => ({transaction_id: faker.string.uuid(), is_settlement: faker.datatype.boolean(), ...overrideResponse})
+
+export const getGetSettlementCandidatesResponseMock = (): SettlementCandidateResponse[] => (Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({id: faker.string.uuid(), date: faker.date.past().toISOString().slice(0, 10), merchant: faker.string.alpha({length: {min: 10, max: 20}}), amount: faker.number.float({fractionDigits: 2}), payer_person_id: faker.string.uuid(), category: faker.string.alpha({length: {min: 10, max: 20}}), score: faker.number.int(), match_reasons: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => (faker.string.alpha({length: {min: 10, max: 20}})))})))
+
+export const getUnlinkSettlementTransactionResponseMock = (): UnlinkSettlementTransaction200 => ({
+        [faker.string.alphanumeric(5)]: faker.datatype.boolean()
+      })
 
 
 export const getRecordSettlementMockHandler = (overrideResponse?: SettlementResponse | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<SettlementResponse> | SettlementResponse), options?: RequestHandlerOptions) => {
@@ -94,10 +102,36 @@ export const getMarkTransactionAsSettlementMockHandler = (overrideResponse?: Mar
       })
   }, options)
 }
+
+export const getGetSettlementCandidatesMockHandler = (overrideResponse?: SettlementCandidateResponse[] | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<SettlementCandidateResponse[]> | SettlementCandidateResponse[]), options?: RequestHandlerOptions) => {
+  return http.get('*/api/v1/settlements/candidates', async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getGetSettlementCandidatesResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
+
+export const getUnlinkSettlementTransactionMockHandler = (overrideResponse?: UnlinkSettlementTransaction200 | ((info: Parameters<Parameters<typeof http.delete>[1]>[0]) => Promise<UnlinkSettlementTransaction200> | UnlinkSettlementTransaction200), options?: RequestHandlerOptions) => {
+  return http.delete('*/api/v1/settlements/:settlementId/links/:transactionId', async (info: Parameters<Parameters<typeof http.delete>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getUnlinkSettlementTransactionResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
 export const getSettlementsMock = () => [
   getRecordSettlementMockHandler(),
   getWaiveSettlementMockHandler(),
   getGetSettleUpDataMockHandler(),
   getDeleteSettlementMockHandler(),
-  getMarkTransactionAsSettlementMockHandler()
+  getMarkTransactionAsSettlementMockHandler(),
+  getGetSettlementCandidatesMockHandler(),
+  getUnlinkSettlementTransactionMockHandler()
 ]

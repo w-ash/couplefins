@@ -237,10 +237,15 @@ Recording who paid whom. This is the core "together moment" — the reason the c
 - Given a small outstanding balance, then I can waive it (forgive the debt) with a note
 - Given a waived balance, then the month shows as settled
 
-**US-SETTLE-3**: As a partner, I want to link a bank transaction to the settlement so it doesn't count as a shared expense.
+**US-SETTLE-3** (v1.2.2): As a partner, I want to link bank transactions to a settlement so they don't count as spending.
 
-- Given a Venmo transfer appears in my uploaded transactions, then I can mark it as a settlement transaction
-- Given a linked settlement transaction, then it's excluded from reconciliation math
+- Given I am recording a settlement, then I see an expandable section with matching bank transactions from both partners' uploads
+- Given the app has configurable settlement merchants (Venmo, Zelle, etc. — set in Settings), then candidates are scored by merchant match, amount match, and category
+- Given matching transfers exist, then I see them as candidates with merchant, amount, date, and payer
+- Given I select candidates and record the payment, then the selected transactions are linked and excluded from spending and budget totals
+- Given I previously recorded a settlement without links, then I can link transactions to it from payment history
+- Given a linked transaction, then it appears beneath its settlement in payment history
+- Given I tag a transaction `settlement` in Monarch before export, then it is automatically excluded on import
 
 **US-SETTLE-4**: As a partner, I want to see all past payments for this month.
 
@@ -327,6 +332,13 @@ Setup and maintenance tasks that happen occasionally, not monthly.
 
 - Given the Settings page (or sidebar toggle), then I can choose: System, Light, or Dark
 - Given I select a theme, then it applies immediately and persists across sessions
+
+**US-CONFIG-4** (v1.2.2): As a partner, I want to configure which merchants we use for settlement payments so the app can find matching transactions.
+
+- Given the Settings page, then I see a "Settlement merchants" section with configured merchants (seeded with Venmo, Zelle, Cash App)
+- Given I add a merchant (name + pattern), then it appears in the list and is used for candidate matching on the Settle Up page
+- Given I delete a merchant, then it's no longer used for matching
+- Given I record a settlement, then the method dropdown is populated from configured merchants (plus "Other" as a freeform fallback)
 
 ---
 

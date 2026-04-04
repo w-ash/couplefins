@@ -5,7 +5,9 @@ from pydantic import BaseModel
 
 from src.application.use_cases._shared.settlement_records import SettlementRecord
 from src.application.use_cases.get_settle_up_data import GetSettleUpDataResult
-from src.domain.entities.settlement import Settlement, SettlementMethod
+from src.domain.entities.settlement import Settlement
+from src.domain.entities.transaction import Transaction
+from src.domain.settlement_matching import SettlementCandidate
 from src.interface.api.schemas.dashboard import DashboardPersonResponse
 from src.interface.api.schemas.reconciliation import (
     MonthReference,
@@ -20,7 +22,7 @@ class RecordSettlementRequest(BaseModel):
     amount: float
     from_person_id: UUID
     to_person_id: UUID
-    method: SettlementMethod
+    method: str
     notes: str = ""
     settled_at: datetime.datetime | None = None
     linked_transaction_ids: list[UUID] = []
@@ -40,6 +42,24 @@ class MarkTransactionRequest(BaseModel):
     is_settlement: bool = True
 
 
+class LinkedTransactionResponse(BaseModel):
+    id: UUID
+    date: datetime.date
+    merchant: str
+    amount: float
+    payer_person_id: UUID
+
+    @classmethod
+    def from_domain(cls, tx: Transaction) -> LinkedTransactionResponse:
+        return cls(
+            id=tx.id,
+            date=tx.date,
+            merchant=tx.merchant,
+            amount=float(tx.amount),
+            payer_person_id=tx.payer_person_id,
+        )
+
+
 class SettlementResponse(BaseModel):
     id: UUID
     year: int
@@ -53,6 +73,7 @@ class SettlementResponse(BaseModel):
     settled_at: datetime.datetime
     created_at: datetime.datetime
     linked_transaction_ids: list[UUID]
+    linked_transactions: list[LinkedTransactionResponse] = []
 
     @classmethod
     def from_domain(
@@ -65,7 +86,7 @@ class SettlementResponse(BaseModel):
             amount=float(settlement.amount),
             from_person_id=settlement.from_person_id,
             to_person_id=settlement.to_person_id,
-            method=settlement.method.value if settlement.method else None,
+            method=settlement.method,
             is_waived=settlement.is_waived,
             notes=settlement.notes,
             settled_at=settlement.settled_at,
@@ -75,7 +96,50 @@ class SettlementResponse(BaseModel):
 
     @classmethod
     def from_record(cls, record: SettlementRecord) -> SettlementResponse:
-        return cls.from_domain(record.settlement, record.linked_transaction_ids)
+        s = record.settlement
+        return cls(
+            id=s.id,
+            year=s.year,
+            month=s.month,
+            amount=float(s.amount),
+            from_person_id=s.from_person_id,
+            to_person_id=s.to_person_id,
+            method=s.method,
+            is_waived=s.is_waived,
+            notes=s.notes,
+            settled_at=s.settled_at,
+            created_at=s.created_at,
+            linked_transaction_ids=record.linked_transaction_ids,
+            linked_transactions=[
+                LinkedTransactionResponse.from_domain(tx)
+                for tx in record.linked_transactions
+            ],
+        )
+
+
+class SettlementCandidateResponse(BaseModel):
+    id: UUID
+    date: datetime.date
+    merchant: str
+    amount: float
+    payer_person_id: UUID
+    category: str
+    score: int
+    match_reasons: list[str]
+
+    @classmethod
+    def from_domain(cls, candidate: SettlementCandidate) -> SettlementCandidateResponse:
+        tx = candidate.transaction
+        return cls(
+            id=tx.id,
+            date=tx.date,
+            merchant=tx.merchant,
+            amount=float(tx.amount),
+            payer_person_id=tx.payer_person_id,
+            category=tx.category,
+            score=candidate.score,
+            match_reasons=list(candidate.match_reasons),
+        )
 
 
 class SettleUpDataResponse(BaseModel):

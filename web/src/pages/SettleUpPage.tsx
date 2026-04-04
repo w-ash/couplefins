@@ -3,23 +3,26 @@ import {
   CheckCircle2,
   Download,
   HandCoins,
+  Link2,
   Loader2,
   Trash2,
   Upload,
 } from "lucide-react";
 import { useCallback, useState } from "react";
+import { getGetBudgetOverviewQueryKey } from "@/api/generated/budgets/budgets";
 import { getGetDashboardQueryKey } from "@/api/generated/dashboard/dashboard";
 import type {
   SettlementResponse,
   SettleUpDataResponse,
 } from "@/api/generated/model";
-import { SettlementMethod } from "@/api/generated/model";
 import {
   getGetReconciliationQueryKey,
   useFinalizePeriod,
   useUnfinalizePeriod,
 } from "@/api/generated/reconciliation/reconciliation";
+import { useGetSettlementMerchants } from "@/api/generated/settings/settings";
 import {
+  getGetSettlementCandidatesQueryKey,
   getGetSettleUpDataQueryKey,
   useDeleteSettlement,
   useGetSettleUpData,
@@ -28,9 +31,11 @@ import {
 } from "@/api/generated/settlements/settlements";
 import { AdjustmentExportDialog } from "@/components/AdjustmentExportDialog";
 import { Button } from "@/components/Button";
+import { CandidateChecklist } from "@/components/CandidateChecklist";
 import { Card } from "@/components/Card";
 import { FinalizationBanner } from "@/components/FinalizationBanner";
 import { InlineError } from "@/components/InlineError";
+import { LinkedTransactionSubrows } from "@/components/LinkedTransactionSubrows";
 import { MonthPicker } from "@/components/MonthPicker";
 import { PageHeader } from "@/components/PageHeader";
 import {
@@ -40,14 +45,16 @@ import {
   PageLoading,
 } from "@/components/PageStates";
 import { PersonBadge } from "@/components/PersonBadge";
+import { PosthocLinkDialog } from "@/components/PosthocLinkDialog";
 import { UploadStatusRow } from "@/components/UploadStatusRow";
 import { useTemporary } from "@/hooks/useTemporary";
 import { formatCurrency, MONTHS, useMonthYear } from "@/lib/format";
-import { baseInputClass } from "@/lib/input-styles";
+import { baseInputClass, selectInputClass } from "@/lib/input-styles";
 import { PAGE_PADDING } from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
 
 const formInputClass = `w-full ${baseInputClass}`;
+const formSelectClass = `w-full ${selectInputClass}`;
 
 function HeroCard({
   data,
@@ -97,11 +104,7 @@ function HeroCard({
   );
 }
 
-const METHODS: { value: SettlementMethod; label: string }[] = [
-  { value: SettlementMethod.venmo, label: "Venmo" },
-  { value: SettlementMethod.zelle, label: "Zelle" },
-  { value: SettlementMethod.other, label: "Other" },
-];
+const OTHER_METHOD = "__other__";
 
 function RecordPaymentForm({
   data,
@@ -118,13 +121,25 @@ function RecordPaymentForm({
       ? data.remaining_balance.toFixed(2)
       : (owed?.amount.toFixed(2) ?? "0");
 
+  const { data: merchantsResponse } = useGetSettlementMerchants({
+    query: { staleTime: Number.POSITIVE_INFINITY },
+  });
+  const merchants = merchantsResponse?.data ?? [];
+
   const [amount, setAmount] = useState(defaultAmount);
-  const [method, setMethod] = useState<SettlementMethod>(METHODS[0].value);
+  const [selectedMethod, setSelectedMethod] = useState("");
+  const [otherMethod, setOtherMethod] = useState("");
   const [notes, setNotes] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [successMessage, setSuccessMessage] = useTemporary<string | null>(
     null,
     4000,
   );
+
+  const effectiveDefault = merchants.length > 0 ? merchants[0].name : "";
+  const method = selectedMethod || effectiveDefault;
+
+  const resolvedMethod = method === OTHER_METHOD ? otherMethod.trim() : method;
 
   const mutation = useRecordSettlement({
     mutation: {
@@ -138,6 +153,7 @@ function RecordPaymentForm({
           );
         }
         setNotes("");
+        setSelectedIds([]);
         onSuccess();
       },
     },
@@ -189,17 +205,36 @@ function RecordPaymentForm({
             <select
               id="settlement-method"
               value={method}
-              onChange={(e) => setMethod(e.target.value as SettlementMethod)}
-              className={formInputClass}
+              onChange={(e) => setSelectedMethod(e.target.value)}
+              className={formSelectClass}
             >
-              {METHODS.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
+              {merchants.map((m) => (
+                <option key={m.id} value={m.name}>
+                  {m.name}
                 </option>
               ))}
+              <option value={OTHER_METHOD}>Other</option>
             </select>
           </div>
         </div>
+        {method === OTHER_METHOD && (
+          <div>
+            <label
+              htmlFor="settlement-method-other"
+              className="mb-1 block text-sm font-medium text-foreground"
+            >
+              Payment method
+            </label>
+            <input
+              id="settlement-method-other"
+              type="text"
+              value={otherMethod}
+              onChange={(e) => setOtherMethod(e.target.value)}
+              placeholder="e.g. Cash, bank transfer"
+              className={formInputClass}
+            />
+          </div>
+        )}
         <div>
           <label
             htmlFor="settlement-notes"
@@ -216,6 +251,14 @@ function RecordPaymentForm({
             className={formInputClass}
           />
         </div>
+        <CandidateChecklist
+          amount={amount}
+          month={data.month}
+          year={data.year}
+          persons={data.persons}
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
+        />
         <Button
           onClick={() => {
             if (!owed) return;
@@ -226,14 +269,20 @@ function RecordPaymentForm({
                 amount: Number.parseFloat(amount),
                 from_person_id: owed.from_person_id,
                 to_person_id: owed.to_person_id,
-                method,
+                method: resolvedMethod,
                 notes,
+                linked_transaction_ids:
+                  selectedIds.length > 0 ? selectedIds : undefined,
               },
             });
           }}
           loading={mutation.isPending}
           loadingText="Recording..."
-          disabled={!amount || Number.parseFloat(amount) <= 0}
+          disabled={
+            !amount ||
+            Number.parseFloat(amount) <= 0 ||
+            (method === OTHER_METHOD && !otherMethod.trim())
+          }
         >
           Record Payment
         </Button>
@@ -319,17 +368,28 @@ function WaiveAction({
 
 function PaymentHistory({
   settlements,
+  persons,
   getPersonName,
+  getPersonColor,
   onDelete,
-  isDeleting,
+  deletingId,
+  isDeletionPending,
   isFinalized,
+  invalidateAll,
 }: {
   settlements: SettlementResponse[];
+  persons: Array<{ id: string; name: string }>;
   getPersonName: (id: string) => string;
+  getPersonColor: (id: string) => string;
   onDelete: (id: string) => void;
-  isDeleting: boolean;
+  deletingId: string | null;
+  isDeletionPending: boolean;
   isFinalized: boolean;
+  invalidateAll: () => void;
 }) {
+  const [linkDialogSettlement, setLinkDialogSettlement] =
+    useState<SettlementResponse | null>(null);
+
   if (settlements.length === 0) return null;
 
   return (
@@ -348,62 +408,95 @@ function PaymentHistory({
             "en-US",
             { month: "short", day: "numeric" },
           );
+          const hasLinks = (s.linked_transactions?.length ?? 0) > 0;
 
           return (
-            <div
-              key={s.id}
-              className="flex items-start justify-between gap-2 rounded-lg border border-border-muted px-4 py-3"
-            >
-              <div className="flex items-center gap-3">
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    {s.is_waived ? (
-                      <>Balance waived</>
-                    ) : (
-                      <>
-                        {fromName} paid {toName}{" "}
-                        <span className="tabular-nums">
-                          {formatCurrency(s.amount)}
+            <div key={s.id}>
+              <div className="flex items-start justify-between gap-2 rounded-lg border border-border-muted px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      {s.is_waived ? (
+                        <>Balance waived</>
+                      ) : (
+                        <>
+                          {fromName} paid {toName}{" "}
+                          <span className="tabular-nums">
+                            {formatCurrency(s.amount)}
+                          </span>
+                        </>
+                      )}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {settledDate}
+                      {s.method && (
+                        <span className="ml-1.5 capitalize">
+                          via {s.method}
                         </span>
-                      </>
+                      )}
+                      {s.notes && (
+                        <span className="ml-1.5 text-muted-foreground/70">
+                          — {s.notes}
+                        </span>
+                      )}
+                    </p>
+                    {!isFinalized && !s.is_waived && !hasLinks && (
+                      <button
+                        type="button"
+                        onClick={() => setLinkDialogSettlement(s)}
+                        className="mt-1 inline-flex items-center gap-1 text-xs text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <Link2 className="size-3" />
+                        Link bank transaction
+                      </button>
                     )}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {settledDate}
-                    {s.method && (
-                      <span className="ml-1.5 capitalize">via {s.method}</span>
-                    )}
-                    {s.notes && (
-                      <span className="ml-1.5 text-muted-foreground/70">
-                        — {s.notes}
-                      </span>
-                    )}
-                  </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  {!isFinalized && (
+                    <button
+                      type="button"
+                      onClick={() => onDelete(s.id)}
+                      disabled={deletingId === s.id && isDeletionPending}
+                      className="rounded-md p-2.5 sm:p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={
+                        s.is_waived
+                          ? "Delete waiver"
+                          : `Delete ${fromName} payment of ${formatCurrency(s.amount)}`
+                      }
+                    >
+                      {deletingId === s.id && isDeletionPending ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="size-4" />
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
-              {!isFinalized && (
-                <button
-                  type="button"
-                  onClick={() => onDelete(s.id)}
-                  disabled={isDeleting}
-                  className="rounded-md p-2.5 sm:p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-                  aria-label={
-                    s.is_waived
-                      ? "Delete waiver"
-                      : `Delete ${fromName} payment of ${formatCurrency(s.amount)}`
-                  }
-                >
-                  {isDeleting ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="size-4" />
-                  )}
-                </button>
+              {hasLinks && s.linked_transactions && (
+                <LinkedTransactionSubrows
+                  linkedTransactions={s.linked_transactions}
+                  getPersonName={getPersonName}
+                  getPersonColor={getPersonColor}
+                />
               )}
             </div>
           );
         })}
       </div>
+
+      {linkDialogSettlement && (
+        <PosthocLinkDialog
+          open={linkDialogSettlement !== null}
+          onClose={() => setLinkDialogSettlement(null)}
+          settlement={linkDialogSettlement}
+          persons={persons}
+          getPersonName={getPersonName}
+          getPersonColor={getPersonColor}
+          onSuccess={invalidateAll}
+        />
+      )}
     </Card>
   );
 }
@@ -432,6 +525,12 @@ export function SettleUpPage() {
     queryClient.invalidateQueries({
       queryKey: getGetReconciliationQueryKey(),
     });
+    queryClient.invalidateQueries({
+      queryKey: getGetBudgetOverviewQueryKey(),
+    });
+    queryClient.invalidateQueries({
+      queryKey: getGetSettlementCandidatesQueryKey(),
+    });
   }, [queryClient]);
 
   const finalizeMutation = useFinalizePeriod({
@@ -442,8 +541,17 @@ export function SettleUpPage() {
     mutation: { onSuccess: invalidateAll },
   });
 
+  const [deletingSettlementId, setDeletingSettlementId] = useState<
+    string | null
+  >(null);
+
   const deleteMutation = useDeleteSettlement({
-    mutation: { onSuccess: invalidateAll },
+    mutation: {
+      onSuccess: () => {
+        setDeletingSettlementId(null);
+        invalidateAll();
+      },
+    },
   });
 
   const { getPersonName, getPersonColor } = usePersonMaps(data?.persons);
@@ -529,10 +637,17 @@ export function SettleUpPage() {
 
           <PaymentHistory
             settlements={data.recorded_settlements}
+            persons={data.persons}
             getPersonName={getPersonName}
-            onDelete={(id) => deleteMutation.mutate({ settlementId: id })}
-            isDeleting={deleteMutation.isPending}
+            getPersonColor={getPersonColor}
+            onDelete={(id) => {
+              setDeletingSettlementId(id);
+              deleteMutation.mutate({ settlementId: id });
+            }}
+            deletingId={deletingSettlementId}
+            isDeletionPending={deleteMutation.isPending}
             isFinalized={data.is_finalized}
+            invalidateAll={invalidateAll}
           />
 
           <button

@@ -26,13 +26,16 @@ import type {
 import type {
   DeleteSettlementResponse,
   GetSettleUpDataParams,
+  GetSettlementCandidatesParams,
   HTTPValidationError,
   MarkTransactionRequest,
   MarkTransactionResponse,
   RecordSettlementRequest,
   RecordWaivedSettlementRequest,
   SettleUpDataResponse,
-  SettlementResponse
+  SettlementCandidateResponse,
+  SettlementResponse,
+  UnlinkSettlementTransaction200
 } from '../model';
 
 import { customFetch } from '../../client';
@@ -520,4 +523,218 @@ export const useMarkTransactionAsSettlement = <TError = HTTPValidationError,
         TContext
       > => {
       return useMutation(getMarkTransactionAsSettlementMutationOptions(options), queryClient);
+    }
+    /**
+ * @summary Get Settlement Candidates
+ */
+export type getSettlementCandidatesResponse200 = {
+  data: SettlementCandidateResponse[]
+  status: 200
+}
+
+export type getSettlementCandidatesResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type getSettlementCandidatesResponseSuccess = (getSettlementCandidatesResponse200) & {
+  headers: Headers;
+};
+export type getSettlementCandidatesResponseError = (getSettlementCandidatesResponse422) & {
+  headers: Headers;
+};
+
+export type getSettlementCandidatesResponse = (getSettlementCandidatesResponseSuccess | getSettlementCandidatesResponseError)
+
+export const getGetSettlementCandidatesUrl = (params: GetSettlementCandidatesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/settlements/candidates?${stringifiedParams}` : `/api/v1/settlements/candidates`
+}
+
+export const getSettlementCandidates = async (params: GetSettlementCandidatesParams, options?: RequestInit): Promise<getSettlementCandidatesResponse> => {
+
+  return customFetch<getSettlementCandidatesResponse>(getGetSettlementCandidatesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSettlementCandidatesQueryKey = (params?: GetSettlementCandidatesParams,) => {
+    return [
+    `/api/v1/settlements/candidates`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetSettlementCandidatesQueryOptions = <TData = Awaited<ReturnType<typeof getSettlementCandidates>>, TError = HTTPValidationError>(params: GetSettlementCandidatesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSettlementCandidates>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSettlementCandidatesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSettlementCandidates>>> = ({ signal }) => getSettlementCandidates(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSettlementCandidates>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetSettlementCandidatesQueryResult = NonNullable<Awaited<ReturnType<typeof getSettlementCandidates>>>
+export type GetSettlementCandidatesQueryError = HTTPValidationError
+
+
+export function useGetSettlementCandidates<TData = Awaited<ReturnType<typeof getSettlementCandidates>>, TError = HTTPValidationError>(
+ params: GetSettlementCandidatesParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSettlementCandidates>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSettlementCandidates>>,
+          TError,
+          Awaited<ReturnType<typeof getSettlementCandidates>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSettlementCandidates<TData = Awaited<ReturnType<typeof getSettlementCandidates>>, TError = HTTPValidationError>(
+ params: GetSettlementCandidatesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSettlementCandidates>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSettlementCandidates>>,
+          TError,
+          Awaited<ReturnType<typeof getSettlementCandidates>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSettlementCandidates<TData = Awaited<ReturnType<typeof getSettlementCandidates>>, TError = HTTPValidationError>(
+ params: GetSettlementCandidatesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSettlementCandidates>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Settlement Candidates
+ */
+
+export function useGetSettlementCandidates<TData = Awaited<ReturnType<typeof getSettlementCandidates>>, TError = HTTPValidationError>(
+ params: GetSettlementCandidatesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSettlementCandidates>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetSettlementCandidatesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+/**
+ * @summary Unlink Settlement Transaction
+ */
+export type unlinkSettlementTransactionResponse200 = {
+  data: UnlinkSettlementTransaction200
+  status: 200
+}
+
+export type unlinkSettlementTransactionResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type unlinkSettlementTransactionResponseSuccess = (unlinkSettlementTransactionResponse200) & {
+  headers: Headers;
+};
+export type unlinkSettlementTransactionResponseError = (unlinkSettlementTransactionResponse422) & {
+  headers: Headers;
+};
+
+export type unlinkSettlementTransactionResponse = (unlinkSettlementTransactionResponseSuccess | unlinkSettlementTransactionResponseError)
+
+export const getUnlinkSettlementTransactionUrl = (settlementId: string,
+    transactionId: string,) => {
+
+
+
+
+  return `/api/v1/settlements/${settlementId}/links/${transactionId}`
+}
+
+export const unlinkSettlementTransaction = async (settlementId: string,
+    transactionId: string, options?: RequestInit): Promise<unlinkSettlementTransactionResponse> => {
+
+  return customFetch<unlinkSettlementTransactionResponse>(getUnlinkSettlementTransactionUrl(settlementId,transactionId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getUnlinkSettlementTransactionMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unlinkSettlementTransaction>>, TError,{settlementId: string;transactionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unlinkSettlementTransaction>>, TError,{settlementId: string;transactionId: string}, TContext> => {
+
+const mutationKey = ['unlinkSettlementTransaction'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unlinkSettlementTransaction>>, {settlementId: string;transactionId: string}> = (props) => {
+          const {settlementId,transactionId} = props ?? {};
+
+          return  unlinkSettlementTransaction(settlementId,transactionId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnlinkSettlementTransactionMutationResult = NonNullable<Awaited<ReturnType<typeof unlinkSettlementTransaction>>>
+
+    export type UnlinkSettlementTransactionMutationError = HTTPValidationError
+
+    /**
+ * @summary Unlink Settlement Transaction
+ */
+export const useUnlinkSettlementTransaction = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unlinkSettlementTransaction>>, TError,{settlementId: string;transactionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof unlinkSettlementTransaction>>,
+        TError,
+        {settlementId: string;transactionId: string},
+        TContext
+      > => {
+      return useMutation(getUnlinkSettlementTransactionMutationOptions(options), queryClient);
     }

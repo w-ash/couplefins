@@ -25,6 +25,12 @@ const ROWS = [
     detail: "You fronted the money — your partner pays you back in full",
   },
   {
+    tag: "settlement",
+    what: "Settlement payment",
+    detail:
+      "Transfers to your partner — excluded from spending totals. You can also link them from Settle Up.",
+  },
+  {
     tag: null,
     what: "Personal",
     detail: "Your own expense, not in the household budget",

@@ -27,6 +27,7 @@ The couple uses Monarch tags to classify transactions:
 - **`household`** tag (case-insensitive): marks a transaction as a household expense without implying a split — for expenses relevant to the couple's shared life but paid individually (e.g., concert tickets bought separately for an event you attend together)
 - **`sXX`** tag (e.g., `s70`): sets the payer's share to XX%. Authoritative — overrides any default from other tags. If multiple `sXX` tags are present, the highest value wins (payer takes the most share)
 - **Person name** tag (e.g., `bob`): marks a transaction as spotted — the payer fronted the money but the other person owes 100%. Detected by matching tags against known person names (case-insensitive). Reserved tags (`shared`, `split`, `household`, `settlement`) are never treated as person names.
+- **`settlement`** tag (case-insensitive): marks a transaction as a settlement payment (e.g., Venmo transfer to your partner). Sets `is_settlement=true`, which excludes the transaction from both spending totals and budget calculations. You can also link settlement transactions from the Settle Up page instead of tagging in Monarch.
 - Tags are dynamic — any integer 0-100 is valid for `sXX` (e.g., `s0`, `s30`, `s100`)
 
 **Input vs. internal representation**: Tags are the *input mechanism*. Internally, each transaction stores two fields: `payer_person_id` (who paid), `payer_percentage` (their share, 0-100, always set), and `household` (budget-relevant to the couple, bool).
@@ -40,6 +41,9 @@ The couple uses Monarch tags to classify transactions:
 | `household` | true | 100 (no split implied) | Household (no settlement) |
 | `household, sXX` | true | XX | Household + split |
 | person-name (e.g., `bob`) | true | 0 | Spotted |
+| `settlement` | false | 100 | Settlement payment |
+
+The `settlement` tag also sets `is_settlement=true`, which excludes the transaction from both reconciliation math and budget totals.
 
 The couple can set splits either way: tag transactions in Monarch before exporting, or edit split percentages and household flags directly in the app after uploading. Both workflows produce the same internal representation.
 
