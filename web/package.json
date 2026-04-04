@@ -39,7 +39,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.21",
-    "lucide-react": "^0.577.0",
+    "lucide-react": "^1.7.0",
     "react": "^19.2.4",
     "react-day-picker": "^9.14.0",
     "react-dom": "^19.2.4",

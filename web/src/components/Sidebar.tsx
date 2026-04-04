@@ -1,5 +1,5 @@
-import { Heart } from "lucide-react";
 import { PRIMARY_ROUTES, SECONDARY_ROUTES } from "@/lib/navigation";
+import { CoupleFinsLogo } from "./CoupleFinsLogo";
 import { LoggedInUser } from "./LoggedInUser";
 import { NavItem } from "./NavItem";
 
@@ -11,7 +11,7 @@ export function Sidebar() {
     >
       {/* Wordmark */}
       <div className="flex items-center gap-2 px-5 py-5">
-        <Heart className="size-5 text-primary" />
+        <CoupleFinsLogo className="h-5 w-auto text-primary" />
         <span className="font-semibold text-lg text-foreground">
           CoupleFins
         </span>

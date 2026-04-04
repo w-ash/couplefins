@@ -262,15 +262,18 @@ Are we on track for the month and the year? The couple reviews this together.
 
 **US-BUDGET-1**: As a partner, I want to set monthly budgets per category group.
 
-- Given the Budget page, then I see category groups with budget input fields
-- Given I set a budget amount, when I save, then it persists with an effective date
-- Given I change a budget mid-year, then historical months use the old amount
+- Given the Budget page for a month, then I see category groups with budget amounts (or empty if none set)
+- Given I set a budget amount for a group, when I save, then it persists for that specific month
+- Given I change a budget for one month, then other months are unaffected
+- Given I delete a budget for a group, then it's removed for this month only
 
 **US-BUDGET-2**: As a partner, I want to see spending vs budget for the current month and year-to-date.
 
 - Given the Budget page, then I can toggle between Monthly and YTD views
-- Given either view, then I see per-group: budget amount, actual spending, remaining, and a health indicator
+- Given either view, then I see per-group: budget amount, actual spending, and a health indicator
 - Given a group approaching or over budget, then the indicator communicates urgency without alarm (teal → amber → coral)
+- Given YTD view, then the YTD budget is the sum of individual monthly budgets (not a cascading amount)
+- Given a month with no budget set, then that month contributes $0 to the YTD budget total
 
 **US-BUDGET-3**: As a partner, I want to see a grand total so I know our overall position.
 
@@ -289,6 +292,25 @@ Are we on track for the month and the year? The couple reviews this together.
 - Given a chart, then I can toggle category groups on/off to focus on specific areas
 - Given a chart, then I can see budget limit lines overlaid to spot when we crossed thresholds
 - Given a year-over-year mode, then I can compare this year's spending trajectory to last year's
+
+**US-BUDGET-6** (v1.3.x): As a partner, I want to copy last month's budgets so I don't re-enter them every month.
+
+- Given I open the Budget page for a month with no budgets, and the previous month has budgets, then I see a "Copy from [previous month]" option
+- Given I click copy, then all budget amounts from the previous month are created for this month — both household and personal budgets in one click
+- Given I've already set some budgets for this month, then only missing groups are copied (no overwrites)
+- Given the previous month has no budgets, then I see the standard "Add budget" empty state
+
+**US-BUDGET-7** (v1.3.x): As a partner, I want household and personal budgets to be completely separate views.
+
+- Given I toggle to "Household" scope, then I see only household budgets — personal budgets are not visible
+- Given I toggle to "My Budget" scope, then I see only my personal budgets — household budgets are not visible
+- Given a category group has `include_personal` categories, then the household budget's spending and average hint include personal transactions, with a "(incl. personal)" indicator so I set the target appropriately
+
+**US-BUDGET-8** (v1.3.x): As a partner, I want to see budget lines on spending trend charts.
+
+- Given the Insights page spending trends, then I see a dashed line showing the budget amount per month overlaid on each group's spending chart
+- Given my budget changed between months, then the overlay reflects the actual budget for each month
+- Given a group with no budget, then no overlay line is shown
 
 ---
 

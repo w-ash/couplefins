@@ -111,13 +111,11 @@ function GroupHeader({
 function SpentBudgetLabel({
   spent,
   budget,
-  remaining,
   hasBudget,
   breakdown,
 }: {
   spent: number;
   budget: number | null;
-  remaining: number | null;
   hasBudget: boolean;
   breakdown?: { household: number; personal: number } | null;
 }) {
@@ -143,13 +141,6 @@ function SpentBudgetLabel({
         {" / "}
         {formatCurrency(budget)}
       </span>
-      {remaining != null && (
-        <span
-          className={`ml-2 font-medium ${remaining < 0 ? "text-destructive-muted-foreground" : "text-muted-foreground"}`}
-        >
-          {formatCurrency(remaining)}
-        </span>
-      )}
       {breakdownEl}
     </span>
   );
@@ -195,7 +186,6 @@ function BudgetGroupRow({
   const health =
     viewMode === "monthly" ? status.monthly_health : status.ytd_health;
   const healthStyle = getHealthStyle(health);
-  const remaining = budget != null ? budget - spent : null;
   const hasBudget = status.monthly_budget != null;
   const pct =
     hasBudget && budget != null && budget > 0
@@ -247,7 +237,6 @@ function BudgetGroupRow({
               <SpentBudgetLabel
                 spent={spent}
                 budget={budget}
-                remaining={remaining}
                 hasBudget={hasBudget}
                 breakdown={breakdown}
               />
@@ -258,11 +247,7 @@ function BudgetGroupRow({
           <div className="hidden min-w-0 flex-1 space-y-1.5 sm:block">
             <GroupHeader {...headerProps} />
             {hasBudget && budget != null && (
-              <ProgressBar
-                pct={pct}
-                barColor={healthStyle.barColor}
-                showLabel
-              />
+              <ProgressBar pct={pct} barColor={healthStyle.barColor} />
             )}
           </div>
 
@@ -270,7 +255,6 @@ function BudgetGroupRow({
             <SpentBudgetLabel
               spent={spent}
               budget={budget}
-              remaining={remaining}
               hasBudget={hasBudget}
               breakdown={breakdown}
             />
@@ -501,16 +485,17 @@ function BudgetGroupRow({
 function AddBudgetForm({
   unbudgetedGroups,
   onSave,
+  year,
+  month,
 }: {
   unbudgetedGroups: GroupBudgetStatusResponse[];
   onSave: (groupId: string, amount: number, effectiveFrom: string) => void;
+  year: number;
+  month: number;
 }) {
   const [open, setOpen] = useState(false);
   const [groupId, setGroupId] = useState("");
   const [amount, setAmount] = useState("");
-  const [effectiveFrom, setEffectiveFrom] = useState(
-    new Date().toISOString().slice(0, 10),
-  );
 
   const groupOptions: ComboboxOption[] = useMemo(
     () =>
@@ -521,8 +506,9 @@ function AddBudgetForm({
     [unbudgetedGroups],
   );
 
-  // Find the selected group to show average hint
   const selectedGroup = unbudgetedGroups.find((g) => g.group_id === groupId);
+
+  if (unbudgetedGroups.length === 0) return null;
 
   if (!open) {
     return (
@@ -543,19 +529,23 @@ function AddBudgetForm({
         className="rounded-xl border border-border bg-card p-4 shadow-sm"
         onSubmit={(e) => {
           e.preventDefault();
-          if (groupId && Number.parseFloat(amount) > 0) {
-            onSave(groupId, Number.parseFloat(amount), effectiveFrom);
-            setOpen(false);
-            setGroupId("");
-            setAmount("");
-          }
+          const parsed = Number.parseFloat(amount);
+          if (!groupId || !Number.isFinite(parsed) || parsed <= 0) return;
+          onSave(
+            groupId,
+            parsed,
+            `${year}-${String(month).padStart(2, "0")}-01`,
+          );
+          setOpen(false);
+          setGroupId("");
+          setAmount("");
         }}
       >
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div className="min-w-0 flex-1 sm:max-w-48">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_12rem] sm:items-end">
+          <div className="min-w-0">
             <label
               htmlFor="budget-group"
-              className="mb-1 block text-sm font-medium text-foreground"
+              className="mb-1.5 block text-sm font-medium text-foreground"
             >
               Category group
             </label>
@@ -571,7 +561,7 @@ function AddBudgetForm({
           <div>
             <label
               htmlFor="budget-amount"
-              className="mb-1 block text-sm font-medium text-foreground"
+              className="mb-1.5 block text-sm font-medium text-foreground"
             >
               Monthly amount
             </label>
@@ -588,26 +578,12 @@ function AddBudgetForm({
                   ? `Avg: ${formatCurrency(selectedGroup.average_monthly_spending)}`
                   : "0.00"
               }
-              className={`w-32 tabular-nums ${baseInputClass}`}
+              className={`w-full tabular-nums ${baseInputClass}`}
               required
             />
           </div>
-          <div>
-            <label
-              htmlFor="budget-effective"
-              className="mb-1 block text-sm font-medium text-foreground"
-            >
-              Effective from
-            </label>
-            <input
-              id="budget-effective"
-              type="date"
-              value={effectiveFrom}
-              onChange={(e) => setEffectiveFrom(e.target.value)}
-              className={baseInputClass}
-              required
-            />
-          </div>
+        </div>
+        <div className="mt-4 flex items-center gap-3">
           <Button type="submit" size="sm">
             Save Budget
           </Button>
@@ -801,14 +777,31 @@ export function BudgetPage() {
 
       {data && (
         <div className="space-y-6">
+          {/* Add budget form */}
+          <AddBudgetForm
+            unbudgetedGroups={allGroupsForAdd}
+            year={year}
+            month={month}
+            onSave={(groupId, amount, effectiveFrom) =>
+              saveMutation.mutate({
+                data: {
+                  group_id: groupId,
+                  monthly_amount: amount,
+                  effective_from: effectiveFrom,
+                  is_personal: scope === "personal",
+                },
+              })
+            }
+          />
+
           {data.group_statuses.length === 0 && data.budgets.length === 0 ? (
             <PageEmpty
               icon={<PieChart />}
               heading="No budgets yet"
               description={
                 scope === "personal"
-                  ? "Add a budget above to start tracking your personal spending."
-                  : "Add a budget above to start tracking household spending."
+                  ? "Add a budget to start tracking your personal spending."
+                  : "Add a budget to start tracking household spending."
               }
             />
           ) : (
@@ -862,21 +855,6 @@ export function BudgetPage() {
               )}
             </>
           )}
-
-          {/* Add budget form */}
-          <AddBudgetForm
-            unbudgetedGroups={allGroupsForAdd}
-            onSave={(groupId, amount, effectiveFrom) =>
-              saveMutation.mutate({
-                data: {
-                  group_id: groupId,
-                  monthly_amount: amount,
-                  effective_from: effectiveFrom,
-                  is_personal: scope === "personal",
-                },
-              })
-            }
-          />
         </div>
       )}
     </div>

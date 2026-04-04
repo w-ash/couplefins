@@ -89,7 +89,12 @@ function HeroCard({
           accentColor={getPersonColor(owed.from_person_id)}
           size="lg"
         />{" "}
-        owes {getPersonName(owed.to_person_id)}{" "}
+        owes{" "}
+        <PersonBadge
+          name={getPersonName(owed.to_person_id)}
+          accentColor={getPersonColor(owed.to_person_id)}
+          size="lg"
+        />{" "}
         <span className="tabular-nums">{formatCurrency(owed.amount)}</span>
       </p>
       {data.remaining_balance > 0 && data.remaining_balance !== owed.amount && (
@@ -579,6 +584,8 @@ export function SettleUpPage() {
           getPersonColor={getPersonColor}
         />
       )}
+
+      {data && !isEmpty && <div className="h-2" />}
 
       {isEmpty && (
         <PageEmpty

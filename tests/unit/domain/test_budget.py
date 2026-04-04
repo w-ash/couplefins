@@ -111,7 +111,7 @@ def test_health_over_budget() -> None:
 
 
 def test_health_exactly_at_budget() -> None:
-    assert determine_health(Decimal(500), Decimal(500)) == "over_budget"
+    assert determine_health(Decimal(500), Decimal(500)) == "near_limit"
 
 
 def test_health_zero_budget_no_spending() -> None:
@@ -266,7 +266,7 @@ def test_overview_grand_totals_exclude_unbudgeted() -> None:
     assert overview.total_monthly_spent == Decimal(200)
 
 
-def test_overview_unbudgeted_groups_without_spending_excluded() -> None:
+def test_overview_unbudgeted_groups_without_spending_included() -> None:
     food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
     auto_gid = UUID("aaaaaaaa-0000-0000-0000-000000000002")
 
@@ -277,7 +277,9 @@ def test_overview_unbudgeted_groups_without_spending_excluded() -> None:
 
     overview = compute_budget_overview([], [], {}, groups, 2026, 1)
 
-    assert len(overview.group_statuses) == 0
+    assert len(overview.group_statuses) == 2
+    assert all(s.monthly_budget is None for s in overview.group_statuses)
+    assert all(s.monthly_spent == Decimal(0) for s in overview.group_statuses)
 
 
 def test_overview_empty() -> None:
@@ -609,7 +611,8 @@ def test_personal_overview_empty_txs() -> None:
 
     overview = compute_personal_budget_overview([], [], {}, groups, 2026, 1, ALICE)
 
-    assert overview.group_statuses == []
+    assert len(overview.group_statuses) == 1
+    assert overview.group_statuses[0].monthly_spent == Decimal(0)
     assert overview.total_monthly_spent == Decimal(0)
 
 
@@ -630,7 +633,8 @@ def test_personal_overview_excludes_excluded_txs() -> None:
     ]
 
     overview = compute_personal_budget_overview([], txs, lookup, groups, 2026, 1, ALICE)
-    assert overview.group_statuses == []
+    assert len(overview.group_statuses) == 1
+    assert overview.group_statuses[0].monthly_spent == Decimal(0)
 
 
 def test_personal_overview_partner_household_creates_share() -> None:

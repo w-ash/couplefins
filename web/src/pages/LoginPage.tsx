@@ -1,8 +1,8 @@
-import { Heart } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useLogin } from "@/api/generated/auth/auth";
 import type { AuthPersonResponse } from "@/api/generated/model";
 import { Button } from "@/components/Button";
+import { CoupleFinsLogo } from "@/components/CoupleFinsLogo";
 import { InlineError } from "@/components/InlineError";
 import { PasswordInput } from "@/components/PasswordInput";
 import { PersonPicker, SelectedPersonBadge } from "@/components/PersonPicker";
@@ -58,7 +58,7 @@ export function LoginPage({
       <div className="mx-auto max-w-md px-6 py-12">
         <div className="mb-8 text-center">
           <div className="mb-4 inline-flex items-center justify-center rounded-full bg-primary-muted p-3">
-            <Heart className="size-6 text-primary" />
+            <CoupleFinsLogo className="size-6 text-primary" />
           </div>
           <h1 className="font-semibold text-2xl text-foreground">
             {selectedName ? `Log in as ${selectedName}` : "Welcome back"}

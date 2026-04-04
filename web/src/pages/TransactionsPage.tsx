@@ -548,7 +548,7 @@ function TransactionRow({
         {personEntries.map((p) => (
           <td
             key={p.id}
-            className="hidden py-2 text-right text-muted-foreground tabular-nums sm:table-cell"
+            className="hidden py-2 px-3 text-right text-muted-foreground tabular-nums sm:table-cell"
           >
             {formatCurrency(
               p.id === tx.payer_person_id ? payerShare : otherShare,

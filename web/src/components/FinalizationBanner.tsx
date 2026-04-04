@@ -29,7 +29,10 @@ export function FinalizationBanner({
     return (
       <div className="flex flex-col gap-2 rounded-lg border border-primary-muted bg-primary-muted/40 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2.5">
-          <Lock className="size-4 text-primary-muted-foreground" />
+          <Lock
+            className="size-4 text-primary-muted-foreground"
+            strokeWidth={2.5}
+          />
           <span className="text-sm font-medium text-primary-muted-foreground">
             Month locked
             {finalizedAt && (
@@ -42,7 +45,7 @@ export function FinalizationBanner({
         <Button
           variant="secondary"
           size="sm"
-          icon={<LockOpen className="size-3" />}
+          icon={<LockOpen className="size-3" strokeWidth={2.5} />}
           onClick={onUnfinalize}
           loading={isPending}
           loadingText="Unlocking"
@@ -65,7 +68,7 @@ export function FinalizationBanner({
       </div>
       <Button
         size="sm"
-        icon={<LockOpen className="size-3" />}
+        icon={<LockOpen className="size-3" strokeWidth={2.5} />}
         onClick={onFinalize}
         loading={isPending}
         loadingText="Locking"

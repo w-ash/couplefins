@@ -79,7 +79,7 @@ def determine_health(spent: Decimal, budget: Decimal) -> HealthStatus:
     if budget <= 0:
         return "over_budget" if spent > 0 else "on_track"
     ratio = spent / budget
-    if ratio >= 1:
+    if ratio > 1:
         return "over_budget"
     if ratio >= _NEAR_LIMIT_THRESHOLD:
         return "near_limit"
@@ -233,9 +233,8 @@ def compute_budget_overview(  # noqa: PLR0913, PLR0917
         year_txs, category_lookup, month, personal_categories
     )
 
-    statuses: list[CategoryGroupBudgetStatus] = []
-    for gid, name in group_names.items():
-        status = _build_group_status(
+    statuses: list[CategoryGroupBudgetStatus] = [
+        _build_group_status(
             gid,
             name,
             budgets_by_group.get(gid, []),
@@ -245,8 +244,8 @@ def compute_budget_overview(  # noqa: PLR0913, PLR0917
             year,
             month,
         )
-        if status.monthly_budget is not None or status.monthly_spent > 0:
-            statuses.append(status)
+        for gid, name in group_names.items()
+    ]
 
     return _assemble_overview(statuses, year, month)
 
@@ -399,10 +398,10 @@ def compute_personal_budget_overview(  # noqa: PLR0913, PLR0914, PLR0917
             month,
         )
         household_spend, personal = month_split.get(gid, (Decimal(0), Decimal(0)))
-        status = evolve(
-            status, household_spending=household_spend, personal_spending=personal
+        statuses.append(
+            evolve(
+                status, household_spending=household_spend, personal_spending=personal
+            )
         )
-        if status.monthly_budget is not None or status.monthly_spent > 0:
-            statuses.append(status)
 
     return _assemble_overview(statuses, year, month)

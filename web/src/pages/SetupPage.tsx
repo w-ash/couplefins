@@ -1,10 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Heart, KeyRound, UserPlus } from "lucide-react";
+import { KeyRound, UserPlus } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { getListAuthPersonsQueryKey } from "@/api/generated/auth/auth";
 import { useSetupCouple } from "@/api/generated/persons/persons";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { CoupleFinsLogo } from "@/components/CoupleFinsLogo";
 import { InlineError } from "@/components/InlineError";
 import { PasswordInput } from "@/components/PasswordInput";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -59,7 +60,7 @@ export function SetupPage() {
       <div className="mx-auto max-w-md px-6 py-12">
         <div className="mb-8 text-center">
           <div className="mb-4 inline-flex items-center justify-center rounded-full bg-primary-muted p-3">
-            <Heart className="size-6 text-primary" />
+            <CoupleFinsLogo className="size-6 text-primary" />
           </div>
           <h1 className="font-semibold text-2xl text-foreground">
             Welcome to CoupleFins
