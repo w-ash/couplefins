@@ -2,6 +2,7 @@ import { Link2, Loader2, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import type {
   LinkedTransactionResponse,
+  MonthReference,
   SettlementResponse,
 } from "@/api/generated/model";
 import {
@@ -73,6 +74,7 @@ export function PosthocLinkDialog({
   getPersonName,
   getPersonColor,
   onSuccess,
+  latestTransactionMonth,
 }: {
   open: boolean;
   onClose: () => void;
@@ -81,6 +83,7 @@ export function PosthocLinkDialog({
   getPersonName: (id: string) => string;
   getPersonColor: (id: string) => string;
   onSuccess: () => void;
+  latestTransactionMonth: MonthReference | null;
 }) {
   const dialogRef = useDialogSync(open);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -187,7 +190,8 @@ export function PosthocLinkDialog({
           year={settlement.year}
           persons={persons}
           selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
+          onSelectionChange={(ids) => setSelectedIds(ids)}
+          latestTransactionMonth={latestTransactionMonth}
         />
       </div>
 

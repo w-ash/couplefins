@@ -92,6 +92,26 @@ export function matchesPreset(
   return startDate === preset.startDate && endDate === preset.endDate;
 }
 
+export function stepMonth(
+  y: number,
+  m: number,
+  delta: 1 | -1,
+): [number, number] {
+  const next = m + delta;
+  if (next > 12) return [y + 1, 1];
+  if (next < 1) return [y - 1, 12];
+  return [y, next];
+}
+
+export function monthAtOrAfter(
+  y: number,
+  m: number,
+  floorY: number,
+  floorM: number,
+): boolean {
+  return y > floorY || (y === floorY && m >= floorM);
+}
+
 export function isSingleMonth(
   startDate: string,
   endDate: string,

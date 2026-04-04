@@ -139,6 +139,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.2.1 | Terminology cleanup — "shared" → "household" throughout codebase, remove `TransactionType` | Completed (2026-04-01) | M |
 | v1.2.2 | Settlement transaction linking — candidate matching, Settle Up linking UI | Completed (2026-04-03) | M |
 | v1.2.3 | Brand identity — CoupleFins logo, favicon, Lucide v1 upgrade, lighter strokes | Completed (2026-04-03) | S |
+| v1.2.4 | Transaction-first settlement flow — link transactions instead of recording payments | Completed (2026-04-04) | M |
 | v1.3.0 | Per-month budget model — replace cascading effective dates with year/month | Not started | M |
 | v1.3.1 | Copy from last month + budget page UX polish | Not started | S |
 | v1.3.2 | Budget trends on Insights page — budget overlay lines on spending charts | Not started | M |

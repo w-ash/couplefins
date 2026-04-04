@@ -12,6 +12,7 @@ import { useCallback, useState } from "react";
 import { getGetBudgetOverviewQueryKey } from "@/api/generated/budgets/budgets";
 import { getGetDashboardQueryKey } from "@/api/generated/dashboard/dashboard";
 import type {
+  MonthReference,
   SettlementResponse,
   SettleUpDataResponse,
 } from "@/api/generated/model";
@@ -20,7 +21,6 @@ import {
   useFinalizePeriod,
   useUnfinalizePeriod,
 } from "@/api/generated/reconciliation/reconciliation";
-import { useGetSettlementMerchants } from "@/api/generated/settings/settings";
 import {
   getGetSettlementCandidatesQueryKey,
   getGetSettleUpDataQueryKey,
@@ -31,7 +31,11 @@ import {
 } from "@/api/generated/settlements/settlements";
 import { AdjustmentExportDialog } from "@/components/AdjustmentExportDialog";
 import { Button } from "@/components/Button";
-import { CandidateChecklist } from "@/components/CandidateChecklist";
+import {
+  CandidateChecklist,
+  computeSettlementAmount,
+  type SelectedCandidate,
+} from "@/components/CandidateChecklist";
 import { Card } from "@/components/Card";
 import { FinalizationBanner } from "@/components/FinalizationBanner";
 import { InlineError } from "@/components/InlineError";
@@ -49,12 +53,8 @@ import { PosthocLinkDialog } from "@/components/PosthocLinkDialog";
 import { UploadStatusRow } from "@/components/UploadStatusRow";
 import { useTemporary } from "@/hooks/useTemporary";
 import { formatCurrency, MONTHS, useMonthYear } from "@/lib/format";
-import { baseInputClass, selectInputClass } from "@/lib/input-styles";
 import { PAGE_PADDING } from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
-
-const formInputClass = `w-full ${baseInputClass}`;
-const formSelectClass = `w-full ${selectInputClass}`;
 
 function HeroCard({
   data,
@@ -109,9 +109,7 @@ function HeroCard({
   );
 }
 
-const OTHER_METHOD = "__other__";
-
-function RecordPaymentForm({
+function LinkSettlementSection({
   data,
   getPersonName,
   onSuccess,
@@ -121,44 +119,29 @@ function RecordPaymentForm({
   onSuccess: () => void;
 }) {
   const owed = data.owed;
-  const defaultAmount =
+  const searchAmount =
     owed && data.remaining_balance > 0
       ? data.remaining_balance.toFixed(2)
       : (owed?.amount.toFixed(2) ?? "0");
 
-  const { data: merchantsResponse } = useGetSettlementMerchants({
-    query: { staleTime: Number.POSITIVE_INFINITY },
-  });
-  const merchants = merchantsResponse?.data ?? [];
-
-  const [amount, setAmount] = useState(defaultAmount);
-  const [selectedMethod, setSelectedMethod] = useState("");
-  const [otherMethod, setOtherMethod] = useState("");
-  const [notes, setNotes] = useState("");
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selected, setSelected] = useState<SelectedCandidate[]>([]);
   const [successMessage, setSuccessMessage] = useTemporary<string | null>(
     null,
     4000,
   );
 
-  const effectiveDefault = merchants.length > 0 ? merchants[0].name : "";
-  const method = selectedMethod || effectiveDefault;
-
-  const resolvedMethod = method === OTHER_METHOD ? otherMethod.trim() : method;
-
   const mutation = useRecordSettlement({
     mutation: {
       onSuccess: () => {
-        const paidAmount = Number.parseFloat(amount);
         if (owed) {
           const fromName = getPersonName(owed.from_person_id);
           const toName = getPersonName(owed.to_person_id);
+          const amount = computeSettlementAmount(selected);
           setSuccessMessage(
-            `Payment recorded — ${fromName} paid ${toName} ${formatCurrency(paidAmount)}`,
+            `Settlement linked — ${fromName} paid ${toName} ${formatCurrency(amount)}`,
           );
         }
-        setNotes("");
-        setSelectedIds([]);
+        setSelected([]);
         onSuccess();
       },
     },
@@ -166,145 +149,64 @@ function RecordPaymentForm({
 
   if (!owed || owed.amount === 0) return null;
 
-  const fromName = getPersonName(owed.from_person_id);
-  const toName = getPersonName(owed.to_person_id);
+  const selectedIds = selected.map((c) => c.id);
+  const amount = computeSettlementAmount(selected);
+  const method = selected.length > 0 ? selected[0].merchant : "";
 
   return (
     <Card>
-      <h2 className="mb-1 font-medium text-lg text-foreground">
-        Record Payment
-      </h2>
-      <p className="mb-4 text-xs text-muted-foreground">
-        Log a payment to reduce the outstanding balance
-      </p>
-      <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          {fromName} pays {toName}
-        </p>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label
-              htmlFor="settlement-amount"
-              className="mb-1 block text-sm font-medium text-foreground"
-            >
-              Amount
-            </label>
-            <input
-              id="settlement-amount"
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0.01"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className={formInputClass}
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="settlement-method"
-              className="mb-1 block text-sm font-medium text-foreground"
-            >
-              Method
-            </label>
-            <select
-              id="settlement-method"
-              value={method}
-              onChange={(e) => setSelectedMethod(e.target.value)}
-              className={formSelectClass}
-            >
-              {merchants.map((m) => (
-                <option key={m.id} value={m.name}>
-                  {m.name}
-                </option>
-              ))}
-              <option value={OTHER_METHOD}>Other</option>
-            </select>
-          </div>
-        </div>
-        {method === OTHER_METHOD && (
-          <div>
-            <label
-              htmlFor="settlement-method-other"
-              className="mb-1 block text-sm font-medium text-foreground"
-            >
-              Payment method
-            </label>
-            <input
-              id="settlement-method-other"
-              type="text"
-              value={otherMethod}
-              onChange={(e) => setOtherMethod(e.target.value)}
-              placeholder="e.g. Cash, bank transfer"
-              className={formInputClass}
-            />
-          </div>
-        )}
-        <div>
-          <label
-            htmlFor="settlement-notes"
-            className="mb-1 block text-sm font-medium text-foreground"
+      <CandidateChecklist
+        amount={searchAmount}
+        month={data.month}
+        year={data.year}
+        persons={data.persons}
+        selectedIds={selectedIds}
+        onSelectionChange={(_ids, candidates) => setSelected(candidates)}
+        latestTransactionMonth={data.latest_transaction_month}
+      />
+      {selected.length > 0 && (
+        <div className="mt-4 flex items-center gap-3">
+          <Button
+            icon={<Link2 className="size-4" />}
+            onClick={() => {
+              if (!owed) return;
+              mutation.mutate({
+                data: {
+                  year: data.year,
+                  month: data.month,
+                  amount,
+                  from_person_id: owed.from_person_id,
+                  to_person_id: owed.to_person_id,
+                  method,
+                  linked_transaction_ids: selectedIds,
+                },
+              });
+            }}
+            loading={mutation.isPending}
+            loadingText="Linking..."
           >
-            Notes (optional)
-          </label>
-          <input
-            id="settlement-notes"
-            type="text"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="e.g. Venmo confirmation #1234"
-            className={formInputClass}
-          />
+            Mark as settlement ({formatCurrency(amount)})
+          </Button>
         </div>
-        <CandidateChecklist
-          amount={amount}
-          month={data.month}
-          year={data.year}
-          persons={data.persons}
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
-        <Button
-          onClick={() => {
-            if (!owed) return;
-            mutation.mutate({
-              data: {
-                year: data.year,
-                month: data.month,
-                amount: Number.parseFloat(amount),
-                from_person_id: owed.from_person_id,
-                to_person_id: owed.to_person_id,
-                method: resolvedMethod,
-                notes,
-                linked_transaction_ids:
-                  selectedIds.length > 0 ? selectedIds : undefined,
-              },
-            });
-          }}
-          loading={mutation.isPending}
-          loadingText="Recording..."
-          disabled={
-            !amount ||
-            Number.parseFloat(amount) <= 0 ||
-            (method === OTHER_METHOD && !otherMethod.trim())
-          }
+      )}
+      {successMessage && (
+        <p
+          className="mt-3 text-sm font-medium text-positive"
+          aria-live="polite"
         >
-          Record Payment
-        </Button>
-        {successMessage && (
-          <p className="text-sm font-medium text-positive" aria-live="polite">
-            <CheckCircle2 className="mr-1 inline size-3.5" />
-            {successMessage}
-          </p>
-        )}
-        {mutation.isError && (
+          <CheckCircle2 className="mr-1 inline size-3.5" />
+          {successMessage}
+        </p>
+      )}
+      {mutation.isError && (
+        <div className="mt-3">
           <InlineError>
             {mutation.error instanceof Error
               ? mutation.error.message
-              : "Failed to record payment"}
+              : "Failed to link settlement"}
           </InlineError>
-        )}
-      </div>
+        </div>
+      )}
     </Card>
   );
 }
@@ -381,6 +283,7 @@ function PaymentHistory({
   isDeletionPending,
   isFinalized,
   invalidateAll,
+  latestTransactionMonth,
 }: {
   settlements: SettlementResponse[];
   persons: Array<{ id: string; name: string }>;
@@ -391,6 +294,7 @@ function PaymentHistory({
   isDeletionPending: boolean;
   isFinalized: boolean;
   invalidateAll: () => void;
+  latestTransactionMonth: MonthReference | null;
 }) {
   const [linkDialogSettlement, setLinkDialogSettlement] =
     useState<SettlementResponse | null>(null);
@@ -500,6 +404,7 @@ function PaymentHistory({
           getPersonName={getPersonName}
           getPersonColor={getPersonColor}
           onSuccess={invalidateAll}
+          latestTransactionMonth={latestTransactionMonth}
         />
       )}
     </Card>
@@ -629,7 +534,7 @@ export function SettleUpPage() {
             getPersonColor={getPersonColor}
           />
 
-          <RecordPaymentForm
+          <LinkSettlementSection
             key={`${data.remaining_balance}-${data.recorded_settlements.length}`}
             data={data}
             getPersonName={getPersonName}
@@ -655,6 +560,7 @@ export function SettleUpPage() {
             isDeletionPending={deleteMutation.isPending}
             isFinalized={data.is_finalized}
             invalidateAll={invalidateAll}
+            latestTransactionMonth={data.latest_transaction_month}
           />
 
           <button

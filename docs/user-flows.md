@@ -39,7 +39,7 @@ Each person, on their own time:
 The couple sits down to:
 
 1. Open the dashboard — see who owes whom, whether anything needs attention
-2. Settle up — record the payment (Venmo, cash, etc.)
+2. Settle up — link the settlement transactions (Venmo, Zelle, etc.)
 3. Review budget — are we on track this month? This year?
 4. Finalize the month — lock it so nothing shifts
 5. (Optional) Export adjustment CSVs to import back into Monarch for accurate personal spending
@@ -56,7 +56,7 @@ Seven top-level pages in the sidebar, ordered by workflow:
 |---|---|---|
 | **Dashboard** | "Now" view — settlement status, upload readiness, YTD overview, month history. Each card owns its own temporal context. | v0.2.1 |
 | **Transactions** | Shared transaction table with search, filtering, bulk editing, category breakdown | v0.2.0 |
-| **Settle Up** | Record payments, waive balances, link settlement transactions, finalization controls | v0.6.0 |
+| **Settle Up** | Link settlement transactions, waive balances, finalization controls | v0.6.0 |
 | **Budget** | Category group budgets, monthly + YTD views, progress indicators, spending charts | v0.4.0 |
 | **Insights** | Spending trend sparklines per category group, comparison cards, budget overlays, settlement balance trend, YoY comparison | v0.7.0 |
 | **Upload** | CSV import: preview, confirm, re-upload. Drag-and-drop in v0.8.x | v0.1.1 |
@@ -223,34 +223,32 @@ The dashboard is the landing page. It answers "what's going on and what do I nee
 
 ### Settling Up
 
-Recording who paid whom. This is the core "together moment" — the reason the couple sits down side by side.
+Linking bank transactions to show that the balance has been paid. The payment itself happens outside the app (Venmo, Zelle, cash). Both sides of the transfer appear in each person's uploaded CSV. The couple identifies the matching transactions and marks them as the settlement.
 
-**Goal**: The balance is paid, recorded, and both people agree on the number.
+**Goal**: The balance is settled, both people agree on the number, and the transfer transactions are excluded from spending.
 
-**US-SETTLE-1**: As a partner, I want to see exactly who owes whom and record a payment.
+**US-SETTLE-1**: As a partner, I want to see who owes whom and link matching bank transactions as the settlement.
 
 - Given the Settle Up page, then I see a hero card with the current month's settlement amount ("Alice owes Bob $147.50")
-- Given I enter an amount and payment method (Venmo, cash, etc.), when I click Record Payment, then the payment is recorded and the remaining balance updates
+- Given both partners have uploaded, then I see matching transfer pairs (e.g., Venmo debit + credit) sorted by amount
+- Given I select a matching pair, when I click "Mark as settlement", then both transactions are linked, excluded from spending, and the remaining balance updates
+- Given the app has configurable settlement merchants (Venmo, Zelle, etc. — set in Settings), then candidates are scored by merchant match, amount match, and category
+- Given I tag a transaction `settlement` in Monarch before export, then it is automatically excluded on import
 
 **US-SETTLE-2**: As a partner, I want to waive a small balance instead of transferring money.
 
 - Given a small outstanding balance, then I can waive it (forgive the debt) with a note
 - Given a waived balance, then the month shows as settled
 
-**US-SETTLE-3** (v1.2.2): As a partner, I want to link bank transactions to a settlement so they don't count as spending.
+**US-SETTLE-3**: As a partner, I want to link transactions to an existing settlement after the fact.
 
-- Given I am recording a settlement, then I see an expandable section with matching bank transactions from both partners' uploads
-- Given the app has configurable settlement merchants (Venmo, Zelle, etc. — set in Settings), then candidates are scored by merchant match, amount match, and category
-- Given matching transfers exist, then I see them as candidates with merchant, amount, date, and payer
-- Given I select candidates and record the payment, then the selected transactions are linked and excluded from spending and budget totals
-- Given I previously recorded a settlement without links, then I can link transactions to it from payment history
+- Given a settlement in payment history without linked transactions, then I can open a link dialog and select matching transfers
 - Given a linked transaction, then it appears beneath its settlement in payment history
-- Given I tag a transaction `settlement` in Monarch before export, then it is automatically excluded on import
 
-**US-SETTLE-4**: As a partner, I want to see all past payments for this month.
+**US-SETTLE-4**: As a partner, I want to see all past settlements for this month.
 
-- Given the Settle Up page, then I see a history of recorded payments with amounts, methods, and dates
-- Given a mistake, then I can undo a recorded payment
+- Given the Settle Up page, then I see a history of linked settlements and waivers with amounts and dates
+- Given a mistake, then I can delete a settlement (which unlinks the transactions)
 
 ---
 
@@ -393,7 +391,7 @@ Setup and maintenance tasks that happen occasionally, not monthly.
 | 1 | Dashboard | Both open app together in April | Settlement card: "March 2026: Alice owes Bob $147.50", both uploaded |
 | 2 | Dashboard | Click "Settle Up →" | Navigate to Settle Up page |
 | 3 | Settle Up | See hero card: "Alice owes Bob $147.50" | Upload statuses confirmed, payment history visible |
-| 4 | Settle Up | Enter $147.50, select Venmo, click Record Payment | "Payment recorded" — remaining balance $0.00 |
+| 4 | Settle Up | Select matching Venmo transactions, click "Mark as settlement" | Settlement linked — remaining balance $0.00 |
 | 5 | Budget | Navigate to Budget, toggle to YTD | Food & Dining at 92% (amber), Travel at 40% (teal) |
 | 6 | Budget | Discuss — agree to eat out less next month | — |
 | 7 | Settle Up | Return to Settle Up, click Lock Month | March finalized, lock indicator appears |

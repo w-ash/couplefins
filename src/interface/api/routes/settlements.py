@@ -143,10 +143,18 @@ async def mark_transaction_as_settlement(
 
 @router.get("/settlements/candidates")
 async def get_settlement_candidates(
-    year: int, month: int, amount: float
+    year: int,
+    month: int,
+    amount: float,
+    search_year: int | None = None,
+    search_month: int | None = None,
 ) -> list[SettlementCandidateResponse]:
     command = FindSettlementCandidatesCommand(
-        year=year, month=month, amount=Decimal(str(amount))
+        year=year,
+        month=month,
+        amount=Decimal(str(amount)),
+        search_year=search_year,
+        search_month=search_month,
     )
     result = await execute_use_case(
         lambda uow: FindSettlementCandidatesUseCase().execute(command, uow)

@@ -1,6 +1,6 @@
 import uuid
 
-from attrs import define
+from attrs import define, evolve
 
 from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.application.use_cases._shared.finalization import assert_period_not_finalized
@@ -28,6 +28,19 @@ class DeleteSettlementUseCase:
             )
 
             await assert_period_not_finalized(uow, settlement.year, settlement.month)
+
+            links = await uow.settlement_transaction_links.get_by_settlement_ids([
+                settlement.id
+            ])
+            if links:
+                linked_txs = await uow.transactions.get_by_ids([
+                    link.transaction_id for link in links
+                ])
+                for tx in linked_txs:
+                    if tx.is_settlement:
+                        await uow.transactions.update_mutable_fields(
+                            evolve(tx, is_settlement=False)
+                        )
 
             await uow.settlement_transaction_links.delete_by_settlement_id(
                 settlement.id

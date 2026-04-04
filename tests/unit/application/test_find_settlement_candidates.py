@@ -41,7 +41,7 @@ class TestFindSettlementCandidates:
 
         call_args = uow.transactions.get_by_date_range.call_args
         start, end = call_args.args[0], call_args.args[1]
-        assert start == date(2025, 12, 25)
+        assert start == date(2026, 1, 1)
         assert end == date(2026, 2, 7)
 
     async def test_empty_transactions(self) -> None:

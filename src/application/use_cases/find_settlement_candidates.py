@@ -23,6 +23,8 @@ class FindSettlementCandidatesCommand:
     year: int = field(validator=positive_int)
     month: int = field(validator=month_range)
     amount: Decimal = field(validator=positive_decimal)
+    search_year: int | None = field(default=None)
+    search_month: int | None = field(default=None)
 
 
 @define(frozen=True, slots=True)
@@ -36,8 +38,10 @@ class FindSettlementCandidatesUseCase:
         self, command: FindSettlementCandidatesCommand, uow: UnitOfWorkProtocol
     ) -> FindSettlementCandidatesResult:
         async with uow:
-            start, end = month_bounds(command.year, command.month)
-            search_start = start - _DATE_PADDING
+            sy = command.search_year or command.year
+            sm = command.search_month or command.month
+            start, end = month_bounds(sy, sm)
+            search_start = start
             search_end = end + _DATE_PADDING
 
             transactions = await uow.transactions.get_by_date_range(

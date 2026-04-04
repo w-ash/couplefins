@@ -6,7 +6,14 @@
  */
 
 export interface CreateSettlementMerchantRequest {
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
   name: string;
-  /** @minLength 2 */
+  /**
+   * @minLength 2
+   * @maxLength 100
+   */
   merchant_pattern: string;
 }
