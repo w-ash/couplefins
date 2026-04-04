@@ -29,7 +29,8 @@ async def test_create_budget(client: AsyncClient) -> None:
         json={
             "group_id": group_id,
             "monthly_amount": 500.0,
-            "effective_from": "2026-01-01",
+            "year": 2026,
+            "month": 1,
         },
         cookies=cookies,
     )
@@ -37,7 +38,8 @@ async def test_create_budget(client: AsyncClient) -> None:
     data = response.json()
     assert data["group_id"] == group_id
     assert data["monthly_amount"] == pytest.approx(500.0)
-    assert data["effective_from"] == "2026-01-01"
+    assert data["year"] == 2026
+    assert data["month"] == 1
     assert "id" in data
 
 
@@ -53,7 +55,8 @@ async def test_update_budget(client: AsyncClient) -> None:
         json={
             "group_id": group_id,
             "monthly_amount": 500.0,
-            "effective_from": "2026-01-01",
+            "year": 2026,
+            "month": 1,
         },
         cookies=cookies,
     )
@@ -80,7 +83,8 @@ async def test_delete_budget(client: AsyncClient) -> None:
         json={
             "group_id": group_id,
             "monthly_amount": 300.0,
-            "effective_from": "2026-01-01",
+            "year": 2026,
+            "month": 1,
         },
         cookies=cookies,
     )
@@ -109,7 +113,8 @@ async def test_list_budgets(client: AsyncClient) -> None:
         json={
             "group_id": group_id,
             "monthly_amount": 200.0,
-            "effective_from": "2026-01-01",
+            "year": 2026,
+            "month": 1,
         },
         cookies=cookies,
     )
@@ -141,7 +146,8 @@ async def test_overview_with_budget_and_spending(client: AsyncClient) -> None:
         json={
             "group_id": group_id,
             "monthly_amount": 500.0,
-            "effective_from": "2026-01-01",
+            "year": 2026,
+            "month": 1,
         },
         cookies=cookies,
     )
@@ -168,8 +174,7 @@ async def test_overview_with_budget_and_spending(client: AsyncClient) -> None:
 
 
 async def test_create_personal_budget(client: AsyncClient) -> None:
-    persons, cookies = await setup_and_login(client)
-    alice_id = persons[0]["id"]
+    _, cookies = await setup_and_login(client)
 
     group_resp = await client.post(
         "/api/v1/category-groups", json={"name": "Food & Dining"}, cookies=cookies
@@ -181,14 +186,15 @@ async def test_create_personal_budget(client: AsyncClient) -> None:
         json={
             "group_id": group_id,
             "monthly_amount": 300.0,
-            "effective_from": "2026-01-01",
-            "person_id": alice_id,
+            "year": 2026,
+            "month": 1,
+            "is_personal": True,
         },
         cookies=cookies,
     )
     assert response.status_code == 201
     data = response.json()
-    assert data["person_id"] == alice_id
+    assert data["person_id"] is not None
     assert data["monthly_amount"] == pytest.approx(300.0)
 
 
@@ -213,8 +219,9 @@ async def test_personal_budget_overview(client: AsyncClient) -> None:
         json={
             "group_id": group_id,
             "monthly_amount": 400.0,
-            "effective_from": "2026-01-01",
-            "person_id": alice_id,
+            "year": 2026,
+            "month": 1,
+            "is_personal": True,
         },
         cookies=cookies,
     )

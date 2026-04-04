@@ -1,6 +1,5 @@
 from collections import defaultdict
 from collections.abc import Set
-from datetime import date
 from decimal import Decimal
 from typing import Literal
 from uuid import UUID
@@ -51,30 +50,6 @@ class BudgetOverview:
     total_ytd_spent: Decimal
 
 
-def resolve_effective_budget(
-    budgets: list[CategoryGroupBudget],
-    target_date: date,
-) -> CategoryGroupBudget | None:
-    applicable = [b for b in budgets if b.effective_from <= target_date]
-    if not applicable:
-        return None
-    return max(applicable, key=lambda b: b.effective_from)
-
-
-def compute_ytd_budget(
-    budgets: list[CategoryGroupBudget],
-    year: int,
-    through_month: int,
-) -> Decimal:
-    total = Decimal(0)
-    for month in range(1, through_month + 1):
-        target = date(year, month, 1)
-        effective = resolve_effective_budget(budgets, target)
-        if effective:
-            total += effective.monthly_amount
-    return total
-
-
 def determine_health(spent: Decimal, budget: Decimal) -> HealthStatus:
     if budget <= 0:
         return "over_budget" if spent > 0 else "on_track"
@@ -121,18 +96,34 @@ def compute_average_monthly_spending(
     return {gid: total / num_months for gid, total in group_totals.items()}
 
 
+def _index_month_budgets(
+    month_budgets: list[CategoryGroupBudget],
+) -> dict[UUID, CategoryGroupBudget]:
+    return {b.group_id: b for b in month_budgets}
+
+
+def _compute_ytd_budget(
+    year_budgets: list[CategoryGroupBudget], group_id: UUID, through_month: int
+) -> Decimal | None:
+    amounts = [
+        b.monthly_amount
+        for b in year_budgets
+        if b.group_id == group_id and b.month <= through_month
+    ]
+    return sum(amounts, Decimal(0)) if amounts else None
+
+
 def _build_group_status(  # noqa: PLR0913, PLR0917
     gid: UUID,
     name: str,
-    group_budgets: list[CategoryGroupBudget],
+    month_budget_index: dict[UUID, CategoryGroupBudget],
+    year_budgets: list[CategoryGroupBudget],
     month_by_group: dict[UUID | None, CategoryGroupBreakdown],
     ytd_by_group: dict[UUID | None, CategoryGroupBreakdown],
     avg_spending: dict[UUID, Decimal],
-    year: int,
     month: int,
 ) -> CategoryGroupBudgetStatus:
-    target_date = date(year, month, 1)
-    effective = resolve_effective_budget(group_budgets, target_date)
+    effective = month_budget_index.get(gid)
 
     monthly_bd = month_by_group.get(gid)
     ytd_bd = ytd_by_group.get(gid)
@@ -140,9 +131,7 @@ def _build_group_status(  # noqa: PLR0913, PLR0917
     ytd_spent = ytd_bd.total_amount if ytd_bd else Decimal(0)
 
     monthly_budget = effective.monthly_amount if effective else None
-    ytd_budget_val = (
-        compute_ytd_budget(group_budgets, year, month) if group_budgets else None
-    )
+    ytd_budget_val = _compute_ytd_budget(year_budgets, gid, month)
 
     return CategoryGroupBudgetStatus(
         group_id=gid,
@@ -150,7 +139,7 @@ def _build_group_status(  # noqa: PLR0913, PLR0917
         budget_id=effective.id if effective else None,
         monthly_budget=monthly_budget,
         monthly_spent=monthly_spent,
-        ytd_budget=ytd_budget_val if group_budgets else None,
+        ytd_budget=ytd_budget_val,
         ytd_spent=ytd_spent,
         monthly_health=determine_health(monthly_spent, monthly_budget)
         if monthly_budget is not None
@@ -195,7 +184,8 @@ def _assemble_overview(
 
 
 def compute_budget_overview(  # noqa: PLR0913, PLR0917
-    budgets: list[CategoryGroupBudget],
+    month_budgets: list[CategoryGroupBudget],
+    year_budgets: list[CategoryGroupBudget],
     year_txs: list[Transaction],
     category_lookup: dict[str, tuple[UUID, str]],
     groups: list[CategoryGroup],
@@ -204,10 +194,6 @@ def compute_budget_overview(  # noqa: PLR0913, PLR0917
     personal_categories: Set[str] = frozenset(),
 ) -> BudgetOverview:
     group_names = {g.id: g.name for g in groups}
-
-    budgets_by_group: dict[UUID, list[CategoryGroupBudget]] = defaultdict(list)
-    for b in budgets:
-        budgets_by_group[b.group_id].append(b)
 
     ytd_txs = [
         tx
@@ -233,15 +219,17 @@ def compute_budget_overview(  # noqa: PLR0913, PLR0917
         year_txs, category_lookup, month, personal_categories
     )
 
+    month_budget_index = _index_month_budgets(month_budgets)
+
     statuses: list[CategoryGroupBudgetStatus] = [
         _build_group_status(
             gid,
             name,
-            budgets_by_group.get(gid, []),
+            month_budget_index,
+            year_budgets,
             month_by_group,
             ytd_by_group,
             avg_spending,
-            year,
             month,
         )
         for gid, name in group_names.items()
@@ -270,7 +258,7 @@ def _compute_personal_breakdowns(
     """Compute category breakdowns using person's share amounts.
 
     Returns (breakdowns, spending_split) where spending_split maps
-    group_id → (household_spending, personal_spending).
+    group_id -> (household_spending, personal_spending).
     """
     uncategorized = "Uncategorized"
 
@@ -323,7 +311,8 @@ def _compute_personal_breakdowns(
 
 
 def compute_personal_budget_overview(  # noqa: PLR0913, PLR0914, PLR0917
-    budgets: list[CategoryGroupBudget],
+    month_budgets: list[CategoryGroupBudget],
+    year_budgets: list[CategoryGroupBudget],
     year_txs: list[Transaction],
     category_lookup: dict[str, tuple[UUID, str]],
     groups: list[CategoryGroup],
@@ -336,10 +325,6 @@ def compute_personal_budget_overview(  # noqa: PLR0913, PLR0914, PLR0917
     Spending = person's share of household txs + their personal txs.
     """
     group_names = {g.id: g.name for g in groups}
-
-    budgets_by_group: dict[UUID, list[CategoryGroupBudget]] = defaultdict(list)
-    for b in budgets:
-        budgets_by_group[b.group_id].append(b)
 
     ytd_txs = [
         tx
@@ -385,16 +370,18 @@ def compute_personal_budget_overview(  # noqa: PLR0913, PLR0914, PLR0917
     num_months = len(months_with_data) or 1
     avg_spending = {gid: total / num_months for gid, total in group_totals.items()}
 
+    month_budget_index = _index_month_budgets(month_budgets)
+
     statuses: list[CategoryGroupBudgetStatus] = []
     for gid, name in group_names.items():
         status = _build_group_status(
             gid,
             name,
-            budgets_by_group.get(gid, []),
+            month_budget_index,
+            year_budgets,
             month_by_group,
             ytd_by_group,
             avg_spending,
-            year,
             month,
         )
         household_spend, personal = month_split.get(gid, (Decimal(0), Decimal(0)))

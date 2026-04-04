@@ -55,12 +55,14 @@ class GetBudgetOverviewUseCase:
             category_lookup = build_category_lookup(categories, category_groups)
 
             if command.scope == "personal" and command.person_id is not None:
-                budgets = await uow.category_group_budgets.get_by_person(
-                    command.person_id
+                year_budgets = await uow.category_group_budgets.get_by_year(
+                    command.year, command.person_id
                 )
+                month_budgets = [b for b in year_budgets if b.month == command.month]
                 year_txs = await uow.transactions.get_by_year(command.year)
                 overview = compute_personal_budget_overview(
-                    budgets,
+                    month_budgets,
+                    year_budgets,
                     year_txs,
                     category_lookup,
                     category_groups,
@@ -68,8 +70,12 @@ class GetBudgetOverviewUseCase:
                     command.month,
                     command.person_id,
                 )
+                budgets = month_budgets
             else:
-                budgets = await uow.category_group_budgets.get_by_person(None)
+                year_budgets = await uow.category_group_budgets.get_by_year(
+                    command.year, None
+                )
+                month_budgets = [b for b in year_budgets if b.month == command.month]
                 personal_cats = get_personal_included_categories(categories)
                 if personal_cats:
                     year_txs = await uow.transactions.get_by_year(command.year)
@@ -78,7 +84,8 @@ class GetBudgetOverviewUseCase:
                         command.year
                     )
                 overview = compute_budget_overview(
-                    budgets,
+                    month_budgets,
+                    year_budgets,
                     year_txs,
                     category_lookup,
                     category_groups,
@@ -86,6 +93,7 @@ class GetBudgetOverviewUseCase:
                     command.month,
                     personal_categories=personal_cats,
                 )
+                budgets = month_budgets
 
             return GetBudgetOverviewResult(
                 overview=overview,

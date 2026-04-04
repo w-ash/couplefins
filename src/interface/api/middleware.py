@@ -9,6 +9,7 @@ from src.domain.exceptions import (
     AuthenticationError,
     DomainError,
     DuplicateError,
+    ForbiddenError,
     NotFoundError,
     PeriodFinalizedError,
     ValidationError,
@@ -22,6 +23,7 @@ _DOMAIN_ERROR_MAP: dict[type[DomainError], tuple[int, str]] = {
     DuplicateError: (409, "DUPLICATE_ERROR"),
     PeriodFinalizedError: (409, "PERIOD_FINALIZED"),
     AuthenticationError: (401, "AUTHENTICATION_ERROR"),
+    ForbiddenError: (403, "FORBIDDEN"),
 }
 
 

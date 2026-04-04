@@ -1,8 +1,7 @@
-from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from src.application.use_cases._shared.command_validators import assert_positive_decimal
 from src.application.use_cases.get_budget_overview import GetBudgetOverviewResult
@@ -13,7 +12,8 @@ from src.domain.entities.category_group_budget import CategoryGroupBudget
 class SaveBudgetRequest(BaseModel):
     group_id: UUID
     monthly_amount: Decimal
-    effective_from: date
+    year: int = Field(ge=2020, le=2099)
+    month: int = Field(ge=1, le=12)
     is_personal: bool = False
 
     @field_validator("monthly_amount")
@@ -35,7 +35,8 @@ class BudgetResponse(BaseModel):
     id: UUID
     group_id: UUID
     monthly_amount: float
-    effective_from: date
+    year: int
+    month: int
     person_id: UUID | None = None
 
     @classmethod
@@ -44,7 +45,8 @@ class BudgetResponse(BaseModel):
             id=budget.id,
             group_id=budget.group_id,
             monthly_amount=float(budget.monthly_amount),
-            effective_from=budget.effective_from,
+            year=budget.year,
+            month=budget.month,
             person_id=budget.person_id,
         )
 

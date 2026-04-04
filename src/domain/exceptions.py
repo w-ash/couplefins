@@ -20,3 +20,7 @@ class PeriodFinalizedError(DomainError):
 
 class AuthenticationError(DomainError):
     pass
+
+
+class ForbiddenError(DomainError):
+    pass

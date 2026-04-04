@@ -2,6 +2,9 @@ from uuid import UUID
 
 from attrs import define
 
+from src.application.use_cases._shared.budget_ownership import (
+    require_budget_ownership,
+)
 from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
@@ -9,6 +12,7 @@ from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 @define(frozen=True, slots=True)
 class DeleteBudgetCommand:
     budget_id: UUID
+    person_id: UUID  # current user — for ownership check
 
 
 @define(frozen=True, slots=True)
@@ -22,9 +26,11 @@ class DeleteBudgetUseCase:
         self, command: DeleteBudgetCommand, uow: UnitOfWorkProtocol
     ) -> DeleteBudgetResult:
         async with uow:
-            await require_by_id(
+            existing = await require_by_id(
                 uow.category_group_budgets.get_by_id, command.budget_id, "Budget"
             )
+
+            require_budget_ownership(existing, command.person_id)
 
             await uow.category_group_budgets.delete(command.budget_id)
             await uow.commit()

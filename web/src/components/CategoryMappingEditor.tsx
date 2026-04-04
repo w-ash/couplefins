@@ -119,7 +119,10 @@ function GroupCard({
   const hasBudgets = groupBudgets.length > 0;
   const latestBudget = hasBudgets
     ? groupBudgets.reduce((latest, b) =>
-        b.effective_from > latest.effective_from ? b : latest,
+        b.year > latest.year ||
+        (b.year === latest.year && b.month > latest.month)
+          ? b
+          : latest,
       )
     : null;
 

@@ -143,14 +143,16 @@ def make_category_group_budget(
     id: uuid.UUID | None = None,
     group_id: uuid.UUID | None = None,
     monthly_amount: Decimal = Decimal("500.00"),
-    effective_from: date = date(2026, 1, 1),
+    year: int = 2026,
+    month: int = 1,
     person_id: uuid.UUID | None = None,
 ) -> CategoryGroupBudget:
     return CategoryGroupBudget(
         id=id or uuid.uuid4(),
         group_id=group_id or uuid.uuid4(),
         monthly_amount=monthly_amount,
-        effective_from=effective_from,
+        year=year,
+        month=month,
         person_id=person_id,
     )
 

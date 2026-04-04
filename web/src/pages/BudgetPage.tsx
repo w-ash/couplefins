@@ -485,13 +485,9 @@ function BudgetGroupRow({
 function AddBudgetForm({
   unbudgetedGroups,
   onSave,
-  year,
-  month,
 }: {
   unbudgetedGroups: GroupBudgetStatusResponse[];
-  onSave: (groupId: string, amount: number, effectiveFrom: string) => void;
-  year: number;
-  month: number;
+  onSave: (groupId: string, amount: number) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [groupId, setGroupId] = useState("");
@@ -531,11 +527,7 @@ function AddBudgetForm({
           e.preventDefault();
           const parsed = Number.parseFloat(amount);
           if (!groupId || !Number.isFinite(parsed) || parsed <= 0) return;
-          onSave(
-            groupId,
-            parsed,
-            `${year}-${String(month).padStart(2, "0")}-01`,
-          );
+          onSave(groupId, parsed);
           setOpen(false);
           setGroupId("");
           setAmount("");
@@ -780,14 +772,13 @@ export function BudgetPage() {
           {/* Add budget form */}
           <AddBudgetForm
             unbudgetedGroups={allGroupsForAdd}
-            year={year}
-            month={month}
-            onSave={(groupId, amount, effectiveFrom) =>
+            onSave={(groupId, amount) =>
               saveMutation.mutate({
                 data: {
                   group_id: groupId,
                   monthly_amount: amount,
-                  effective_from: effectiveFrom,
+                  year,
+                  month,
                   is_personal: scope === "personal",
                 },
               })

@@ -1,8 +1,7 @@
-from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import delete as sa_delete, select
+from sqlalchemy import Select, delete as sa_delete, select
 
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.infrastructure.persistence.models.category_group_budget_model import (
@@ -22,7 +21,8 @@ class CategoryGroupBudgetRepository(
             id=UUID(model.id),
             group_id=UUID(model.group_id),
             monthly_amount=Decimal(model.monthly_amount),
-            effective_from=date.fromisoformat(model.effective_from),
+            year=model.year,
+            month=model.month,
             person_id=UUID(model.person_id) if model.person_id else None,
         )
 
@@ -32,19 +32,37 @@ class CategoryGroupBudgetRepository(
             id=str(entity.id),
             group_id=str(entity.group_id),
             monthly_amount=str(entity.monthly_amount),
-            effective_from=entity.effective_from.isoformat(),
+            year=entity.year,
+            month=entity.month,
             person_id=str(entity.person_id) if entity.person_id else None,
         )
 
-    async def get_by_person(self, person_id: UUID | None) -> list[CategoryGroupBudget]:
+    @staticmethod
+    def _person_filter(
+        stmt: Select[tuple[CategoryGroupBudgetModel]], person_id: UUID | None
+    ) -> Select[tuple[CategoryGroupBudgetModel]]:
         if person_id is None:
-            stmt = select(CategoryGroupBudgetModel).where(
-                CategoryGroupBudgetModel.person_id.is_(None)
-            )
-        else:
-            stmt = select(CategoryGroupBudgetModel).where(
-                CategoryGroupBudgetModel.person_id == str(person_id)
-            )
+            return stmt.where(CategoryGroupBudgetModel.person_id.is_(None))
+        return stmt.where(CategoryGroupBudgetModel.person_id == str(person_id))
+
+    async def get_by_month(
+        self, year: int, month: int, person_id: UUID | None
+    ) -> list[CategoryGroupBudget]:
+        stmt = select(CategoryGroupBudgetModel).where(
+            CategoryGroupBudgetModel.year == year,
+            CategoryGroupBudgetModel.month == month,
+        )
+        stmt = self._person_filter(stmt, person_id)
+        result = await self._session.execute(stmt)
+        return [self._to_domain(row) for row in result.scalars().all()]
+
+    async def get_by_year(
+        self, year: int, person_id: UUID | None
+    ) -> list[CategoryGroupBudget]:
+        stmt = select(CategoryGroupBudgetModel).where(
+            CategoryGroupBudgetModel.year == year,
+        )
+        stmt = self._person_filter(stmt, person_id)
         result = await self._session.execute(stmt)
         return [self._to_domain(row) for row in result.scalars().all()]
 

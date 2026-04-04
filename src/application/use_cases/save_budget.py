@@ -1,10 +1,13 @@
-from datetime import date
 from decimal import Decimal
 import uuid
 
 from attrs import define, field
 
-from src.application.use_cases._shared.command_validators import positive_decimal
+from src.application.use_cases._shared.command_validators import (
+    month_range,
+    positive_decimal,
+    positive_int,
+)
 from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
@@ -14,7 +17,8 @@ from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 class SaveBudgetCommand:
     group_id: uuid.UUID
     monthly_amount: Decimal = field(validator=positive_decimal)
-    effective_from: date
+    year: int = field(validator=positive_int)
+    month: int = field(validator=month_range)
     person_id: uuid.UUID | None = None
 
 
@@ -35,11 +39,20 @@ class SaveBudgetUseCase:
             if command.person_id is not None:
                 await require_by_id(uow.persons.get_by_id, command.person_id, "Person")
 
+            existing = await uow.category_group_budgets.get_by_month(
+                command.year, command.month, command.person_id
+            )
+            budget_id = (
+                next((b.id for b in existing if b.group_id == command.group_id), None)
+                or uuid.uuid4()
+            )
+
             budget = CategoryGroupBudget(
-                id=uuid.uuid4(),
+                id=budget_id,
                 group_id=command.group_id,
                 monthly_amount=command.monthly_amount,
-                effective_from=command.effective_from,
+                year=command.year,
+                month=command.month,
                 person_id=command.person_id,
             )
             saved = await uow.category_group_budgets.save(budget)

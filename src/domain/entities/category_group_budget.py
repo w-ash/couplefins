@@ -1,4 +1,3 @@
-from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
@@ -10,5 +9,6 @@ class CategoryGroupBudget:
     id: UUID
     group_id: UUID
     monthly_amount: Decimal
-    effective_from: date
+    year: int
+    month: int
     person_id: UUID | None = None

@@ -112,12 +112,14 @@ Each Monarch category maps to exactly one group. The initial mapping is seeded f
 
 ## Category Group Budgets
 
-Monthly budget limits per **category group** (not individual category) for shared expenses. Budget amounts have an `effective_from` date to support changing budgets over time without losing history.
+Monthly budget limits per **category group** (not individual category). Each budget is a simple per-month amount identified by `year` + `month` — no cascading effective dates.
+
+**Household vs personal budgets**: Household budgets use `person_id=NULL` and are shared — editable by either partner. Personal budgets use the authenticated user's `person_id` and are private per-person. The two are completely separate views controlled by a scope toggle.
 
 The couple reviews budgets together once a month. The system supports two views:
 
 - **Monthly**: Current month's spending vs. the monthly budget amount per group.
-- **Year-to-date (YTD)**: Cumulative spending from January through the current month vs. the YTD budget (monthly_amount × months elapsed). When a budget's `effective_from` changes mid-year, the YTD calculation uses the correct amount for each month.
+- **Year-to-date (YTD)**: Cumulative spending from January through the current month vs. the YTD budget (sum of individual monthly amounts where a budget was set). A month with no budget record contributes $0 to the YTD total.
 
 ## Accounting Concepts Mapping
 

@@ -48,8 +48,10 @@ async def get_budget_overview(
 
 
 @router.get("/budgets")
-async def get_budgets() -> list[BudgetResponse]:
-    result = await execute_use_case(list_budgets)
+async def get_budgets(
+    current_user: Person = Depends(get_current_user),
+) -> list[BudgetResponse]:
+    result = await execute_use_case(lambda uow: list_budgets(uow, current_user.id))
     return [BudgetResponse.from_domain(b) for b in result.budgets]
 
 
@@ -62,7 +64,8 @@ async def post_budget(
     command = SaveBudgetCommand(
         group_id=body.group_id,
         monthly_amount=body.monthly_amount,
-        effective_from=body.effective_from,
+        year=body.year,
+        month=body.month,
         person_id=person_id,
     )
     result = await execute_use_case(
@@ -72,9 +75,15 @@ async def post_budget(
 
 
 @router.put("/budgets/{budget_id}")
-async def put_budget(budget_id: UUID, body: UpdateBudgetRequest) -> BudgetResponse:
+async def put_budget(
+    budget_id: UUID,
+    body: UpdateBudgetRequest,
+    current_user: Person = Depends(get_current_user),
+) -> BudgetResponse:
     command = UpdateBudgetCommand(
-        budget_id=budget_id, monthly_amount=body.monthly_amount
+        budget_id=budget_id,
+        monthly_amount=body.monthly_amount,
+        person_id=current_user.id,
     )
     result = await execute_use_case(
         lambda uow: UpdateBudgetUseCase().execute(command, uow)
@@ -83,6 +92,9 @@ async def put_budget(budget_id: UUID, body: UpdateBudgetRequest) -> BudgetRespon
 
 
 @router.delete("/budgets/{budget_id}", status_code=204)
-async def delete_budget(budget_id: UUID) -> None:
-    command = DeleteBudgetCommand(budget_id=budget_id)
+async def delete_budget(
+    budget_id: UUID,
+    current_user: Person = Depends(get_current_user),
+) -> None:
+    command = DeleteBudgetCommand(budget_id=budget_id, person_id=current_user.id)
     await execute_use_case(lambda uow: DeleteBudgetUseCase().execute(command, uow))

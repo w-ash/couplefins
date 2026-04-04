@@ -1,5 +1,4 @@
-from collections import defaultdict
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -15,7 +14,6 @@ from src.application.use_cases._shared.reconciliation_context import (
     ReconciliationContext,
     load_reconciliation_context,
 )
-from src.domain.budget import resolve_effective_budget
 from src.domain.categories import build_category_lookup
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.entities.person import Person
@@ -57,18 +55,8 @@ class GetSpendingTrendsResult:
 
 def _build_budget_lines(
     budgets: list[CategoryGroupBudget],
-    target_date: date,
 ) -> dict[UUID, Decimal]:
-    budgets_by_group: dict[UUID, list[CategoryGroupBudget]] = defaultdict(list)
-    for b in budgets:
-        budgets_by_group[b.group_id].append(b)
-
-    result: dict[UUID, Decimal] = {}
-    for group_id, group_budgets in budgets_by_group.items():
-        effective = resolve_effective_budget(group_budgets, target_date)
-        if effective:
-            result[group_id] = effective.monthly_amount
-    return result
+    return {b.group_id: b.monthly_amount for b in budgets}
 
 
 def _build_settlement_trend(
@@ -120,10 +108,10 @@ class GetSpendingTrendsUseCase:
                 year_txs, category_lookup, target_month
             )
 
-            all_budgets = await uow.category_group_budgets.get_all()
-            budget_lines = _build_budget_lines(
-                all_budgets, date(command.year, target_month, 1)
+            month_budgets = await uow.category_group_budgets.get_by_month(
+                command.year, target_month, None
             )
+            budget_lines = _build_budget_lines(month_budgets)
 
             all_year_settlements = await uow.settlements.get_by_year(command.year)
             settlement_trend = _build_settlement_trend(

@@ -8,6 +8,15 @@
 export interface SaveBudgetRequest {
   group_id: string;
   monthly_amount: number | string;
-  effective_from: string;
+  /**
+   * @minimum 2020
+   * @maximum 2099
+   */
+  year: number;
+  /**
+   * @minimum 1
+   * @maximum 12
+   */
+  month: number;
   is_personal?: boolean;
 }

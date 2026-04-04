@@ -200,7 +200,8 @@ def _compute_all_spending(txs: list[Transaction]) -> Decimal:
 
 
 def _build_budget_alerts(  # noqa: PLR0913, PLR0917
-    uow_budgets: list[CategoryGroupBudget],
+    month_budgets: list[CategoryGroupBudget],
+    year_budgets: list[CategoryGroupBudget],
     year_txs: list[Transaction],
     category_lookup: dict[str, tuple[UUID, str]],
     category_groups: list[CategoryGroup],
@@ -210,7 +211,8 @@ def _build_budget_alerts(  # noqa: PLR0913, PLR0917
 ) -> list[BudgetAlert]:
     """Compute personal budget overview and extract top alerts."""
     overview = compute_personal_budget_overview(
-        uow_budgets,
+        month_budgets,
+        year_budgets,
         year_txs,
         category_lookup,
         category_groups,
@@ -280,7 +282,8 @@ def _compute_personal_scope_data(  # noqa: PLR0913, PLR0917
     person_id: UUID,
     active_month: int,
     year: int,
-    budgets: list[CategoryGroupBudget],
+    month_budgets: list[CategoryGroupBudget],
+    year_budgets: list[CategoryGroupBudget],
     category_lookup: dict[str, tuple[UUID, str]],
     category_groups: list[CategoryGroup],
 ) -> _PersonalScopeData:
@@ -311,7 +314,8 @@ def _compute_personal_scope_data(  # noqa: PLR0913, PLR0917
     ]
 
     alerts = _build_budget_alerts(
-        budgets,
+        month_budgets,
+        year_budgets,
         all_year_txs,
         category_lookup,
         category_groups,
@@ -424,15 +428,19 @@ class GetDashboardUseCase:
                 category_lookup = build_category_lookup(
                     ctx.categories, ctx.category_groups
                 )
-                personal_budgets = await uow.category_group_budgets.get_by_person(
-                    command.person_id
+                personal_year_budgets = await uow.category_group_budgets.get_by_year(
+                    command.year, command.person_id
                 )
+                personal_month_budgets = [
+                    b for b in personal_year_budgets if b.month == active_month
+                ]
                 personal_data = _compute_personal_scope_data(
                     all_year_txs,
                     command.person_id,
                     active_month,
                     command.year,
-                    personal_budgets,
+                    personal_month_budgets,
+                    personal_year_budgets,
                     category_lookup,
                     ctx.category_groups,
                 )

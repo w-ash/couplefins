@@ -83,7 +83,8 @@ const overviewWithData: BudgetOverviewResponse = {
       id: "b1",
       group_id: "g1",
       monthly_amount: 500,
-      effective_from: "2026-01-01",
+      year: 2026,
+      month: 1,
     },
   ],
 };
@@ -178,6 +179,11 @@ describe("BudgetPage", () => {
   });
 
   it("shows add budget button", async () => {
+    server.use(
+      http.get("/api/v1/budgets/overview", () =>
+        HttpResponse.json(overviewWithData),
+      ),
+    );
     renderWithProviders(<BudgetPage />);
 
     await waitFor(() => {

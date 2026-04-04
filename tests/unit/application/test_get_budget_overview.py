@@ -18,7 +18,7 @@ async def test_returns_overview_and_budgets() -> None:
     group = make_category_group()
     budget = make_category_group_budget(group_id=group.id)
 
-    uow.category_group_budgets.get_by_person.return_value = [budget]
+    uow.category_group_budgets.get_by_year.return_value = [budget]
     uow.categories.get_all.return_value = []
     uow.category_groups.get_all.return_value = [group]
     uow.transactions.get_household_by_year.return_value = []
@@ -29,13 +29,13 @@ async def test_returns_overview_and_budgets() -> None:
     assert result.overview.year == 2026
     assert result.overview.month == 1
     assert result.budgets == [budget]
-    uow.category_group_budgets.get_by_person.assert_called_once_with(None)
+    uow.category_group_budgets.get_by_year.assert_called_once_with(2026, None)
     uow.transactions.get_household_by_year.assert_called_once_with(2026)
 
 
 async def test_returns_empty_overview_when_no_data() -> None:
     uow = make_mock_uow()
-    uow.category_group_budgets.get_by_person.return_value = []
+    uow.category_group_budgets.get_by_year.return_value = []
     uow.categories.get_all.return_value = []
     uow.category_groups.get_all.return_value = []
     uow.transactions.get_household_by_year.return_value = []
@@ -47,13 +47,13 @@ async def test_returns_empty_overview_when_no_data() -> None:
     assert result.budgets == []
 
 
-async def test_personal_scope_calls_get_by_person() -> None:
+async def test_personal_scope_calls_get_by_year() -> None:
     uow = make_mock_uow()
     alice = make_person(name="Alice")
     group = make_category_group()
     budget = make_category_group_budget(group_id=group.id, person_id=alice.id)
 
-    uow.category_group_budgets.get_by_person.return_value = [budget]
+    uow.category_group_budgets.get_by_year.return_value = [budget]
     uow.categories.get_all.return_value = []
     uow.category_groups.get_all.return_value = [group]
     uow.persons.get_all.return_value = [alice]
@@ -64,7 +64,7 @@ async def test_personal_scope_calls_get_by_person() -> None:
     )
     result = await GetBudgetOverviewUseCase().execute(command, uow)
 
-    uow.category_group_budgets.get_by_person.assert_called_once_with(alice.id)
+    uow.category_group_budgets.get_by_year.assert_called_once_with(2026, alice.id)
     uow.transactions.get_by_year.assert_called_once_with(2026)
     assert result.budgets == [budget]
 

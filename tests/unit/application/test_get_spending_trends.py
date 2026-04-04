@@ -30,7 +30,7 @@ def _setup_uow():
     category = make_category(name="Dining Out", group_id=food_group.id)
     uow.categories.get_all.return_value = [category]
 
-    uow.category_group_budgets.get_all.return_value = []
+    uow.category_group_budgets.get_by_month.return_value = []
 
     return uow, alice, bob, food_group
 
@@ -133,11 +133,12 @@ async def test_budget_lines_populated() -> None:
             payer_person_id=alice.id,
         ),
     ]
-    uow.category_group_budgets.get_all.return_value = [
+    uow.category_group_budgets.get_by_month.return_value = [
         make_category_group_budget(
             group_id=food_group.id,
             monthly_amount=Decimal("500.00"),
-            effective_from=date(2026, 1, 1),
+            year=2026,
+            month=1,
         ),
     ]
 

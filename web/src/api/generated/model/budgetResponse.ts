@@ -9,6 +9,7 @@ export interface BudgetResponse {
   id: string;
   group_id: string;
   monthly_amount: number;
-  effective_from: string;
+  year: number;
+  month: number;
   person_id?: string | null;
 }

@@ -3,15 +3,15 @@ from decimal import Decimal
 from uuid import UUID
 
 from src.domain.budget import (
+    _compute_ytd_budget,
+    _index_month_budgets,
     _is_budget_relevant,
     _is_personal_budget_relevant,
     compute_average_monthly_spending,
     compute_budget_overview,
     compute_person_share,
     compute_personal_budget_overview,
-    compute_ytd_budget,
     determine_health,
-    resolve_effective_budget,
 )
 from src.domain.categories import compute_category_breakdowns
 from tests.fixtures.factories import (
@@ -20,75 +20,92 @@ from tests.fixtures.factories import (
     make_transaction,
 )
 
-# --- resolve_effective_budget ---
+# --- _index_month_budgets ---
 
 
-def test_resolve_picks_most_recent_before_target() -> None:
+def test_index_month_budgets_returns_match() -> None:
     gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
-    b1 = make_category_group_budget(
-        group_id=gid, effective_from=date(2026, 1, 1), monthly_amount=Decimal(500)
-    )
-    b2 = make_category_group_budget(
-        group_id=gid, effective_from=date(2026, 3, 1), monthly_amount=Decimal(600)
-    )
-    b3 = make_category_group_budget(
-        group_id=gid, effective_from=date(2026, 6, 1), monthly_amount=Decimal(700)
-    )
-
-    result = resolve_effective_budget([b1, b2, b3], date(2026, 4, 1))
-    assert result is not None
-    assert result.monthly_amount == Decimal(600)
+    b = make_category_group_budget(group_id=gid, monthly_amount=Decimal(500))
+    index = _index_month_budgets([b])
+    assert gid in index
+    assert index[gid].monthly_amount == Decimal(500)
 
 
-def test_resolve_returns_none_when_no_budget_applicable() -> None:
+def test_index_month_budgets_missing_group() -> None:
     gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
-    b = make_category_group_budget(group_id=gid, effective_from=date(2026, 6, 1))
+    other = UUID("aaaaaaaa-0000-0000-0000-000000000002")
+    b = make_category_group_budget(group_id=other)
+    index = _index_month_budgets([b])
+    assert gid not in index
 
-    result = resolve_effective_budget([b], date(2026, 1, 1))
+
+# --- _compute_ytd_budget ---
+
+
+def test_ytd_sums_monthly_amounts() -> None:
+    gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    budgets = [
+        make_category_group_budget(
+            group_id=gid, year=2026, month=1, monthly_amount=Decimal(500)
+        ),
+        make_category_group_budget(
+            group_id=gid, year=2026, month=2, monthly_amount=Decimal(500)
+        ),
+        make_category_group_budget(
+            group_id=gid, year=2026, month=3, monthly_amount=Decimal(600)
+        ),
+    ]
+    result = _compute_ytd_budget(budgets, gid, 3)
+    assert result == Decimal(1600)
+
+
+def test_ytd_with_gap_month_contributes_zero() -> None:
+    gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    budgets = [
+        make_category_group_budget(
+            group_id=gid, year=2026, month=1, monthly_amount=Decimal(500)
+        ),
+        make_category_group_budget(
+            group_id=gid, year=2026, month=3, monthly_amount=Decimal(600)
+        ),
+    ]
+    # Month 2 has no budget, contributes $0
+    result = _compute_ytd_budget(budgets, gid, 3)
+    assert result == Decimal(1100)
+
+
+def test_ytd_no_budgets_returns_none() -> None:
+    gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    result = _compute_ytd_budget([], gid, 6)
     assert result is None
 
 
-def test_resolve_returns_exact_match() -> None:
+def test_ytd_excludes_future_months() -> None:
     gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
-    b = make_category_group_budget(
-        group_id=gid, effective_from=date(2026, 3, 1), monthly_amount=Decimal(500)
-    )
+    budgets = [
+        make_category_group_budget(
+            group_id=gid, year=2026, month=1, monthly_amount=Decimal(500)
+        ),
+        make_category_group_budget(
+            group_id=gid, year=2026, month=4, monthly_amount=Decimal(700)
+        ),
+    ]
+    result = _compute_ytd_budget(budgets, gid, 2)
+    assert result == Decimal(500)
 
-    result = resolve_effective_budget([b], date(2026, 3, 1))
-    assert result is not None
-    assert result.monthly_amount == Decimal(500)
 
-
-# --- compute_ytd_budget ---
-
-
-def test_ytd_single_rate() -> None:
+def test_same_group_different_months_no_contamination() -> None:
+    """Regression: per-month model must NOT cascade budgets across months."""
     gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
-    b = make_category_group_budget(
-        group_id=gid, effective_from=date(2026, 1, 1), monthly_amount=Decimal(500)
-    )
+    month1_budgets = [
+        make_category_group_budget(
+            group_id=gid, year=2026, month=1, monthly_amount=Decimal(500)
+        ),
+    ]
+    month2_budgets: list = []
 
-    result = compute_ytd_budget([b], 2026, 3)
-    assert result == Decimal(1500)
-
-
-def test_ytd_with_mid_year_change() -> None:
-    gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
-    b1 = make_category_group_budget(
-        group_id=gid, effective_from=date(2026, 1, 1), monthly_amount=Decimal(500)
-    )
-    b2 = make_category_group_budget(
-        group_id=gid, effective_from=date(2026, 3, 1), monthly_amount=Decimal(600)
-    )
-
-    # Jan=500, Feb=500, Mar=600, Apr=600
-    result = compute_ytd_budget([b1, b2], 2026, 4)
-    assert result == Decimal(2200)
-
-
-def test_ytd_no_budget_returns_zero() -> None:
-    result = compute_ytd_budget([], 2026, 6)
-    assert result == Decimal(0)
+    assert gid in _index_month_budgets(month1_budgets)
+    assert gid not in _index_month_budgets(month2_budgets)
 
 
 # --- determine_health ---
@@ -186,13 +203,15 @@ def test_overview_budgeted_groups_first() -> None:
         make_category_group(id=food_gid, name="Food & Dining"),
         make_category_group(id=auto_gid, name="Auto & Transport"),
     ]
-    budgets = [
+    month_budgets = [
         make_category_group_budget(
             group_id=food_gid,
-            effective_from=date(2026, 1, 1),
+            year=2026,
+            month=1,
             monthly_amount=Decimal(500),
         ),
     ]
+    year_budgets = list(month_budgets)
     lookup = {
         "Groceries": (food_gid, "Food & Dining"),
         "Gas": (auto_gid, "Auto & Transport"),
@@ -212,7 +231,9 @@ def test_overview_budgeted_groups_first() -> None:
         ),
     ]
 
-    overview = compute_budget_overview(budgets, txs, lookup, groups, 2026, 1)
+    overview = compute_budget_overview(
+        month_budgets, year_budgets, txs, lookup, groups, 2026, 1
+    )
 
     assert len(overview.group_statuses) == 2
     # Budgeted group first
@@ -234,13 +255,15 @@ def test_overview_grand_totals_exclude_unbudgeted() -> None:
         make_category_group(id=food_gid, name="Food & Dining"),
         make_category_group(id=auto_gid, name="Auto & Transport"),
     ]
-    budgets = [
+    month_budgets = [
         make_category_group_budget(
             group_id=food_gid,
-            effective_from=date(2026, 1, 1),
+            year=2026,
+            month=1,
             monthly_amount=Decimal(500),
         ),
     ]
+    year_budgets = list(month_budgets)
     lookup = {
         "Groceries": (food_gid, "Food & Dining"),
         "Gas": (auto_gid, "Auto & Transport"),
@@ -260,7 +283,9 @@ def test_overview_grand_totals_exclude_unbudgeted() -> None:
         ),
     ]
 
-    overview = compute_budget_overview(budgets, txs, lookup, groups, 2026, 1)
+    overview = compute_budget_overview(
+        month_budgets, year_budgets, txs, lookup, groups, 2026, 1
+    )
 
     assert overview.total_monthly_budget == Decimal(500)
     assert overview.total_monthly_spent == Decimal(200)
@@ -275,7 +300,7 @@ def test_overview_unbudgeted_groups_without_spending_included() -> None:
         make_category_group(id=auto_gid, name="Auto & Transport"),
     ]
 
-    overview = compute_budget_overview([], [], {}, groups, 2026, 1)
+    overview = compute_budget_overview([], [], [], {}, groups, 2026, 1)
 
     assert len(overview.group_statuses) == 2
     assert all(s.monthly_budget is None for s in overview.group_statuses)
@@ -283,7 +308,7 @@ def test_overview_unbudgeted_groups_without_spending_included() -> None:
 
 
 def test_overview_empty() -> None:
-    overview = compute_budget_overview([], [], {}, [], 2026, 1)
+    overview = compute_budget_overview([], [], [], {}, [], 2026, 1)
 
     assert overview.year == 2026
     assert overview.month == 1
@@ -297,11 +322,23 @@ def test_overview_ytd_computation() -> None:
     payer = UUID("bbbbbbbb-0000-0000-0000-000000000001")
 
     groups = [make_category_group(id=food_gid, name="Food & Dining")]
-    budgets = [
+    month_budgets = [
         make_category_group_budget(
             group_id=food_gid,
-            effective_from=date(2026, 1, 1),
+            year=2026,
+            month=3,
             monthly_amount=Decimal(500),
+        ),
+    ]
+    year_budgets = [
+        make_category_group_budget(
+            group_id=food_gid, year=2026, month=1, monthly_amount=Decimal(500)
+        ),
+        make_category_group_budget(
+            group_id=food_gid, year=2026, month=2, monthly_amount=Decimal(500)
+        ),
+        make_category_group_budget(
+            group_id=food_gid, year=2026, month=3, monthly_amount=Decimal(500)
         ),
     ]
     lookup = {"Groceries": (food_gid, "Food & Dining")}
@@ -326,7 +363,9 @@ def test_overview_ytd_computation() -> None:
         ),
     ]
 
-    overview = compute_budget_overview(budgets, txs, lookup, groups, 2026, 3)
+    overview = compute_budget_overview(
+        month_budgets, year_budgets, txs, lookup, groups, 2026, 3
+    )
 
     status = overview.group_statuses[0]
     assert status.monthly_spent == Decimal(150)
@@ -540,14 +579,16 @@ def test_personal_irrelevant_settlement() -> None:
 def test_personal_overview_mixed_household_and_personal() -> None:
     food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
     groups = [make_category_group(id=food_gid, name="Food & Dining")]
-    budgets = [
+    month_budgets = [
         make_category_group_budget(
             group_id=food_gid,
-            effective_from=date(2026, 1, 1),
+            year=2026,
+            month=1,
             monthly_amount=Decimal(400),
             person_id=ALICE,
         ),
     ]
+    year_budgets = list(month_budgets)
     lookup = {"Groceries": (food_gid, "Food & Dining")}
 
     txs = [
@@ -590,7 +631,7 @@ def test_personal_overview_mixed_household_and_personal() -> None:
     ]
 
     overview = compute_personal_budget_overview(
-        budgets, txs, lookup, groups, 2026, 1, ALICE
+        month_budgets, year_budgets, txs, lookup, groups, 2026, 1, ALICE
     )
 
     assert len(overview.group_statuses) == 1
@@ -609,7 +650,7 @@ def test_personal_overview_empty_txs() -> None:
     food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
     groups = [make_category_group(id=food_gid, name="Food & Dining")]
 
-    overview = compute_personal_budget_overview([], [], {}, groups, 2026, 1, ALICE)
+    overview = compute_personal_budget_overview([], [], [], {}, groups, 2026, 1, ALICE)
 
     assert len(overview.group_statuses) == 1
     assert overview.group_statuses[0].monthly_spent == Decimal(0)
@@ -632,7 +673,9 @@ def test_personal_overview_excludes_excluded_txs() -> None:
         ),
     ]
 
-    overview = compute_personal_budget_overview([], txs, lookup, groups, 2026, 1, ALICE)
+    overview = compute_personal_budget_overview(
+        [], [], txs, lookup, groups, 2026, 1, ALICE
+    )
     assert len(overview.group_statuses) == 1
     assert overview.group_statuses[0].monthly_spent == Decimal(0)
 
@@ -641,14 +684,16 @@ def test_personal_overview_partner_household_creates_share() -> None:
     """Alice should have a share of Bob's household payments."""
     food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
     groups = [make_category_group(id=food_gid, name="Food & Dining")]
-    budgets = [
+    month_budgets = [
         make_category_group_budget(
             group_id=food_gid,
-            effective_from=date(2026, 1, 1),
+            year=2026,
+            month=1,
             monthly_amount=Decimal(500),
             person_id=ALICE,
         ),
     ]
+    year_budgets = list(month_budgets)
     lookup = {"Groceries": (food_gid, "Food & Dining")}
 
     txs = [
@@ -664,7 +709,7 @@ def test_personal_overview_partner_household_creates_share() -> None:
     ]
 
     overview = compute_personal_budget_overview(
-        budgets, txs, lookup, groups, 2026, 1, ALICE
+        month_budgets, year_budgets, txs, lookup, groups, 2026, 1, ALICE
     )
 
     status = overview.group_statuses[0]
@@ -676,10 +721,27 @@ def test_personal_overview_partner_household_creates_share() -> None:
 def test_personal_overview_ytd_across_months() -> None:
     food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
     groups = [make_category_group(id=food_gid, name="Food & Dining")]
-    budgets = [
+    month_budgets = [
         make_category_group_budget(
             group_id=food_gid,
-            effective_from=date(2026, 1, 1),
+            year=2026,
+            month=2,
+            monthly_amount=Decimal(300),
+            person_id=ALICE,
+        ),
+    ]
+    year_budgets = [
+        make_category_group_budget(
+            group_id=food_gid,
+            year=2026,
+            month=1,
+            monthly_amount=Decimal(300),
+            person_id=ALICE,
+        ),
+        make_category_group_budget(
+            group_id=food_gid,
+            year=2026,
+            month=2,
             monthly_amount=Decimal(300),
             person_id=ALICE,
         ),
@@ -706,7 +768,7 @@ def test_personal_overview_ytd_across_months() -> None:
     ]
 
     overview = compute_personal_budget_overview(
-        budgets, txs, lookup, groups, 2026, 2, ALICE
+        month_budgets, year_budgets, txs, lookup, groups, 2026, 2, ALICE
     )
 
     status = overview.group_statuses[0]
