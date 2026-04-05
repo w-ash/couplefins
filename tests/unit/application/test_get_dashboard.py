@@ -577,6 +577,90 @@ async def test_zero_balance_month_is_trivially_settled() -> None:
     assert jan.settled_at is None
 
 
+async def test_net_settlement_reflects_overpayment() -> None:
+    """Dashboard should show net position after settlements, not gross."""
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    _setup_uow_base(uow, alice, bob)
+
+    txs = [
+        make_transaction(
+            date=date(2026, 1, 15),
+            amount=Decimal("-100.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+    ]
+    uow.transactions.get_household_by_year.return_value = txs
+    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+
+    # Bob owes Alice $50, but pays $200 (overpayment)
+    uow.settlements.get_by_year.return_value = [
+        make_settlement(
+            year=2026,
+            month=1,
+            amount=Decimal("200.00"),
+            from_person_id=bob.id,
+            to_person_id=alice.id,
+        ),
+    ]
+
+    result = await GetDashboardUseCase().execute(_make_command(), uow)
+
+    # Month history: net reverses direction
+    jan = result.month_history[-1]
+    assert jan.is_settled is False
+    assert jan.settlement_amount == Decimal("150.00")
+    assert jan.settlement_from_person_id == alice.id  # Direction reversed
+    assert jan.settlement_to_person_id == bob.id
+
+    # Active month net settlement (January has no transactions in March context)
+    # But YTD net should reflect the overpayment
+    assert result.ytd_net_settlement is not None
+    assert result.ytd_net_settlement.amount == Decimal("150.00")
+    assert result.ytd_net_settlement.from_person_id == alice.id
+
+    # Current month net (March has no transactions, no settlements)
+    assert result.current_month_net_settlement is not None
+    assert result.current_month_net_settlement.amount == Decimal(0)
+
+
+async def test_net_settlement_partial_payment() -> None:
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    _setup_uow_base(uow, alice, bob)
+
+    txs = [
+        make_transaction(
+            date=date(2026, 3, 10),
+            amount=Decimal("-200.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+    ]
+    uow.transactions.get_household_by_year.return_value = txs
+    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+
+    uow.settlements.get_by_year.return_value = [
+        make_settlement(
+            year=2026,
+            month=3,
+            amount=Decimal("30.00"),
+            from_person_id=bob.id,
+            to_person_id=alice.id,
+        ),
+    ]
+
+    result = await GetDashboardUseCase().execute(_make_command(), uow)
+
+    # Current month net: $100 gross - $30 paid = $70 remaining
+    assert result.current_month_net_settlement is not None
+    assert result.current_month_net_settlement.amount == Decimal("70.00")
+    assert result.current_month_net_settlement.from_person_id == bob.id
+
+
 async def test_no_settlements_yields_zero_ytd_total() -> None:
     uow = make_mock_uow()
     alice = make_person(name="Alice")

@@ -33,6 +33,7 @@ from src.domain.exceptions import ValidationError
 from src.domain.reconciliation import (
     ReconciliationSummary,
     SettlementResult,
+    compute_net_position,
     reconcile,
     reconcile_all_months,
 )
@@ -88,10 +89,12 @@ class GetDashboardResult:
     scope: Scope
     current_person_id: UUID | None
     current_month: ReconciliationSummary
+    current_month_net_settlement: SettlementResult | None
     upload_statuses: list[UploadStatus]
     household_spending_month: Decimal
     household_spending_ytd: Decimal
     ytd_settlement: SettlementResult | None
+    ytd_net_settlement: SettlementResult | None
     ytd_total_settled: Decimal
     month_history: list[MonthHistoryEntry]
     persons: list[Person]
@@ -119,14 +122,13 @@ def _build_month_history(
 ) -> list[MonthHistoryEntry]:
     entries: list[MonthHistoryEntry] = []
     for month in sorted(summaries, reverse=True):
-        settlement = summaries[month].settlement
-        owed = settlement.amount if settlement else Decimal(0)
+        gross = summaries[month].settlement
         month_settlements = settlements_by_month.get(month, [])
-        total_settled = sum((s.amount for s in month_settlements), Decimal(0))
-        is_settled = total_settled >= owed
+        net = compute_net_position(gross, month_settlements)
+        no_balance = net is None or net.amount == Decimal(0)
         settled_at = (
             max(s.settled_at for s in month_settlements)
-            if is_settled and month_settlements
+            if no_balance and month_settlements
             else None
         )
         entries.append(
@@ -134,13 +136,11 @@ def _build_month_history(
                 year=year,
                 month=month,
                 total_household_spending=summaries[month].total_household_spending,
-                settlement_amount=owed,
-                settlement_from_person_id=settlement.from_person_id
-                if settlement
-                else None,
-                settlement_to_person_id=settlement.to_person_id if settlement else None,
+                settlement_amount=net.amount if net else Decimal(0),
+                settlement_from_person_id=net.from_person_id if net else None,
+                settlement_to_person_id=net.to_person_id if net else None,
                 is_finalized=month in finalized_months,
-                is_settled=is_settled,
+                is_settled=no_balance,
                 settled_at=settled_at,
                 total_all_spending=(
                     all_spending_by_month[month]
@@ -448,16 +448,30 @@ class GetDashboardUseCase:
                     us for us in upload_statuses if us.person_id == command.person_id
                 ]
 
+            # Net settlement positions (gross adjusted for recorded payments)
+            active_month_settlements = [
+                s for s in all_year_settlements if s.month == active_month
+            ]
+            ytd_settlements = [
+                s for s in all_year_settlements if s.month <= active_month
+            ]
+
             return GetDashboardResult(
                 scope=command.scope,
                 current_person_id=command.person_id,
                 current_month=current_month,
+                current_month_net_settlement=compute_net_position(
+                    current_month.settlement, active_month_settlements
+                ),
                 upload_statuses=upload_statuses,
                 household_spending_month=household_spending_month,
                 household_spending_ytd=household_spending_ytd,
                 ytd_settlement=ytd_summary.settlement,
+                ytd_net_settlement=compute_net_position(
+                    ytd_summary.settlement, ytd_settlements
+                ),
                 ytd_total_settled=sum(
-                    (s.amount for s in all_year_settlements if s.month <= active_month),
+                    (s.amount for s in ytd_settlements),
                     Decimal(0),
                 ),
                 month_history=_build_month_history(

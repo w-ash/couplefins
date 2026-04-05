@@ -146,6 +146,7 @@ class SettleUpDataResponse(BaseModel):
     year: int
     month: int
     owed: OwedAmountResponse | None
+    net_position: OwedAmountResponse | None
     recorded_settlements: list[SettlementResponse]
     remaining_balance: float
     upload_statuses: list[UploadStatusResponse]
@@ -154,6 +155,7 @@ class SettleUpDataResponse(BaseModel):
     finalized_at: datetime.datetime | None
     transaction_count: int
     latest_transaction_month: MonthReference | None
+    finalization_warnings: list[str]
 
     @classmethod
     def from_result(cls, result: GetSettleUpDataResult) -> SettleUpDataResponse:
@@ -161,6 +163,9 @@ class SettleUpDataResponse(BaseModel):
             year=result.year,
             month=result.month,
             owed=OwedAmountResponse.from_domain(result.owed) if result.owed else None,
+            net_position=OwedAmountResponse.from_domain(result.net_position)
+            if result.net_position
+            else None,
             recorded_settlements=[
                 SettlementResponse.from_record(r) for r in result.recorded_settlements
             ],
@@ -177,6 +182,7 @@ class SettleUpDataResponse(BaseModel):
             latest_transaction_month=MonthReference.from_optional_tuple(
                 result.latest_transaction_month
             ),
+            finalization_warnings=result.finalization_warnings,
         )
 
 

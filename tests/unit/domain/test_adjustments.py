@@ -139,8 +139,8 @@ def test_rounding_fractional_cents() -> None:
     ]
 
     adj = compute_adjustments(txs, alice)
-    # 33.33 * 50/100 = 16.665 → 16.67 (ROUND_HALF_UP)
-    assert adj[0].amount == Decimal("16.67")
+    # 33.33 * 50/100 = 16.665 → payer rounds to 16.67, other gets remainder 16.66
+    assert adj[0].amount == Decimal("16.66")
 
 
 def test_deterministic_sort_order() -> None:

@@ -21,7 +21,5 @@ def compute_shares(amount: Decimal, payer_percentage: int) -> tuple[Decimal, Dec
     payer_share = (abs_amount * payer_pct / _HUNDRED).quantize(
         _QUANTIZE_EXP, rounding=ROUND_HALF_UP
     )
-    other_share = (abs_amount * (_HUNDRED - payer_pct) / _HUNDRED).quantize(
-        _QUANTIZE_EXP, rounding=ROUND_HALF_UP
-    )
+    other_share = abs_amount - payer_share
     return payer_share, other_share

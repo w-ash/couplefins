@@ -14,6 +14,7 @@ export interface SettleUpDataResponse {
   year: number;
   month: number;
   owed: OwedAmountResponse | null;
+  net_position: OwedAmountResponse | null;
   recorded_settlements: SettlementResponse[];
   remaining_balance: number;
   upload_statuses: UploadStatusResponse[];
@@ -22,4 +23,5 @@ export interface SettleUpDataResponse {
   finalized_at: string | null;
   transaction_count: number;
   latest_transaction_month: MonthReference | null;
+  finalization_warnings: string[];
 }

@@ -24,3 +24,7 @@ class AuthenticationError(DomainError):
 
 class ForbiddenError(DomainError):
     pass
+
+
+class InvariantViolationError(DomainError):
+    pass

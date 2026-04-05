@@ -2,12 +2,22 @@ from datetime import date
 from decimal import Decimal
 import uuid
 
+import pytest
+
 from src.domain.entities.category import Category
-from src.domain.reconciliation import reconcile
+from src.domain.exceptions import InvariantViolationError
+from src.domain.reconciliation import (
+    PersonSummary,
+    SettlementResult,
+    _compute_settlement,
+    compute_net_position,
+    reconcile,
+)
 from tests.fixtures.factories import (
     make_category,
     make_category_group,
     make_person,
+    make_settlement,
     make_transaction,
 )
 
@@ -384,7 +394,7 @@ def test_nullable_group_id_category_becomes_uncategorized() -> None:
 
 def test_rounding_fractional_cents() -> None:
     alice, bob = _alice_bob()
-    # $33.33 split 50/50 → 16.665 each, rounds to 16.67
+    # $33.33 split 50/50 → payer rounds to 16.67, other gets remainder 16.66
     txs = [
         make_transaction(
             amount=Decimal("-33.33"),
@@ -405,7 +415,8 @@ def test_rounding_fractional_cents() -> None:
     alice_summary = next(s for s in result.person_summaries if s.person_id == alice.id)
     bob_summary = next(s for s in result.person_summaries if s.person_id == bob.id)
     assert alice_summary.total_share == Decimal("16.67")
-    assert bob_summary.total_share == Decimal("16.67")
+    assert bob_summary.total_share == Decimal("16.66")
+    assert alice_summary.total_share + bob_summary.total_share == Decimal("33.33")
 
 
 def test_all_refunds_no_expenses() -> None:
@@ -534,3 +545,125 @@ def test_settlement_transactions_not_in_reconciliation() -> None:
 
     assert result.transaction_count == 1
     assert result.total_household_spending == Decimal("60.00")
+
+
+# --- compute_net_position tests ---
+
+
+def test_net_position_no_settlements_returns_gross() -> None:
+    alice, bob = _alice_bob()
+    gross = SettlementResult(
+        amount=Decimal("100.00"), from_person_id=alice.id, to_person_id=bob.id
+    )
+    result = compute_net_position(gross, [])
+    assert result is gross
+
+
+def test_net_position_gross_none_returns_none() -> None:
+    assert compute_net_position(None, []) is None
+
+
+def test_net_position_partial_payment() -> None:
+    alice, bob = _alice_bob()
+    gross = SettlementResult(
+        amount=Decimal("200.00"), from_person_id=alice.id, to_person_id=bob.id
+    )
+    settlement = make_settlement(
+        amount=Decimal("50.00"), from_person_id=alice.id, to_person_id=bob.id
+    )
+    result = compute_net_position(gross, [settlement])
+    assert result is not None
+    assert result.amount == Decimal("150.00")
+    assert result.from_person_id == alice.id
+    assert result.to_person_id == bob.id
+
+
+def test_net_position_exact_payment_returns_none() -> None:
+    alice, bob = _alice_bob()
+    gross = SettlementResult(
+        amount=Decimal("212.65"), from_person_id=alice.id, to_person_id=bob.id
+    )
+    settlement = make_settlement(
+        amount=Decimal("212.65"), from_person_id=alice.id, to_person_id=bob.id
+    )
+    assert compute_net_position(gross, [settlement]) is None
+
+
+def test_net_position_overpayment_reverses_direction() -> None:
+    alice, bob = _alice_bob()
+    gross = SettlementResult(
+        amount=Decimal("212.65"), from_person_id=alice.id, to_person_id=bob.id
+    )
+    settlement = make_settlement(
+        amount=Decimal("1981.00"), from_person_id=alice.id, to_person_id=bob.id
+    )
+    result = compute_net_position(gross, [settlement])
+    assert result is not None
+    assert result.amount == Decimal("1768.35")
+    assert result.from_person_id == bob.id
+    assert result.to_person_id == alice.id
+
+
+def test_net_position_multiple_settlements() -> None:
+    alice, bob = _alice_bob()
+    gross = SettlementResult(
+        amount=Decimal("300.00"), from_person_id=alice.id, to_person_id=bob.id
+    )
+    s1 = make_settlement(
+        amount=Decimal("100.00"), from_person_id=alice.id, to_person_id=bob.id
+    )
+    s2 = make_settlement(
+        amount=Decimal("50.00"), from_person_id=alice.id, to_person_id=bob.id
+    )
+    result = compute_net_position(gross, [s1, s2])
+    assert result is not None
+    assert result.amount == Decimal("150.00")
+    assert result.from_person_id == alice.id
+
+
+# --- zero-sum invariant tests ---
+
+
+def test_mixed_odd_cent_amounts_pass_zero_sum() -> None:
+    alice, bob = _alice_bob()
+    txs = [
+        make_transaction(
+            amount=Decimal("-33.33"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+        make_transaction(
+            amount=Decimal("-17.51"),
+            payer_person_id=bob.id,
+            payer_percentage=70,
+        ),
+        make_transaction(
+            amount=Decimal("-9.99"),
+            payer_person_id=alice.id,
+            payer_percentage=30,
+        ),
+    ]
+
+    # Should complete without InvariantViolationError
+    result = reconcile(
+        txs,
+        [alice, bob],
+        [],
+        [],
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+    )
+    assert result.settlement is not None
+
+
+def test_broken_summaries_raise_invariant_violation() -> None:
+    alice, bob = _alice_bob()
+    # Artificially broken: net1 + net2 != 0
+    summaries = [
+        PersonSummary(
+            person_id=alice.id, total_paid=Decimal(100), total_share=Decimal(60)
+        ),
+        PersonSummary(person_id=bob.id, total_paid=Decimal(0), total_share=Decimal(50)),
+    ]
+    with pytest.raises(InvariantViolationError, match="Zero-sum invariant violated"):
+        _compute_settlement(summaries)

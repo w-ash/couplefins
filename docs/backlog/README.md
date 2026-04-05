@@ -143,6 +143,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.3.0 | Per-month budget model — replace cascading effective dates with year/month | Completed (2026-04-04) | M |
 | v1.3.1 | Copy from last month + budget page UX polish | Not started | S |
 | v1.3.2 | Budget trends on Insights page — budget overlay lines on spending charts | Not started | M |
+| v1.3.3 | Accounting guardrails — rounding fix, zero-sum assertion, settlement link validation, pre-finalization warnings | Completed (2026-04-05) | M |
 
 ## Infrastructure Readiness
 

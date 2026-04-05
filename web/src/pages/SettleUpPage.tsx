@@ -65,10 +65,9 @@ function HeroCard({
   getPersonName: (id: string) => string;
   getPersonColor: (id: string) => string;
 }) {
-  const owed = data.owed;
-  const isSettled = !owed || owed.amount === 0;
+  const net = data.net_position;
 
-  if (isSettled) {
+  if (!net) {
     return (
       <div className="rounded-xl border border-primary/20 bg-card p-5 shadow-md sm:p-8">
         <p className="text-center text-xl font-semibold text-primary sm:text-2xl">
@@ -81,28 +80,28 @@ function HeroCard({
     );
   }
 
+  const gross = data.owed;
+  const hasPayments = gross && gross.amount !== net.amount;
+
   return (
     <div className="rounded-xl border border-primary/20 bg-card p-5 shadow-md sm:p-8">
       <p className="text-center text-xl font-semibold text-foreground sm:text-2xl">
         <PersonBadge
-          name={getPersonName(owed.from_person_id)}
-          accentColor={getPersonColor(owed.from_person_id)}
+          name={getPersonName(net.from_person_id)}
+          accentColor={getPersonColor(net.from_person_id)}
           size="lg"
         />{" "}
         owes{" "}
         <PersonBadge
-          name={getPersonName(owed.to_person_id)}
-          accentColor={getPersonColor(owed.to_person_id)}
+          name={getPersonName(net.to_person_id)}
+          accentColor={getPersonColor(net.to_person_id)}
           size="lg"
         />{" "}
-        <span className="tabular-nums">{formatCurrency(owed.amount)}</span>
+        <span className="tabular-nums">{formatCurrency(net.amount)}</span>
       </p>
-      {data.remaining_balance > 0 && data.remaining_balance !== owed.amount && (
+      {hasPayments && (
         <p className="mt-2 text-center text-sm text-muted-foreground">
-          Remaining after payments:{" "}
-          <span className="font-medium tabular-nums">
-            {formatCurrency(data.remaining_balance)}
-          </span>
+          {formatCurrency(gross.amount)} gross, after payments
         </p>
       )}
     </div>
@@ -118,11 +117,8 @@ function LinkSettlementSection({
   getPersonName: (id: string) => string;
   onSuccess: () => void;
 }) {
-  const owed = data.owed;
-  const searchAmount =
-    owed && data.remaining_balance > 0
-      ? data.remaining_balance.toFixed(2)
-      : (owed?.amount.toFixed(2) ?? "0");
+  const net = data.net_position;
+  const searchAmount = net ? net.amount.toFixed(2) : "0";
 
   const [selected, setSelected] = useState<SelectedCandidate[]>([]);
   const [successMessage, setSuccessMessage] = useTemporary<string | null>(
@@ -133,9 +129,9 @@ function LinkSettlementSection({
   const mutation = useRecordSettlement({
     mutation: {
       onSuccess: () => {
-        if (owed) {
-          const fromName = getPersonName(owed.from_person_id);
-          const toName = getPersonName(owed.to_person_id);
+        if (net) {
+          const fromName = getPersonName(net.from_person_id);
+          const toName = getPersonName(net.to_person_id);
           const amount = computeSettlementAmount(selected);
           setSuccessMessage(
             `Settlement linked — ${fromName} paid ${toName} ${formatCurrency(amount)}`,
@@ -147,7 +143,9 @@ function LinkSettlementSection({
     },
   });
 
-  if (!owed || owed.amount === 0) return null;
+  // Hide when fully settled, no gross balance, or overpaid (direction reversed)
+  if (!net || !data.owed || net.from_person_id !== data.owed.from_person_id)
+    return null;
 
   const selectedIds = selected.map((c) => c.id);
   const amount = computeSettlementAmount(selected);
@@ -169,14 +167,13 @@ function LinkSettlementSection({
           <Button
             icon={<Link2 className="size-4" />}
             onClick={() => {
-              if (!owed) return;
               mutation.mutate({
                 data: {
                   year: data.year,
                   month: data.month,
                   amount,
-                  from_person_id: owed.from_person_id,
-                  to_person_id: owed.to_person_id,
+                  from_person_id: net.from_person_id,
+                  to_person_id: net.to_person_id,
                   method,
                   linked_transaction_ids: selectedIds,
                 },
@@ -220,20 +217,20 @@ function WaiveAction({
   getPersonName: (id: string) => string;
   onSuccess: () => void;
 }) {
-  const owed = data.owed;
+  const net = data.net_position;
 
   const mutation = useWaiveSettlement({
     mutation: { onSuccess },
   });
 
-  if (!owed || owed.amount === 0) return null;
+  if (!net) return null;
 
   return (
     <div className="rounded-lg border border-border-muted px-4 py-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">
-            Waive {getPersonName(owed.from_person_id)}'s balance for this month
+            Waive {getPersonName(net.from_person_id)}'s balance for this month
           </p>
           <p className="text-xs text-muted-foreground/70">
             The full balance will be forgiven. This can be undone by deleting
@@ -244,13 +241,12 @@ function WaiveAction({
           variant="secondary"
           size="sm"
           onClick={() => {
-            if (!owed) return;
             mutation.mutate({
               data: {
                 year: data.year,
                 month: data.month,
-                from_person_id: owed.from_person_id,
-                to_person_id: owed.to_person_id,
+                from_person_id: net.from_person_id,
+                to_person_id: net.to_person_id,
                 notes: "Balance waived",
               },
             });
@@ -526,6 +522,7 @@ export function SettleUpPage() {
             isPending={
               finalizeMutation.isPending || unfinalizeMutation.isPending
             }
+            warnings={data.finalization_warnings}
           />
 
           <HeroCard
@@ -535,7 +532,7 @@ export function SettleUpPage() {
           />
 
           <LinkSettlementSection
-            key={`${data.remaining_balance}-${data.recorded_settlements.length}`}
+            key={`${data.net_position?.amount ?? 0}-${data.recorded_settlements.length}`}
             data={data}
             getPersonName={getPersonName}
             onSuccess={invalidateAll}

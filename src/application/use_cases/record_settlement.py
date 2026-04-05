@@ -14,10 +14,11 @@ from src.application.use_cases._shared.settlement_records import (
     build_settlement,
     validate_settlement_persons,
 )
+from src.domain.constants import CoupleDefaults
 from src.domain.entities.settlement import Settlement
 from src.domain.entities.settlement_transaction_link import SettlementTransactionLink
 from src.domain.entities.transaction import Transaction
-from src.domain.exceptions import NotFoundError
+from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -58,6 +59,26 @@ class RecordSettlementUseCase:
                 missing = set(command.linked_transaction_ids) - found_ids
                 if missing:
                     raise NotFoundError(f"Transactions not found: {missing}")
+
+                for tx_id in command.linked_transaction_ids:
+                    existing = (
+                        await uow.settlement_transaction_links.get_by_transaction_id(
+                            tx_id
+                        )
+                    )
+                    if existing:
+                        raise ValidationError(
+                            f"Transaction {tx_id} is already linked to a settlement"
+                        )
+
+                payer_ids = {tx.payer_person_id for tx in linked_txs}
+                if (
+                    len(linked_txs) >= CoupleDefaults.EXPECTED_PERSON_COUNT
+                    and len(payer_ids) == 1
+                ):
+                    raise ValidationError(
+                        "All linked transactions are from the same person"
+                    )
 
             settlement = build_settlement(
                 year=command.year,

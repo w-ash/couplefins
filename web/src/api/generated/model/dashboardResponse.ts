@@ -23,10 +23,12 @@ export interface DashboardResponse {
   current_month_transaction_count: number;
   current_month_person_summaries: PersonSummaryResponse[];
   current_month_settlement: OwedAmountResponse | null;
+  current_month_net_settlement: OwedAmountResponse | null;
   upload_statuses: UploadStatusResponse[];
   household_spending_month: number;
   household_spending_ytd: number;
   ytd_settlement: OwedAmountResponse | null;
+  ytd_net_settlement: OwedAmountResponse | null;
   ytd_total_settled: number;
   month_history: MonthHistoryEntryResponse[];
   persons: DashboardPersonResponse[];

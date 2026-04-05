@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal
 from uuid import UUID
@@ -14,7 +15,9 @@ from src.domain.date_math import month_bounds
 from src.domain.entities.category import Category
 from src.domain.entities.category_group import CategoryGroup
 from src.domain.entities.person import Person
+from src.domain.entities.settlement import Settlement
 from src.domain.entities.transaction import Transaction
+from src.domain.exceptions import InvariantViolationError
 from src.domain.splits import compute_shares
 
 
@@ -86,6 +89,11 @@ def _compute_settlement(
     net1 = p1.total_share - p1.total_paid
     net2 = p2.total_share - p2.total_paid
 
+    if net1 + net2 != Decimal(0):
+        raise InvariantViolationError(
+            f"Zero-sum invariant violated: net1={net1}, net2={net2}, sum={net1 + net2}"
+        )
+
     if net1 == 0 and net2 == 0:
         return SettlementResult(
             amount=Decimal(0), from_person_id=p1.person_id, to_person_id=p2.person_id
@@ -97,6 +105,38 @@ def _compute_settlement(
         )
     return SettlementResult(
         amount=net2, from_person_id=p2.person_id, to_person_id=p1.person_id
+    )
+
+
+def compute_net_position(
+    gross: SettlementResult | None,
+    settlements: Sequence[Settlement],
+) -> SettlementResult | None:
+    """Apply settlement payments to gross balance. Overpayments reverse direction."""
+    if gross is None or not settlements:
+        return gross
+
+    net = gross.amount
+    for s in settlements:
+        if s.from_person_id == gross.from_person_id:
+            net -= s.amount
+        else:
+            net += s.amount
+
+    if net == Decimal(0):
+        return None
+
+    if net > 0:
+        return SettlementResult(
+            amount=net,
+            from_person_id=gross.from_person_id,
+            to_person_id=gross.to_person_id,
+        )
+
+    return SettlementResult(
+        amount=abs(net),
+        from_person_id=gross.to_person_id,
+        to_person_id=gross.from_person_id,
     )
 
 

@@ -62,10 +62,12 @@ class DashboardResponse(BaseModel):
     current_month_transaction_count: int
     current_month_person_summaries: list[PersonSummaryResponse]
     current_month_settlement: OwedAmountResponse | None
+    current_month_net_settlement: OwedAmountResponse | None
     upload_statuses: list[UploadStatusResponse]
     household_spending_month: float
     household_spending_ytd: float
     ytd_settlement: OwedAmountResponse | None
+    ytd_net_settlement: OwedAmountResponse | None
     ytd_total_settled: float
     month_history: list[MonthHistoryEntryResponse]
     persons: list[DashboardPersonResponse]
@@ -100,6 +102,11 @@ class DashboardResponse(BaseModel):
             current_month_settlement=(
                 OwedAmountResponse.from_domain(cm.settlement) if cm.settlement else None
             ),
+            current_month_net_settlement=(
+                OwedAmountResponse.from_domain(result.current_month_net_settlement)
+                if result.current_month_net_settlement
+                else None
+            ),
             upload_statuses=[
                 UploadStatusResponse.from_domain(us) for us in result.upload_statuses
             ],
@@ -108,6 +115,11 @@ class DashboardResponse(BaseModel):
             ytd_settlement=(
                 OwedAmountResponse.from_domain(result.ytd_settlement)
                 if result.ytd_settlement
+                else None
+            ),
+            ytd_net_settlement=(
+                OwedAmountResponse.from_domain(result.ytd_net_settlement)
+                if result.ytd_net_settlement
                 else None
             ),
             ytd_total_settled=float(result.ytd_total_settled),

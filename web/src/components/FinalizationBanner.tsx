@@ -7,6 +7,7 @@ interface FinalizationBannerProps {
   onFinalize: () => void;
   onUnfinalize: () => void;
   isPending: boolean;
+  warnings?: string[];
 }
 
 function formatFinalizedDate(iso: string): string {
@@ -24,6 +25,7 @@ export function FinalizationBanner({
   onFinalize,
   onUnfinalize,
   isPending,
+  warnings,
 }: FinalizationBannerProps) {
   if (isFinalized) {
     return (
@@ -65,6 +67,15 @@ export function FinalizationBanner({
         <p className="text-xs text-muted-foreground/70">
           Lock it once you've both reviewed and settled up.
         </p>
+        {warnings && warnings.length > 0 && (
+          <ul className="mt-1 space-y-0.5">
+            {warnings.map((w) => (
+              <li key={w} className="text-xs text-warning-muted-foreground">
+                {w}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
       <Button
         size="sm"

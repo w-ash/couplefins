@@ -61,7 +61,7 @@ function HouseholdStats({
   personNames: Map<string, string>;
 }) {
   const { thisMonth, ytdRange } = useTimeLabels(data);
-  const ytdLabel = buildSettlementLabel(data.ytd_settlement, personNames);
+  const ytdLabel = buildSettlementLabel(data.ytd_net_settlement, personNames);
   return (
     <StatsGrid
       stats={[
@@ -128,7 +128,7 @@ function AllStats({
   personNames: Map<string, string>;
 }) {
   const { thisMonth, ytdRange } = useTimeLabels(data);
-  const ytdLabel = buildSettlementLabel(data.ytd_settlement, personNames);
+  const ytdLabel = buildSettlementLabel(data.ytd_net_settlement, personNames);
   return (
     <StatsGrid
       stats={[
@@ -246,10 +246,9 @@ function SettlementHero({
   getPersonName: (id: string) => string;
   getPersonColor: (id: string) => string;
 }) {
-  const settlement = data.current_month_settlement;
-  const hasBalance = settlement && settlement.amount > 0;
+  const settlement = data.current_month_net_settlement;
 
-  if (!hasBalance) {
+  if (!settlement) {
     return (
       <div className="rounded-xl border border-primary/20 bg-card p-4 shadow-md sm:p-6">
         <p className="mb-1 text-center text-xs font-medium tracking-wider text-muted-foreground uppercase">

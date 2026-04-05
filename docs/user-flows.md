@@ -272,6 +272,7 @@ Are we on track for the month and the year? The couple reviews this together.
 - Given a group approaching or over budget, then the indicator communicates urgency without alarm (teal → amber → coral)
 - Given YTD view, then the YTD budget is the sum of individual monthly budgets (not a cascading amount)
 - Given a month with no budget set, then that month contributes $0 to the YTD budget total
+- Given YTD view and a group is budgeted in some months but not others, then I see an informational note like "3 of 4 months budgeted" — a fact, not a warning
 
 **US-BUDGET-3**: As a partner, I want to see a grand total so I know our overall position.
 
@@ -291,12 +292,14 @@ Are we on track for the month and the year? The couple reviews this together.
 - Given a chart, then I can see budget limit lines overlaid to spot when we crossed thresholds
 - Given a year-over-year mode, then I can compare this year's spending trajectory to last year's
 
-**US-BUDGET-6** (v1.3.x): As a partner, I want to copy last month's budgets so I don't re-enter them every month.
+**US-BUDGET-6** (v1.3.x): As a partner, I want to copy budgets from a previous month so I don't re-enter them every month.
 
-- Given I open the Budget page for a month with no budgets, and the previous month has budgets, then I see a "Copy from [previous month]" option
-- Given I click copy, then all budget amounts from the previous month are created for this month — both household and personal budgets in one click
+- Given I open the Budget page for a month with no budgets, and a previous month has budgets, then I see a "Copy budgets from [source month]" card — the source is the most recent month with budgets, not necessarily the immediately previous month
+- Given I click copy, then all household budgets plus my personal budgets from the source month are created for this month (my partner's personal budgets are theirs to copy)
 - Given I've already set some budgets for this month, then only missing groups are copied (no overwrites)
-- Given the previous month has no budgets, then I see the standard "Add budget" empty state
+- Given no previous month has any budgets, then I see the "Add your first budget" empty state instead
+- Given the copy succeeds, then the budgets appear immediately — the transition from empty to populated IS the feedback
+- Given the copy fails (network error), then I see an error message and the empty state remains unchanged
 
 **US-BUDGET-7** (v1.3.x): As a partner, I want household and personal budgets to be completely separate views.
 
@@ -310,6 +313,18 @@ Are we on track for the month and the year? The couple reviews this together.
 - Given my budget changed between months, then the overlay reflects the actual budget for each month
 - Given a group with no budget, then no overlay line is shown
 
+**US-BUDGET-9** (v1.3.x): As a partner, I want the empty-month Budget page to give me useful context while I decide what to do.
+
+- Given a month with no budgets, then the scope toggle and month picker remain usable (no full-page blocker)
+- Given a month with spending but no budgets, then I see unbudgeted group spending below the copy card (US-BUDGET-6) — context for setting amounts
+- Given the budget overview is still loading, then I see a skeleton (not a premature empty state that flickers into a copy card)
+
+**US-BUDGET-10** (v1.3.x): As a partner reviewing a past month, I want to set up next month's budgets while I'm already here.
+
+- Given I'm viewing a past month's budget (e.g., March in April), and the next month has no budgets, then I see a subtle prompt near the month picker: "Set up [next month] budgets?"
+- Given I click the prompt, then the month picker advances to the next month, showing the empty-month experience (copy card or add-first-budget)
+- Given the next month already has budgets, then no prompt is shown
+
 ---
 
 ### Closing the Month
@@ -321,6 +336,8 @@ Finalization and export happen together at the end of the together session. Once
 **US-CLOSE-1**: As a partner, I want to finalize a month once we agree the numbers are right.
 
 - Given the Settle Up page for a month, then I see a "Lock Month" button
+- Given missing uploads, unsettled balance, or unmapped categories, then I see inline warnings on the finalization banner — advisory, not blocking (v1.3.3)
+- Given all pre-finalization checks pass, then no warnings are shown
 - Given I finalize, then the month is locked — uploads and edits for that month are rejected
 - Given a finalized month, then I can un-finalize with confirmation if we discover a mistake
 
@@ -392,20 +409,23 @@ Setup and maintenance tasks that happen occasionally, not monthly.
 | 2 | Dashboard | Click "Settle Up →" | Navigate to Settle Up page |
 | 3 | Settle Up | See hero card: "Alice owes Bob $147.50" | Upload statuses confirmed, payment history visible |
 | 4 | Settle Up | Select matching Venmo transactions, click "Mark as settlement" | Settlement linked — remaining balance $0.00 |
-| 5 | Budget | Navigate to Budget, toggle to YTD | Food & Dining at 92% (amber), Travel at 40% (teal) |
+| 5 | Budget | Navigate to Budget for March, toggle to YTD | Food & Dining at 92% (amber), Travel at 40% (teal) |
 | 6 | Budget | Discuss — agree to eat out less next month | — |
-| 7 | Settle Up | Return to Settle Up, click Lock Month | March finalized, lock indicator appears |
-| 8 | Dashboard | Return to Dashboard | March shows locked in history; dashboard surfaces next unfinalized month |
+| 7 | Budget | See "Set up April budgets?" prompt, click it | Month picker advances to April |
+| 8 | Budget | See "Copy budgets from March" card, click it | April budgets created instantly |
+| 9 | Budget | Tap Food & Dining, edit amount from $800 to $700 | Budget updated for April only |
+| 10 | Settle Up | Return to Settle Up for March, click Lock Month | March finalized, lock indicator appears |
+| 11 | Dashboard | Return to Dashboard | March locked; April budgets ready |
 
 ### Journey 4: Budget Review
 
 | Step | Screen | Action | Result |
 |---|---|---|---|
-| 1 | Budget | Navigate to Budget | Category groups with budget vs actual for current month |
-| 2 | Budget | Toggle to YTD | Cumulative Jan–current month |
-| 3 | Budget | See "Food & Dining" at 92% | Amber indicator — approaching limit |
-| 4 | Budget | See "Travel" at 150% | Coral indicator — over budget |
-| 5 | Budget (v0.7.x) | View spending chart | Monthly trend lines per category group across the year |
+| 1 | Budget | Navigate to Budget for current month | If budgets set: groups with progress bars. If empty: copy card or add-first-budget |
+| 2 | Budget | (If empty) Click "Copy budgets from [month]" | Budgets appear instantly, summary stats populate |
+| 3 | Budget | Scan urgency-sorted groups | Over-budget groups at top (coral), near-limit (amber), on-track (teal) |
+| 4 | Budget | Toggle to YTD | Cumulative spending with gap indicators per group |
+| 5 | Budget | Expand "Food & Dining" | Per-category breakdown with include_personal toggles |
 
 ### Journey 5: Settings & Configuration
 
@@ -416,3 +436,13 @@ Setup and maintenance tasks that happen occasionally, not monthly.
 | 3 | Settings | See "Unmapped: Coffee Shops & Treats" | New category from recent upload |
 | 4 | Settings | Assign to "Food & Dining" group | Mapping saved |
 | 5 | Settings | Set adjustment account: "Shared Adjustments" | Enables export on Transactions page |
+
+### Journey 6: First-Time Budget Setup
+
+| Step | Screen | Action | Result |
+|---|---|---|---|
+| 1 | Budget | Navigate to Budget for first month with data | "Add your first budget" empty state — no previous month to copy from |
+| 2 | Budget | See unbudgeted spending below empty state | Groups with actual spending and average hints as context |
+| 3 | Budget | Click "Add budget", select "Food & Dining" | Amount input with hint: "Avg: $750/mo" |
+| 4 | Budget | Enter $800, save | Food & Dining appears with progress bar |
+| 5 | Budget | Add budgets for remaining groups | ~5 minutes, guided by average spending hints |
