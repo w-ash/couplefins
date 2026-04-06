@@ -1,4 +1,3 @@
-from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -114,7 +113,7 @@ async def update_transaction(
     command = BulkUpdateTransactionsCommand(
         transaction_ids=[transaction_id],
         date=body.date,
-        amount=Decimal(str(body.amount)) if body.amount is not None else None,
+        amount=body.amount,
         category=body.category,
         notes=body.notes,
         tags=tuple(body.tags) if body.tags is not None else None,

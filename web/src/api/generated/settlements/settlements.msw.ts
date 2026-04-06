@@ -19,6 +19,7 @@ import type {
 import type {
   DeleteSettlementResponse,
   MarkTransactionResponse,
+  RecordSettlementResponse,
   SettleUpDataResponse,
   SettlementCandidateResponse,
   SettlementResponse,
@@ -26,7 +27,7 @@ import type {
 } from '../model';
 
 
-export const getRecordSettlementResponseMock = (overrideResponse: Partial<Extract<SettlementResponse, object>> = {}): SettlementResponse => ({id: faker.string.uuid(), year: faker.number.int(), month: faker.number.int(), amount: faker.number.float({fractionDigits: 2}), from_person_id: faker.string.uuid(), to_person_id: faker.string.uuid(), method: faker.helpers.arrayElement([faker.string.alpha({length: {min: 10, max: 20}}),null,]), is_waived: faker.datatype.boolean(), notes: faker.string.alpha({length: {min: 10, max: 20}}), settled_at: faker.date.past().toISOString().slice(0, 19) + 'Z', created_at: faker.date.past().toISOString().slice(0, 19) + 'Z', linked_transaction_ids: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => (faker.string.uuid())), linked_transactions: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({id: faker.string.uuid(), date: faker.date.past().toISOString().slice(0, 10), merchant: faker.string.alpha({length: {min: 10, max: 20}}), amount: faker.number.float({fractionDigits: 2}), payer_person_id: faker.string.uuid()})), ...overrideResponse})
+export const getRecordSettlementResponseMock = (overrideResponse: Partial<Extract<RecordSettlementResponse, object>> = {}): RecordSettlementResponse => ({settlement: {id: faker.string.uuid(), year: faker.number.int(), month: faker.number.int(), amount: faker.number.float({fractionDigits: 2}), from_person_id: faker.string.uuid(), to_person_id: faker.string.uuid(), method: faker.helpers.arrayElement([faker.string.alpha({length: {min: 10, max: 20}}),null,]), is_waived: faker.datatype.boolean(), notes: faker.string.alpha({length: {min: 10, max: 20}}), settled_at: faker.date.past().toISOString().slice(0, 19) + 'Z', created_at: faker.date.past().toISOString().slice(0, 19) + 'Z', linked_transaction_ids: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => (faker.string.uuid())), linked_transactions: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({id: faker.string.uuid(), date: faker.date.past().toISOString().slice(0, 10), merchant: faker.string.alpha({length: {min: 10, max: 20}}), amount: faker.number.float({fractionDigits: 2}), payer_person_id: faker.string.uuid()}))}, warnings: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => (faker.string.alpha({length: {min: 10, max: 20}}))), ...overrideResponse})
 
 export const getWaiveSettlementResponseMock = (overrideResponse: Partial<Extract<SettlementResponse, object>> = {}): SettlementResponse => ({id: faker.string.uuid(), year: faker.number.int(), month: faker.number.int(), amount: faker.number.float({fractionDigits: 2}), from_person_id: faker.string.uuid(), to_person_id: faker.string.uuid(), method: faker.helpers.arrayElement([faker.string.alpha({length: {min: 10, max: 20}}),null,]), is_waived: faker.datatype.boolean(), notes: faker.string.alpha({length: {min: 10, max: 20}}), settled_at: faker.date.past().toISOString().slice(0, 19) + 'Z', created_at: faker.date.past().toISOString().slice(0, 19) + 'Z', linked_transaction_ids: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => (faker.string.uuid())), linked_transactions: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({id: faker.string.uuid(), date: faker.date.past().toISOString().slice(0, 10), merchant: faker.string.alpha({length: {min: 10, max: 20}}), amount: faker.number.float({fractionDigits: 2}), payer_person_id: faker.string.uuid()})), ...overrideResponse})
 
@@ -43,7 +44,7 @@ export const getUnlinkSettlementTransactionResponseMock = (): UnlinkSettlementTr
       })
 
 
-export const getRecordSettlementMockHandler = (overrideResponse?: SettlementResponse | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<SettlementResponse> | SettlementResponse), options?: RequestHandlerOptions) => {
+export const getRecordSettlementMockHandler = (overrideResponse?: RecordSettlementResponse | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<RecordSettlementResponse> | RecordSettlementResponse), options?: RequestHandlerOptions) => {
   return http.post('*/api/v1/settlements', async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
 
 

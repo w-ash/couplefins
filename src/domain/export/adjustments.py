@@ -7,6 +7,7 @@ from attrs import define
 from src.domain.constants import SplitDefaults
 from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
+from src.domain.exceptions import InvariantViolationError
 from src.domain.splits import compute_shares
 
 # 12 hex chars = 48 bits → ~1-in-281-trillion collision rate per pair
@@ -69,3 +70,14 @@ def compute_adjustments(
         key=lambda a: (a.date, a.merchant, a.category, a.source_transaction_id)
     )
     return adjustments
+
+
+def assert_adjustments_zero_sum(
+    adjustments_a: list[Adjustment],
+    adjustments_b: list[Adjustment],
+) -> None:
+    total = sum((a.amount for a in adjustments_a), Decimal(0)) + sum(
+        (a.amount for a in adjustments_b), Decimal(0)
+    )
+    if total != Decimal(0):
+        raise InvariantViolationError(f"Adjustment zero-sum violated: sum={total}")

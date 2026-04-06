@@ -7,6 +7,7 @@ from src.application.use_cases._shared.command_validators import assert_positive
 from src.application.use_cases.get_budget_overview import GetBudgetOverviewResult
 from src.domain.budget import HealthStatus
 from src.domain.entities.category_group_budget import CategoryGroupBudget
+from src.interface.api.schemas.types import MoneyField
 
 
 class SaveBudgetRequest(BaseModel):
@@ -34,7 +35,7 @@ class UpdateBudgetRequest(BaseModel):
 class BudgetResponse(BaseModel):
     id: UUID
     group_id: UUID
-    monthly_amount: float
+    monthly_amount: MoneyField
     year: int
     month: int
     person_id: UUID | None = None
@@ -44,7 +45,7 @@ class BudgetResponse(BaseModel):
         return cls(
             id=budget.id,
             group_id=budget.group_id,
-            monthly_amount=float(budget.monthly_amount),
+            monthly_amount=budget.monthly_amount,
             year=budget.year,
             month=budget.month,
             person_id=budget.person_id,
@@ -54,15 +55,15 @@ class BudgetResponse(BaseModel):
 class PersonCategorySpend(BaseModel):
     person_id: UUID
     person_name: str
-    amount: float
+    amount: MoneyField
 
 
 class CategorySpendResponse(BaseModel):
     category: str
-    total_amount: float
+    total_amount: MoneyField
     transaction_count: int
     include_personal: bool
-    household_amount: float
+    household_amount: MoneyField
     personal_amounts: list[PersonCategorySpend]
 
 
@@ -70,26 +71,26 @@ class GroupBudgetStatusResponse(BaseModel):
     group_id: UUID
     group_name: str
     budget_id: UUID | None
-    monthly_budget: float | None
-    monthly_spent: float
-    ytd_budget: float | None
-    ytd_spent: float
+    monthly_budget: MoneyField | None
+    monthly_spent: MoneyField
+    ytd_budget: MoneyField | None
+    ytd_spent: MoneyField
     monthly_health: HealthStatus | None
     ytd_health: HealthStatus | None
-    average_monthly_spending: float
+    average_monthly_spending: MoneyField
     categories: list[CategorySpendResponse]
-    household_spending: float | None = None
-    personal_spending: float | None = None
+    household_spending: MoneyField | None = None
+    personal_spending: MoneyField | None = None
 
 
 class BudgetOverviewResponse(BaseModel):
     year: int
     month: int
     group_statuses: list[GroupBudgetStatusResponse]
-    total_monthly_budget: float
-    total_monthly_spent: float
-    total_ytd_budget: float
-    total_ytd_spent: float
+    total_monthly_budget: MoneyField
+    total_monthly_spent: MoneyField
+    total_ytd_budget: MoneyField
+    total_ytd_spent: MoneyField
     budgets: list[BudgetResponse]
 
     @classmethod
@@ -105,47 +106,39 @@ class BudgetOverviewResponse(BaseModel):
                     group_id=s.group_id,
                     group_name=s.group_name,
                     budget_id=s.budget_id,
-                    monthly_budget=float(s.monthly_budget)
-                    if s.monthly_budget is not None
-                    else None,
-                    monthly_spent=float(s.monthly_spent),
-                    ytd_budget=float(s.ytd_budget)
-                    if s.ytd_budget is not None
-                    else None,
-                    ytd_spent=float(s.ytd_spent),
+                    monthly_budget=s.monthly_budget,
+                    monthly_spent=s.monthly_spent,
+                    ytd_budget=s.ytd_budget,
+                    ytd_spent=s.ytd_spent,
                     monthly_health=s.monthly_health,
                     ytd_health=s.ytd_health,
-                    average_monthly_spending=float(s.average_monthly_spending),
+                    average_monthly_spending=s.average_monthly_spending,
                     categories=[
                         CategorySpendResponse(
                             category=c.category,
-                            total_amount=float(c.total_amount),
+                            total_amount=c.total_amount,
                             transaction_count=c.transaction_count,
                             include_personal=personal_lookup.get(c.category, False),
-                            household_amount=float(c.household_amount),
+                            household_amount=c.household_amount,
                             personal_amounts=[
                                 PersonCategorySpend(
                                     person_id=pid,
                                     person_name=person_names.get(pid, "Unknown"),
-                                    amount=float(amt),
+                                    amount=amt,
                                 )
                                 for pid, amt in c.personal_amounts.items()
                             ],
                         )
                         for c in s.categories
                     ],
-                    household_spending=float(s.household_spending)
-                    if s.household_spending is not None
-                    else None,
-                    personal_spending=float(s.personal_spending)
-                    if s.personal_spending is not None
-                    else None,
+                    household_spending=s.household_spending,
+                    personal_spending=s.personal_spending,
                 )
                 for s in overview.group_statuses
             ],
-            total_monthly_budget=float(overview.total_monthly_budget),
-            total_monthly_spent=float(overview.total_monthly_spent),
-            total_ytd_budget=float(overview.total_ytd_budget),
-            total_ytd_spent=float(overview.total_ytd_spent),
+            total_monthly_budget=overview.total_monthly_budget,
+            total_monthly_spent=overview.total_monthly_spent,
+            total_ytd_budget=overview.total_ytd_budget,
+            total_ytd_spent=overview.total_ytd_spent,
             budgets=[BudgetResponse.from_domain(b) for b in result.budgets],
         )

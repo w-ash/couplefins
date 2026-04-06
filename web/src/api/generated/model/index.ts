@@ -76,6 +76,7 @@ export * from './previewUploadResponse';
 export * from './putCategoryMappings200';
 export * from './reconciliationResponse';
 export * from './recordSettlementRequest';
+export * from './recordSettlementResponse';
 export * from './recordWaivedSettlementRequest';
 export * from './resetPartnerPasswordRequest';
 export * from './saveBudgetRequest';

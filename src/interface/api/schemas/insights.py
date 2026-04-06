@@ -5,11 +5,12 @@ from pydantic import BaseModel
 from src.application.use_cases.get_spending_trends import GetSpendingTrendsResult
 from src.domain.insights import MonthlyGroupSpending
 from src.interface.api.schemas.persons import PersonResponse
+from src.interface.api.schemas.types import MoneyField
 
 
 class CategorySpendingItem(BaseModel):
     category: str
-    amount: float
+    amount: MoneyField
 
 
 class MonthlyGroupSpendingItem(BaseModel):
@@ -17,48 +18,48 @@ class MonthlyGroupSpendingItem(BaseModel):
     month: int
     group_id: UUID | None
     group_name: str
-    amount: float
+    amount: MoneyField
     categories: list[CategorySpendingItem]
 
 
 class MonthlyTotalItem(BaseModel):
     year: int
     month: int
-    total_amount: float
+    total_amount: MoneyField
 
 
 class GroupSummaryItem(BaseModel):
     group_id: UUID | None
     group_name: str
-    ytd_total: float
+    ytd_total: MoneyField
     transaction_count: int
 
 
 class GroupComparisonItem(BaseModel):
     group_id: UUID | None
     group_name: str
-    current_month_amount: float
-    trailing_average: float
-    delta_amount: float
-    delta_percentage: float
+    current_month_amount: MoneyField
+    trailing_average: MoneyField
+    delta_amount: MoneyField
+    delta_percentage: MoneyField
 
 
 class BudgetLineItem(BaseModel):
     group_id: UUID
-    monthly_budget: float
+    monthly_budget: MoneyField
 
 
 class MonthlyPersonPaidItem(BaseModel):
     month: int
     person_id: UUID
     group_id: UUID | None
-    amount_paid: float
+    amount_paid: MoneyField
 
 
 class MonthlySettlementItem(BaseModel):
     year: int
     month: int
-    amount: float
+    amount: MoneyField
     from_person_id: UUID
     to_person_id: UUID
     is_settled: bool
@@ -88,11 +89,9 @@ class SpendingTrendsResponse(BaseModel):
                     month=mgs.month,
                     group_id=mgs.group_id,
                     group_name=mgs.group_name,
-                    amount=float(mgs.amount),
+                    amount=mgs.amount,
                     categories=[
-                        CategorySpendingItem(
-                            category=cs.category, amount=float(cs.amount)
-                        )
+                        CategorySpendingItem(category=cs.category, amount=cs.amount)
                         for cs in mgs.categories
                     ],
                 )
@@ -107,7 +106,7 @@ class SpendingTrendsResponse(BaseModel):
                 MonthlyTotalItem(
                     year=mt.year,
                     month=mt.month,
-                    total_amount=float(mt.total_amount),
+                    total_amount=mt.total_amount,
                 )
                 for mt in result.trends.monthly_totals
             ],
@@ -115,7 +114,7 @@ class SpendingTrendsResponse(BaseModel):
                 GroupSummaryItem(
                     group_id=gs.group_id,
                     group_name=gs.group_name,
-                    ytd_total=float(gs.ytd_total),
+                    ytd_total=gs.ytd_total,
                     transaction_count=gs.transaction_count,
                 )
                 for gs in result.trends.group_summaries
@@ -124,17 +123,17 @@ class SpendingTrendsResponse(BaseModel):
                 GroupComparisonItem(
                     group_id=cc.group_id,
                     group_name=cc.group_name,
-                    current_month_amount=float(cc.current_month_amount),
-                    trailing_average=float(cc.trailing_average),
-                    delta_amount=float(cc.delta_amount),
-                    delta_percentage=float(cc.delta_percentage),
+                    current_month_amount=cc.current_month_amount,
+                    trailing_average=cc.trailing_average,
+                    delta_amount=cc.delta_amount,
+                    delta_percentage=cc.delta_percentage,
                 )
                 for cc in result.comparison_cards
             ],
             budget_lines=[
                 BudgetLineItem(
                     group_id=gid,
-                    monthly_budget=float(amount),
+                    monthly_budget=amount,
                 )
                 for gid, amount in result.budget_lines.items()
             ],
@@ -143,7 +142,7 @@ class SpendingTrendsResponse(BaseModel):
                     month=pp.month,
                     person_id=pp.person_id,
                     group_id=pp.group_id,
-                    amount_paid=float(pp.amount_paid),
+                    amount_paid=pp.amount_paid,
                 )
                 for pp in result.monthly_person_paid
             ],
@@ -151,7 +150,7 @@ class SpendingTrendsResponse(BaseModel):
                 MonthlySettlementItem(
                     year=ms.year,
                     month=ms.month,
-                    amount=float(ms.amount),
+                    amount=ms.amount,
                     from_person_id=ms.from_person_id,
                     to_person_id=ms.to_person_id,
                     is_settled=ms.is_settled,

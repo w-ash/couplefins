@@ -3,7 +3,7 @@ from decimal import Decimal
 import uuid
 
 import attrs
-from attrs import define, field
+from attrs import Factory, define, field
 
 from src.application.use_cases._shared.command_validators import (
     month_range,
@@ -35,9 +35,13 @@ class RecordSettlementCommand:
     linked_transaction_ids: list[uuid.UUID] = field(factory=list)
 
 
+_AMOUNT_MISMATCH_THRESHOLD = Decimal("0.20")
+
+
 @define(frozen=True, slots=True)
 class RecordSettlementResult:
     settlement: Settlement
+    warnings: list[str] = Factory(list[str])
 
 
 @define(slots=True)
@@ -80,6 +84,17 @@ class RecordSettlementUseCase:
                         "All linked transactions are from the same person"
                     )
 
+            warnings: list[str] = []
+            if linked_txs:
+                best_match = min(
+                    abs(abs(tx.amount) - command.amount) for tx in linked_txs
+                )
+                if best_match > command.amount * _AMOUNT_MISMATCH_THRESHOLD:
+                    warnings.append(
+                        f"No linked transaction amount is close to "
+                        f"settlement amount ${command.amount}"
+                    )
+
             settlement = build_settlement(
                 year=command.year,
                 month=command.month,
@@ -110,4 +125,4 @@ class RecordSettlementUseCase:
                         await uow.transactions.update_mutable_fields(updated)
 
             await uow.commit()
-            return RecordSettlementResult(settlement=saved)
+            return RecordSettlementResult(settlement=saved, warnings=warnings)

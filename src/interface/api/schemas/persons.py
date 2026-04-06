@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from src.application.use_cases.export_adjustments import PreviewAdjustmentsResult
 from src.domain.entities.person import Person
+from src.interface.api.schemas.types import MoneyField
 
 _NAME_MAX = 50
 
@@ -62,7 +63,7 @@ class AdjustmentResponse(BaseModel):
     date: str
     merchant: str
     category: str
-    amount: float
+    amount: MoneyField
 
 
 class AdjustmentPreviewResponse(BaseModel):
@@ -79,7 +80,7 @@ class AdjustmentPreviewResponse(BaseModel):
                     date=a.date.isoformat(),
                     merchant=a.merchant,
                     category=a.category,
-                    amount=float(a.amount),
+                    amount=a.amount,
                 )
                 for a in result.adjustments
             ],

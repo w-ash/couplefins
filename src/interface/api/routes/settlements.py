@@ -41,6 +41,7 @@ from src.interface.api.schemas.settlements import (
     MarkTransactionRequest,
     MarkTransactionResponse,
     RecordSettlementRequest,
+    RecordSettlementResponse,
     RecordWaivedSettlementRequest,
     SettlementCandidateResponse,
     SettlementResponse,
@@ -59,12 +60,12 @@ def _assert_participant(current_user: Person, from_id: UUID, to_id: UUID) -> Non
 async def record_settlement(
     body: RecordSettlementRequest,
     current_user: Person = Depends(get_current_user),
-) -> SettlementResponse:
+) -> RecordSettlementResponse:
     _assert_participant(current_user, body.from_person_id, body.to_person_id)
     command = RecordSettlementCommand(
         year=body.year,
         month=body.month,
-        amount=Decimal(str(body.amount)),
+        amount=body.amount,
         from_person_id=body.from_person_id,
         to_person_id=body.to_person_id,
         method=body.method,
@@ -76,7 +77,10 @@ async def record_settlement(
         lambda uow: RecordSettlementUseCase().execute(command, uow)
     )
     event_bus.broadcast("settlements")
-    return SettlementResponse.from_domain(result.settlement)
+    return RecordSettlementResponse(
+        settlement=SettlementResponse.from_domain(result.settlement),
+        warnings=result.warnings,
+    )
 
 
 @router.post("/settlements/waive", status_code=201)
@@ -145,14 +149,14 @@ async def mark_transaction_as_settlement(
 async def get_settlement_candidates(
     year: int,
     month: int,
-    amount: float,
+    amount: Decimal,
     search_year: int | None = None,
     search_month: int | None = None,
 ) -> list[SettlementCandidateResponse]:
     command = FindSettlementCandidatesCommand(
         year=year,
         month=month,
-        amount=Decimal(str(amount)),
+        amount=amount,
         search_year=search_year,
         search_month=search_month,
     )

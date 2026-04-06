@@ -10,6 +10,7 @@ from src.domain.exceptions import (
     DomainError,
     DuplicateError,
     ForbiddenError,
+    InvariantViolationError,
     NotFoundError,
     PeriodFinalizedError,
     ValidationError,
@@ -64,6 +65,20 @@ class RequestLoggingMiddleware:
 def register_exception_handlers(app: FastAPI) -> None:
     for exc_type, (status_code, error_code) in _DOMAIN_ERROR_MAP.items():
         _register_domain_handler(app, exc_type, status_code, error_code)
+
+    @app.exception_handler(InvariantViolationError)
+    async def invariant_error(_: Request, exc: InvariantViolationError) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
+        logger.error("invariant_violation", detail=str(exc))
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": {
+                    "code": "INVARIANT_VIOLATION",
+                    "message": "A calculation integrity check failed. "
+                    "This is a bug — please check the server logs.",
+                }
+            },
+        )
 
     @app.exception_handler(Exception)
     async def internal_error(_: Request, _exc: Exception) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]

@@ -5,6 +5,7 @@ from pydantic import BaseModel, field_validator
 
 from src.application.use_cases.bulk_modify_tags import TagAction
 from src.domain.splits import check_payer_percentage
+from src.interface.api.schemas.types import MoneyField
 
 
 def _validate_payer_pct(v: int | None) -> int | None:
@@ -45,7 +46,7 @@ class UpdateSplitsResponse(BaseModel):
 
 class UpdateTransactionRequest(BaseModel):
     date: datetime.date | None = None
-    amount: float | None = None
+    amount: MoneyField | None = None
     category: str | None = None
     tags: list[str] | None = None
     payer_percentage: int | None = None

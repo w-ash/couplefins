@@ -15,6 +15,7 @@ from src.domain.categories import (
 from src.domain.entities.category_group import CategoryGroup
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.entities.transaction import Transaction
+from src.domain.exceptions import InvariantViolationError
 from src.domain.splits import compute_shares
 
 HealthStatus = Literal["on_track", "near_limit", "over_budget"]
@@ -94,6 +95,44 @@ def compute_average_monthly_spending(
 
     num_months = len(months_with_data) or 1
     return {gid: total / num_months for gid, total in group_totals.items()}
+
+
+def _check_totals_match(
+    status_total: Decimal,
+    by_group: dict[UUID | None, CategoryGroupBreakdown],
+    mapped_ids: set[UUID | None],
+    label: str,
+) -> None:
+    breakdown_total = sum(
+        (bd.total_amount for gid, bd in by_group.items() if gid in mapped_ids),
+        Decimal(0),
+    )
+    if status_total != breakdown_total:
+        raise InvariantViolationError(
+            f"Budget {label} spending integrity violated: "
+            f"statuses={status_total}, breakdowns={breakdown_total}"
+        )
+
+
+def _assert_spending_integrity(
+    statuses: list[CategoryGroupBudgetStatus],
+    month_by_group: dict[UUID | None, CategoryGroupBreakdown],
+    ytd_by_group: dict[UUID | None, CategoryGroupBreakdown],
+) -> None:
+    # Only compare mapped groups (non-None group_ids) since statuses don't include uncategorized
+    mapped_ids: set[UUID | None] = {s.group_id for s in statuses}
+    _check_totals_match(
+        sum((s.monthly_spent for s in statuses), Decimal(0)),
+        month_by_group,
+        mapped_ids,
+        "monthly",
+    )
+    _check_totals_match(
+        sum((s.ytd_spent for s in statuses), Decimal(0)),
+        ytd_by_group,
+        mapped_ids,
+        "YTD",
+    )
 
 
 def _index_month_budgets(
@@ -235,6 +274,7 @@ def compute_budget_overview(  # noqa: PLR0913, PLR0917
         for gid, name in group_names.items()
     ]
 
+    _assert_spending_integrity(statuses, month_by_group, ytd_by_group)
     return _assemble_overview(statuses, year, month)
 
 
@@ -391,4 +431,5 @@ def compute_personal_budget_overview(  # noqa: PLR0913, PLR0914, PLR0917
             )
         )
 
+    _assert_spending_integrity(statuses, month_by_group, ytd_by_group)
     return _assemble_overview(statuses, year, month)

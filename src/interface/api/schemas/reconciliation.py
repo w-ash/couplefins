@@ -7,6 +7,7 @@ from src.application.use_cases._shared.upload_status import UploadStatus
 from src.application.use_cases.get_reconciliation import GetReconciliationResult
 from src.domain.entities.reconciliation_period import ReconciliationPeriod
 from src.domain.reconciliation import PersonSummary, SettlementResult
+from src.interface.api.schemas.types import MoneyField
 
 
 class MonthReference(BaseModel):
@@ -35,14 +36,14 @@ class UploadStatusResponse(BaseModel):
 
 
 class OwedAmountResponse(BaseModel):
-    amount: float
+    amount: MoneyField
     from_person_id: UUID
     to_person_id: UUID
 
     @classmethod
     def from_domain(cls, sr: SettlementResult) -> OwedAmountResponse:
         return cls(
-            amount=float(sr.amount),
+            amount=sr.amount,
             from_person_id=sr.from_person_id,
             to_person_id=sr.to_person_id,
         )
@@ -50,15 +51,15 @@ class OwedAmountResponse(BaseModel):
 
 class PersonSummaryResponse(BaseModel):
     person_id: UUID
-    total_paid: float
-    total_share: float
+    total_paid: MoneyField
+    total_share: MoneyField
 
     @classmethod
     def from_domain(cls, ps: PersonSummary) -> PersonSummaryResponse:
         return cls(
             person_id=ps.person_id,
-            total_paid=float(ps.total_paid),
-            total_share=float(ps.total_share),
+            total_paid=ps.total_paid,
+            total_share=ps.total_share,
         )
 
 
@@ -66,14 +67,14 @@ class CategoryBreakdownResponse(BaseModel):
     category: str
     group_id: UUID | None
     group_name: str
-    total_amount: float
+    total_amount: MoneyField
     transaction_count: int
 
 
 class CategoryGroupBreakdownResponse(BaseModel):
     group_id: UUID | None
     group_name: str
-    total_amount: float
+    total_amount: MoneyField
     transaction_count: int
     categories: list[CategoryBreakdownResponse]
 
@@ -84,7 +85,7 @@ class TransactionResponse(BaseModel):
     merchant: str
     category: str
     account: str
-    amount: float
+    amount: MoneyField
     notes: str
     tags: list[str]
     payer_person_id: UUID
@@ -92,7 +93,7 @@ class TransactionResponse(BaseModel):
     household: bool
     is_excluded: bool
     original_date: datetime.date | None
-    original_amount: float | None
+    original_amount: MoneyField | None
 
 
 class FinalizePeriodRequest(BaseModel):
@@ -127,9 +128,9 @@ class ReconciliationResponse(BaseModel):
     end_date: datetime.date
     year: int | None
     month: int | None
-    total_household_spending: float
-    total_household_refunds: float
-    net_household_spending: float
+    total_household_spending: MoneyField
+    total_household_refunds: MoneyField
+    net_household_spending: MoneyField
     person_summaries: list[PersonSummaryResponse]
     settlement: OwedAmountResponse | None
     category_group_breakdowns: list[CategoryGroupBreakdownResponse]
@@ -150,9 +151,9 @@ class ReconciliationResponse(BaseModel):
             end_date=summary.end_date,
             year=result.year,
             month=result.month,
-            total_household_spending=float(summary.total_household_spending),
-            total_household_refunds=float(summary.total_household_refunds),
-            net_household_spending=float(summary.net_household_spending),
+            total_household_spending=summary.total_household_spending,
+            total_household_refunds=summary.total_household_refunds,
+            net_household_spending=summary.net_household_spending,
             person_summaries=[
                 PersonSummaryResponse.from_domain(ps) for ps in summary.person_summaries
             ],
@@ -165,14 +166,14 @@ class ReconciliationResponse(BaseModel):
                 CategoryGroupBreakdownResponse(
                     group_id=gb.group_id,
                     group_name=gb.group_name,
-                    total_amount=float(gb.total_amount),
+                    total_amount=gb.total_amount,
                     transaction_count=gb.transaction_count,
                     categories=[
                         CategoryBreakdownResponse(
                             category=cb.category,
                             group_id=cb.group_id,
                             group_name=cb.group_name,
-                            total_amount=float(cb.total_amount),
+                            total_amount=cb.total_amount,
                             transaction_count=cb.transaction_count,
                         )
                         for cb in gb.categories
@@ -188,7 +189,7 @@ class ReconciliationResponse(BaseModel):
                     merchant=tx.merchant,
                     category=tx.category,
                     account=tx.account,
-                    amount=float(tx.amount),
+                    amount=tx.amount,
                     notes=tx.notes,
                     tags=list(tx.tags),
                     payer_person_id=tx.payer_person_id,
@@ -196,11 +197,7 @@ class ReconciliationResponse(BaseModel):
                     household=tx.household,
                     is_excluded=tx.is_excluded,
                     original_date=tx.original_date,
-                    original_amount=(
-                        float(tx.original_amount)
-                        if tx.original_amount is not None
-                        else None
-                    ),
+                    original_amount=tx.original_amount,
                 )
                 for tx in result.transactions
             ],

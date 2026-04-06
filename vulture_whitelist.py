@@ -61,8 +61,10 @@ HealthResponse.database_mode
 
 # --- Domain functions: tested + public API, not yet wired into a use case ---
 
+from src.domain.export.adjustments import assert_adjustments_zero_sum
 from src.domain.insights import compute_trailing_average
 
+assert_adjustments_zero_sum  # zero-sum invariant, tested in test_adjustments.py
 compute_trailing_average  # tested in test_insights.py, planned for future Insights enhancements
 
 # --- Test-only utility: called from tests/integration/conftest.py ---

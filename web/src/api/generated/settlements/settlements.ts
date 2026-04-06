@@ -31,6 +31,7 @@ import type {
   MarkTransactionRequest,
   MarkTransactionResponse,
   RecordSettlementRequest,
+  RecordSettlementResponse,
   RecordWaivedSettlementRequest,
   SettleUpDataResponse,
   SettlementCandidateResponse,
@@ -49,7 +50,7 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
  * @summary Record Settlement
  */
 export type recordSettlementResponse201 = {
-  data: SettlementResponse
+  data: RecordSettlementResponse
   status: 201
 }
 

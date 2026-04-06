@@ -9,6 +9,7 @@ from src.application.use_cases.get_upload_history import (
 )
 from src.application.use_cases.preview_csv import PreviewCsvResult, PreviewTransaction
 from src.application.use_cases.upload_csv import UploadCsvResult
+from src.interface.api.schemas.types import MoneyField
 
 
 class UploadHistoryEntryResponse(BaseModel):
@@ -51,7 +52,7 @@ class PreviewTransactionResponse(BaseModel):
     date: date
     merchant: str
     category: str
-    amount: float
+    amount: MoneyField
     household: bool
     payer_percentage: int
 
@@ -82,7 +83,7 @@ class PreviewUploadResponse(BaseModel):
                 date=tx.date,
                 merchant=tx.merchant,
                 category=tx.category,
-                amount=float(tx.amount),
+                amount=tx.amount,
                 household=tx.household,
                 payer_percentage=tx.payer_percentage,
             )

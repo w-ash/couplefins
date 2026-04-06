@@ -14,12 +14,13 @@ from src.interface.api.schemas.reconciliation import (
     OwedAmountResponse,
     UploadStatusResponse,
 )
+from src.interface.api.schemas.types import MoneyField
 
 
 class RecordSettlementRequest(BaseModel):
     year: int
     month: int
-    amount: float
+    amount: MoneyField
     from_person_id: UUID
     to_person_id: UUID
     method: str
@@ -46,7 +47,7 @@ class LinkedTransactionResponse(BaseModel):
     id: UUID
     date: datetime.date
     merchant: str
-    amount: float
+    amount: MoneyField
     payer_person_id: UUID
 
     @classmethod
@@ -55,7 +56,7 @@ class LinkedTransactionResponse(BaseModel):
             id=tx.id,
             date=tx.date,
             merchant=tx.merchant,
-            amount=float(tx.amount),
+            amount=tx.amount,
             payer_person_id=tx.payer_person_id,
         )
 
@@ -64,7 +65,7 @@ class SettlementResponse(BaseModel):
     id: UUID
     year: int
     month: int
-    amount: float
+    amount: MoneyField
     from_person_id: UUID
     to_person_id: UUID
     method: str | None
@@ -83,7 +84,7 @@ class SettlementResponse(BaseModel):
             id=settlement.id,
             year=settlement.year,
             month=settlement.month,
-            amount=float(settlement.amount),
+            amount=settlement.amount,
             from_person_id=settlement.from_person_id,
             to_person_id=settlement.to_person_id,
             method=settlement.method,
@@ -101,7 +102,7 @@ class SettlementResponse(BaseModel):
             id=s.id,
             year=s.year,
             month=s.month,
-            amount=float(s.amount),
+            amount=s.amount,
             from_person_id=s.from_person_id,
             to_person_id=s.to_person_id,
             method=s.method,
@@ -121,7 +122,7 @@ class SettlementCandidateResponse(BaseModel):
     id: UUID
     date: datetime.date
     merchant: str
-    amount: float
+    amount: MoneyField
     payer_person_id: UUID
     category: str
     score: int
@@ -134,7 +135,7 @@ class SettlementCandidateResponse(BaseModel):
             id=tx.id,
             date=tx.date,
             merchant=tx.merchant,
-            amount=float(tx.amount),
+            amount=tx.amount,
             payer_person_id=tx.payer_person_id,
             category=tx.category,
             score=candidate.score,
@@ -148,7 +149,7 @@ class SettleUpDataResponse(BaseModel):
     owed: OwedAmountResponse | None
     net_position: OwedAmountResponse | None
     recorded_settlements: list[SettlementResponse]
-    remaining_balance: float
+    remaining_balance: MoneyField
     upload_statuses: list[UploadStatusResponse]
     persons: list[DashboardPersonResponse]
     is_finalized: bool
@@ -169,7 +170,7 @@ class SettleUpDataResponse(BaseModel):
             recorded_settlements=[
                 SettlementResponse.from_record(r) for r in result.recorded_settlements
             ],
-            remaining_balance=float(result.remaining_balance),
+            remaining_balance=result.remaining_balance,
             upload_statuses=[
                 UploadStatusResponse.from_domain(us) for us in result.upload_statuses
             ],
@@ -184,6 +185,11 @@ class SettleUpDataResponse(BaseModel):
             ),
             finalization_warnings=result.finalization_warnings,
         )
+
+
+class RecordSettlementResponse(BaseModel):
+    settlement: SettlementResponse
+    warnings: list[str]
 
 
 class DeleteSettlementResponse(BaseModel):

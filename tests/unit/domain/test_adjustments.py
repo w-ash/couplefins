@@ -2,7 +2,10 @@ from datetime import date
 from decimal import Decimal
 import uuid
 
-from src.domain.export.adjustments import compute_adjustments
+from src.domain.export.adjustments import (
+    assert_adjustments_zero_sum,
+    compute_adjustments,
+)
 from tests.fixtures.factories import make_person, make_transaction
 
 
@@ -236,3 +239,70 @@ def test_excluded_transactions_produce_no_adjustments() -> None:
     ]
 
     assert compute_adjustments(txs, alice) == []
+
+
+# --- Zero-sum invariant ---
+
+
+def _assert_zero_sum(txs: list, alice, bob) -> None:
+    """Helper: both persons' adjustments must sum to zero."""
+    assert_adjustments_zero_sum(
+        compute_adjustments(txs, alice),
+        compute_adjustments(txs, bob),
+    )
+
+
+def test_zero_sum_single_expense() -> None:
+    alice, bob = _alice_bob()
+    txs = [
+        make_transaction(
+            amount=Decimal("-100.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        )
+    ]
+    _assert_zero_sum(txs, alice, bob)
+
+
+def test_zero_sum_mixed_splits_and_payers() -> None:
+    alice, bob = _alice_bob()
+    txs = [
+        make_transaction(
+            amount=Decimal("-100.00"),
+            payer_person_id=alice.id,
+            payer_percentage=70,
+        ),
+        make_transaction(
+            amount=Decimal("-55.50"),
+            payer_person_id=bob.id,
+            payer_percentage=30,
+        ),
+        make_transaction(
+            amount=Decimal("20.00"),  # refund
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+        make_transaction(
+            amount=Decimal("-33.33"),
+            payer_person_id=bob.id,
+            payer_percentage=0,  # spotted
+        ),
+    ]
+    _assert_zero_sum(txs, alice, bob)
+
+
+def test_zero_sum_odd_penny_rounding() -> None:
+    alice, bob = _alice_bob()
+    txs = [
+        make_transaction(
+            amount=Decimal("-1.01"),
+            payer_person_id=alice.id,
+            payer_percentage=33,
+        ),
+        make_transaction(
+            amount=Decimal("-7.77"),
+            payer_person_id=bob.id,
+            payer_percentage=67,
+        ),
+    ]
+    _assert_zero_sum(txs, alice, bob)
