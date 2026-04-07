@@ -1,12 +1,12 @@
 import uuid
 
 from attrs import define
-import structlog
+from structlog.stdlib import get_logger
 
 from src.domain.entities.settlement_merchant import SettlementMerchant
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
-logger = structlog.get_logger()
+logger = get_logger()
 
 _DEFAULT_MERCHANTS = [
     ("Venmo", "venmo"),

@@ -4,13 +4,13 @@ import uuid
 
 from attrs import define
 from pydantic import TypeAdapter
-import structlog
+from structlog.stdlib import get_logger
 
 from src.domain.entities.category import Category
 from src.domain.entities.category_group import CategoryGroup
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
-logger = structlog.get_logger()
+logger = get_logger()
 
 FIXTURE_PATH = (
     Path(__file__).resolve().parent.parent.parent.parent

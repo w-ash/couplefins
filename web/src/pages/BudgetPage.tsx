@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, CheckCircle2, PieChart, Plus } from "lucide-react";
+import { AlertCircle, CheckCircle2, Info, PieChart, Plus } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import {
   getGetBudgetOverviewQueryKey,
@@ -88,7 +88,7 @@ function GroupHeader({
   groupName: string;
   icon: string | null;
   health: string | null;
-  healthStyle: { color: string };
+  healthStyle: { color: string; label: string };
   hasBudget: boolean;
 }) {
   const GroupIcon = getCategoryGroupIcon(icon);
@@ -101,7 +101,7 @@ function GroupHeader({
           className={`flex items-center gap-1 text-xs ${healthStyle.color}`}
         >
           <HealthIcon health={health} />
-          {getHealthStyle(health).label}
+          {healthStyle.label}
         </span>
       )}
     </div>
@@ -843,6 +843,13 @@ export function BudgetPage() {
                     ))}
                   </div>
                 </section>
+              )}
+
+              {data.spending_drift != null && (
+                <p className="mt-6 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Info className="size-3.5 shrink-0" />
+                  Totals may be slightly off — check category mappings
+                </p>
               )}
             </>
           )}

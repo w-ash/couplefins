@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import structlog
+from structlog.stdlib import get_logger
 
 from src.application.runner import execute_use_case
 from src.application.use_cases.seed_category_groups import seed_category_groups
@@ -17,10 +17,8 @@ from src.infrastructure.persistence.database.db_connection import (
     dispose_engine,
     init_db,
 )
-from src.interface.api.middleware import (
-    RequestLoggingMiddleware,
-    register_exception_handlers,
-)
+from src.interface.api.error_handling import register_error_handlers
+from src.interface.api.request_logging import RequestLoggingMiddleware
 from src.interface.api.routes.auth import router as auth_router
 from src.interface.api.routes.budgets import router as budgets_router
 from src.interface.api.routes.category_groups import router as category_groups_router
@@ -35,7 +33,7 @@ from src.interface.api.routes.settlements import router as settlements_router
 from src.interface.api.routes.transactions import router as transactions_router
 from src.interface.api.routes.uploads import router as uploads_router
 
-logger = structlog.get_logger()
+logger = get_logger()
 
 
 @asynccontextmanager
@@ -69,7 +67,7 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(RequestLoggingMiddleware)
-    register_exception_handlers(app)
+    register_error_handlers(app)
     app.include_router(auth_router, prefix=AppConfig.API_V1_PREFIX)
     app.include_router(health_router, prefix=AppConfig.API_V1_PREFIX)
     app.include_router(persons_router, prefix=AppConfig.API_V1_PREFIX)

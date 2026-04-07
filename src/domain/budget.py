@@ -15,7 +15,6 @@ from src.domain.categories import (
 from src.domain.entities.category_group import CategoryGroup
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.entities.transaction import Transaction
-from src.domain.exceptions import InvariantViolationError
 from src.domain.splits import compute_shares
 
 HealthStatus = Literal["on_track", "near_limit", "over_budget"]
@@ -49,6 +48,7 @@ class BudgetOverview:
     total_monthly_spent: Decimal
     total_ytd_budget: Decimal
     total_ytd_spent: Decimal
+    spending_drift: Decimal | None = None
 
 
 def determine_health(spent: Decimal, budget: Decimal) -> HealthStatus:
@@ -97,42 +97,35 @@ def compute_average_monthly_spending(
     return {gid: total / num_months for gid, total in group_totals.items()}
 
 
-def _check_totals_match(
+def _totals_drift(
     status_total: Decimal,
     by_group: dict[UUID | None, CategoryGroupBreakdown],
     mapped_ids: set[UUID | None],
-    label: str,
-) -> None:
+) -> Decimal:
     breakdown_total = sum(
         (bd.total_amount for gid, bd in by_group.items() if gid in mapped_ids),
         Decimal(0),
     )
-    if status_total != breakdown_total:
-        raise InvariantViolationError(
-            f"Budget {label} spending integrity violated: "
-            f"statuses={status_total}, breakdowns={breakdown_total}"
-        )
+    return status_total - breakdown_total
 
 
-def _assert_spending_integrity(
+def _check_spending_integrity(
     statuses: list[CategoryGroupBudgetStatus],
     month_by_group: dict[UUID | None, CategoryGroupBreakdown],
     ytd_by_group: dict[UUID | None, CategoryGroupBreakdown],
-) -> None:
-    # Only compare mapped groups (non-None group_ids) since statuses don't include uncategorized
+) -> Decimal | None:
+    """Return the spending drift amount, or None if totals are consistent."""
     mapped_ids: set[UUID | None] = {s.group_id for s in statuses}
-    _check_totals_match(
+    drift = _totals_drift(
         sum((s.monthly_spent for s in statuses), Decimal(0)),
         month_by_group,
         mapped_ids,
-        "monthly",
-    )
-    _check_totals_match(
+    ) + _totals_drift(
         sum((s.ytd_spent for s in statuses), Decimal(0)),
         ytd_by_group,
         mapped_ids,
-        "YTD",
     )
+    return drift if drift != Decimal(0) else None
 
 
 def _index_month_budgets(
@@ -195,8 +188,8 @@ def _assemble_overview(
     statuses: list[CategoryGroupBudgetStatus],
     year: int,
     month: int,
+    spending_drift: Decimal | None = None,
 ) -> BudgetOverview:
-    """Sort statuses (budgeted first) and assemble totals into BudgetOverview."""
     budgeted = [s for s in statuses if s.monthly_budget is not None]
     unbudgeted = [s for s in statuses if s.monthly_budget is None]
 
@@ -219,6 +212,7 @@ def _assemble_overview(
             (s.ytd_budget for s in budgeted if s.ytd_budget), Decimal(0)
         ),
         total_ytd_spent=sum((s.ytd_spent for s in budgeted), Decimal(0)),
+        spending_drift=spending_drift,
     )
 
 
@@ -274,8 +268,8 @@ def compute_budget_overview(  # noqa: PLR0913, PLR0917
         for gid, name in group_names.items()
     ]
 
-    _assert_spending_integrity(statuses, month_by_group, ytd_by_group)
-    return _assemble_overview(statuses, year, month)
+    drift = _check_spending_integrity(statuses, month_by_group, ytd_by_group)
+    return _assemble_overview(statuses, year, month, spending_drift=drift)
 
 
 def compute_person_share(tx: Transaction, person_id: UUID) -> Decimal:
@@ -431,5 +425,5 @@ def compute_personal_budget_overview(  # noqa: PLR0913, PLR0914, PLR0917
             )
         )
 
-    _assert_spending_integrity(statuses, month_by_group, ytd_by_group)
-    return _assemble_overview(statuses, year, month)
+    drift = _check_spending_integrity(statuses, month_by_group, ytd_by_group)
+    return _assemble_overview(statuses, year, month, spending_drift=drift)

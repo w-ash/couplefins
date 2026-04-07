@@ -6,7 +6,7 @@ from src.infrastructure.persistence.models.base import Base
 
 class CategoryGroupBudgetModel(Base):
     __tablename__ = "category_group_budgets"
-    __table_args__ = (
+    __table_args__: tuple[Index, Index, dict[str, str]] = (
         Index(
             "uq_budget_group_month_personal",
             "group_id",
@@ -24,6 +24,7 @@ class CategoryGroupBudgetModel(Base):
             unique=True,
             postgresql_where=text("person_id IS NULL"),
         ),
+        {},
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)

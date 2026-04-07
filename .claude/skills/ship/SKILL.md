@@ -75,15 +75,26 @@ Also update `src/config/constants.py`:
 
 Run `uv sync` to update `uv.lock` — but only if Step 5 changed `pyproject.toml`. Otherwise skip.
 
-## Step 7: Quality gate
+## Step 7: Code health — zero tolerance
 
-Run the full quality gate:
+Zero warnings, zero errors, zero test failures. Nothing is "pre-existing" — if it shows up, fix it now. Every warning is a design improvement opportunity.
+
+Run each gate. If anything fails, fix it before moving on. If a fix would be a significant refactor (5+ files, public API change), present options to the user instead of silently choosing.
 
 ```bash
-uv run ruff check . --fix && uv run ruff format . && uv run basedpyright src/ && uv run vulture && uv run pytest
+# Backend
+uv run ruff check . --fix && uv run ruff format .
+uv run basedpyright src/            # 0 errors AND 0 warnings required
+uv run vulture
+uv run pytest
+
+# Frontend
+pnpm --prefix web generate          # Orval codegen (required if backend schemas changed)
+pnpm --prefix web check             # Biome + tsc + build
+pnpm --prefix web test
 ```
 
-If it fails, fix the issue and re-run. Do not proceed to commit until the gate passes.
+Do not proceed to commit until every gate is clean.
 
 ## Step 8: Stage and commit
 

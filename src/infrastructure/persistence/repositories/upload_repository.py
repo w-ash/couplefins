@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import ColumnElement, case, func, select
@@ -10,6 +11,10 @@ from src.infrastructure.persistence.repositories.base import (
     BaseRepository,
     date_month_prefix,
 )
+
+type _UploadCountsRow = tuple[
+    str, str, str, str, int, int | None, str | None, str | None
+]
 
 
 class UploadRepository(BaseRepository[Upload, UploadModel]):
@@ -89,20 +94,17 @@ class UploadRepository(BaseRepository[Upload, UploadModel]):
             .order_by(UploadModel.uploaded_at.desc())
         )
         result = await self._session.execute(stmt)
+        rows = cast(list[_UploadCountsRow], result.tuples().all())
         return [
             UploadWithCounts(
-                id=UUID(row.id),
-                person_id=UUID(row.person_id),
-                filename=row.filename,
-                uploaded_at=datetime.fromisoformat(row.uploaded_at),
-                transaction_count=row.transaction_count,
-                household_count=row.household_count or 0,
-                date_range_start=date.fromisoformat(row.date_range_start)
-                if row.date_range_start
-                else None,
-                date_range_end=date.fromisoformat(row.date_range_end)
-                if row.date_range_end
-                else None,
+                id=UUID(id_),
+                person_id=UUID(person_id),
+                filename=filename,
+                uploaded_at=datetime.fromisoformat(uploaded_at),
+                transaction_count=tx_count,
+                household_count=hh_count or 0,
+                date_range_start=date.fromisoformat(dr_start) if dr_start else None,
+                date_range_end=date.fromisoformat(dr_end) if dr_end else None,
             )
-            for row in result.all()
+            for id_, person_id, filename, uploaded_at, tx_count, hh_count, dr_start, dr_end in rows
         ]

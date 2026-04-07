@@ -16,4 +16,5 @@ export interface BudgetOverviewResponse {
   total_ytd_budget: number;
   total_ytd_spent: number;
   budgets: BudgetResponse[];
+  spending_drift?: number | null;
 }

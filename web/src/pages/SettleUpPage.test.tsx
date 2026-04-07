@@ -19,6 +19,7 @@ const settleUpResponse = {
   year: 2026,
   month: 3,
   owed: { amount: 50.0, from_person_id: "p2", to_person_id: "p1" },
+  net_position: { amount: 50.0, from_person_id: "p2", to_person_id: "p1" },
   recorded_settlements: [],
   remaining_balance: 50.0,
   upload_statuses: [
@@ -43,12 +44,14 @@ const settleUpResponse = {
   finalized_at: null,
   transaction_count: 5,
   latest_transaction_month: { year: 2026, month: 3 },
+  finalization_warnings: [],
 };
 
 const emptyResponse = {
   year: 2026,
   month: 3,
   owed: { amount: 0.0, from_person_id: "p1", to_person_id: "p2" },
+  net_position: null,
   recorded_settlements: [],
   remaining_balance: 0.0,
   upload_statuses: [
@@ -73,6 +76,7 @@ const emptyResponse = {
   finalized_at: null,
   transaction_count: 0,
   latest_transaction_month: null,
+  finalization_warnings: [],
 };
 
 const emptyWithPriorDataResponse = {
@@ -83,6 +87,7 @@ const emptyWithPriorDataResponse = {
 const allSettledResponse = {
   ...settleUpResponse,
   owed: { amount: 0.0, from_person_id: "p1", to_person_id: "p2" },
+  net_position: null,
   remaining_balance: 0.0,
   transaction_count: 5,
 };

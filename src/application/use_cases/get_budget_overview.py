@@ -2,6 +2,7 @@ from typing import Literal
 from uuid import UUID
 
 from attrs import define, field
+from structlog.stdlib import get_logger
 
 from src.application.use_cases._shared.command_validators import (
     month_range,
@@ -21,6 +22,8 @@ from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.entities.person import Person
 from src.domain.exceptions import ValidationError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
+
+logger = get_logger()
 
 
 @define(frozen=True, slots=True)
@@ -94,6 +97,15 @@ class GetBudgetOverviewUseCase:
                     personal_categories=personal_cats,
                 )
                 budgets = month_budgets
+
+            if overview.spending_drift is not None:
+                logger.warning(
+                    "budget_spending_drift",
+                    drift=str(overview.spending_drift),
+                    year=command.year,
+                    month=command.month,
+                    scope=command.scope,
+                )
 
             return GetBudgetOverviewResult(
                 overview=overview,

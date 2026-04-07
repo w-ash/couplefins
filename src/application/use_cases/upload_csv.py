@@ -4,7 +4,7 @@ import uuid
 
 import attrs
 from attrs import define, field
-import structlog
+from structlog.stdlib import get_logger
 
 from src.application.use_cases._shared.command_validators import non_empty_string
 from src.application.use_cases._shared.entity_lookup import require_by_id
@@ -21,7 +21,7 @@ from src.domain.entities.upload import Upload
 from src.domain.parsing.monarch_csv import parse_monarch_csv
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
-logger = structlog.get_logger()
+logger = get_logger()
 
 type ProgressCallback = Callable[[int, int, str], None]
 

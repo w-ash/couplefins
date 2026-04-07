@@ -7,6 +7,7 @@ Usage:
 import argparse
 import getpass
 import sys
+from typing import cast
 
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
@@ -48,10 +49,9 @@ def main() -> None:
     reset.add_argument("name", help="Person name")
     args = parser.parse_args()
 
-    command: str = args.command
+    command = cast(str | None, args.command)
     if command == "reset-password":
-        name: str = args.name
-        _reset_password(name)
+        _reset_password(cast(str, args.name))
     else:
         parser.print_help()
         sys.exit(1)

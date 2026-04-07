@@ -92,6 +92,7 @@ class BudgetOverviewResponse(BaseModel):
     total_ytd_budget: MoneyField
     total_ytd_spent: MoneyField
     budgets: list[BudgetResponse]
+    spending_drift: MoneyField | None = None
 
     @classmethod
     def from_result(cls, result: GetBudgetOverviewResult) -> BudgetOverviewResponse:
@@ -141,4 +142,5 @@ class BudgetOverviewResponse(BaseModel):
             total_ytd_budget=overview.total_ytd_budget,
             total_ytd_spent=overview.total_ytd_spent,
             budgets=[BudgetResponse.from_domain(b) for b in result.budgets],
+            spending_drift=overview.spending_drift,
         )
