@@ -29,6 +29,8 @@ export * from './categorySpendingItem';
 export * from './categorySpendResponse';
 export * from './changedTransactionResponse';
 export * from './changePasswordRequest';
+export * from './copyBudgetsRequest';
+export * from './copyBudgetsResponse';
 export * from './createCategoryGroupRequest';
 export * from './createSettlementMerchantRequest';
 export * from './dashboardPersonResponse';

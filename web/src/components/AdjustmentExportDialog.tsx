@@ -4,7 +4,6 @@ import {
   Check,
   Download,
   Loader2,
-  X,
 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Link } from "react-router";
@@ -14,12 +13,13 @@ import {
   usePreviewAdjustments,
 } from "@/api/generated/persons/persons";
 import { Button } from "@/components/Button";
+import { Dialog, DialogFooter, DialogHeader } from "@/components/Dialog";
 import { InlineError } from "@/components/InlineError";
-import { useDialogSync } from "@/hooks/useDialogSync";
 import { useTemporary } from "@/hooks/useTemporary";
 import { downloadAdjustmentCsv } from "@/lib/adjustments";
 import { formatCurrency, formatDate, MONTHS, plural } from "@/lib/format";
 import { useIdentityStore } from "@/lib/identity";
+import { tableHeaderRowClass } from "@/lib/layout";
 
 function AdjustmentRow({ adj }: { adj: AdjustmentResponse }) {
   const isCredit = adj.amount >= 0;
@@ -59,7 +59,6 @@ export function AdjustmentExportDialog({
   year: number;
   month: number;
 }) {
-  const dialogRef = useDialogSync(open);
   const personId = useIdentityStore((s) => s.currentPersonId);
 
   const { data: personsResponse } = useGetPersons();
@@ -97,26 +96,12 @@ export function AdjustmentExportDialog({
   }, [personId, year, month, setSuccessMessage]);
 
   return (
-    <dialog
-      ref={dialogRef}
-      onClose={onClose}
-      className="mx-4 w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-lg backdrop:bg-black/40"
-    >
-      <div className="flex items-start justify-between">
-        <div>
-          <h2 className="text-lg font-medium text-foreground">
-            Export Adjustments
-          </h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">{monthLabel}</p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-md p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <X className="size-4" />
-        </button>
-      </div>
+    <Dialog open={open} onClose={onClose}>
+      <DialogHeader
+        title="Export Adjustments"
+        subtitle={monthLabel}
+        onClose={onClose}
+      />
 
       <div className="mt-4">
         {!hasAccount && (
@@ -163,7 +148,7 @@ export function AdjustmentExportDialog({
             <div className="max-h-64 overflow-y-auto overflow-x-auto rounded-lg border border-border">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-card">
-                  <tr className="border-b border-border text-left text-muted-foreground">
+                  <tr className={tableHeaderRowClass}>
                     <th className="px-3 py-2 font-medium">Date</th>
                     <th className="px-3 py-2 font-medium">Merchant</th>
                     <th className="hidden px-3 py-2 font-medium sm:table-cell">
@@ -189,7 +174,7 @@ export function AdjustmentExportDialog({
         )}
       </div>
 
-      <div className="mt-5 flex items-center justify-end gap-3">
+      <DialogFooter>
         {successMessage && (
           <span className="inline-flex items-center gap-1 text-sm text-positive">
             <Check className="size-4" />
@@ -211,7 +196,7 @@ export function AdjustmentExportDialog({
             Download CSV
           </Button>
         )}
-      </div>
-    </dialog>
+      </DialogFooter>
+    </Dialog>
   );
 }

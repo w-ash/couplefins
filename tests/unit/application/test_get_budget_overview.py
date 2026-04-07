@@ -19,6 +19,7 @@ async def test_returns_overview_and_budgets() -> None:
     budget = make_category_group_budget(group_id=group.id)
 
     uow.category_group_budgets.get_by_year.return_value = [budget]
+    uow.category_group_budgets.get_all.return_value = [budget]
     uow.categories.get_all.return_value = []
     uow.category_groups.get_all.return_value = [group]
     uow.transactions.get_household_by_year.return_value = []
@@ -36,6 +37,7 @@ async def test_returns_overview_and_budgets() -> None:
 async def test_returns_empty_overview_when_no_data() -> None:
     uow = make_mock_uow()
     uow.category_group_budgets.get_by_year.return_value = []
+    uow.category_group_budgets.get_all.return_value = []
     uow.categories.get_all.return_value = []
     uow.category_groups.get_all.return_value = []
     uow.transactions.get_household_by_year.return_value = []
@@ -54,6 +56,7 @@ async def test_personal_scope_calls_get_by_year() -> None:
     budget = make_category_group_budget(group_id=group.id, person_id=alice.id)
 
     uow.category_group_budgets.get_by_year.return_value = [budget]
+    uow.category_group_budgets.get_all.return_value = [budget]
     uow.categories.get_all.return_value = []
     uow.category_groups.get_all.return_value = [group]
     uow.persons.get_all.return_value = [alice]
@@ -67,6 +70,109 @@ async def test_personal_scope_calls_get_by_year() -> None:
     uow.category_group_budgets.get_by_year.assert_called_once_with(2026, alice.id)
     uow.transactions.get_by_year.assert_called_once_with(2026)
     assert result.budgets == [budget]
+
+
+async def test_copyable_source_returns_most_recent_prior_month() -> None:
+    uow = make_mock_uow()
+    group = make_category_group()
+    jan_budget = make_category_group_budget(group_id=group.id, year=2026, month=1)
+    feb_budget = make_category_group_budget(group_id=group.id, year=2026, month=2)
+
+    uow.category_group_budgets.get_by_year.return_value = []
+    uow.category_group_budgets.get_all.return_value = [jan_budget, feb_budget]
+    uow.categories.get_all.return_value = []
+    uow.category_groups.get_all.return_value = [group]
+    uow.transactions.get_household_by_year.return_value = []
+
+    command = GetBudgetOverviewCommand(year=2026, month=3)
+    result = await GetBudgetOverviewUseCase().execute(command, uow)
+
+    assert result.copyable_source == (2026, 2)
+
+
+async def test_copyable_source_crosses_year_boundary() -> None:
+    uow = make_mock_uow()
+    group = make_category_group()
+    dec_budget = make_category_group_budget(group_id=group.id, year=2025, month=12)
+
+    uow.category_group_budgets.get_by_year.return_value = []
+    uow.category_group_budgets.get_all.return_value = [dec_budget]
+    uow.categories.get_all.return_value = []
+    uow.category_groups.get_all.return_value = [group]
+    uow.transactions.get_household_by_year.return_value = []
+
+    command = GetBudgetOverviewCommand(year=2026, month=1)
+    result = await GetBudgetOverviewUseCase().execute(command, uow)
+
+    assert result.copyable_source == (2025, 12)
+
+
+async def test_copyable_source_none_when_no_prior_budgets() -> None:
+    uow = make_mock_uow()
+    uow.category_group_budgets.get_by_year.return_value = []
+    uow.category_group_budgets.get_all.return_value = []
+    uow.categories.get_all.return_value = []
+    uow.category_groups.get_all.return_value = []
+    uow.transactions.get_household_by_year.return_value = []
+
+    command = GetBudgetOverviewCommand(year=2026, month=1)
+    result = await GetBudgetOverviewUseCase().execute(command, uow)
+
+    assert result.copyable_source is None
+    assert result.source_budgets == []
+
+
+async def test_next_month_has_budgets() -> None:
+    uow = make_mock_uow()
+    group = make_category_group()
+    jan_budget = make_category_group_budget(group_id=group.id, year=2026, month=1)
+    feb_budget = make_category_group_budget(group_id=group.id, year=2026, month=2)
+
+    uow.category_group_budgets.get_by_year.return_value = [jan_budget]
+    uow.category_group_budgets.get_all.return_value = [jan_budget, feb_budget]
+    uow.categories.get_all.return_value = []
+    uow.category_groups.get_all.return_value = [group]
+    uow.transactions.get_household_by_year.return_value = []
+
+    command = GetBudgetOverviewCommand(year=2026, month=1)
+    result = await GetBudgetOverviewUseCase().execute(command, uow)
+
+    assert result.next_month_has_budgets is True
+
+
+async def test_next_month_has_no_budgets() -> None:
+    uow = make_mock_uow()
+    group = make_category_group()
+    jan_budget = make_category_group_budget(group_id=group.id, year=2026, month=1)
+
+    uow.category_group_budgets.get_by_year.return_value = [jan_budget]
+    uow.category_group_budgets.get_all.return_value = [jan_budget]
+    uow.categories.get_all.return_value = []
+    uow.category_groups.get_all.return_value = [group]
+    uow.transactions.get_household_by_year.return_value = []
+
+    command = GetBudgetOverviewCommand(year=2026, month=1)
+    result = await GetBudgetOverviewUseCase().execute(command, uow)
+
+    assert result.next_month_has_budgets is False
+
+
+async def test_source_budgets_populated_from_copyable_source() -> None:
+    uow = make_mock_uow()
+    group = make_category_group()
+    jan_budget = make_category_group_budget(group_id=group.id, year=2026, month=1)
+
+    uow.category_group_budgets.get_by_year.return_value = []
+    uow.category_group_budgets.get_all.return_value = [jan_budget]
+    uow.categories.get_all.return_value = []
+    uow.category_groups.get_all.return_value = [group]
+    uow.transactions.get_household_by_year.return_value = []
+
+    command = GetBudgetOverviewCommand(year=2026, month=2)
+    result = await GetBudgetOverviewUseCase().execute(command, uow)
+
+    assert result.copyable_source == (2026, 1)
+    assert result.source_budgets == [jan_budget]
 
 
 def test_personal_scope_requires_person_id() -> None:

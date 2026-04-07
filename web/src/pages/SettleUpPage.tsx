@@ -53,7 +53,11 @@ import { PosthocLinkDialog } from "@/components/PosthocLinkDialog";
 import { UploadStatusRow } from "@/components/UploadStatusRow";
 import { useTemporary } from "@/hooks/useTemporary";
 import { formatCurrency, MONTHS, useMonthYear } from "@/lib/format";
-import { PAGE_PADDING } from "@/lib/layout";
+import {
+  PAGE_PADDING,
+  sectionDescriptionClass,
+  sectionHeadingClass,
+} from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
 
 function HeroCard({
@@ -299,10 +303,8 @@ function PaymentHistory({
 
   return (
     <Card>
-      <h2 className="mb-1 font-medium text-lg text-foreground">
-        Payment History
-      </h2>
-      <p className="mb-4 text-xs text-muted-foreground">
+      <h2 className={sectionHeadingClass}>Payment History</h2>
+      <p className={sectionDescriptionClass}>
         Payments and waivers recorded for this month
       </p>
       <div className="space-y-3">

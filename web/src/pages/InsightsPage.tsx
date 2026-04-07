@@ -27,7 +27,11 @@ import {
   MONTHS,
   useMonthYear,
 } from "@/lib/format";
-import { PAGE_PADDING } from "@/lib/layout";
+import {
+  PAGE_PADDING,
+  sectionDescriptionClass,
+  sectionHeadingClass,
+} from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
 
 interface GroupChartData {
@@ -433,10 +437,10 @@ export function InsightsPage() {
 
           {comparisonCards.length > 0 && (
             <section>
-              <h2 className="mb-1 font-medium text-lg text-foreground">
+              <h2 className={sectionHeadingClass}>
                 {MONTHS[month - 1]} vs 3-month average
               </h2>
-              <p className="mb-4 text-xs text-muted-foreground">
+              <p className={sectionDescriptionClass}>
                 Spot categories where spending jumped or dropped this month
               </p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -456,10 +460,8 @@ export function InsightsPage() {
           )}
 
           <section>
-            <h2 className="mb-1 font-medium text-lg text-foreground">
-              Spending by category
-            </h2>
-            <p className="mb-4 text-xs text-muted-foreground">
+            <h2 className={sectionHeadingClass}>Spending by category</h2>
+            <p className={sectionDescriptionClass}>
               Monthly trends for each category — tap to see the breakdown
             </p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -494,10 +496,8 @@ export function InsightsPage() {
 
           {(personPaidChartData.length > 0 || settlementTrend.length > 0) && (
             <section>
-              <h2 className="mb-1 font-medium text-lg text-foreground">
-                Who's paying
-              </h2>
-              <p className="mb-4 text-xs text-muted-foreground">
+              <h2 className={sectionHeadingClass}>Who's paying</h2>
+              <p className={sectionDescriptionClass}>
                 See who's been covering more of the household spending each
                 month
               </p>

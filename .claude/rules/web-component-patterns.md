@@ -16,4 +16,7 @@ Use shared building blocks — never hand-roll equivalent styling inline.
 - **Page header**: `<PageHeader>` — never hand-roll h1 + flex layout
 - **Async states**: `<PageLoading>`, `<PageError>`, `<PageEmpty>` from `@/components/PageStates`
 - **Stats row**: `<StatsGrid>` component
+- **Dialogs**: `<Dialog>` from `@/components/Dialog` (sizes: default/sm). Use `<DialogHeader>` for title + close button, `<DialogFooter>` for action buttons. Confirmation dialogs can use `<Dialog size="sm">` with inline body/footer.
+- **Section headers**: compose from `sectionHeadingClass` / `sectionDescriptionClass` in `@/lib/layout`
+- **Table header rows**: use `tableHeaderRowClass` from `@/lib/layout` on `<tr>` inside `<thead>`
 - **Popovers**: `z-50`, `mt-1.5` offset, single-section `rounded-lg`, multi-section `rounded-xl`

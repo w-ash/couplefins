@@ -427,3 +427,26 @@ def compute_personal_budget_overview(  # noqa: PLR0913, PLR0914, PLR0917
 
     drift = _check_spending_integrity(statuses, month_by_group, ytd_by_group)
     return _assemble_overview(statuses, year, month, spending_drift=drift)
+
+
+def find_copyable_source(
+    all_budgets: list[CategoryGroupBudget],
+    year: int,
+    month: int,
+) -> tuple[int, int] | None:
+    """Most recent (year, month) with budgets strictly before the given month."""
+    best: tuple[int, int] | None = None
+    for b in all_budgets:
+        ym = (b.year, b.month)
+        if ym < (year, month) and (best is None or ym > best):
+            best = ym
+    return best
+
+
+def has_budgets_for_month(
+    all_budgets: list[CategoryGroupBudget],
+    year: int,
+    month: int,
+) -> bool:
+    """Check whether any budget exists for the given month."""
+    return any(b.year == year and b.month == month for b in all_budgets)

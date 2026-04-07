@@ -26,6 +26,8 @@ import type {
 import type {
   BudgetOverviewResponse,
   BudgetResponse,
+  CopyBudgetsRequest,
+  CopyBudgetsResponse,
   GetBudgetOverviewParams,
   HTTPValidationError,
   SaveBudgetRequest,
@@ -361,6 +363,95 @@ export const usePostBudget = <TError = HTTPValidationError,
         TContext
       > => {
       return useMutation(getPostBudgetMutationOptions(options), queryClient);
+    }
+    /**
+ * @summary Copy Budgets
+ */
+export type copyBudgetsResponse201 = {
+  data: CopyBudgetsResponse
+  status: 201
+}
+
+export type copyBudgetsResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type copyBudgetsResponseSuccess = (copyBudgetsResponse201) & {
+  headers: Headers;
+};
+export type copyBudgetsResponseError = (copyBudgetsResponse422) & {
+  headers: Headers;
+};
+
+export type copyBudgetsResponse = (copyBudgetsResponseSuccess | copyBudgetsResponseError)
+
+export const getCopyBudgetsUrl = () => {
+
+
+
+
+  return `/api/v1/budgets/copy`
+}
+
+export const copyBudgets = async (copyBudgetsRequest: CopyBudgetsRequest, options?: RequestInit): Promise<copyBudgetsResponse> => {
+
+  return customFetch<copyBudgetsResponse>(getCopyBudgetsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      copyBudgetsRequest,)
+  }
+);}
+
+
+
+
+export const getCopyBudgetsMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof copyBudgets>>, TError,{data: CopyBudgetsRequest}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof copyBudgets>>, TError,{data: CopyBudgetsRequest}, TContext> => {
+
+const mutationKey = ['copyBudgets'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof copyBudgets>>, {data: CopyBudgetsRequest}> = (props) => {
+          const {data} = props ?? {};
+
+          return  copyBudgets(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CopyBudgetsMutationResult = NonNullable<Awaited<ReturnType<typeof copyBudgets>>>
+    export type CopyBudgetsMutationBody = CopyBudgetsRequest
+    export type CopyBudgetsMutationError = HTTPValidationError
+
+    /**
+ * @summary Copy Budgets
+ */
+export const useCopyBudgets = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof copyBudgets>>, TError,{data: CopyBudgetsRequest}, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof copyBudgets>>,
+        TError,
+        {data: CopyBudgetsRequest},
+        TContext
+      > => {
+      return useMutation(getCopyBudgetsMutationOptions(options), queryClient);
     }
     /**
  * @summary Put Budget

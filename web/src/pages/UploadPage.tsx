@@ -50,7 +50,7 @@ import {
   plural,
 } from "@/lib/format";
 import { useIdentityStore } from "@/lib/identity";
-import { PAGE_PADDING } from "@/lib/layout";
+import { PAGE_PADDING, tableHeaderRowClass } from "@/lib/layout";
 
 const PREVIEW_LIMIT = 5;
 const MAX_CSV_SIZE = 10 * 1024 * 1024;
@@ -269,7 +269,7 @@ function PreviewCard({ preview }: { preview: PreviewUploadResponse }) {
       <div className="hidden overflow-x-auto sm:block">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-border text-left text-muted-foreground">
+            <tr className={tableHeaderRowClass}>
               <th className="pb-2 pr-4 font-medium">Date</th>
               <th className="pb-2 pr-4 font-medium">Merchant</th>
               <th className="pb-2 pr-4 font-medium">Category</th>

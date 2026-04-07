@@ -7,6 +7,7 @@ from src.application.use_cases._shared.command_validators import assert_positive
 from src.application.use_cases.get_budget_overview import GetBudgetOverviewResult
 from src.domain.budget import HealthStatus
 from src.domain.entities.category_group_budget import CategoryGroupBudget
+from src.interface.api.schemas.reconciliation import MonthReference
 from src.interface.api.schemas.types import MoneyField
 
 
@@ -30,6 +31,18 @@ class UpdateBudgetRequest(BaseModel):
     @classmethod
     def amount_must_be_positive(cls, v: Decimal) -> Decimal:
         return assert_positive_decimal(v, "monthly_amount")
+
+
+class CopyBudgetsRequest(BaseModel):
+    source_year: int = Field(ge=2020, le=2099)
+    source_month: int = Field(ge=1, le=12)
+    target_year: int = Field(ge=2020, le=2099)
+    target_month: int = Field(ge=1, le=12)
+
+
+class CopyBudgetsResponse(BaseModel):
+    copied_count: int
+    skipped_count: int
 
 
 class BudgetResponse(BaseModel):
@@ -93,6 +106,9 @@ class BudgetOverviewResponse(BaseModel):
     total_ytd_spent: MoneyField
     budgets: list[BudgetResponse]
     spending_drift: MoneyField | None = None
+    copyable_source: MonthReference | None = None
+    next_month_has_budgets: bool = False
+    source_budgets: list[BudgetResponse] = []
 
     @classmethod
     def from_result(cls, result: GetBudgetOverviewResult) -> BudgetOverviewResponse:
@@ -143,4 +159,9 @@ class BudgetOverviewResponse(BaseModel):
             total_ytd_spent=overview.total_ytd_spent,
             budgets=[BudgetResponse.from_domain(b) for b in result.budgets],
             spending_drift=overview.spending_drift,
+            copyable_source=MonthReference.from_optional_tuple(result.copyable_source),
+            next_month_has_budgets=result.next_month_has_budgets,
+            source_budgets=[
+                BudgetResponse.from_domain(b) for b in result.source_budgets
+            ],
         )

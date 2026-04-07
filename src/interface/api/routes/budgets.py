@@ -4,6 +4,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 
 from src.application.runner import execute_use_case
+from src.application.use_cases.copy_budgets import (
+    CopyBudgetsCommand,
+    CopyBudgetsUseCase,
+)
 from src.application.use_cases.delete_budget import (
     DeleteBudgetCommand,
     DeleteBudgetUseCase,
@@ -23,6 +27,8 @@ from src.interface.api.dependencies import get_current_user
 from src.interface.api.schemas.budgets import (
     BudgetOverviewResponse,
     BudgetResponse,
+    CopyBudgetsRequest,
+    CopyBudgetsResponse,
     SaveBudgetRequest,
     UpdateBudgetRequest,
 )
@@ -53,6 +59,27 @@ async def get_budgets(
 ) -> list[BudgetResponse]:
     result = await execute_use_case(lambda uow: list_budgets(uow, current_user.id))
     return [BudgetResponse.from_domain(b) for b in result.budgets]
+
+
+@router.post("/budgets/copy", status_code=201)
+async def copy_budgets(
+    body: CopyBudgetsRequest,
+    current_user: Person = Depends(get_current_user),
+) -> CopyBudgetsResponse:
+    command = CopyBudgetsCommand(
+        source_year=body.source_year,
+        source_month=body.source_month,
+        target_year=body.target_year,
+        target_month=body.target_month,
+        person_id=current_user.id,
+    )
+    result = await execute_use_case(
+        lambda uow: CopyBudgetsUseCase().execute(command, uow)
+    )
+    return CopyBudgetsResponse(
+        copied_count=result.copied_count,
+        skipped_count=result.skipped_count,
+    )
 
 
 @router.post("/budgets", status_code=201)

@@ -18,15 +18,18 @@ import type {
 
 import type {
   BudgetOverviewResponse,
-  BudgetResponse
+  BudgetResponse,
+  CopyBudgetsResponse
 } from '../model';
 
 
-export const getGetBudgetOverviewResponseMock = (overrideResponse: Partial<Extract<BudgetOverviewResponse, object>> = {}): BudgetOverviewResponse => ({year: faker.number.int(), month: faker.number.int(), group_statuses: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({group_id: faker.string.uuid(), group_name: faker.string.alpha({length: {min: 10, max: 20}}), budget_id: faker.helpers.arrayElement([faker.string.uuid(),null,]), monthly_budget: faker.helpers.arrayElement([faker.number.float({fractionDigits: 2}),null,]), monthly_spent: faker.number.float({fractionDigits: 2}), ytd_budget: faker.helpers.arrayElement([faker.number.float({fractionDigits: 2}),null,]), ytd_spent: faker.number.float({fractionDigits: 2}), monthly_health: faker.helpers.arrayElement([faker.helpers.arrayElement(['on_track','near_limit','over_budget'] as const),null,]), ytd_health: faker.helpers.arrayElement([faker.helpers.arrayElement(['on_track','near_limit','over_budget'] as const),null,]), average_monthly_spending: faker.number.float({fractionDigits: 2}), categories: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({category: faker.string.alpha({length: {min: 10, max: 20}}), total_amount: faker.number.float({fractionDigits: 2}), transaction_count: faker.number.int(), include_personal: faker.datatype.boolean(), household_amount: faker.number.float({fractionDigits: 2}), personal_amounts: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({person_id: faker.string.uuid(), person_name: faker.string.alpha({length: {min: 10, max: 20}}), amount: faker.number.float({fractionDigits: 2})}))})), household_spending: faker.helpers.arrayElement([faker.helpers.arrayElement([faker.number.float({fractionDigits: 2}),null,]), undefined]), personal_spending: faker.helpers.arrayElement([faker.helpers.arrayElement([faker.number.float({fractionDigits: 2}),null,]), undefined])})), total_monthly_budget: faker.number.float({fractionDigits: 2}), total_monthly_spent: faker.number.float({fractionDigits: 2}), total_ytd_budget: faker.number.float({fractionDigits: 2}), total_ytd_spent: faker.number.float({fractionDigits: 2}), budgets: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({id: faker.string.uuid(), group_id: faker.string.uuid(), monthly_amount: faker.number.float({fractionDigits: 2}), year: faker.number.int(), month: faker.number.int(), person_id: faker.helpers.arrayElement([faker.helpers.arrayElement([faker.string.uuid(),null,]), undefined])})), spending_drift: faker.helpers.arrayElement([faker.helpers.arrayElement([faker.number.float({fractionDigits: 2}),null,]), undefined]), ...overrideResponse})
+export const getGetBudgetOverviewResponseMock = (overrideResponse: Partial<Extract<BudgetOverviewResponse, object>> = {}): BudgetOverviewResponse => ({year: faker.number.int(), month: faker.number.int(), group_statuses: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({group_id: faker.string.uuid(), group_name: faker.string.alpha({length: {min: 10, max: 20}}), budget_id: faker.helpers.arrayElement([faker.string.uuid(),null,]), monthly_budget: faker.helpers.arrayElement([faker.number.float({fractionDigits: 2}),null,]), monthly_spent: faker.number.float({fractionDigits: 2}), ytd_budget: faker.helpers.arrayElement([faker.number.float({fractionDigits: 2}),null,]), ytd_spent: faker.number.float({fractionDigits: 2}), monthly_health: faker.helpers.arrayElement([faker.helpers.arrayElement(['on_track','near_limit','over_budget'] as const),null,]), ytd_health: faker.helpers.arrayElement([faker.helpers.arrayElement(['on_track','near_limit','over_budget'] as const),null,]), average_monthly_spending: faker.number.float({fractionDigits: 2}), categories: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({category: faker.string.alpha({length: {min: 10, max: 20}}), total_amount: faker.number.float({fractionDigits: 2}), transaction_count: faker.number.int(), include_personal: faker.datatype.boolean(), household_amount: faker.number.float({fractionDigits: 2}), personal_amounts: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({person_id: faker.string.uuid(), person_name: faker.string.alpha({length: {min: 10, max: 20}}), amount: faker.number.float({fractionDigits: 2})}))})), household_spending: faker.helpers.arrayElement([faker.helpers.arrayElement([faker.number.float({fractionDigits: 2}),null,]), undefined]), personal_spending: faker.helpers.arrayElement([faker.helpers.arrayElement([faker.number.float({fractionDigits: 2}),null,]), undefined])})), total_monthly_budget: faker.number.float({fractionDigits: 2}), total_monthly_spent: faker.number.float({fractionDigits: 2}), total_ytd_budget: faker.number.float({fractionDigits: 2}), total_ytd_spent: faker.number.float({fractionDigits: 2}), budgets: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({id: faker.string.uuid(), group_id: faker.string.uuid(), monthly_amount: faker.number.float({fractionDigits: 2}), year: faker.number.int(), month: faker.number.int(), person_id: faker.helpers.arrayElement([faker.helpers.arrayElement([faker.string.uuid(),null,]), undefined])})), spending_drift: faker.helpers.arrayElement([faker.helpers.arrayElement([faker.number.float({fractionDigits: 2}),null,]), undefined]), copyable_source: faker.helpers.arrayElement([faker.helpers.arrayElement([{year: faker.number.int(), month: faker.number.int()},null,]), undefined]), next_month_has_budgets: faker.datatype.boolean(), source_budgets: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({id: faker.string.uuid(), group_id: faker.string.uuid(), monthly_amount: faker.number.float({fractionDigits: 2}), year: faker.number.int(), month: faker.number.int(), person_id: faker.helpers.arrayElement([faker.helpers.arrayElement([faker.string.uuid(),null,]), undefined])})), ...overrideResponse})
 
 export const getGetBudgetsResponseMock = (): BudgetResponse[] => (Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({id: faker.string.uuid(), group_id: faker.string.uuid(), monthly_amount: faker.number.float({fractionDigits: 2}), year: faker.number.int(), month: faker.number.int(), person_id: faker.helpers.arrayElement([faker.helpers.arrayElement([faker.string.uuid(),null,]), undefined])})))
 
 export const getPostBudgetResponseMock = (overrideResponse: Partial<Extract<BudgetResponse, object>> = {}): BudgetResponse => ({id: faker.string.uuid(), group_id: faker.string.uuid(), monthly_amount: faker.number.float({fractionDigits: 2}), year: faker.number.int(), month: faker.number.int(), person_id: faker.helpers.arrayElement([faker.helpers.arrayElement([faker.string.uuid(),null,]), undefined]), ...overrideResponse})
+
+export const getCopyBudgetsResponseMock = (overrideResponse: Partial<Extract<CopyBudgetsResponse, object>> = {}): CopyBudgetsResponse => ({copied_count: faker.number.int(), skipped_count: faker.number.int(), ...overrideResponse})
 
 export const getPutBudgetResponseMock = (overrideResponse: Partial<Extract<BudgetResponse, object>> = {}): BudgetResponse => ({id: faker.string.uuid(), group_id: faker.string.uuid(), monthly_amount: faker.number.float({fractionDigits: 2}), year: faker.number.int(), month: faker.number.int(), person_id: faker.helpers.arrayElement([faker.helpers.arrayElement([faker.string.uuid(),null,]), undefined]), ...overrideResponse})
 
@@ -67,6 +70,18 @@ export const getPostBudgetMockHandler = (overrideResponse?: BudgetResponse | ((i
   }, options)
 }
 
+export const getCopyBudgetsMockHandler = (overrideResponse?: CopyBudgetsResponse | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<CopyBudgetsResponse> | CopyBudgetsResponse), options?: RequestHandlerOptions) => {
+  return http.post('*/api/v1/budgets/copy', async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getCopyBudgetsResponseMock(),
+      { status: 201
+      })
+  }, options)
+}
+
 export const getPutBudgetMockHandler = (overrideResponse?: BudgetResponse | ((info: Parameters<Parameters<typeof http.put>[1]>[0]) => Promise<BudgetResponse> | BudgetResponse), options?: RequestHandlerOptions) => {
   return http.put('*/api/v1/budgets/:budgetId', async (info: Parameters<Parameters<typeof http.put>[1]>[0]) => {
 
@@ -92,6 +107,7 @@ export const getBudgetsMock = () => [
   getGetBudgetOverviewMockHandler(),
   getGetBudgetsMockHandler(),
   getPostBudgetMockHandler(),
+  getCopyBudgetsMockHandler(),
   getPutBudgetMockHandler(),
   getDeleteBudgetMockHandler()
 ]

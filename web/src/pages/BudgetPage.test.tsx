@@ -108,7 +108,7 @@ describe("BudgetPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("heading", { name: "No budgets yet" }),
+        screen.getByRole("heading", { name: "Add your first budget" }),
       ).toBeInTheDocument();
     });
   });
@@ -244,9 +244,24 @@ describe("BudgetPage", () => {
 
     fireEvent.click(screen.getByText("Remove budget"));
 
-    expect(
-      screen.getByText("Remove Food & Dining budget?"),
-    ).toBeInTheDocument();
+    // Month comes from useMonthYear() (current date), not the response fixture
+    const now = new Date();
+    const monthNames = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ];
+    const expected = `Remove Food & Dining budget for ${monthNames[now.getMonth()]} ${now.getFullYear()}?`;
+    expect(screen.getByText(expected)).toBeInTheDocument();
     expect(
       screen.getByText("Monthly tracking for this group will stop."),
     ).toBeInTheDocument();

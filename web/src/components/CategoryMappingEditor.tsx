@@ -13,10 +13,10 @@ import type { CategoryGroupResponse } from "@/api/generated/model";
 import { BottomSheet } from "@/components/BottomSheet";
 import { Button } from "@/components/Button";
 import { Combobox } from "@/components/Combobox";
+import { Dialog } from "@/components/Dialog";
 import { ExpandChevron } from "@/components/ExpandChevron";
 import { PageError, PageLoading } from "@/components/PageStates";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
-import { useDialogSync } from "@/hooks/useDialogSync";
 import { useGroupOptions, useInvalidateCategories } from "@/lib/categories";
 import { getCategoryGroupIcon, ICON_OPTIONS } from "@/lib/category-icons";
 import { baseInputClass } from "@/lib/input-styles";
@@ -78,7 +78,6 @@ function GroupCard({
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [moveToGroupId, setMoveToGroupId] = useState<string>("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const dialogRef = useDialogSync(confirmDelete);
 
   // Lazy-fetch budgets only when delete dialog is open
   const { data: budgetsResponse } = useGetBudgets({
@@ -298,11 +297,11 @@ function GroupCard({
       />
 
       {/* Delete confirmation dialog */}
-      <dialog
-        ref={dialogRef}
-        aria-labelledby={`delete-${group.id}-title`}
+      <Dialog
+        open={confirmDelete}
         onClose={handleCancelDelete}
-        className="mx-4 w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-lg backdrop:bg-black/40"
+        size="sm"
+        aria-labelledby={`delete-${group.id}-title`}
       >
         <h3
           id={`delete-${group.id}-title`}
@@ -368,7 +367,7 @@ function GroupCard({
             {hasCategories ? "Move & Remove" : "Remove Group"}
           </Button>
         </div>
-      </dialog>
+      </Dialog>
     </>
   );
 }

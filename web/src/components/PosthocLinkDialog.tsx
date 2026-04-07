@@ -11,9 +11,9 @@ import {
 } from "@/api/generated/settlements/settlements";
 import { Button } from "@/components/Button";
 import { CandidateChecklist } from "@/components/CandidateChecklist";
+import { Dialog, DialogFooter, DialogHeader } from "@/components/Dialog";
 import { InlineError } from "@/components/InlineError";
 import { PersonBadge } from "@/components/PersonBadge";
-import { useDialogSync } from "@/hooks/useDialogSync";
 import { formatCurrency } from "@/lib/format";
 
 function LinkedRow({
@@ -85,7 +85,6 @@ export function PosthocLinkDialog({
   onSuccess: () => void;
   latestTransactionMonth: MonthReference | null;
 }) {
-  const dialogRef = useDialogSync(open);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isLinking, setIsLinking] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
@@ -123,45 +122,28 @@ export function PosthocLinkDialog({
   const linked = settlement.linked_transactions ?? [];
 
   return (
-    <dialog
-      ref={dialogRef}
-      onClose={onClose}
-      className="mx-4 w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-lg backdrop:bg-black/40"
-    >
-      <div className="flex items-start justify-between">
-        <div>
-          <h2 className="text-lg font-medium text-foreground">
-            Link bank transactions
-          </h2>
-          <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
-            <PersonBadge
-              name={getPersonName(settlement.from_person_id)}
-              accentColor={getPersonColor(settlement.from_person_id)}
-              size="xs"
-            />
-            <span>paid</span>
-            <PersonBadge
-              name={getPersonName(settlement.to_person_id)}
-              accentColor={getPersonColor(settlement.to_person_id)}
-              size="xs"
-            />
-            <span className="tabular-nums">
-              {formatCurrency(settlement.amount)}
-            </span>
-          </p>
-          <p className="mt-2 text-xs text-muted-foreground/70">
-            Linked transactions are excluded from spending totals.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="rounded-md p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <X className="size-4" />
-        </button>
-      </div>
+    <Dialog open={open} onClose={onClose}>
+      <DialogHeader title="Link bank transactions" onClose={onClose}>
+        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+          <PersonBadge
+            name={getPersonName(settlement.from_person_id)}
+            accentColor={getPersonColor(settlement.from_person_id)}
+            size="xs"
+          />
+          <span>paid</span>
+          <PersonBadge
+            name={getPersonName(settlement.to_person_id)}
+            accentColor={getPersonColor(settlement.to_person_id)}
+            size="xs"
+          />
+          <span className="tabular-nums">
+            {formatCurrency(settlement.amount)}
+          </span>
+        </p>
+        <p className="mt-2 text-xs text-muted-foreground/70">
+          Linked transactions are excluded from spending totals.
+        </p>
+      </DialogHeader>
 
       {linked.length > 0 && (
         <div className="mt-4">
@@ -201,7 +183,7 @@ export function PosthocLinkDialog({
         </div>
       )}
 
-      <div className="mt-5 flex items-center justify-end gap-3">
+      <DialogFooter>
         <Button variant="secondary" size="sm" onClick={onClose}>
           Close
         </Button>
@@ -217,7 +199,7 @@ export function PosthocLinkDialog({
             {selectedIds.length === 1 ? "transaction" : "transactions"}
           </Button>
         )}
-      </div>
-    </dialog>
+      </DialogFooter>
+    </Dialog>
   );
 }

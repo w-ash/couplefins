@@ -6,6 +6,7 @@
  */
 import type { BudgetResponse } from './budgetResponse';
 import type { GroupBudgetStatusResponse } from './groupBudgetStatusResponse';
+import type { MonthReference } from './monthReference';
 
 export interface BudgetOverviewResponse {
   year: number;
@@ -17,4 +18,7 @@ export interface BudgetOverviewResponse {
   total_ytd_spent: number;
   budgets: BudgetResponse[];
   spending_drift?: number | null;
+  copyable_source?: MonthReference | null;
+  next_month_has_budgets?: boolean;
+  source_budgets?: BudgetResponse[];
 }

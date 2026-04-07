@@ -6,7 +6,11 @@ import { PageHeader } from "@/components/PageHeader";
 import { PersonAccountSettings } from "@/components/PersonAccountSettings";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useIdentityStore } from "@/lib/identity";
-import { PAGE_PADDING } from "@/lib/layout";
+import {
+  PAGE_PADDING,
+  sectionDescriptionClass,
+  sectionHeadingClass,
+} from "@/lib/layout";
 import type { Theme } from "@/lib/theme";
 
 export function AccountPage() {
@@ -29,13 +33,10 @@ export function AccountPage() {
       <div className="space-y-6">
         {/* Appearance */}
         <Card as="section" aria-labelledby="account-appearance">
-          <h2
-            id="account-appearance"
-            className="mb-1 font-medium text-lg text-foreground"
-          >
+          <h2 id="account-appearance" className={sectionHeadingClass}>
             Appearance
           </h2>
-          <p className="mb-4 text-xs text-muted-foreground">
+          <p className={sectionDescriptionClass}>
             Control how the app looks on your device
           </p>
           <div className="flex items-center justify-between">
@@ -51,13 +52,10 @@ export function AccountPage() {
 
         {/* Security */}
         <Card as="section" aria-labelledby="account-security">
-          <h2
-            id="account-security"
-            className="mb-1 font-medium text-lg text-foreground"
-          >
+          <h2 id="account-security" className={sectionHeadingClass}>
             Security
           </h2>
-          <p className="mb-4 text-xs text-muted-foreground">
+          <p className={sectionDescriptionClass}>
             Manage passwords for you and your partner
           </p>
           <AccountSettings />
@@ -65,13 +63,10 @@ export function AccountPage() {
 
         {/* Export account */}
         <Card as="section" aria-labelledby="account-export">
-          <h2
-            id="account-export"
-            className="mb-1 font-medium text-lg text-foreground"
-          >
+          <h2 id="account-export" className={sectionHeadingClass}>
             Monarch Export
           </h2>
-          <p className="mb-4 text-xs text-muted-foreground">
+          <p className={sectionDescriptionClass}>
             Account name used when generating adjustment CSVs for Monarch import
           </p>
           <PersonAccountSettings filterToPersonId={personId ?? undefined} />

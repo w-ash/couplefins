@@ -260,3 +260,130 @@ async def test_default_scope_backward_compatible(client: AsyncClient) -> None:
     for status in data["group_statuses"]:
         assert status["household_spending"] is None
         assert status["personal_spending"] is None
+
+
+async def test_copy_budgets_end_to_end(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
+    group_resp = await client.post(
+        "/api/v1/category-groups", json={"name": "Food & Dining"}, cookies=cookies
+    )
+    group_id = group_resp.json()["id"]
+
+    await client.post(
+        "/api/v1/budgets",
+        json={
+            "group_id": group_id,
+            "monthly_amount": 500.0,
+            "year": 2026,
+            "month": 1,
+        },
+        cookies=cookies,
+    )
+
+    response = await client.post(
+        "/api/v1/budgets/copy",
+        json={
+            "source_year": 2026,
+            "source_month": 1,
+            "target_year": 2026,
+            "target_month": 2,
+        },
+        cookies=cookies,
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["copied_count"] == 1
+    assert data["skipped_count"] == 0
+
+    overview = await client.get(
+        "/api/v1/budgets/overview?year=2026&month=2", cookies=cookies
+    )
+    feb_budgets = overview.json()["budgets"]
+    assert len(feb_budgets) == 1
+    assert feb_budgets[0]["group_id"] == group_id
+    assert feb_budgets[0]["monthly_amount"] == pytest.approx(500.0)
+
+
+async def test_copy_skips_existing_targets(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
+    group_resp = await client.post(
+        "/api/v1/category-groups", json={"name": "Travel"}, cookies=cookies
+    )
+    group_id = group_resp.json()["id"]
+
+    # Create budget in Jan and Feb for same group
+    for month in (1, 2):
+        await client.post(
+            "/api/v1/budgets",
+            json={
+                "group_id": group_id,
+                "monthly_amount": 300.0,
+                "year": 2026,
+                "month": month,
+            },
+            cookies=cookies,
+        )
+
+    response = await client.post(
+        "/api/v1/budgets/copy",
+        json={
+            "source_year": 2026,
+            "source_month": 1,
+            "target_year": 2026,
+            "target_month": 2,
+        },
+        cookies=cookies,
+    )
+    assert response.status_code == 201
+    assert response.json()["copied_count"] == 0
+    assert response.json()["skipped_count"] == 1
+
+
+async def test_copy_to_finalized_month_returns_409(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
+
+    await client.post(
+        "/api/v1/reconciliation/finalize",
+        json={"year": 2026, "month": 2},
+        cookies=cookies,
+    )
+
+    response = await client.post(
+        "/api/v1/budgets/copy",
+        json={
+            "source_year": 2026,
+            "source_month": 1,
+            "target_year": 2026,
+            "target_month": 2,
+        },
+        cookies=cookies,
+    )
+    assert response.status_code == 409
+
+
+async def test_overview_includes_copyable_source(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
+    group_resp = await client.post(
+        "/api/v1/category-groups", json={"name": "Lifestyle"}, cookies=cookies
+    )
+    group_id = group_resp.json()["id"]
+
+    await client.post(
+        "/api/v1/budgets",
+        json={
+            "group_id": group_id,
+            "monthly_amount": 200.0,
+            "year": 2026,
+            "month": 1,
+        },
+        cookies=cookies,
+    )
+
+    response = await client.get(
+        "/api/v1/budgets/overview?year=2026&month=2", cookies=cookies
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["copyable_source"] == {"year": 2026, "month": 1}
+    assert data["next_month_has_budgets"] is False
+    assert len(data["source_budgets"]) == 1

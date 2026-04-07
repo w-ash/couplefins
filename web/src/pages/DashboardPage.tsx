@@ -39,7 +39,12 @@ import {
 } from "@/lib/format";
 import { getHealthStyle } from "@/lib/health-styles";
 import { actionLinkClass } from "@/lib/input-styles";
-import { PAGE_PADDING } from "@/lib/layout";
+import {
+  PAGE_PADDING,
+  sectionDescriptionClass,
+  sectionHeadingClass,
+  tableHeaderRowClass,
+} from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
 
 // --- Stats ---
@@ -332,15 +337,13 @@ function HouseholdMonthHistory({
 
   return (
     <Card>
-      <h2 className="mb-1 font-medium text-lg text-foreground">
-        Month History
-      </h2>
-      <p className="mb-4 text-xs text-muted-foreground">
+      <h2 className={sectionHeadingClass}>Month History</h2>
+      <p className={sectionDescriptionClass}>
         Track spending and settlement status across months
       </p>
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-border text-left text-muted-foreground">
+          <tr className={tableHeaderRowClass}>
             <th className="pb-2 pr-4 font-medium">Month</th>
             <th className="pb-2 pr-4 font-medium">Settlement</th>
             <th className="hidden pb-2 text-right font-medium sm:table-cell">
@@ -420,15 +423,11 @@ function PersonalMonthHistory({
 
   return (
     <Card>
-      <h2 className="mb-1 font-medium text-lg text-foreground">
-        Month History
-      </h2>
-      <p className="mb-4 text-xs text-muted-foreground">
-        Your spending across months
-      </p>
+      <h2 className={sectionHeadingClass}>Month History</h2>
+      <p className={sectionDescriptionClass}>Your spending across months</p>
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-border text-left text-muted-foreground">
+          <tr className={tableHeaderRowClass}>
             <th className="pb-2 pr-4 font-medium">Month</th>
             <th className="pb-2 pr-4 text-right font-medium">My Spending</th>
             <th className="hidden pb-2 text-right font-medium sm:table-cell">

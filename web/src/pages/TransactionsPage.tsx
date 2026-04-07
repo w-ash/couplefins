@@ -76,7 +76,7 @@ import {
   plural,
 } from "@/lib/format";
 
-import { PAGE_PADDING } from "@/lib/layout";
+import { PAGE_PADDING, tableHeaderRowClass } from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
 import type { SortField, SortState } from "@/lib/transaction-filters";
 import {
@@ -331,7 +331,7 @@ function TransactionTable({
       <div className="overflow-x-auto">
         <table className="w-full border-spacing-0 text-sm [&_td:first-child]:pl-4 [&_td:last-child]:pr-4 [&_th:first-child]:pl-4 [&_th:last-child]:pr-4">
           <thead>
-            <tr className="border-b border-border text-left text-muted-foreground">
+            <tr className={tableHeaderRowClass}>
               {bulkMode && (
                 <th className="w-8 pb-2 pr-2 align-middle">
                   <div className={checkboxTouchTarget}>

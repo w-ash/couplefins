@@ -1,8 +1,17 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, CheckCircle2, Info, PieChart, Plus } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  CopyPlus,
+  Info,
+  PieChart,
+  Plus,
+} from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
+import { Link } from "react-router";
 import {
   getGetBudgetOverviewQueryKey,
+  useCopyBudgets,
   useDeleteBudget,
   useGetBudgetOverview,
   usePostBudget,
@@ -15,7 +24,9 @@ import type {
 } from "@/api/generated/model";
 import { useGetPersons } from "@/api/generated/persons/persons";
 import { Button } from "@/components/Button";
+import { Card } from "@/components/Card";
 import { Combobox, type ComboboxOption } from "@/components/Combobox";
+import { Dialog } from "@/components/Dialog";
 import { ExpandChevron } from "@/components/ExpandChevron";
 import { MonthPicker } from "@/components/MonthPicker";
 import { PageHeader } from "@/components/PageHeader";
@@ -23,7 +34,6 @@ import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
 import { ProgressBar } from "@/components/ProgressBar";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { StatsGrid } from "@/components/StatsGrid";
-import { useDialogSync } from "@/hooks/useDialogSync";
 import {
   type BudgetScope,
   type SortMode,
@@ -32,11 +42,22 @@ import {
 } from "@/lib/budget-filters";
 import { useGroupIconMap } from "@/lib/categories";
 import { getCategoryGroupIcon } from "@/lib/category-icons";
-import { formatCurrency, useMonthYear } from "@/lib/format";
+import { stepMonth } from "@/lib/date-range";
+import {
+  currentMonth,
+  currentYear,
+  formatCurrency,
+  MONTHS,
+  useMonthYear,
+} from "@/lib/format";
 
 import { getHealthStyle } from "@/lib/health-styles";
 import { baseInputClass } from "@/lib/input-styles";
-import { PAGE_PADDING } from "@/lib/layout";
+import {
+  PAGE_PADDING,
+  sectionDescriptionClass,
+  sectionHeadingClass,
+} from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
 import { getPersonBarColor } from "@/types/person";
 
@@ -151,6 +172,9 @@ function BudgetGroupRow({
   viewMode,
   breakdown,
   icon,
+  year,
+  month,
+  sourceBudgetAmount,
   onUpdate,
   onDelete,
   budgetQueryKey,
@@ -160,6 +184,9 @@ function BudgetGroupRow({
   viewMode: ViewMode;
   breakdown: { household: number; personal: number } | null;
   icon: string | null;
+  year: number;
+  month: number;
+  sourceBudgetAmount: number | null;
   onUpdate: (budgetId: string, amount: number) => void;
   onDelete: (budgetId: string) => void;
   budgetQueryKey: readonly unknown[];
@@ -170,7 +197,6 @@ function BudgetGroupRow({
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const dialogRef = useDialogSync(confirmDelete);
 
   const patchCategory = usePatchCategory({
     mutation: {
@@ -404,6 +430,11 @@ function BudgetGroupRow({
                       >
                         Cancel
                       </button>
+                      {sourceBudgetAmount != null && (
+                        <span className="text-xs text-muted-foreground">
+                          Last: {formatCurrency(sourceBudgetAmount)}
+                        </span>
+                      )}
                     </form>
                   ) : (
                     <Button
@@ -442,13 +473,17 @@ function BudgetGroupRow({
 
       {/* Delete confirmation dialog */}
       {hasBudget && (
-        <dialog
-          ref={dialogRef}
+        <Dialog
+          open={confirmDelete}
           onClose={() => setConfirmDelete(false)}
-          className="mx-4 w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-lg backdrop:bg-black/40"
+          size="sm"
+          aria-labelledby={`delete-budget-${status.group_id}-title`}
         >
-          <h3 className="font-medium text-foreground">
-            Remove {status.group_name} budget?
+          <h3
+            id={`delete-budget-${status.group_id}-title`}
+            className="font-medium text-foreground"
+          >
+            Remove {status.group_name} budget for {MONTHS[month - 1]} {year}?
           </h3>
           <p className="mt-2 text-sm text-muted-foreground">
             Monthly tracking for this group will stop.
@@ -476,7 +511,7 @@ function BudgetGroupRow({
               Remove Budget
             </Button>
           </div>
-        </dialog>
+        </Dialog>
       )}
     </>
   );
@@ -503,6 +538,8 @@ function AddBudgetForm({
   );
 
   const selectedGroup = unbudgetedGroups.find((g) => g.group_id === groupId);
+  const hasPersonalCategories =
+    selectedGroup?.categories.some((c) => c.include_personal) ?? false;
 
   if (unbudgetedGroups.length === 0) return null;
 
@@ -588,9 +625,21 @@ function AddBudgetForm({
           </button>
         </div>
         {selectedGroup && selectedGroup.average_monthly_spending > 0 && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Average monthly spending:{" "}
-            {formatCurrency(selectedGroup.average_monthly_spending)}
+          <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span>
+              Avg: {formatCurrency(selectedGroup.average_monthly_spending)}
+              {hasPersonalCategories && " (incl. personal)"}
+            </span>
+            {hasPersonalCategories && (
+              <button
+                type="button"
+                className="rounded-md p-0.5 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Personal spending is included in this budget's totals because one or more categories have 'Include personal' enabled"
+                title="Personal spending is included in this budget's totals because one or more categories have 'Include personal' enabled"
+              >
+                <Info className="size-3.5" />
+              </button>
+            )}
           </p>
         )}
       </form>
@@ -696,6 +745,20 @@ export function BudgetPage() {
     [deleteMutation.mutate],
   );
 
+  const copyMutation = useCopyBudgets({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    },
+  });
+
+  const sourceBudgetMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const b of data?.source_budgets ?? []) {
+      map.set(b.group_id, b.monthly_amount);
+    }
+    return map;
+  }, [data?.source_budgets]);
+
   const { budgetedGroups, unbudgetedGroups, allGroupsForAdd } = useMemo(() => {
     if (!data)
       return { budgetedGroups: [], unbudgetedGroups: [], allGroupsForAdd: [] };
@@ -732,7 +795,24 @@ export function BudgetPage() {
   return (
     <div className={`mx-auto max-w-5xl ${PAGE_PADDING}`}>
       <PageHeader icon={<PieChart className="size-6" />} title="Budget">
-        <MonthPicker />
+        <div className="flex items-center gap-3">
+          {data &&
+            data.next_month_has_budgets === false &&
+            (year < currentYear() ||
+              (year === currentYear() && month < currentMonth())) &&
+            (() => {
+              const [ny, nm] = stepMonth(year, month, 1);
+              return (
+                <Link
+                  to={`/budget?year=${ny}&month=${nm}`}
+                  className="text-sm text-primary hover:underline"
+                >
+                  Set up {MONTHS[nm - 1]}
+                </Link>
+              );
+            })()}
+          <MonthPicker />
+        </div>
       </PageHeader>
 
       {/* Controls */}
@@ -786,15 +866,90 @@ export function BudgetPage() {
           />
 
           {data.group_statuses.length === 0 && data.budgets.length === 0 ? (
-            <PageEmpty
-              icon={<PieChart />}
-              heading="No budgets yet"
-              description={
-                scope === "personal"
-                  ? "Add a budget to start tracking your personal spending."
-                  : "Add a budget to start tracking household spending."
-              }
-            />
+            <div className="space-y-6">
+              {data.copyable_source ? (
+                (() => {
+                  const { year: srcYear, month: srcMonth } =
+                    data.copyable_source;
+                  return (
+                    <Card className="flex flex-col items-center py-8 text-center">
+                      <CopyPlus className="size-10 text-muted-foreground" />
+                      <h2 className="mt-4 text-lg font-medium text-foreground">
+                        Copy budgets from {MONTHS[srcMonth - 1]} {srcYear}
+                      </h2>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Start with your previous amounts and adjust from there
+                      </p>
+                      <div className="mt-4">
+                        <Button
+                          onClick={() =>
+                            copyMutation.mutate({
+                              data: {
+                                source_year: srcYear,
+                                source_month: srcMonth,
+                                target_year: year,
+                                target_month: month,
+                              },
+                            })
+                          }
+                          loading={copyMutation.isPending}
+                          loadingText="Copying..."
+                          icon={<CopyPlus className="size-4" />}
+                        >
+                          Copy budgets
+                        </Button>
+                      </div>
+                      {copyMutation.isError && (
+                        <p className="mt-3 text-sm text-destructive">
+                          {copyMutation.error instanceof Error
+                            ? copyMutation.error.message
+                            : "Failed to copy budgets"}
+                        </p>
+                      )}
+                    </Card>
+                  );
+                })()
+              ) : (
+                <PageEmpty
+                  icon={<PieChart />}
+                  heading="Add your first budget"
+                  description={
+                    scope === "personal"
+                      ? "Use the form above to start tracking your personal spending."
+                      : "Use the form above to start tracking household spending."
+                  }
+                />
+              )}
+
+              {unbudgetedGroups.length > 0 && (
+                <section>
+                  <h2 className={sectionHeadingClass}>Spending this month</h2>
+                  <p className={sectionDescriptionClass}>
+                    Context for setting your budget amounts
+                  </p>
+                  <div className="space-y-3">
+                    {unbudgetedGroups.map((status) => (
+                      <BudgetGroupRow
+                        key={status.group_id}
+                        status={status}
+                        viewMode={viewMode}
+                        breakdown={toBreakdown(status)}
+                        icon={groupIconMap.get(status.group_id) ?? null}
+                        year={year}
+                        month={month}
+                        sourceBudgetAmount={
+                          sourceBudgetMap.get(status.group_id) ?? null
+                        }
+                        onUpdate={handleUpdate}
+                        onDelete={handleDelete}
+                        budgetQueryKey={queryKey}
+                        getPersonIndex={getPersonIndex}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
           ) : (
             <>
               <SummaryStats data={data} viewMode={viewMode} />
@@ -809,6 +964,11 @@ export function BudgetPage() {
                       viewMode={viewMode}
                       breakdown={toBreakdown(status)}
                       icon={groupIconMap.get(status.group_id) ?? null}
+                      year={year}
+                      month={month}
+                      sourceBudgetAmount={
+                        sourceBudgetMap.get(status.group_id) ?? null
+                      }
                       onUpdate={handleUpdate}
                       onDelete={handleDelete}
                       budgetQueryKey={queryKey}
@@ -821,10 +981,10 @@ export function BudgetPage() {
               {/* Unbudgeted groups with spending */}
               {unbudgetedGroups.length > 0 && (
                 <section>
-                  <h2 className="mb-1 font-medium text-lg text-foreground">
+                  <h2 className={sectionHeadingClass}>
                     Spending without a budget
                   </h2>
-                  <p className="mb-4 text-xs text-muted-foreground">
+                  <p className={sectionDescriptionClass}>
                     Groups with spending but no monthly target set
                   </p>
                   <div className="space-y-3">
@@ -835,6 +995,11 @@ export function BudgetPage() {
                         viewMode={viewMode}
                         breakdown={toBreakdown(status)}
                         icon={groupIconMap.get(status.group_id) ?? null}
+                        year={year}
+                        month={month}
+                        sourceBudgetAmount={
+                          sourceBudgetMap.get(status.group_id) ?? null
+                        }
                         onUpdate={handleUpdate}
                         onDelete={handleDelete}
                         budgetQueryKey={queryKey}
