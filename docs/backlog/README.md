@@ -148,8 +148,8 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.3.5 | Graceful degradation, zero-tolerance type safety, error handling split | Completed (2026-04-06) | M |
 | v1.3.6 | UI component library DRY — cn() utility, InlineSuccess, SectionHeader, heroCardClass, Card typing fix | Completed (2026-04-07) | S |
 | v1.4.0 | Edit attribution — `edited_by_person_id` on TransactionEdit, threaded through all edit use cases | Completed (2026-04-07) | S |
-| v1.4.1 | Import provenance — enriched edit history endpoint with upload-derived import event | Not started | S |
-| v1.4.2 | Transaction history timeline — vertical timeline UI with import anchor + person-attributed edits | Not started | M |
+| v1.4.1 | Import provenance — enriched edit history endpoint with upload-derived import event | Completed (2026-04-08) | S |
+| v1.4.2 | Transaction history timeline — vertical timeline UI with import anchor + person-attributed edits | Completed (2026-04-08) | M |
 
 ## Infrastructure Readiness
 

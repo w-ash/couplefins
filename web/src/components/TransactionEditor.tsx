@@ -1,17 +1,15 @@
-import { Clock } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
-  TransactionEditResponse,
   TransactionResponse,
   UpdateTransactionRequest,
 } from "@/api/generated/model";
-import { useGetTransactionEdits } from "@/api/generated/transactions/transactions";
 import { Button } from "@/components/Button";
 import type { ComboboxOption } from "@/components/Combobox";
 import { Combobox } from "@/components/Combobox";
 import { InlineError } from "@/components/InlineError";
 import { PercentInput } from "@/components/PercentInput";
 import { SegmentedControl } from "@/components/SegmentedControl";
+import { TransactionEditHistory } from "@/components/TransactionEditHistory";
 import { cn } from "@/lib/cn";
 import {
   computeShares,
@@ -28,69 +26,10 @@ interface TransactionEditorProps {
   otherName: string;
   categoryOptions: ComboboxOption[];
   tagOptions: ComboboxOption[];
+  personNames: Map<string, string>;
   saving?: boolean;
   onSave: (fields: UpdateTransactionRequest) => void;
   onCancel: () => void;
-}
-
-const editDateFmt = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-});
-
-const fieldLabels: Record<string, string> = {
-  date: "Date",
-  amount: "Amount",
-  category: "Category",
-  notes: "Notes",
-  tags: "Tags",
-  payer_percentage: "Split",
-  household: "Type",
-  is_excluded: "Excluded",
-};
-
-function formatEditValue(fieldName: string, value: string): string {
-  if (fieldName === "payer_percentage") return value ? `${value}%` : "—";
-  if (fieldName === "household")
-    return value === "true" ? "Household" : "Personal";
-  if (fieldName === "is_excluded") return value === "true" ? "Yes" : "No";
-  if (fieldName === "date" && value) return formatDate(value);
-  if (fieldName === "amount" && value) return formatCurrency(Number(value));
-  return value || "—";
-}
-
-function EditHistory({ transactionId }: { transactionId: string }) {
-  const { data: response } = useGetTransactionEdits(transactionId);
-  const edits = (response?.status === 200 ? response.data.edits : null) ?? [];
-  if (edits.length === 0) return null;
-
-  return (
-    <div className="mt-3 border-t border-border-muted pt-3">
-      <p className="mb-1.5 flex items-center gap-1 text-sm font-medium text-muted-foreground">
-        <Clock className="size-3" />
-        Edit History
-      </p>
-      <div className="space-y-1.5">
-        {edits.map((edit: TransactionEditResponse) => (
-          <p key={edit.id} className="text-xs text-muted-foreground">
-            <span className="tabular-nums">
-              {editDateFmt.format(new Date(edit.edited_at))}
-            </span>
-            {" · "}
-            <span className="text-foreground">
-              {fieldLabels[edit.field_name] ?? edit.field_name}
-            </span>
-            {": "}
-            {formatEditValue(edit.field_name, edit.old_value)}
-            {" → "}
-            {formatEditValue(edit.field_name, edit.new_value)}
-          </p>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 export function TransactionEditor({
@@ -99,6 +38,7 @@ export function TransactionEditor({
   otherName,
   categoryOptions,
   tagOptions,
+  personNames,
   saving = false,
   onSave,
   onCancel,
@@ -356,7 +296,7 @@ export function TransactionEditor({
         </div>
       </div>
 
-      <EditHistory transactionId={tx.id} />
+      <TransactionEditHistory transactionId={tx.id} personNames={personNames} />
     </form>
   );
 }

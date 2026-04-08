@@ -4,8 +4,10 @@
  * Couplefins
  * OpenAPI spec version: 0.1.0
  */
+import type { ImportEventResponse } from './importEventResponse';
 import type { TransactionEditResponse } from './transactionEditResponse';
 
 export interface TransactionEditHistoryResponse {
+  import_event: ImportEventResponse | null;
   edits: TransactionEditResponse[];
 }

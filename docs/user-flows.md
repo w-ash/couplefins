@@ -188,6 +188,13 @@ Making sure the data is right before settling. This is solo prep work — each p
 - Given I expand a flagged transaction, then I see a "Mark Discussed" button that removes the tag in one click
 - Given I mark a transaction as discussed, then the icon disappears and the discuss count decrements
 
+**US-REVIEW-11** (v1.4.x): As a partner, I want to see the full lifecycle of a transaction — when it was imported and by whom, plus any field changes — so I can trust the data during our together session.
+
+- Given I expand a transaction that has never been edited, then I see "Imported by {name} on {date}" as the only history entry
+- Given I expand a transaction that has been edited, then I see the import event at the bottom and edits above it, each showing who changed what and when
+- Given an edit was made before v1.4.0 (no person tracking), then I see the edit with date and change details but no person name
+- Given a transaction whose CSV was re-uploaded, then the import event shows the date of the most recent upload, not the original
+
 ---
 
 ### Understanding Where We Stand

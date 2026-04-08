@@ -30,6 +30,13 @@ const dateFmt = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
 });
 
+const dateTimeFmt = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
 const currencyFmt = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -37,6 +44,10 @@ const currencyFmt = new Intl.NumberFormat("en-US", {
 
 export function formatDate(dateStr: string): string {
   return dateFmt.format(new Date(`${dateStr}T00:00:00`));
+}
+
+export function formatDateTime(isoString: string): string {
+  return dateTimeFmt.format(new Date(isoString));
 }
 
 export function formatCurrency(amount: number): string {

@@ -29,6 +29,7 @@ from src.interface.api.schemas.transactions import (
     BulkModifyTagsResponse,
     BulkUpdateRequest,
     BulkUpdateResponse,
+    ImportEventResponse,
     TransactionEditHistoryResponse,
     TransactionEditResponse,
     UpdateSplitsRequest,
@@ -159,5 +160,8 @@ async def get_transaction_edits(
         lambda uow: GetTransactionEditsUseCase().execute(command, uow)
     )
     return TransactionEditHistoryResponse(
+        import_event=ImportEventResponse.model_validate(result.import_event)
+        if result.import_event
+        else None,
         edits=[TransactionEditResponse.model_validate(e) for e in result.edits],
     )

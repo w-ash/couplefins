@@ -72,7 +72,15 @@ class TransactionEditResponse(BaseModel):
     edited_by_person_id: UUID | None
 
 
+class ImportEventResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
+    person_id: UUID
+    imported_at: datetime.datetime
+
+
 class TransactionEditHistoryResponse(BaseModel):
+    import_event: ImportEventResponse | None
     edits: list[TransactionEditResponse]
 
 

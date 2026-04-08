@@ -59,6 +59,18 @@ HealthResponse.schema_ok
 HealthResponse.database_host
 HealthResponse.database_mode
 
+# --- Domain value objects: attrs fields accessed by callers ---
+
+from src.domain.entities.import_event import ImportEvent
+
+ImportEvent.imported_at  # accessed by route handler + tests
+
+# --- Pydantic schema fields: serialized to JSON ---
+
+from src.interface.api.schemas.transactions import ImportEventResponse
+
+ImportEventResponse.imported_at  # serialized to JSON in GET /transactions/{id}/edits
+
 # --- Domain functions: tested + public API, not yet wired into a use case ---
 
 from src.domain.export.adjustments import assert_adjustments_zero_sum

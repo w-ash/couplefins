@@ -559,6 +559,7 @@ function TransactionRow({
                 otherName={otherName}
                 categoryOptions={categoryOptions}
                 tagOptions={tagOptions}
+                personNames={personNames}
                 saving={isSaving}
                 onSave={onTransactionUpdate}
                 onCancel={onCancel}
