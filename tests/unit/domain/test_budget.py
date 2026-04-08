@@ -3,7 +3,6 @@ from decimal import Decimal
 from uuid import UUID
 
 from src.domain.budget import (
-    _compute_ytd_budget,
     _index_month_budgets,
     _is_budget_relevant,
     _is_personal_budget_relevant,
@@ -37,61 +36,6 @@ def test_index_month_budgets_missing_group() -> None:
     b = make_category_group_budget(group_id=other)
     index = _index_month_budgets([b])
     assert gid not in index
-
-
-# --- _compute_ytd_budget ---
-
-
-def test_ytd_sums_monthly_amounts() -> None:
-    gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
-    budgets = [
-        make_category_group_budget(
-            group_id=gid, year=2026, month=1, monthly_amount=Decimal(500)
-        ),
-        make_category_group_budget(
-            group_id=gid, year=2026, month=2, monthly_amount=Decimal(500)
-        ),
-        make_category_group_budget(
-            group_id=gid, year=2026, month=3, monthly_amount=Decimal(600)
-        ),
-    ]
-    result = _compute_ytd_budget(budgets, gid, 3)
-    assert result == Decimal(1600)
-
-
-def test_ytd_with_gap_month_contributes_zero() -> None:
-    gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
-    budgets = [
-        make_category_group_budget(
-            group_id=gid, year=2026, month=1, monthly_amount=Decimal(500)
-        ),
-        make_category_group_budget(
-            group_id=gid, year=2026, month=3, monthly_amount=Decimal(600)
-        ),
-    ]
-    # Month 2 has no budget, contributes $0
-    result = _compute_ytd_budget(budgets, gid, 3)
-    assert result == Decimal(1100)
-
-
-def test_ytd_no_budgets_returns_none() -> None:
-    gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
-    result = _compute_ytd_budget([], gid, 6)
-    assert result is None
-
-
-def test_ytd_excludes_future_months() -> None:
-    gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
-    budgets = [
-        make_category_group_budget(
-            group_id=gid, year=2026, month=1, monthly_amount=Decimal(500)
-        ),
-        make_category_group_budget(
-            group_id=gid, year=2026, month=4, monthly_amount=Decimal(700)
-        ),
-    ]
-    result = _compute_ytd_budget(budgets, gid, 2)
-    assert result == Decimal(500)
 
 
 def test_same_group_different_months_no_contamination() -> None:

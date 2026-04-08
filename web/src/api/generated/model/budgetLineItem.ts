@@ -7,5 +7,6 @@
 
 export interface BudgetLineItem {
   group_id: string;
+  month: number;
   monthly_budget: number;
 }

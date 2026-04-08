@@ -35,6 +35,7 @@ class CategoryGroupBudgetStatus:
     ytd_health: HealthStatus | None
     average_monthly_spending: Decimal
     categories: list[CategoryBreakdown]
+    budgeted_months: int
     household_spending: Decimal | None = None
     personal_spending: Decimal | None = None
 
@@ -134,17 +135,6 @@ def _index_month_budgets(
     return {b.group_id: b for b in month_budgets}
 
 
-def _compute_ytd_budget(
-    year_budgets: list[CategoryGroupBudget], group_id: UUID, through_month: int
-) -> Decimal | None:
-    amounts = [
-        b.monthly_amount
-        for b in year_budgets
-        if b.group_id == group_id and b.month <= through_month
-    ]
-    return sum(amounts, Decimal(0)) if amounts else None
-
-
 def _build_group_status(  # noqa: PLR0913, PLR0917
     gid: UUID,
     name: str,
@@ -163,7 +153,14 @@ def _build_group_status(  # noqa: PLR0913, PLR0917
     ytd_spent = ytd_bd.total_amount if ytd_bd else Decimal(0)
 
     monthly_budget = effective.monthly_amount if effective else None
-    ytd_budget_val = _compute_ytd_budget(year_budgets, gid, month)
+    budgets_through_month = [
+        b for b in year_budgets if b.group_id == gid and b.month <= month
+    ]
+    ytd_budget_val = (
+        sum((b.monthly_amount for b in budgets_through_month), Decimal(0))
+        if budgets_through_month
+        else None
+    )
 
     return CategoryGroupBudgetStatus(
         group_id=gid,
@@ -181,6 +178,7 @@ def _build_group_status(  # noqa: PLR0913, PLR0917
         else None,
         average_monthly_spending=avg_spending.get(gid, Decimal(0)),
         categories=monthly_bd.categories if monthly_bd else [],
+        budgeted_months=len(budgets_through_month),
     )
 
 

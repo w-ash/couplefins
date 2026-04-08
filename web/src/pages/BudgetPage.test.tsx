@@ -32,6 +32,7 @@ const overviewWithData: BudgetOverviewResponse = {
       monthly_health: "on_track",
       ytd_health: "near_limit",
       average_monthly_spending: 366.67,
+      budgeted_months: 3,
       categories: [
         {
           category: "Groceries",
@@ -62,6 +63,7 @@ const overviewWithData: BudgetOverviewResponse = {
       monthly_health: null,
       ytd_health: null,
       average_monthly_spending: 66.67,
+      budgeted_months: 0,
       categories: [
         {
           category: "Gas",

@@ -108,7 +108,7 @@ const populatedResponse: SpendingTrendsResponse = {
       delta_percentage: 12.5,
     },
   ],
-  budget_lines: [{ group_id: "g1", monthly_budget: 500 }],
+  budget_lines: [{ group_id: "g1", month: 1, monthly_budget: 500 }],
   settlement_trend: [
     {
       year: 2026,

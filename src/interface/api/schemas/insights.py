@@ -46,6 +46,7 @@ class GroupComparisonItem(BaseModel):
 
 class BudgetLineItem(BaseModel):
     group_id: UUID
+    month: int
     monthly_budget: MoneyField
 
 
@@ -133,9 +134,11 @@ class SpendingTrendsResponse(BaseModel):
             budget_lines=[
                 BudgetLineItem(
                     group_id=gid,
+                    month=month,
                     monthly_budget=amount,
                 )
-                for gid, amount in result.budget_lines.items()
+                for gid, months in result.budget_lines.items()
+                for month, amount in months.items()
             ],
             monthly_person_paid=[
                 MonthlyPersonPaidItem(

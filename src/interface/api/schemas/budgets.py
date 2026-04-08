@@ -92,6 +92,7 @@ class GroupBudgetStatusResponse(BaseModel):
     ytd_health: HealthStatus | None
     average_monthly_spending: MoneyField
     categories: list[CategorySpendResponse]
+    budgeted_months: int
     household_spending: MoneyField | None = None
     personal_spending: MoneyField | None = None
 
@@ -130,6 +131,7 @@ class BudgetOverviewResponse(BaseModel):
                     monthly_health=s.monthly_health,
                     ytd_health=s.ytd_health,
                     average_monthly_spending=s.average_monthly_spending,
+                    budgeted_months=s.budgeted_months,
                     categories=[
                         CategorySpendResponse(
                             category=c.category,

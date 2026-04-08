@@ -80,8 +80,19 @@ function buildCategoryMap(
   return result;
 }
 
-function buildBudgetMap(budgetLines: BudgetLineItem[]): Map<string, number> {
-  return new Map(budgetLines.map((bl) => [bl.group_id, bl.monthly_budget]));
+function buildBudgetMap(
+  budgetLines: BudgetLineItem[],
+): Map<string, Array<{ month: number; amount: number }>> {
+  const map = new Map<string, Array<{ month: number; amount: number }>>();
+  for (const bl of budgetLines) {
+    let arr = map.get(bl.group_id);
+    if (!arr) {
+      arr = [];
+      map.set(bl.group_id, arr);
+    }
+    arr.push({ month: bl.month, amount: bl.monthly_budget });
+  }
+  return map;
 }
 
 interface KpiData {
@@ -258,7 +269,9 @@ export function InsightsPage() {
 
   const budgetMap = useMemo(
     () =>
-      data ? buildBudgetMap(data.budget_lines) : new Map<string, number>(),
+      data
+        ? buildBudgetMap(data.budget_lines)
+        : new Map<string, Array<{ month: number; amount: number }>>(),
     [data],
   );
 
@@ -473,7 +486,7 @@ export function InsightsPage() {
                   data={group.data}
                   ytdTotal={group.ytdTotal}
                   color={getChartColor(index)}
-                  budgetLine={budgetMap.get(group.groupId ?? "") ?? null}
+                  budgetAmounts={budgetMap.get(group.groupId ?? "")}
                   comparisonData={comparisonMap.get(group.groupId) ?? undefined}
                   comparisonYear={year - 1}
                   year={year}

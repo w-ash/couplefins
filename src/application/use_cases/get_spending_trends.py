@@ -46,7 +46,7 @@ class GetSpendingTrendsResult:
     month: int
     trends: SpendingTrends
     comparison_cards: list[GroupComparison]
-    budget_lines: dict[UUID, Decimal]
+    budget_lines: dict[UUID, dict[int, Decimal]]
     settlement_trend: list[MonthlySettlement]
     monthly_person_paid: list[MonthlyPersonPaid]
     persons: list[Person]
@@ -55,8 +55,11 @@ class GetSpendingTrendsResult:
 
 def _build_budget_lines(
     budgets: list[CategoryGroupBudget],
-) -> dict[UUID, Decimal]:
-    return {b.group_id: b.monthly_amount for b in budgets}
+) -> dict[UUID, dict[int, Decimal]]:
+    result: dict[UUID, dict[int, Decimal]] = {}
+    for b in budgets:
+        result.setdefault(b.group_id, {})[b.month] = b.monthly_amount
+    return result
 
 
 def _build_settlement_trend(
@@ -108,10 +111,10 @@ class GetSpendingTrendsUseCase:
                 year_txs, category_lookup, target_month
             )
 
-            month_budgets = await uow.category_group_budgets.get_by_month(
-                command.year, target_month, None
+            year_budgets = await uow.category_group_budgets.get_by_year(
+                command.year, None
             )
-            budget_lines = _build_budget_lines(month_budgets)
+            budget_lines = _build_budget_lines(year_budgets)
 
             all_year_settlements = await uow.settlements.get_by_year(command.year)
             settlement_trend = _build_settlement_trend(

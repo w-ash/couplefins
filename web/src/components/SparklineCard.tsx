@@ -5,7 +5,6 @@ import { Link } from "react-router";
 import {
   Line,
   LineChart,
-  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -25,6 +24,7 @@ interface MergedPoint {
   month: number;
   amount: number;
   comparisonAmount?: number;
+  budgetAmount?: number;
 }
 
 interface CategoryDetail {
@@ -38,7 +38,7 @@ interface SparklineCardProps {
   data: DataPoint[];
   ytdTotal: number;
   color: string;
-  budgetLine?: number | null;
+  budgetAmounts?: Array<{ month: number; amount: number }>;
   comparisonData?: DataPoint[];
   comparisonYear?: number;
   year?: number;
@@ -112,6 +112,14 @@ function SparklineTooltip({
           </span>
         </div>
       )}
+      {payload[0].payload.budgetAmount != null && (
+        <div className="mt-0.5 opacity-60">
+          <span className="text-muted-foreground">Budget</span>
+          <span className="ml-2 tabular-nums text-foreground">
+            {formatCurrency(payload[0].payload.budgetAmount)}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -122,7 +130,7 @@ export function SparklineCard({
   data,
   ytdTotal,
   color,
-  budgetLine,
+  budgetAmounts,
   comparisonData,
   comparisonYear,
   year,
@@ -132,7 +140,9 @@ export function SparklineCard({
   selectedMonth,
 }: SparklineCardProps) {
   const Icon = getCategoryGroupIcon(groupIcon);
-  const budget = budgetLine ?? 0;
+  const maxBudgetAmount = budgetAmounts?.length
+    ? Math.max(...budgetAmounts.map((b) => b.amount))
+    : 0;
   const creep = useMemo(() => detectCreep(data), [data]);
   const isExpandable = onToggle != null;
 
@@ -141,12 +151,16 @@ export function SparklineCard({
     const compMap = comparisonData?.length
       ? new Map(comparisonData.map((d) => [d.month, d.amount]))
       : null;
+    const budgetByMonth = budgetAmounts?.length
+      ? new Map(budgetAmounts.map((b) => [b.month, b.amount]))
+      : null;
     return Array.from({ length: 12 }, (_, i) => i + 1).map((month) => ({
       month,
       amount: dataMap.get(month) ?? 0,
       comparisonAmount: compMap?.get(month),
+      budgetAmount: budgetByMonth?.get(month),
     }));
-  }, [data, comparisonData]);
+  }, [data, comparisonData, budgetAmounts]);
 
   const maxComparisonAmount = comparisonData?.length
     ? Math.max(...comparisonData.map((d) => d.amount))
@@ -213,7 +227,8 @@ export function SparklineCard({
               domain={[
                 0,
                 (dataMax: number) =>
-                  Math.max(dataMax, budget, maxComparisonAmount) * 1.05 || 1,
+                  Math.max(dataMax, maxBudgetAmount, maxComparisonAmount) *
+                    1.05 || 1,
               ]}
               hide
             />
@@ -226,20 +241,19 @@ export function SparklineCard({
               }
               cursor={false}
             />
-            {budgetLine != null && (
-              <ReferenceLine
-                y={budgetLine}
+            {budgetAmounts?.length ? (
+              <Line
+                type="stepAfter"
+                dataKey="budgetAmount"
                 stroke="var(--color-muted-foreground)"
-                strokeDasharray="4 4"
                 strokeWidth={1}
-                label={{
-                  value: formatCurrency(budgetLine),
-                  position: "right",
-                  fontSize: 9,
-                  fill: "var(--color-muted-foreground)",
-                }}
+                strokeDasharray="4 4"
+                strokeOpacity={0.5}
+                dot={false}
+                activeDot={false}
+                connectNulls={false}
               />
-            )}
+            ) : null}
             {comparisonData?.length ? (
               <Line
                 type="monotone"

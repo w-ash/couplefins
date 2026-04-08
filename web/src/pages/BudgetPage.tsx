@@ -218,6 +218,31 @@ function BudgetGroupRow({
       ? Math.min(100, (spent / budget) * 100)
       : 0;
 
+  const budgetDelta = (() => {
+    if (viewMode !== "monthly" || !hasBudget || status.monthly_budget == null)
+      return null;
+    if (sourceBudgetAmount == null) return "New this month";
+    const diff = status.monthly_budget - sourceBudgetAmount;
+    if (diff === 0) return null;
+    const arrow = diff > 0 ? "\u2191" : "\u2193";
+    return `${arrow} ${formatCurrency(Math.abs(diff))} from last month`;
+  })();
+
+  const ytdGap =
+    viewMode === "ytd" &&
+    hasBudget &&
+    status.budgeted_months < month &&
+    status.budgeted_months > 0
+      ? `${status.budgeted_months} of ${month} months budgeted`
+      : null;
+
+  const deltaHint =
+    budgetDelta || ytdGap ? (
+      <span className="text-xs text-muted-foreground">
+        {budgetDelta || ytdGap}
+      </span>
+    ) : null;
+
   const headerProps = {
     groupName: status.group_name,
     icon,
@@ -250,6 +275,7 @@ function BudgetGroupRow({
           {/* Mobile layout */}
           <div className="min-w-0 flex-1 sm:hidden">
             <GroupHeader {...headerProps} />
+            {deltaHint}
             {hasBudget && budget != null && (
               <div className="mt-1.5">
                 <ProgressBar
@@ -272,6 +298,7 @@ function BudgetGroupRow({
           {/* Desktop layout */}
           <div className="hidden min-w-0 flex-1 space-y-1.5 sm:block">
             <GroupHeader {...headerProps} />
+            {deltaHint}
             {hasBudget && budget != null && (
               <ProgressBar pct={pct} barColor={healthStyle.barColor} />
             )}

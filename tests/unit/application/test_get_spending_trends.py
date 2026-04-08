@@ -31,6 +31,7 @@ def _setup_uow():
     uow.categories.get_all.return_value = [category]
 
     uow.category_group_budgets.get_by_month.return_value = []
+    uow.category_group_budgets.get_by_year.return_value = []
 
     return uow, alice, bob, food_group
 
@@ -133,7 +134,7 @@ async def test_budget_lines_populated() -> None:
             payer_person_id=alice.id,
         ),
     ]
-    uow.category_group_budgets.get_by_month.return_value = [
+    uow.category_group_budgets.get_by_year.return_value = [
         make_category_group_budget(
             group_id=food_group.id,
             monthly_amount=Decimal("500.00"),
@@ -146,7 +147,7 @@ async def test_budget_lines_populated() -> None:
     result = await GetSpendingTrendsUseCase().execute(command, uow)
 
     assert food_group.id in result.budget_lines
-    assert result.budget_lines[food_group.id] == Decimal("500.00")
+    assert result.budget_lines[food_group.id] == {1: Decimal("500.00")}
 
 
 async def test_budget_lines_empty_when_no_budgets() -> None:
@@ -157,6 +158,74 @@ async def test_budget_lines_empty_when_no_budgets() -> None:
     result = await GetSpendingTrendsUseCase().execute(command, uow)
 
     assert result.budget_lines == {}
+
+
+async def test_budget_lines_per_month() -> None:
+    uow, alice, _, food_group = _setup_uow()
+    uow.transactions.get_household_by_year.return_value = [
+        make_transaction(
+            date=date(2026, 1, 10),
+            category="Dining Out",
+            amount=Decimal("-50.00"),
+            payer_person_id=alice.id,
+        ),
+    ]
+    uow.category_group_budgets.get_by_year.return_value = [
+        make_category_group_budget(
+            group_id=food_group.id,
+            monthly_amount=Decimal("500.00"),
+            year=2026,
+            month=1,
+        ),
+        make_category_group_budget(
+            group_id=food_group.id,
+            monthly_amount=Decimal("600.00"),
+            year=2026,
+            month=2,
+        ),
+    ]
+
+    command = GetSpendingTrendsCommand(year=2026, month=2)
+    result = await GetSpendingTrendsUseCase().execute(command, uow)
+
+    assert result.budget_lines[food_group.id] == {
+        1: Decimal("500.00"),
+        2: Decimal("600.00"),
+    }
+
+
+async def test_budget_lines_sparse_months() -> None:
+    uow, alice, _, food_group = _setup_uow()
+    uow.transactions.get_household_by_year.return_value = [
+        make_transaction(
+            date=date(2026, 1, 10),
+            category="Dining Out",
+            amount=Decimal("-50.00"),
+            payer_person_id=alice.id,
+        ),
+    ]
+    uow.category_group_budgets.get_by_year.return_value = [
+        make_category_group_budget(
+            group_id=food_group.id,
+            monthly_amount=Decimal("500.00"),
+            year=2026,
+            month=1,
+        ),
+        make_category_group_budget(
+            group_id=food_group.id,
+            monthly_amount=Decimal("500.00"),
+            year=2026,
+            month=3,
+        ),
+    ]
+
+    command = GetSpendingTrendsCommand(year=2026, month=3)
+    result = await GetSpendingTrendsUseCase().execute(command, uow)
+
+    months = result.budget_lines[food_group.id]
+    assert 1 in months
+    assert 2 not in months  # null semantics: absent, not 0
+    assert 3 in months
 
 
 async def test_settlement_trend_populated() -> None:

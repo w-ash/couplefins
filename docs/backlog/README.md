@@ -142,7 +142,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.2.4 | Transaction-first settlement flow — link transactions instead of recording payments | Completed (2026-04-04) | M |
 | v1.3.0 | Per-month budget model — replace cascading effective dates with year/month | Completed (2026-04-04) | M |
 | v1.3.1 | Copy from last month + budget page UX polish | Completed (2026-04-06) | S |
-| v1.3.2 | Budget trends on Insights page — budget overlay lines on spending charts | Not started | M |
+| v1.3.2 | Budget trends on Insights page — budget overlay lines on spending charts | Completed (2026-04-07) | M |
 | v1.3.3 | Accounting guardrails — rounding fix, zero-sum assertion, settlement link validation, pre-finalization warnings | Completed (2026-04-05) | M |
 | v1.3.4 | Monetary type consistency, budget/adjustment invariants, settlement amount validation | Completed (2026-04-06) | M |
 | v1.3.5 | Graceful degradation, zero-tolerance type safety, error handling split | Completed (2026-04-06) | M |
