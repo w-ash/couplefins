@@ -140,7 +140,7 @@ def compute_net_position(
     )
 
 
-def reconcile(  # noqa: PLR0913
+def reconcile(
     transactions: list[Transaction],
     persons: list[Person],
     categories: list[Category],

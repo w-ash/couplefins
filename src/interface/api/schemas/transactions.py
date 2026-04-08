@@ -69,6 +69,7 @@ class TransactionEditResponse(BaseModel):
     old_value: str
     new_value: str
     edited_at: datetime.datetime
+    edited_by_person_id: UUID | None
 
 
 class TransactionEditHistoryResponse(BaseModel):

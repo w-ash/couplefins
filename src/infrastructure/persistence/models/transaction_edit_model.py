@@ -18,3 +18,6 @@ class TransactionEditModel(Base):
     old_value: Mapped[str] = mapped_column(String, nullable=False)
     new_value: Mapped[str] = mapped_column(String, nullable=False)
     edited_at: Mapped[str] = mapped_column(String, nullable=False)
+    edited_by_person_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("persons.id"), nullable=True
+    )

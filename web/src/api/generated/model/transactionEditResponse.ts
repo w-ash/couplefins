@@ -12,4 +12,5 @@ export interface TransactionEditResponse {
   old_value: string;
   new_value: string;
   edited_at: string;
+  edited_by_person_id: string | null;
 }

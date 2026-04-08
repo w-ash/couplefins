@@ -30,7 +30,9 @@ def compute_edit(
     field_name: str,
     old_value: FieldValue,
     new_value: FieldValue,
+    *,
     now: datetime | None = None,
+    edited_by_person_id: UUID | None = None,
 ) -> TransactionEdit | None:
     if old_value == new_value:
         return None
@@ -43,6 +45,7 @@ def compute_edit(
         old_value=field_str(old_value),
         new_value=field_str(new_value),
         edited_at=now,
+        edited_by_person_id=edited_by_person_id,
     )
 
 

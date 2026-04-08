@@ -147,6 +147,9 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.3.4 | Monetary type consistency, budget/adjustment invariants, settlement amount validation | Completed (2026-04-06) | M |
 | v1.3.5 | Graceful degradation, zero-tolerance type safety, error handling split | Completed (2026-04-06) | M |
 | v1.3.6 | UI component library DRY — cn() utility, InlineSuccess, SectionHeader, heroCardClass, Card typing fix | Completed (2026-04-07) | S |
+| v1.4.0 | Edit attribution — `edited_by_person_id` on TransactionEdit, threaded through all edit use cases | Completed (2026-04-07) | S |
+| v1.4.1 | Import provenance — enriched edit history endpoint with upload-derived import event | Not started | S |
+| v1.4.2 | Transaction history timeline — vertical timeline UI with import anchor + person-attributed edits | Not started | M |
 
 ## Infrastructure Readiness
 
@@ -242,4 +245,5 @@ pnpm --prefix web check && pnpm --prefix web test
 - **Transaction editor**: Two-dimension model (v1.1.0+): Household/Personal toggle ("Scope") + always-editable split percentage. The two fields are orthogonal — `household` controls budget inclusion, `payer_percentage` controls settlement. There is no intermediate "type" layer. Split display uses percentage format (`50%`).
 - **Content layout**: Data pages use `max-w-5xl` (1024px) since v1.1.0. Settings/Account at `max-w-3xl`, auth pages at `max-w-md`. Transaction table Group column hides below `xl` (1280px viewport). Table has `pl-4`/`pr-4` on first/last columns for proper padding with expanded-row backgrounds.
 - **Schema version guard**: `GET /health` returns `APP_VERSION`, `SCHEMA_VERSION` (expected Alembic head), `schema_current` (actual from `alembic_version` table), and `schema_ok` (boolean match). Frontend gates on `schema_ok` before running the auth flow. On mismatch, shows an `UpgradeScreen` distinguishing code-behind-schema (pull + restart) from schema-behind-code (restart to run migrations). Prevents cryptic SQLAlchemy errors when two laptops are at different code versions against the same Neon database.
+- **Transaction edit history**: `TransactionEdit` entity tracks field-level changes (field_name, old_value, new_value, edited_at) with `edited_by_person_id` for person attribution (v1.4.0+, nullable for historical edits). Import provenance derived from `Transaction.upload_id → Upload(person_id, uploaded_at)` — no synthetic edit records for imports. `compute_edit()` shared helper in `_shared/transaction_pipeline.py` is the single creation point. Frontend timeline renders import event (from enriched API response) as the anchor, edits above. Person names resolved client-side via existing `usePersonMaps()`.
 - **Tooling**: uv, Ruff, BasedPyright, pytest, Biome

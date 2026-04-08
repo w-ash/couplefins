@@ -130,3 +130,20 @@ async def test_multiple_edits_accumulate(client: AsyncClient) -> None:
     assert len(edits) == 2
     field_names = {e["field_name"] for e in edits}
     assert field_names == {"category", "amount"}
+
+
+async def test_edit_carries_person_attribution(client: AsyncClient) -> None:
+    alice_id, tx, cookies = await _setup_transaction(client)
+    tx_id = tx["id"]
+
+    resp = await client.patch(
+        f"/api/v1/transactions/{tx_id}",
+        json={"category": "Fast Food"},
+        cookies=cookies,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["edits"][0]["edited_by_person_id"] == alice_id
+
+    resp = await client.get(f"/api/v1/transactions/{tx_id}/edits", cookies=cookies)
+    assert resp.status_code == 200
+    assert resp.json()["edits"][0]["edited_by_person_id"] == alice_id

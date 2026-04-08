@@ -54,7 +54,7 @@ def test_compute_edit_returns_edit_when_changed() -> None:
     tx = make_transaction(category="Dining Out")
     now = datetime.now(UTC)
 
-    edit = compute_edit(tx, "category", "Dining Out", "Fast Food", now)
+    edit = compute_edit(tx, "category", "Dining Out", "Fast Food", now=now)
 
     assert edit is not None
     assert edit.field_name == "category"
@@ -96,3 +96,24 @@ def test_validate_payer_percentage_rejects_too_high() -> None:
 def test_validate_payer_percentage_rejects_negative() -> None:
     with pytest.raises(ValidationError, match="payer_percentage"):
         validate_payer_percentage(-1)
+
+
+def test_compute_edit_passes_through_edited_by_person_id() -> None:
+    tx = make_transaction(category="Dining Out")
+    person_id = uuid.uuid4()
+
+    edit = compute_edit(
+        tx, "category", "Dining Out", "Fast Food", edited_by_person_id=person_id
+    )
+
+    assert edit is not None
+    assert edit.edited_by_person_id == person_id
+
+
+def test_compute_edit_defaults_edited_by_person_id_to_none() -> None:
+    tx = make_transaction(category="Dining Out")
+
+    edit = compute_edit(tx, "category", "Dining Out", "Fast Food")
+
+    assert edit is not None
+    assert edit.edited_by_person_id is None

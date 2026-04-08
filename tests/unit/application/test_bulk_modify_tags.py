@@ -209,3 +209,25 @@ async def test_preserves_tag_order_on_remove() -> None:
 
     updated = uow.transactions.update_mutable_fields.call_args[0][0]
     assert updated.tags == ("c", "b")
+
+
+# --- Edit attribution ---
+
+
+async def test_edits_carry_edited_by_person_id() -> None:
+    uow = make_mock_uow()
+    tx = make_transaction(tags=("shared",))
+    uow.transactions.get_by_ids.return_value = [tx]
+    person_id = uuid.uuid4()
+    command = BulkModifyTagsCommand(
+        transaction_ids=[tx.id],
+        action=TagAction.ADD,
+        tags=["dinner"],
+        edited_by_person_id=person_id,
+    )
+
+    await BulkModifyTagsUseCase().execute(command, uow)
+
+    edits = uow.transaction_edits.save_batch.call_args[0][0]
+    assert len(edits) == 1
+    assert edits[0].edited_by_person_id == person_id

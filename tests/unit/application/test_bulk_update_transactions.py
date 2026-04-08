@@ -476,3 +476,23 @@ async def test_notes_no_edit_when_unchanged() -> None:
     assert result.updated_count == 0
     uow.transactions.update_mutable_fields.assert_not_called()
     uow.transaction_edits.save_batch.assert_not_called()
+
+
+# --- Edit attribution ---
+
+
+async def test_edits_carry_edited_by_person_id() -> None:
+    uow = make_mock_uow()
+    tx = make_transaction(category="Dining Out")
+    uow.transactions.get_by_ids.return_value = [tx]
+    person_id = uuid.uuid4()
+    command = _make_command(
+        transaction_ids=[tx.id],
+        category="Fast Food",
+        edited_by_person_id=person_id,
+    )
+
+    await BulkUpdateTransactionsUseCase().execute(command, uow)
+
+    edits = uow.transaction_edits.save_batch.call_args[0][0]
+    assert all(e.edited_by_person_id == person_id for e in edits)

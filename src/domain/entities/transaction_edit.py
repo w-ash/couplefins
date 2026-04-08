@@ -12,3 +12,4 @@ class TransactionEdit:
     old_value: str
     new_value: str
     edited_at: datetime
+    edited_by_person_id: UUID | None = None

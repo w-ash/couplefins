@@ -21,6 +21,7 @@ from src.application.use_cases.update_transaction_splits import (
     UpdateTransactionSplitsCommand,
     UpdateTransactionSplitsUseCase,
 )
+from src.domain.entities.person import Person
 from src.infrastructure.events.event_bus import event_bus
 from src.interface.api.dependencies import get_current_user
 from src.interface.api.schemas.transactions import (
@@ -46,7 +47,10 @@ async def get_tags() -> list[str]:
 
 
 @router.patch("/transactions/splits")
-async def update_splits(body: UpdateSplitsRequest) -> UpdateSplitsResponse:
+async def update_splits(
+    body: UpdateSplitsRequest,
+    current_user: Person = Depends(get_current_user),
+) -> UpdateSplitsResponse:
     command = UpdateTransactionSplitsCommand(
         splits=[
             SplitEntry(
@@ -54,7 +58,8 @@ async def update_splits(body: UpdateSplitsRequest) -> UpdateSplitsResponse:
                 payer_percentage=entry.payer_percentage,
             )
             for entry in body.splits
-        ]
+        ],
+        edited_by_person_id=current_user.id,
     )
     result = await execute_use_case(
         lambda uow: UpdateTransactionSplitsUseCase().execute(command, uow)
@@ -64,7 +69,10 @@ async def update_splits(body: UpdateSplitsRequest) -> UpdateSplitsResponse:
 
 
 @router.patch("/transactions/bulk-update")
-async def bulk_update_transactions(body: BulkUpdateRequest) -> BulkUpdateResponse:
+async def bulk_update_transactions(
+    body: BulkUpdateRequest,
+    current_user: Person = Depends(get_current_user),
+) -> BulkUpdateResponse:
     kwargs: dict[str, object] = {}
     if body.payer_percentage is not None:
         kwargs["payer_percentage"] = body.payer_percentage
@@ -76,6 +84,7 @@ async def bulk_update_transactions(body: BulkUpdateRequest) -> BulkUpdateRespons
         transaction_ids=list(body.transaction_ids),
         category=body.category,
         notes=body.notes,
+        edited_by_person_id=current_user.id,
         **kwargs,  # type: ignore[arg-type]
     )
     result = await execute_use_case(
@@ -86,11 +95,15 @@ async def bulk_update_transactions(body: BulkUpdateRequest) -> BulkUpdateRespons
 
 
 @router.post("/transactions/bulk-tags")
-async def bulk_modify_tags(body: BulkModifyTagsRequest) -> BulkModifyTagsResponse:
+async def bulk_modify_tags(
+    body: BulkModifyTagsRequest,
+    current_user: Person = Depends(get_current_user),
+) -> BulkModifyTagsResponse:
     command = BulkModifyTagsCommand(
         transaction_ids=list(body.transaction_ids),
         action=body.action,
         tags=list(body.tags),
+        edited_by_person_id=current_user.id,
     )
     result = await execute_use_case(
         lambda uow: BulkModifyTagsUseCase().execute(command, uow)
@@ -101,7 +114,9 @@ async def bulk_modify_tags(body: BulkModifyTagsRequest) -> BulkModifyTagsRespons
 
 @router.patch("/transactions/{transaction_id}")
 async def update_transaction(
-    transaction_id: UUID, body: UpdateTransactionRequest
+    transaction_id: UUID,
+    body: UpdateTransactionRequest,
+    current_user: Person = Depends(get_current_user),
 ) -> UpdateTransactionResponse:
     extras: dict[str, object] = {}
     if "payer_percentage" in body.model_fields_set:
@@ -117,6 +132,7 @@ async def update_transaction(
         category=body.category,
         notes=body.notes,
         tags=tuple(body.tags) if body.tags is not None else None,
+        edited_by_person_id=current_user.id,
         **extras,  # type: ignore[arg-type]
     )
     result = await execute_use_case(

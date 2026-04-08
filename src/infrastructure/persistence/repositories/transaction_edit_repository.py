@@ -22,6 +22,9 @@ class TransactionEditRepository(BaseRepository[TransactionEdit, TransactionEditM
             old_value=model.old_value,
             new_value=model.new_value,
             edited_at=datetime.fromisoformat(model.edited_at),
+            edited_by_person_id=UUID(model.edited_by_person_id)
+            if model.edited_by_person_id
+            else None,
         )
 
     @staticmethod
@@ -33,6 +36,9 @@ class TransactionEditRepository(BaseRepository[TransactionEdit, TransactionEditM
             old_value=entity.old_value,
             new_value=entity.new_value,
             edited_at=entity.edited_at.isoformat(),
+            edited_by_person_id=str(entity.edited_by_person_id)
+            if entity.edited_by_person_id
+            else None,
         )
 
     async def get_by_transaction_id(

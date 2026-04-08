@@ -25,6 +25,7 @@ class BulkModifyTagsCommand:
     transaction_ids: list[UUID]
     action: TagAction
     tags: list[str]
+    edited_by_person_id: UUID | None = None
 
 
 @define(frozen=True, slots=True)
@@ -70,7 +71,14 @@ class BulkModifyTagsUseCase:
                 else:
                     new_tags = _remove_tags(tx.tags, remove_set)
 
-                edit = compute_edit(tx, "tags", tx.tags, new_tags, now)
+                edit = compute_edit(
+                    tx,
+                    "tags",
+                    tx.tags,
+                    new_tags,
+                    now=now,
+                    edited_by_person_id=command.edited_by_person_id,
+                )
                 if edit is None:
                     continue
 

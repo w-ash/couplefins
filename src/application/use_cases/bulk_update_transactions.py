@@ -37,6 +37,7 @@ class BulkUpdateTransactionsCommand:
     payer_percentage: int | _Unset = field(default=_Unset.UNSET)
     household: bool | _Unset = field(default=_Unset.UNSET)
     is_excluded: bool | _Unset = field(default=_Unset.UNSET)
+    edited_by_person_id: UUID | None = None
 
 
 @define(frozen=True, slots=True)
@@ -153,7 +154,16 @@ class BulkUpdateTransactionsUseCase:
                     e
                     for name, old in field_values
                     if name in tx_updates
-                    and (e := compute_edit(tx, name, old, tx_updates[name], now))
+                    and (
+                        e := compute_edit(
+                            tx,
+                            name,
+                            old,
+                            tx_updates[name],
+                            now=now,
+                            edited_by_person_id=command.edited_by_person_id,
+                        )
+                    )
                 ]
                 if not edits:
                     continue

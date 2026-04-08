@@ -22,6 +22,7 @@ class SplitEntry:
 @define(frozen=True, slots=True)
 class UpdateTransactionSplitsCommand:
     splits: list[SplitEntry]
+    edited_by_person_id: UUID | None = None
 
 
 @define(frozen=True, slots=True)
@@ -56,7 +57,8 @@ class UpdateTransactionSplitsUseCase:
                         "payer_percentage",
                         transactions[entry.transaction_id].payer_percentage,
                         entry.payer_percentage,
-                        now,
+                        now=now,
+                        edited_by_person_id=command.edited_by_person_id,
                     )
                 )
             ]

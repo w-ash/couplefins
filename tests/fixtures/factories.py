@@ -165,6 +165,7 @@ def make_transaction_edit(
     old_value: str = "Dining Out",
     new_value: str = "Fast Food",
     edited_at: datetime | None = None,
+    edited_by_person_id: uuid.UUID | None = None,
 ) -> TransactionEdit:
     return TransactionEdit(
         id=id or uuid.uuid4(),
@@ -173,6 +174,7 @@ def make_transaction_edit(
         old_value=old_value,
         new_value=new_value,
         edited_at=edited_at or datetime.now(UTC),
+        edited_by_person_id=edited_by_person_id,
     )
 
 

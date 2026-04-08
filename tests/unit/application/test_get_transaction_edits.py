@@ -46,3 +46,30 @@ async def test_raises_not_found_for_missing_transaction() -> None:
     command = GetTransactionEditsCommand(transaction_id=missing_id)
     with pytest.raises(NotFoundError, match=str(missing_id)):
         await GetTransactionEditsUseCase().execute(command, uow)
+
+
+async def test_returns_edited_by_person_id() -> None:
+    uow = make_mock_uow()
+    tx = make_transaction()
+    person_id = uuid.uuid4()
+    edit = make_transaction_edit(transaction_id=tx.id, edited_by_person_id=person_id)
+    uow.transactions.get_by_id.return_value = tx
+    uow.transaction_edits.get_by_transaction_id.return_value = [edit]
+
+    command = GetTransactionEditsCommand(transaction_id=tx.id)
+    result = await GetTransactionEditsUseCase().execute(command, uow)
+
+    assert result.edits[0].edited_by_person_id == person_id
+
+
+async def test_returns_none_edited_by_for_historical_edits() -> None:
+    uow = make_mock_uow()
+    tx = make_transaction()
+    edit = make_transaction_edit(transaction_id=tx.id)
+    uow.transactions.get_by_id.return_value = tx
+    uow.transaction_edits.get_by_transaction_id.return_value = [edit]
+
+    command = GetTransactionEditsCommand(transaction_id=tx.id)
+    result = await GetTransactionEditsUseCase().execute(command, uow)
+
+    assert result.edits[0].edited_by_person_id is None
