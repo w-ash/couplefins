@@ -1,10 +1,4 @@
-import {
-  ArrowDownLeft,
-  ArrowUpRight,
-  Check,
-  Download,
-  Loader2,
-} from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Download, Loader2 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Link } from "react-router";
 import type { AdjustmentResponse } from "@/api/generated/model";
@@ -15,6 +9,7 @@ import {
 import { Button } from "@/components/Button";
 import { Dialog, DialogFooter, DialogHeader } from "@/components/Dialog";
 import { InlineError } from "@/components/InlineError";
+import { InlineSuccess } from "@/components/InlineSuccess";
 import { useTemporary } from "@/hooks/useTemporary";
 import { downloadAdjustmentCsv } from "@/lib/adjustments";
 import { formatCurrency, formatDate, MONTHS, plural } from "@/lib/format";
@@ -175,12 +170,7 @@ export function AdjustmentExportDialog({
       </div>
 
       <DialogFooter>
-        {successMessage && (
-          <span className="inline-flex items-center gap-1 text-sm text-positive">
-            <Check className="size-4" />
-            {successMessage}
-          </span>
-        )}
+        {successMessage && <InlineSuccess>{successMessage}</InlineSuccess>}
         <Button variant="secondary" size="sm" onClick={onClose}>
           Close
         </Button>

@@ -23,10 +23,12 @@ import { PageHeader } from "@/components/PageHeader";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
 import { PersonBadge } from "@/components/PersonBadge";
 import { ProgressBar } from "@/components/ProgressBar";
+import { SectionHeader } from "@/components/SectionHeader";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { StatsGrid } from "@/components/StatsGrid";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { UploadStatusRow } from "@/components/UploadStatusRow";
+import { cn } from "@/lib/cn";
 import {
   type DashboardScope,
   useDashboardFilters,
@@ -39,12 +41,7 @@ import {
 } from "@/lib/format";
 import { getHealthStyle } from "@/lib/health-styles";
 import { actionLinkClass } from "@/lib/input-styles";
-import {
-  PAGE_PADDING,
-  sectionDescriptionClass,
-  sectionHeadingClass,
-  tableHeaderRowClass,
-} from "@/lib/layout";
+import { heroCardClass, PAGE_PADDING, tableHeaderRowClass } from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
 
 // --- Stats ---
@@ -255,7 +252,7 @@ function SettlementHero({
 
   if (!settlement) {
     return (
-      <div className="rounded-xl border border-primary/20 bg-card p-4 shadow-md sm:p-6">
+      <div className={cn(heroCardClass, "p-4 sm:p-6")}>
         <p className="mb-1 text-center text-xs font-medium tracking-wider text-muted-foreground uppercase">
           {monthLabel}
         </p>
@@ -277,7 +274,10 @@ function SettlementHero({
   return (
     <Link
       to="/settle"
-      className="block rounded-xl border border-primary/20 bg-card p-4 shadow-md transition-colors hover:bg-muted/50 sm:p-6"
+      className={cn(
+        heroCardClass,
+        "block p-4 transition-colors hover:bg-muted/50 sm:p-6",
+      )}
     >
       <p className="mb-1 text-center text-xs font-medium tracking-wider text-muted-foreground uppercase">
         {monthLabel}
@@ -337,10 +337,10 @@ function HouseholdMonthHistory({
 
   return (
     <Card>
-      <h2 className={sectionHeadingClass}>Month History</h2>
-      <p className={sectionDescriptionClass}>
-        Track spending and settlement status across months
-      </p>
+      <SectionHeader
+        title="Month History"
+        description="Track spending and settlement status across months"
+      />
       <table className="w-full text-sm">
         <thead>
           <tr className={tableHeaderRowClass}>
@@ -423,8 +423,10 @@ function PersonalMonthHistory({
 
   return (
     <Card>
-      <h2 className={sectionHeadingClass}>Month History</h2>
-      <p className={sectionDescriptionClass}>Your spending across months</p>
+      <SectionHeader
+        title="Month History"
+        description="Your spending across months"
+      />
       <table className="w-full text-sm">
         <thead>
           <tr className={tableHeaderRowClass}>

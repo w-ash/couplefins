@@ -17,6 +17,7 @@ import { MonthPicker } from "@/components/MonthPicker";
 import { PageHeader } from "@/components/PageHeader";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
 import { PersonPaidChart } from "@/components/PersonPaidChart";
+import { SectionHeader } from "@/components/SectionHeader";
 import { SettlementTrendChart } from "@/components/SettlementTrendChart";
 import { SparklineCard } from "@/components/SparklineCard";
 import { useGroupIconMap } from "@/lib/categories";
@@ -27,11 +28,7 @@ import {
   MONTHS,
   useMonthYear,
 } from "@/lib/format";
-import {
-  PAGE_PADDING,
-  sectionDescriptionClass,
-  sectionHeadingClass,
-} from "@/lib/layout";
+import { PAGE_PADDING } from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
 
 interface GroupChartData {
@@ -450,12 +447,10 @@ export function InsightsPage() {
 
           {comparisonCards.length > 0 && (
             <section>
-              <h2 className={sectionHeadingClass}>
-                {MONTHS[month - 1]} vs 3-month average
-              </h2>
-              <p className={sectionDescriptionClass}>
-                Spot categories where spending jumped or dropped this month
-              </p>
+              <SectionHeader
+                title={`${MONTHS[month - 1]} vs 3-month average`}
+                description="Spot categories where spending jumped or dropped this month"
+              />
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {comparisonCards.map((card) => (
                   <ComparisonCard
@@ -473,10 +468,10 @@ export function InsightsPage() {
           )}
 
           <section>
-            <h2 className={sectionHeadingClass}>Spending by category</h2>
-            <p className={sectionDescriptionClass}>
-              Monthly trends for each category — tap to see the breakdown
-            </p>
+            <SectionHeader
+              title="Spending by category"
+              description="Monthly trends for each category — tap to see the breakdown"
+            />
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {groupCharts.map((group, index) => (
                 <SparklineCard
@@ -509,11 +504,10 @@ export function InsightsPage() {
 
           {(personPaidChartData.length > 0 || settlementTrend.length > 0) && (
             <section>
-              <h2 className={sectionHeadingClass}>Who's paying</h2>
-              <p className={sectionDescriptionClass}>
-                See who's been covering more of the household spending each
-                month
-              </p>
+              <SectionHeader
+                title="Who's paying"
+                description="See who's been covering more of the household spending each month"
+              />
 
               {/* Category group filter */}
               {data && data.group_summaries.length > 1 && (

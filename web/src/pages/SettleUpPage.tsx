@@ -39,6 +39,7 @@ import {
 import { Card } from "@/components/Card";
 import { FinalizationBanner } from "@/components/FinalizationBanner";
 import { InlineError } from "@/components/InlineError";
+import { InlineSuccess } from "@/components/InlineSuccess";
 import { LinkedTransactionSubrows } from "@/components/LinkedTransactionSubrows";
 import { MonthPicker } from "@/components/MonthPicker";
 import { PageHeader } from "@/components/PageHeader";
@@ -50,14 +51,12 @@ import {
 } from "@/components/PageStates";
 import { PersonBadge } from "@/components/PersonBadge";
 import { PosthocLinkDialog } from "@/components/PosthocLinkDialog";
+import { SectionHeader } from "@/components/SectionHeader";
 import { UploadStatusRow } from "@/components/UploadStatusRow";
 import { useTemporary } from "@/hooks/useTemporary";
+import { cn } from "@/lib/cn";
 import { formatCurrency, MONTHS, useMonthYear } from "@/lib/format";
-import {
-  PAGE_PADDING,
-  sectionDescriptionClass,
-  sectionHeadingClass,
-} from "@/lib/layout";
+import { heroCardClass, PAGE_PADDING } from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
 
 function HeroCard({
@@ -73,7 +72,7 @@ function HeroCard({
 
   if (!net) {
     return (
-      <div className="rounded-xl border border-primary/20 bg-card p-5 shadow-md sm:p-8">
+      <div className={cn(heroCardClass, "p-5 sm:p-8")}>
         <p className="text-center text-xl font-semibold text-primary sm:text-2xl">
           <span className="inline-flex items-center gap-2">
             <CheckCircle2 className="size-6" />
@@ -88,7 +87,7 @@ function HeroCard({
   const hasPayments = gross && gross.amount !== net.amount;
 
   return (
-    <div className="rounded-xl border border-primary/20 bg-card p-5 shadow-md sm:p-8">
+    <div className={cn(heroCardClass, "p-5 sm:p-8")}>
       <p className="text-center text-xl font-semibold text-foreground sm:text-2xl">
         <PersonBadge
           name={getPersonName(net.from_person_id)}
@@ -191,13 +190,9 @@ function LinkSettlementSection({
         </div>
       )}
       {successMessage && (
-        <p
-          className="mt-3 text-sm font-medium text-positive"
-          aria-live="polite"
-        >
-          <CheckCircle2 className="mr-1 inline size-3.5" />
-          {successMessage}
-        </p>
+        <div className="mt-3">
+          <InlineSuccess>{successMessage}</InlineSuccess>
+        </div>
       )}
       {mutation.isError && (
         <div className="mt-3">
@@ -303,10 +298,10 @@ function PaymentHistory({
 
   return (
     <Card>
-      <h2 className={sectionHeadingClass}>Payment History</h2>
-      <p className={sectionDescriptionClass}>
-        Payments and waivers recorded for this month
-      </p>
+      <SectionHeader
+        title="Payment History"
+        description="Payments and waivers recorded for this month"
+      />
       <div className="space-y-3">
         {settlements.map((s) => {
           const fromName = getPersonName(s.from_person_id);

@@ -1,5 +1,4 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Check } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import {
   getGetPersonsQueryKey,
@@ -8,6 +7,7 @@ import {
 } from "@/api/generated/persons/persons";
 import { Button } from "@/components/Button";
 import { InlineError } from "@/components/InlineError";
+import { InlineSuccess } from "@/components/InlineSuccess";
 import { useTemporary } from "@/hooks/useTemporary";
 import { baseInputClass } from "@/lib/input-styles";
 import type { Person } from "@/types/person";
@@ -78,10 +78,7 @@ function PersonAccountRow({ person }: { person: Person }) {
       </div>
       <div className="sm:pt-6">
         {saved ? (
-          <span className="inline-flex items-center gap-1 text-sm text-positive">
-            <Check className="size-4" />
-            Saved
-          </span>
+          <InlineSuccess>Saved</InlineSuccess>
         ) : (
           <Button
             type="submit"

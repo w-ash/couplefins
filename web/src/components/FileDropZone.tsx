@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { cn } from "@/lib/cn";
 import { formatFileSize } from "@/lib/format";
 
 interface FileDropZoneProps {
@@ -133,7 +134,7 @@ export function FileDropZone({
         onKeyDown={handleKeyDown}
         tabIndex={disabled ? -1 : 0}
         aria-describedby={currentFile ? undefined : "dropzone-help"}
-        className={`${baseClasses} ${stateClasses} ${disabledClasses}`}
+        className={cn(baseClasses, stateClasses, disabledClasses)}
       >
         <input
           type="file"

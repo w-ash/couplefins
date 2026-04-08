@@ -9,6 +9,7 @@ import { baseInputClass, inputErrorClass } from "@/lib/input-styles";
 import { getPasswordErrors, MIN_PASSWORD_LENGTH } from "@/lib/password";
 import { Button } from "./Button";
 import { InlineError } from "./InlineError";
+import { InlineSuccess } from "./InlineSuccess";
 
 function ChangeMyPassword() {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -111,7 +112,7 @@ function ChangeMyPassword() {
               : "Failed to change password"}
           </InlineError>
         )}
-        {success && <p className="text-sm text-positive">Password changed</p>}
+        {success && <InlineSuccess>Password changed</InlineSuccess>}
       </div>
       <Button
         type="submit"
@@ -216,9 +217,9 @@ function ResetPartnerPassword() {
           </InlineError>
         )}
         {success && (
-          <p className="text-sm text-positive">
+          <InlineSuccess>
             {partner?.name ?? "Partner"}'s password has been reset
-          </p>
+          </InlineSuccess>
         )}
       </div>
       <Button

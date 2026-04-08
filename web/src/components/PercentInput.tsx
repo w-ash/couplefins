@@ -1,5 +1,6 @@
 import type { RefObject } from "react";
 import { InlineError } from "@/components/InlineError";
+import { cn } from "@/lib/cn";
 import { inputErrorClass, percentInputClass } from "@/lib/input-styles";
 
 interface PercentInputProps {
@@ -38,7 +39,7 @@ export function PercentInput({
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
         placeholder={placeholder}
-        className={`${percentInputClass} ${error ? inputErrorClass : ""}`}
+        className={cn(percentInputClass, error && inputErrorClass)}
         disabled={disabled}
         aria-invalid={error || undefined}
       />

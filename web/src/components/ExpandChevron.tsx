@@ -1,4 +1,5 @@
 import { ChevronDown } from "lucide-react";
+import { cn } from "@/lib/cn";
 
 export function ExpandChevron({
   expanded,
@@ -9,7 +10,11 @@ export function ExpandChevron({
 }) {
   return (
     <ChevronDown
-      className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${expanded ? "" : "-rotate-90"} ${className ?? ""}`}
+      className={cn(
+        "size-4 shrink-0 text-muted-foreground transition-transform duration-200",
+        !expanded && "-rotate-90",
+        className,
+      )}
     />
   );
 }

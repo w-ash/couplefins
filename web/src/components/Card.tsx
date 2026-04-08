@@ -1,33 +1,29 @@
-import type { HTMLAttributes, ReactNode } from "react";
+import type { ComponentPropsWithoutRef, ElementType, ReactNode } from "react";
+import { cn } from "@/lib/cn";
 
 type CardElement = "div" | "section" | "form" | "aside";
 
-interface CardProps extends HTMLAttributes<HTMLDivElement> {
+type CardProps<T extends CardElement = "div"> = {
   children: ReactNode;
-  as?: CardElement;
-}
+  as?: T;
+} & ComponentPropsWithoutRef<T>;
 
-const TAG_MAP: Record<CardElement, string> = {
-  div: "div",
-  section: "section",
-  form: "form",
-  aside: "aside",
-};
-
-export function Card({
+export function Card<T extends CardElement = "div">({
   children,
-  as: Tag = "div",
+  as,
   className,
   ...props
-}: CardProps) {
-  const Element = TAG_MAP[Tag] as CardElement;
+}: CardProps<T>) {
+  const Tag = (as ?? "div") as ElementType;
   return (
-    // @ts-expect-error — polymorphic element type is safe here
-    <Element
-      className={`rounded-xl border border-border bg-card p-6 shadow-sm ${className ?? ""}`}
+    <Tag
+      className={cn(
+        "rounded-xl border border-border bg-card p-6 shadow-sm",
+        className,
+      )}
       {...props}
     >
       {children}
-    </Element>
+    </Tag>
   );
 }

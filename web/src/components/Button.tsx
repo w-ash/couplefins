@@ -1,5 +1,6 @@
 import { Loader2 } from "lucide-react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { cn } from "@/lib/cn";
 
 type Variant = "primary" | "secondary" | "destructive";
 type Size = "default" | "sm";
@@ -43,7 +44,13 @@ export function Button({
   return (
     <button
       disabled={disabled || loading}
-      className={`${base} ${variants[variant]} ${sizes[size]} ${fullWidth ? "w-full" : ""} ${className ?? ""}`}
+      className={cn(
+        base,
+        variants[variant],
+        sizes[size],
+        fullWidth && "w-full",
+        className,
+      )}
       {...props}
     >
       {loading ? (

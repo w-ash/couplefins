@@ -12,6 +12,7 @@ import { Combobox } from "@/components/Combobox";
 import { InlineError } from "@/components/InlineError";
 import { PercentInput } from "@/components/PercentInput";
 import { SegmentedControl } from "@/components/SegmentedControl";
+import { cn } from "@/lib/cn";
 import {
   computeShares,
   formatCurrency,
@@ -222,7 +223,7 @@ export function TransactionEditor({
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className={`${baseInputClass} w-40`}
+            className={cn(baseInputClass, "w-40")}
             disabled={saving}
           />
           {tx.original_date && (
@@ -241,7 +242,11 @@ export function TransactionEditor({
               step="0.01"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className={`${baseInputClass} w-28 tabular-nums ${amountHasError ? inputErrorClass : ""}`}
+              className={cn(
+                baseInputClass,
+                "w-28 tabular-nums",
+                amountHasError && inputErrorClass,
+              )}
               disabled={saving}
               aria-invalid={amountHasError || undefined}
               aria-describedby={amountHasError ? "amount-error" : undefined}
@@ -291,7 +296,7 @@ export function TransactionEditor({
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
-          className={`${baseInputClass} flex-1 resize-y`}
+          className={cn(baseInputClass, "flex-1 resize-y")}
           disabled={saving}
         />
       </label>

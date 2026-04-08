@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { useGetCategoryGroups } from "@/api/generated/category-groups/category-groups";
 import { UnmappedCategoryRow } from "@/components/UnmappedCategoryRow";
 import { useGroupOptions } from "@/lib/categories";
+import { cn } from "@/lib/cn";
 
 export function UnmappedCategoriesWarning({
   categories,
@@ -31,7 +32,10 @@ export function UnmappedCategoriesWarning({
 
   return (
     <div
-      className={`rounded-lg border border-warning-border bg-warning-muted p-3 ${className ?? ""}`}
+      className={cn(
+        "rounded-lg border border-warning-border bg-warning-muted p-3",
+        className,
+      )}
     >
       <p className="mb-2 flex items-center gap-1.5 font-medium text-sm text-warning">
         <AlertTriangle className="size-4 shrink-0" />

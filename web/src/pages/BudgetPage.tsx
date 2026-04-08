@@ -32,6 +32,7 @@ import { MonthPicker } from "@/components/MonthPicker";
 import { PageHeader } from "@/components/PageHeader";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
 import { ProgressBar } from "@/components/ProgressBar";
+import { SectionHeader } from "@/components/SectionHeader";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { StatsGrid } from "@/components/StatsGrid";
 import {
@@ -50,14 +51,9 @@ import {
   MONTHS,
   useMonthYear,
 } from "@/lib/format";
-
 import { getHealthStyle } from "@/lib/health-styles";
 import { baseInputClass } from "@/lib/input-styles";
-import {
-  PAGE_PADDING,
-  sectionDescriptionClass,
-  sectionHeadingClass,
-} from "@/lib/layout";
+import { PAGE_PADDING } from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
 import { getPersonBarColor } from "@/types/person";
 
@@ -950,10 +946,10 @@ export function BudgetPage() {
 
               {unbudgetedGroups.length > 0 && (
                 <section>
-                  <h2 className={sectionHeadingClass}>Spending this month</h2>
-                  <p className={sectionDescriptionClass}>
-                    Context for setting your budget amounts
-                  </p>
+                  <SectionHeader
+                    title="Spending this month"
+                    description="Context for setting your budget amounts"
+                  />
                   <div className="space-y-3">
                     {unbudgetedGroups.map((status) => (
                       <BudgetGroupRow
@@ -1008,12 +1004,10 @@ export function BudgetPage() {
               {/* Unbudgeted groups with spending */}
               {unbudgetedGroups.length > 0 && (
                 <section>
-                  <h2 className={sectionHeadingClass}>
-                    Spending without a budget
-                  </h2>
-                  <p className={sectionDescriptionClass}>
-                    Groups with spending but no monthly target set
-                  </p>
+                  <SectionHeader
+                    title="Spending without a budget"
+                    description="Groups with spending but no monthly target set"
+                  />
                   <div className="space-y-3">
                     {unbudgetedGroups.map((status) => (
                       <BudgetGroupRow

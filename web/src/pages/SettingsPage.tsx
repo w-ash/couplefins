@@ -4,12 +4,9 @@ import { Card } from "@/components/Card";
 import { CategoryMappingEditor } from "@/components/CategoryMappingEditor";
 import { PageHeader } from "@/components/PageHeader";
 import { PersonAccountSettings } from "@/components/PersonAccountSettings";
+import { SectionHeader } from "@/components/SectionHeader";
 import { SettlementMerchantsEditor } from "@/components/SettlementMerchantsEditor";
-import {
-  PAGE_PADDING,
-  sectionDescriptionClass,
-  sectionHeadingClass,
-} from "@/lib/layout";
+import { PAGE_PADDING } from "@/lib/layout";
 
 export function SettingsPage() {
   const { data: healthResponse } = useHealthCheck();
@@ -23,38 +20,31 @@ export function SettingsPage() {
       <div className="space-y-6">
         {/* Category Mappings */}
         <Card as="section" aria-labelledby="settings-category-mappings">
-          <h2 id="settings-category-mappings" className={sectionHeadingClass}>
-            Category Groups
-          </h2>
-          <p className={sectionDescriptionClass}>
-            Map Monarch categories to budget groups
-          </p>
+          <SectionHeader
+            id="settings-category-mappings"
+            title="Category Groups"
+            description="Map Monarch categories to budget groups"
+          />
           <CategoryMappingEditor />
         </Card>
 
         {/* People */}
         <Card as="section" aria-labelledby="settings-people">
-          <h2 id="settings-people" className={sectionHeadingClass}>
-            People
-          </h2>
-          <p className={sectionDescriptionClass}>
-            Names and Monarch adjustment account names for CSV export
-          </p>
+          <SectionHeader
+            id="settings-people"
+            title="People"
+            description="Names and Monarch adjustment account names for CSV export"
+          />
           <PersonAccountSettings />
         </Card>
 
         {/* Settlement Merchants */}
         <Card as="section" aria-labelledby="settings-settlement-merchants">
-          <h2
+          <SectionHeader
             id="settings-settlement-merchants"
-            className={sectionHeadingClass}
-          >
-            Settlement Merchants
-          </h2>
-          <p className={sectionDescriptionClass}>
-            Transactions from these merchants can be auto-detected and linked to
-            payments, so they don't inflate your spending totals
-          </p>
+            title="Settlement Merchants"
+            description="Transactions from these merchants can be auto-detected and linked to payments, so they don't inflate your spending totals"
+          />
           <SettlementMerchantsEditor />
         </Card>
 

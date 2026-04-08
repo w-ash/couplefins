@@ -39,6 +39,7 @@ import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import type { ComboboxOption } from "@/components/Combobox";
 import { DateRangePicker } from "@/components/DateRangePicker";
+import { InlineSuccess } from "@/components/InlineSuccess";
 import { PageHeader } from "@/components/PageHeader";
 import {
   EmptyStateActions,
@@ -304,15 +305,7 @@ function TransactionTable({
       {bulkMode && (
         <div className="mb-4">
           {bulkResult ? (
-            <div
-              className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 shadow-sm"
-              aria-live="polite"
-            >
-              <Check className="size-4 text-positive" />
-              <span className="text-sm font-medium text-foreground">
-                {bulkResult.message}
-              </span>
-            </div>
+            <InlineSuccess>{bulkResult.message}</InlineSuccess>
           ) : (
             <BulkEditToolbar
               selectedIds={selected}

@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { cn } from "@/lib/cn";
 import { useClickOutside } from "@/lib/use-click-outside";
 
 export interface ComboboxOption {
@@ -294,7 +295,7 @@ export function Combobox({
   }, [flatFiltered]);
 
   return (
-    <div ref={containerRef} className={`relative ${className ?? ""}`}>
+    <div ref={containerRef} className={cn("relative", className)}>
       <div
         className={`flex flex-wrap items-center gap-1 rounded-lg border bg-card px-3 py-2 text-sm shadow-sm ${
           disabled
