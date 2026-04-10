@@ -1,0 +1,158 @@
+/**
+ * SSE client for the chat endpoint.
+ *
+ * Ported from Mimir's sse.ts — adapted for Couplefins' tool-use events.
+ * Uses fetch + ReadableStream (not EventSource) because the endpoint is POST.
+ */
+
+const TERMINAL_TYPES = new Set(["done", "error"]);
+
+export interface ChatSSECallbacks {
+  onToken: (text: string) => void;
+  onToolStart: (name: string, id: string) => void;
+  onToolResult: (
+    name: string,
+    id: string,
+    summary: unknown,
+    isError: boolean,
+  ) => void;
+  onDone: () => void;
+  onError: (code: string, message: string) => void;
+}
+
+function parseSSELine(line: string): Record<string, unknown> | null {
+  if (!line.startsWith("data: ")) return null;
+  const json = line.slice(6);
+  if (json === "[DONE]") return null;
+  try {
+    return JSON.parse(json) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+async function readSSEStream(
+  response: Response,
+  onEvent: (event: Record<string, unknown>) => void,
+  signal?: AbortSignal,
+): Promise<{ completed: boolean }> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("Response body is not readable");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let completed = false;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        const event = parseSSELine(trimmed);
+        if (event) {
+          if (TERMINAL_TYPES.has(event.type as string)) completed = true;
+          onEvent(event);
+        }
+      }
+    }
+
+    if (buffer.trim()) {
+      const event = parseSSELine(buffer.trim());
+      if (event) {
+        if (TERMINAL_TYPES.has(event.type as string)) completed = true;
+        onEvent(event);
+      }
+    }
+  } catch (error) {
+    if (signal?.aborted) return { completed: true };
+    throw error;
+  }
+
+  return { completed };
+}
+
+function handleChatEvents(callbacks: ChatSSECallbacks) {
+  return (event: Record<string, unknown>) => {
+    switch (event.type) {
+      case "token":
+        callbacks.onToken(event.text as string);
+        break;
+      case "tool_start":
+        callbacks.onToolStart(event.name as string, event.id as string);
+        break;
+      case "tool_result":
+        callbacks.onToolResult(
+          event.name as string,
+          event.id as string,
+          event.summary,
+          (event.is_error as boolean) ?? false,
+        );
+        break;
+      case "done":
+        callbacks.onDone();
+        break;
+      case "error":
+        callbacks.onError(event.code as string, event.message as string);
+        break;
+    }
+  };
+}
+
+export async function sendChatMessage(
+  messages: { role: "user" | "assistant"; content: string }[],
+  callbacks: ChatSSECallbacks,
+  signal: AbortSignal,
+): Promise<void> {
+  const response = await fetch("/api/v1/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages }),
+    signal,
+  });
+
+  if (!response.ok) {
+    let code = "REQUEST_FAILED";
+    let message = `HTTP ${response.status}`;
+    try {
+      const body = (await response.json()) as {
+        error?: { code?: string; message?: string };
+      };
+      if (body.error) {
+        code = body.error.code ?? code;
+        message = body.error.message ?? message;
+      }
+    } catch {
+      // ignore parse errors
+    }
+    callbacks.onError(code, message);
+    return;
+  }
+
+  try {
+    const { completed } = await readSSEStream(
+      response,
+      handleChatEvents(callbacks),
+      signal,
+    );
+
+    if (!completed && !signal.aborted) {
+      callbacks.onError(
+        "STREAM_ENDED",
+        "Response stream ended unexpectedly. Please try again.",
+      );
+    }
+  } catch (error) {
+    if (signal.aborted) return;
+    callbacks.onError(
+      "STREAM_ERROR",
+      error instanceof Error ? error.message : "Stream reading failed",
+    );
+  }
+}

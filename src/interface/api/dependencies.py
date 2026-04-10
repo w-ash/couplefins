@@ -1,9 +1,10 @@
+from anthropic import AsyncAnthropic
 from fastapi import Request
 
 from src.application.runner import execute_use_case
 from src.config.settings import get_settings
 from src.domain.entities.person import Person
-from src.domain.exceptions import AuthenticationError
+from src.domain.exceptions import AuthenticationError, ChatUnavailableError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 from src.infrastructure.auth.tokens import decode_access_token
 
@@ -25,3 +26,12 @@ async def get_current_user(request: Request) -> Person:
         return person
 
     return await execute_use_case(_lookup)
+
+
+def get_anthropic_client(request: Request) -> AsyncAnthropic:
+    client: AsyncAnthropic | None = getattr(request.app.state, "anthropic_client", None)
+    if client is None:
+        raise ChatUnavailableError(
+            "Chat is not available — no ANTHROPIC_API_KEY configured"
+        )
+    return client

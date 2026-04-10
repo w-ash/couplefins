@@ -20,7 +20,7 @@ Ideas and features without version assignment. Move to a version file when ready
 
 ## Recurring & Smart Detection
 - Recurring expense detection — same merchant + similar amount across months → surface as a "Subscriptions" view
-- Natural language spending queries via Claude API — "How much did we spend on dining last 3 months?" (single input on Dashboard or Insights)
+- ~~Natural language spending queries via Claude API~~ → moved to v1.5.x (Chat Assistant)
 
 ## UI & UX
 - Keyboard shortcuts for common actions

@@ -1,6 +1,6 @@
 import { User } from "lucide-react";
 import { NavLink } from "react-router";
-import { SECONDARY_ROUTES } from "@/lib/navigation";
+import { CHAT_ROUTE, SECONDARY_ROUTES } from "@/lib/navigation";
 import { BottomSheet } from "./BottomSheet";
 import { LoggedInUser } from "./LoggedInUser";
 
@@ -14,9 +14,11 @@ const sheetLinkClass = ({ isActive }: { isActive: boolean }) =>
 export function MoreSheet({
   open,
   onClose,
+  chatAvailable = false,
 }: {
   open: boolean;
   onClose: () => void;
+  chatAvailable?: boolean;
 }) {
   return (
     <BottomSheet open={open} onClose={onClose}>
@@ -32,13 +34,22 @@ export function MoreSheet({
             {label}
           </NavLink>
         ))}
+        {chatAvailable && (
+          <NavLink
+            to={CHAT_ROUTE.to}
+            onClick={onClose}
+            className={sheetLinkClass}
+          >
+            <CHAT_ROUTE.icon className="size-[18px]" />
+            {CHAT_ROUTE.label}
+          </NavLink>
+        )}
         <NavLink to="/account" onClick={onClose} className={sheetLinkClass}>
           <User className="size-[18px]" />
           Account
         </NavLink>
       </div>
 
-      {/* Logged-in user + logout */}
       <div className="mt-3 border-t border-border px-1 pt-3">
         <LoggedInUser />
       </div>

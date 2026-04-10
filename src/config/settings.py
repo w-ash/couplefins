@@ -53,6 +53,12 @@ class AuthConfig(BaseModel):
     cookie_samesite: Literal["lax", "strict", "none"] = "lax"
 
 
+class ChatConfig(BaseModel):
+    anthropic_api_key: str | None = None
+    model_id: str = "claude-sonnet-4-6"
+    max_turns: int = 8
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_nested_delimiter="__",
@@ -64,6 +70,7 @@ class Settings(BaseSettings):
     logging: LoggingConfig = LoggingConfig()
     database: DatabaseConfig = DatabaseConfig()
     auth: AuthConfig = AuthConfig()
+    chat: ChatConfig = ChatConfig()
     cors_origins: list[str] = ["http://localhost:5174"]
 
 

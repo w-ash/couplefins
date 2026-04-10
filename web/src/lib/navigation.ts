@@ -3,6 +3,7 @@ import {
   ArrowLeftRight,
   HandCoins,
   LayoutDashboard,
+  MessageCircle,
   PieChart,
   Settings,
   TrendingUp,
@@ -35,3 +36,10 @@ export const SECONDARY_ROUTES: NavRoute[] = [
   { to: "/upload", label: "Upload", icon: Upload },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
+
+/** Chat nav — only shown when chat is available. */
+export const CHAT_ROUTE: NavRoute = {
+  to: "/ask",
+  label: "Ask",
+  icon: MessageCircle,
+};

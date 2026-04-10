@@ -50,7 +50,7 @@ The couple sits down to:
 
 ## Information Architecture
 
-Seven top-level pages in the sidebar, ordered by workflow:
+Seven top-level pages in the sidebar, ordered by workflow, plus a chat assistant panel:
 
 | Page | Purpose | Ships in |
 |---|---|---|
@@ -61,8 +61,11 @@ Seven top-level pages in the sidebar, ordered by workflow:
 | **Insights** | Spending trend sparklines per category group, comparison cards, budget overlays, settlement balance trend, YoY comparison | v0.7.0 |
 | **Upload** | CSV import: preview, confirm, re-upload. Drag-and-drop in v0.8.x | v0.1.1 |
 | **Settings** | Person config, category-to-group mappings, adjustment accounts, theme | v0.1.3 |
+| **Ask** *(panel)* | Chat assistant — natural language queries about spending, budgets, settlements. Right-edge panel on desktop, full-screen page on mobile. Optional (requires API key). | v1.5.0 |
 
 The Dashboard has no date picker — it's a "now" view where each card owns its own temporal context (settlement shows the active month, stats show year-to-date, history shows trends). Other pages have their own date selectors as needed.
+
+The Ask panel is not a sidebar navigation item — it lives in a separate right-edge tab on desktop because the left sidebar's mental model is "navigate to a page." The chat panel opens alongside the current page without navigating away. On mobile, it's a full-screen page in the "More" menu.
 
 ---
 
@@ -383,6 +386,79 @@ Setup and maintenance tasks that happen occasionally, not monthly.
 - Given I add a merchant (name + pattern), then it appears in the list and is used for candidate matching on the Settle Up page
 - Given I delete a merchant, then it's no longer used for matching
 - Given I record a settlement, then the method dropdown is populated from configured merchants (plus "Other" as a freeform fallback)
+
+---
+
+### Asking Questions (v1.5.x)
+
+A natural language assistant for quick answers without page-hopping. Optional — the app works identically without it.
+
+**Goal**: Get instant answers to spending, budget, and settlement questions during solo prep or the together session.
+
+**US-CHAT-1** (v1.5.x): As a partner, I want to ask spending questions in plain language and get answers from our data.
+
+- Given the chat panel is open, when I type "How much did we spend on dining in March?", then the assistant queries our transaction data and responds with the total, broken down by category if relevant
+- Given I ask "Who owes whom for March?", then the assistant returns the settlement balance for that month
+- Given I ask a question about a month with no data, then the assistant tells me no transactions exist for that period
+- Given I ask an ambiguous question ("How's the budget?"), then the assistant asks a clarifying follow-up or assumes the current month and states its assumption
+
+**US-CHAT-2** (v1.5.x): As a partner, I want the chat panel accessible from any page without losing my place.
+
+- Given any page in the app on desktop, then I see a small icon tab on the right edge of the viewport
+- Given I click the icon tab (or press ⌘K), then a chat panel expands from the right and the page content compresses to make room
+- Given the panel is open, then I can still interact with the page content (scrolling, clicking links) — the content is narrower but fully functional
+- Given I close the panel (click close button, press Escape, or press ⌘K again), then the content expands back and my conversation is preserved until I navigate away or refresh
+- Given the API key is not configured, then the icon tab does not render
+
+**US-CHAT-3** (v1.5.x): As a partner, I want the assistant to know who I am and what month it is without me having to say so.
+
+- Given I'm logged in as Alice and ask "What do I owe?", then the assistant checks settlement for the current active month from Alice's perspective
+- Given I ask "Are we over budget?", then the assistant checks household budgets for the current month
+- Given I ask about "last month", then the assistant resolves it relative to the current date
+
+**US-CHAT-4** (v1.5.x): As a partner, I want to see the assistant's progress when it's looking things up.
+
+- Given the assistant needs to query data, then I see a brief indicator ("Looking up March spending...")
+- Given the response is streaming, then I see text appear progressively (not all at once after a delay)
+- Given a tool call fails, then I see a clear error message and can retry my question
+
+**US-CHAT-5** (v1.5.x): As a partner, I want the assistant's responses to be well-formatted — not a wall of text.
+
+- Given the assistant returns a spending breakdown, then I see it as a compact table or list (not a paragraph of numbers)
+- Given the assistant references a specific transaction, then I see merchant, amount, date, and category inline
+- Given the assistant returns a budget summary, then I see group names with spent/budget amounts and health indicators matching the Budget page's visual language
+
+**US-CHAT-6** (v1.5.x): As a partner on mobile, I want to ask questions without the chat blocking the whole app.
+
+- Given I'm on a mobile viewport, then the "More" menu includes an "Ask" item (alongside Upload and Settings)
+- Given I tap "Ask", then I navigate to a full-screen chat page with a back button
+- Given I'm in the chat page, then the experience is identical to the desktop panel — same messages, same streaming, same tool indicators
+- Given I press back, then I return to the page I was on (conversation is lost on navigation, same as desktop)
+
+**US-CHAT-7** (v1.5.x): As a partner, I want to see example questions so I know what to ask.
+
+- Given I open the chat panel (or page) with no prior messages, then I see 3-4 suggested questions as tappable chips
+- Given the suggestions are context-aware: if there's an outstanding balance, one chip is "Who owes whom?"; if budgets are set, one is "Are we on budget?"
+- Given I tap a suggestion, then it populates the input and sends immediately
+
+**US-CHAT-8** (v1.5.x): As a partner, I want to update budgets through the chat with a confirmation step.
+
+- Given I say "Set the Food & Dining budget to $700 for April", then the assistant shows a confirmation card: "Set Food & Dining to $700.00 for April 2026? [Confirm] [Cancel]"
+- Given I click Confirm, then the budget is updated and the assistant confirms the change
+- Given I click Cancel, then nothing changes and the assistant acknowledges the cancellation
+- Given the month is finalized, then the assistant tells me the month is locked and I need to unfinalize first
+
+**US-CHAT-9** (v1.5.x): As a partner, I want to edit transaction splits through the chat with a confirmation step.
+
+- Given I say "Change the Whole Foods transaction from March 15 to 70/30", then the assistant finds the matching transaction and shows a confirmation card with transaction details and the proposed split change
+- Given multiple transactions match, then the assistant lists them and asks me to clarify which one
+- Given I confirm, then the split is updated and the audit trail records the change
+
+**US-CHAT-10** (v1.5.x): As a partner, I want to tag transactions through the chat.
+
+- Given I say "Tag all the Uber Eats transactions from March as household", then the assistant shows a confirmation card listing the affected transactions and the proposed change
+- Given I confirm, then the transactions are updated (household flag set, audit trail recorded)
+- Given the count is large (>10), then the assistant confirms the count before showing the full confirmation
 
 ---
 

@@ -1,6 +1,6 @@
 from urllib.parse import urlparse
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 from sqlalchemy import text
 
@@ -19,10 +19,11 @@ class HealthResponse(BaseModel):
     schema_ok: bool
     database_host: str
     database_mode: str
+    chat_available: bool
 
 
 @router.get("/health")
-async def health_check() -> HealthResponse:
+async def health_check(request: Request) -> HealthResponse:
     settings = get_settings()
     parsed = urlparse(settings.database.url)
     host = parsed.hostname or "unknown"
@@ -46,4 +47,5 @@ async def health_check() -> HealthResponse:
         schema_ok=schema_current == AppConfig.SCHEMA_VERSION,
         database_host=host,
         database_mode=mode,
+        chat_available=getattr(request.app.state, "anthropic_client", None) is not None,
     )

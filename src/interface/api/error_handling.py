@@ -3,13 +3,17 @@ from fastapi.responses import JSONResponse
 from structlog.stdlib import get_logger
 
 from src.domain.exceptions import (
+    AnthropicApiError,
     AuthenticationError,
+    ChatUnavailableError,
     DomainError,
     DuplicateError,
     ForbiddenError,
     InvariantViolationError,
+    MaxRoundsExceededError,
     NotFoundError,
     PeriodFinalizedError,
+    ToolExecutionError,
     ValidationError,
 )
 
@@ -22,6 +26,10 @@ _DOMAIN_ERROR_MAP: dict[type[DomainError], tuple[int, str]] = {
     PeriodFinalizedError: (409, "PERIOD_FINALIZED"),
     AuthenticationError: (401, "AUTHENTICATION_ERROR"),
     ForbiddenError: (403, "FORBIDDEN"),
+    ChatUnavailableError: (503, "CHAT_UNAVAILABLE"),
+    ToolExecutionError: (500, "TOOL_EXECUTION_ERROR"),
+    MaxRoundsExceededError: (400, "MAX_ROUNDS_EXCEEDED"),
+    AnthropicApiError: (502, "ANTHROPIC_API_ERROR"),
 }
 
 

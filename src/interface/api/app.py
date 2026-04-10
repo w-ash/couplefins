@@ -1,6 +1,7 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+from anthropic import AsyncAnthropic
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from structlog.stdlib import get_logger
@@ -22,6 +23,7 @@ from src.interface.api.request_logging import RequestLoggingMiddleware
 from src.interface.api.routes.auth import router as auth_router
 from src.interface.api.routes.budgets import router as budgets_router
 from src.interface.api.routes.category_groups import router as category_groups_router
+from src.interface.api.routes.chat import router as chat_router
 from src.interface.api.routes.dashboard import router as dashboard_router
 from src.interface.api.routes.events import router as events_router
 from src.interface.api.routes.health import router as health_router
@@ -37,12 +39,21 @@ logger = get_logger()
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     setup_logging()
     await init_db()
     await execute_use_case(seed_category_groups)
     await execute_use_case(seed_settlement_merchants)
-    logger.info("application_started")
+    settings = get_settings()
+    app.state.anthropic_client = (
+        AsyncAnthropic(api_key=settings.chat.anthropic_api_key)
+        if settings.chat.anthropic_api_key
+        else None
+    )
+    logger.info(
+        "application_started",
+        chat_available=app.state.anthropic_client is not None,
+    )
     yield
     logger.info("application_shutting_down")
     await dispose_engine()
@@ -81,6 +92,7 @@ def create_app() -> FastAPI:
     app.include_router(settings_router, prefix=AppConfig.API_V1_PREFIX)
     app.include_router(insights_router, prefix=AppConfig.API_V1_PREFIX)
     app.include_router(events_router, prefix=AppConfig.API_V1_PREFIX)
+    app.include_router(chat_router, prefix=AppConfig.API_V1_PREFIX)
 
     return app
 

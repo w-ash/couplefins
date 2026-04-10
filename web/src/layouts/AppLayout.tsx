@@ -1,15 +1,32 @@
+import { useCallback } from "react";
 import { Outlet } from "react-router";
 import { useHealthCheck } from "@/api/generated/health/health";
 import { BottomNav } from "@/components/BottomNav";
+import { ChatEdgeTab } from "@/components/chat/ChatEdgeTab";
+import { ChatPanel } from "@/components/chat/ChatPanel";
 import { Sidebar } from "@/components/Sidebar";
+import { useKeyboardShortcut } from "@/hooks/useKeyboardShortcut";
 import { useRealtimeSync } from "@/hooks/useRealtimeSync";
+import { useChatStore } from "@/lib/chat";
 
 const DB_KEEPALIVE_MS = 4 * 60 * 1000;
 
 export function AppLayout() {
   useRealtimeSync();
-  // Keep Neon database connection warm while app is open
-  useHealthCheck({ query: { refetchInterval: DB_KEEPALIVE_MS } });
+  const healthQuery = useHealthCheck({
+    query: { refetchInterval: DB_KEEPALIVE_MS },
+  });
+  const health =
+    healthQuery.data?.status === 200 ? healthQuery.data.data : undefined;
+  const chatAvailable = health?.chat_available ?? false;
+
+  const isPanelOpen = useChatStore((s) => s.isPanelOpen);
+
+  const togglePanel = useCallback(() => {
+    useChatStore.getState().togglePanel();
+  }, []);
+
+  useKeyboardShortcut(["cmd", "k"], togglePanel, chatAvailable);
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -25,7 +42,15 @@ export function AppLayout() {
       >
         <Outlet />
       </main>
-      <BottomNav />
+      {chatAvailable &&
+        (isPanelOpen ? (
+          <div className="hidden w-96 shrink-0 border-l border-border bg-card md:flex">
+            <ChatPanel />
+          </div>
+        ) : (
+          <ChatEdgeTab />
+        ))}
+      <BottomNav chatAvailable={chatAvailable} />
     </div>
   );
 }

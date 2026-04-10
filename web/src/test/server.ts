@@ -19,6 +19,7 @@ export const server = setupServer(
     schema_ok: true,
     database_host: "localhost",
     database_mode: "Local PostgreSQL",
+    chat_available: false,
   }),
   ...getPersonsMock(),
   ...getUploadsMock(),

@@ -28,3 +28,19 @@ class ForbiddenError(DomainError):
 
 class InvariantViolationError(DomainError):
     pass
+
+
+class ChatUnavailableError(DomainError):
+    pass
+
+
+class ToolExecutionError(DomainError):
+    pass
+
+
+class MaxRoundsExceededError(DomainError):
+    pass
+
+
+class AnthropicApiError(DomainError):
+    pass

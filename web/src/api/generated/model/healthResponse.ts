@@ -13,4 +13,5 @@ export interface HealthResponse {
   schema_ok: boolean;
   database_host: string;
   database_mode: string;
+  chat_available: boolean;
 }

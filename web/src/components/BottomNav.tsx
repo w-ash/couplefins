@@ -4,7 +4,11 @@ import { NavLink } from "react-router";
 import { PRIMARY_ROUTES } from "@/lib/navigation";
 import { MoreSheet } from "./MoreSheet";
 
-export function BottomNav() {
+export function BottomNav({
+  chatAvailable = false,
+}: {
+  chatAvailable?: boolean;
+}) {
   const [moreOpen, setMoreOpen] = useState(false);
 
   return (
@@ -41,7 +45,11 @@ export function BottomNav() {
         </div>
       </nav>
 
-      <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
+      <MoreSheet
+        open={moreOpen}
+        onClose={() => setMoreOpen(false)}
+        chatAvailable={chatAvailable}
+      />
     </>
   );
 }

@@ -10,6 +10,7 @@ import { AppLayout } from "./layouts/AppLayout";
 import { useIdentityStore } from "./lib/identity";
 import { isValidTheme } from "./lib/theme";
 import { AccountPage } from "./pages/AccountPage";
+import { AskPage } from "./pages/AskPage";
 import { BudgetPage } from "./pages/BudgetPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { InsightsPage } from "./pages/InsightsPage";
@@ -33,6 +34,7 @@ const router = createBrowserRouter([
       { path: "upload", element: <UploadPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "account", element: <AccountPage /> },
+      { path: "ask", element: <AskPage /> },
       { path: "*", element: <Navigate to="/" replace /> },
     ],
   },
