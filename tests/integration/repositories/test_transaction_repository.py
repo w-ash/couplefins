@@ -3,8 +3,14 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.infrastructure.persistence.repositories.person_repository import (
+    PersonRepository,
+)
 from src.infrastructure.persistence.repositories.transaction_repository import (
     TransactionRepository,
+)
+from src.infrastructure.persistence.repositories.upload_repository import (
+    UploadRepository,
 )
 from tests.fixtures.factories import make_person, make_transaction, make_upload
 
@@ -14,6 +20,9 @@ async def _seed_household_transactions(
 ) -> None:
     alice = make_person(name="Alice")
     upload = make_upload(person_id=alice.id)
+
+    await PersonRepository(session).save(alice)
+    await UploadRepository(session).save(upload)
 
     jan_tx = make_transaction(
         upload_id=upload.id,
@@ -70,6 +79,9 @@ async def test_household_by_date_range_boundary_dates(
     repo = TransactionRepository(db_session)
     alice = make_person(name="Alice")
     upload = make_upload(person_id=alice.id)
+
+    await PersonRepository(db_session).save(alice)
+    await UploadRepository(db_session).save(upload)
 
     start_tx = make_transaction(
         upload_id=upload.id,

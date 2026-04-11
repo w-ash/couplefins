@@ -1,6 +1,9 @@
 # Reference documents (not part of the project)
 refs/
 
+# Database backups (local pg_dump files)
+backups/
+
 # macOS
 .DS_Store
 

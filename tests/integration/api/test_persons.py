@@ -115,14 +115,14 @@ async def test_patch_person_updates_adjustment_account(
     assert alice["adjustment_account"] == "Shared Adjustments"
 
 
-async def test_patch_person_not_found(client: AsyncClient) -> None:
+async def test_patch_person_wrong_id_rejected(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
     response = await client.patch(
         "/api/v1/persons/00000000-0000-0000-0000-000000000000",
         json={"adjustment_account": "Test"},
         cookies=cookies,
     )
-    assert response.status_code == 404
+    assert response.status_code == 422
 
 
 async def test_patch_person_rejects_blank_account(

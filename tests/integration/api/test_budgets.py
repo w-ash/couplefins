@@ -4,6 +4,12 @@ import pytest
 from tests.integration.conftest import setup_and_login, upload_csv
 
 
+async def _get_group_id(client: AsyncClient, name: str, cookies: dict[str, str]) -> str:
+    """Look up a seeded category group by name."""
+    resp = await client.get("/api/v1/category-groups", cookies=cookies)
+    return next(g["id"] for g in resp.json() if g["name"] == name)
+
+
 async def test_budget_overview_empty(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
     response = await client.get(
@@ -13,16 +19,14 @@ async def test_budget_overview_empty(client: AsyncClient) -> None:
     data = response.json()
     assert data["year"] == 2026
     assert data["month"] == 1
-    assert data["group_statuses"] == []
+    assert all(s["monthly_budget"] is None for s in data["group_statuses"])
+    assert all(s["monthly_spent"] == pytest.approx(0.0) for s in data["group_statuses"])
     assert data["budgets"] == []
 
 
 async def test_create_budget(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
-    group_resp = await client.post(
-        "/api/v1/category-groups", json={"name": "Food & Dining"}, cookies=cookies
-    )
-    group_id = group_resp.json()["id"]
+    group_id = await _get_group_id(client, "Food & Dining", cookies)
 
     response = await client.post(
         "/api/v1/budgets",
@@ -45,10 +49,7 @@ async def test_create_budget(client: AsyncClient) -> None:
 
 async def test_update_budget(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
-    group_resp = await client.post(
-        "/api/v1/category-groups", json={"name": "Home Expenses"}, cookies=cookies
-    )
-    group_id = group_resp.json()["id"]
+    group_id = await _get_group_id(client, "Home Expenses", cookies)
 
     create_resp = await client.post(
         "/api/v1/budgets",
@@ -73,10 +74,7 @@ async def test_update_budget(client: AsyncClient) -> None:
 
 async def test_delete_budget(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
-    group_resp = await client.post(
-        "/api/v1/category-groups", json={"name": "Shopping"}, cookies=cookies
-    )
-    group_id = group_resp.json()["id"]
+    group_id = await _get_group_id(client, "Shopping", cookies)
 
     create_resp = await client.post(
         "/api/v1/budgets",
@@ -103,10 +101,7 @@ async def test_delete_nonexistent_budget_returns_404(client: AsyncClient) -> Non
 
 async def test_list_budgets(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
-    group_resp = await client.post(
-        "/api/v1/category-groups", json={"name": "Health"}, cookies=cookies
-    )
-    group_id = group_resp.json()["id"]
+    group_id = await _get_group_id(client, "Health & Wellness", cookies)
 
     await client.post(
         "/api/v1/budgets",
@@ -129,17 +124,7 @@ async def test_list_budgets(client: AsyncClient) -> None:
 async def test_overview_with_budget_and_spending(client: AsyncClient) -> None:
     persons, cookies = await setup_and_login(client)
     alice_id = persons[0]["id"]
-
-    group_resp = await client.post(
-        "/api/v1/category-groups", json={"name": "Food & Dining"}, cookies=cookies
-    )
-    group_id = group_resp.json()["id"]
-
-    await client.put(
-        "/api/v1/category-mappings",
-        json={"mappings": [{"category": "Dining Out", "group_id": group_id}]},
-        cookies=cookies,
-    )
+    group_id = await _get_group_id(client, "Food & Dining", cookies)
 
     await client.post(
         "/api/v1/budgets",
@@ -175,11 +160,7 @@ async def test_overview_with_budget_and_spending(client: AsyncClient) -> None:
 
 async def test_create_personal_budget(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
-
-    group_resp = await client.post(
-        "/api/v1/category-groups", json={"name": "Food & Dining"}, cookies=cookies
-    )
-    group_id = group_resp.json()["id"]
+    group_id = await _get_group_id(client, "Food & Dining", cookies)
 
     response = await client.post(
         "/api/v1/budgets",
@@ -201,17 +182,7 @@ async def test_create_personal_budget(client: AsyncClient) -> None:
 async def test_personal_budget_overview(client: AsyncClient) -> None:
     persons, cookies = await setup_and_login(client)
     alice_id = persons[0]["id"]
-
-    group_resp = await client.post(
-        "/api/v1/category-groups", json={"name": "Food & Dining"}, cookies=cookies
-    )
-    group_id = group_resp.json()["id"]
-
-    await client.put(
-        "/api/v1/category-mappings",
-        json={"mappings": [{"category": "Dining Out", "group_id": group_id}]},
-        cookies=cookies,
-    )
+    group_id = await _get_group_id(client, "Food & Dining", cookies)
 
     # Create personal budget for Alice
     await client.post(
@@ -264,10 +235,7 @@ async def test_default_scope_backward_compatible(client: AsyncClient) -> None:
 
 async def test_copy_budgets_end_to_end(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
-    group_resp = await client.post(
-        "/api/v1/category-groups", json={"name": "Food & Dining"}, cookies=cookies
-    )
-    group_id = group_resp.json()["id"]
+    group_id = await _get_group_id(client, "Food & Dining", cookies)
 
     await client.post(
         "/api/v1/budgets",
@@ -306,10 +274,7 @@ async def test_copy_budgets_end_to_end(client: AsyncClient) -> None:
 
 async def test_copy_skips_existing_targets(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
-    group_resp = await client.post(
-        "/api/v1/category-groups", json={"name": "Travel"}, cookies=cookies
-    )
-    group_id = group_resp.json()["id"]
+    group_id = await _get_group_id(client, "Travel", cookies)
 
     # Create budget in Jan and Feb for same group
     for month in (1, 2):
@@ -363,10 +328,7 @@ async def test_copy_to_finalized_month_returns_409(client: AsyncClient) -> None:
 
 async def test_overview_includes_copyable_source(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
-    group_resp = await client.post(
-        "/api/v1/category-groups", json={"name": "Lifestyle"}, cookies=cookies
-    )
-    group_id = group_resp.json()["id"]
+    group_id = await _get_group_id(client, "Lifestyle", cookies)
 
     await client.post(
         "/api/v1/budgets",

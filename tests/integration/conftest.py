@@ -1,6 +1,7 @@
 from collections.abc import AsyncGenerator
 import os
 
+from dotenv import load_dotenv
 from httpx import ASGITransport, AsyncClient
 import pytest
 from sqlalchemy import text
@@ -11,14 +12,25 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-# Import from models/__init__ (not models.base) to ensure all models register with Base.metadata
 from src.infrastructure.persistence.models import Base
+
+load_dotenv()
+
+ALICE_PASSWORD = "password123"
+BOB_PASSWORD = "password456"
 
 
 def _get_test_db_url() -> str:
-    url = os.environ.get("DATABASE__URL", "")
+    url = os.environ.get("TEST_DATABASE__URL", "")
     if not url:
-        pytest.skip("DATABASE__URL not set — skipping integration tests")
+        pytest.skip("TEST_DATABASE__URL not set — skipping integration tests")
+    if "-pooler" in url:
+        msg = (
+            "TEST_DATABASE__URL contains '-pooler', which looks like a production "
+            "Neon endpoint. Use a non-pooled endpoint or a dedicated test branch. "
+            "Integration tests TRUNCATE all tables on teardown."
+        )
+        raise RuntimeError(msg)
     return url
 
 
@@ -57,10 +69,17 @@ async def client() -> AsyncGenerator[AsyncClient]:
     reset_settings()
     reset_engine_cache()
 
+    from src.application.runner import execute_use_case
+    from src.application.use_cases.seed_category_groups import seed_category_groups
+    from src.application.use_cases.seed_settlement_merchants import (
+        seed_settlement_merchants,
+    )
     from src.infrastructure.persistence.database.db_connection import init_db
 
     app = create_app()
     await init_db()
+    await execute_use_case(seed_category_groups)
+    await execute_use_case(seed_settlement_merchants)
 
     async with AsyncClient(
         transport=ASGITransport(app=app),
@@ -75,8 +94,8 @@ async def client() -> AsyncGenerator[AsyncClient]:
 
 async def setup_couple(
     client: AsyncClient,
-    password1: str = "password123",
-    password2: str = "password456",
+    password1: str = ALICE_PASSWORD,
+    password2: str = BOB_PASSWORD,
 ) -> list[dict]:
     """Create a couple (Alice & Bob) and return the person dicts."""
     resp = await client.post(
@@ -94,7 +113,7 @@ async def setup_couple(
 async def login_as(
     client: AsyncClient,
     name: str = "Alice",
-    password: str = "password123",
+    password: str = ALICE_PASSWORD,
 ) -> dict[str, str]:
     """Log in and return cookies dict for subsequent requests."""
     resp = await client.post(
@@ -105,10 +124,15 @@ async def login_as(
     return dict(resp.cookies)
 
 
+async def login_as_bob(client: AsyncClient) -> dict[str, str]:
+    """Log in as Bob and return cookies."""
+    return await login_as(client, "Bob", BOB_PASSWORD)
+
+
 async def setup_and_login(
     client: AsyncClient,
-    password1: str = "password123",
-    password2: str = "password456",
+    password1: str = ALICE_PASSWORD,
+    password2: str = BOB_PASSWORD,
 ) -> tuple[list[dict], dict[str, str]]:
     """Create couple, log in as Alice, return (persons, cookies)."""
     persons = await setup_couple(client, password1=password1, password2=password2)

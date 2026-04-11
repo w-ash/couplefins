@@ -3,7 +3,7 @@ import io
 
 from httpx import AsyncClient
 
-from tests.integration.conftest import setup_and_login, upload_csv
+from tests.integration.conftest import login_as_bob, setup_and_login, upload_csv
 
 SHARED_CSV_ALICE = (
     "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
@@ -30,10 +30,11 @@ async def _setup_with_accounts(
         json={"adjustment_account": "Alice Adjustments"},
         cookies=cookies,
     )
+    bob_cookies = await login_as_bob(client)
     await client.patch(
         f"/api/v1/persons/{bob_id}",
         json={"adjustment_account": "Bob Adjustments"},
-        cookies=cookies,
+        cookies=bob_cookies,
     )
     return alice_id, bob_id, cookies
 
@@ -41,7 +42,8 @@ async def _setup_with_accounts(
 async def test_export_full_flow(client: AsyncClient) -> None:
     alice_id, bob_id, cookies = await _setup_with_accounts(client)
     await upload_csv(client, alice_id, SHARED_CSV_ALICE, cookies=cookies)
-    await upload_csv(client, bob_id, SHARED_CSV_BOB, cookies=cookies)
+    bob_cookies = await login_as_bob(client)
+    await upload_csv(client, bob_id, SHARED_CSV_BOB, cookies=bob_cookies)
 
     response = await client.get(
         f"/api/v1/persons/{alice_id}/export/2026/1", cookies=cookies
@@ -70,7 +72,8 @@ async def test_export_full_flow(client: AsyncClient) -> None:
 async def test_export_bob_perspective(client: AsyncClient) -> None:
     alice_id, bob_id, cookies = await _setup_with_accounts(client)
     await upload_csv(client, alice_id, SHARED_CSV_ALICE, cookies=cookies)
-    await upload_csv(client, bob_id, SHARED_CSV_BOB, cookies=cookies)
+    bob_cookies = await login_as_bob(client)
+    await upload_csv(client, bob_id, SHARED_CSV_BOB, cookies=bob_cookies)
 
     response = await client.get(
         f"/api/v1/persons/{bob_id}/export/2026/1", cookies=cookies
@@ -119,7 +122,8 @@ async def test_export_empty_month(client: AsyncClient) -> None:
 async def test_export_idempotent(client: AsyncClient) -> None:
     alice_id, bob_id, cookies = await _setup_with_accounts(client)
     await upload_csv(client, alice_id, SHARED_CSV_ALICE, cookies=cookies)
-    await upload_csv(client, bob_id, SHARED_CSV_BOB, cookies=cookies)
+    bob_cookies = await login_as_bob(client)
+    await upload_csv(client, bob_id, SHARED_CSV_BOB, cookies=bob_cookies)
 
     first = await client.get(
         f"/api/v1/persons/{alice_id}/export/2026/1", cookies=cookies
@@ -136,7 +140,8 @@ async def test_export_idempotent(client: AsyncClient) -> None:
 async def test_preview_returns_json(client: AsyncClient) -> None:
     alice_id, bob_id, cookies = await _setup_with_accounts(client)
     await upload_csv(client, alice_id, SHARED_CSV_ALICE, cookies=cookies)
-    await upload_csv(client, bob_id, SHARED_CSV_BOB, cookies=cookies)
+    bob_cookies = await login_as_bob(client)
+    await upload_csv(client, bob_id, SHARED_CSV_BOB, cookies=bob_cookies)
 
     response = await client.get(
         f"/api/v1/persons/{alice_id}/adjustments/2026/1", cookies=cookies

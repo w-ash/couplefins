@@ -1,7 +1,7 @@
 from httpx import AsyncClient
 import pytest
 
-from tests.integration.conftest import setup_and_login, upload_csv
+from tests.integration.conftest import login_as_bob, setup_and_login, upload_csv
 
 SHARED_CSV = (
     "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
@@ -21,7 +21,8 @@ async def test_full_reconciliation_both_uploaded(client: AsyncClient) -> None:
     bob_id = persons[1]["id"]
 
     await upload_csv(client, alice_id, SHARED_CSV, cookies=cookies)
-    await upload_csv(client, bob_id, SHARED_CSV_BOB, cookies=cookies)
+    bob_cookies = await login_as_bob(client)
+    await upload_csv(client, bob_id, SHARED_CSV_BOB, cookies=bob_cookies)
 
     response = await client.get(
         "/api/v1/reconciliation?year=2026&month=1", cookies=cookies

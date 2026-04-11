@@ -3,6 +3,9 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.infrastructure.persistence.repositories.person_repository import (
+    PersonRepository,
+)
 from src.infrastructure.persistence.repositories.transaction_repository import (
     TransactionRepository,
 )
@@ -13,13 +16,15 @@ from tests.fixtures.factories import make_person, make_transaction, make_upload
 
 
 async def test_uploads_with_transactions_in_range(db_session: AsyncSession) -> None:
+    person_repo = PersonRepository(db_session)
     tx_repo = TransactionRepository(db_session)
     up_repo = UploadRepository(db_session)
 
     alice = make_person(name="Alice")
+    await person_repo.save(alice)
+
     jan_upload = make_upload(person_id=alice.id, filename="jan.csv")
     feb_upload = make_upload(person_id=alice.id, filename="feb.csv")
-
     await up_repo.save_batch([jan_upload, feb_upload])
 
     jan_tx = make_transaction(
@@ -45,10 +50,13 @@ async def test_uploads_with_transactions_in_range(db_session: AsyncSession) -> N
 
 
 async def test_excludes_out_of_range(db_session: AsyncSession) -> None:
+    person_repo = PersonRepository(db_session)
     tx_repo = TransactionRepository(db_session)
     up_repo = UploadRepository(db_session)
 
     alice = make_person(name="Alice")
+    await person_repo.save(alice)
+
     upload = make_upload(person_id=alice.id)
     await up_repo.save(upload)
 
@@ -67,11 +75,14 @@ async def test_excludes_out_of_range(db_session: AsyncSession) -> None:
 
 
 async def test_excludes_other_persons(db_session: AsyncSession) -> None:
+    person_repo = PersonRepository(db_session)
     tx_repo = TransactionRepository(db_session)
     up_repo = UploadRepository(db_session)
 
     alice = make_person(name="Alice")
     bob = make_person(name="Bob")
+    await person_repo.save_batch([alice, bob])
+
     bob_upload = make_upload(person_id=bob.id)
     await up_repo.save(bob_upload)
 
@@ -98,11 +109,13 @@ async def test_empty_person_ids(db_session: AsyncSession) -> None:
 
 
 async def test_get_all_with_transaction_counts(db_session: AsyncSession) -> None:
+    person_repo = PersonRepository(db_session)
     tx_repo = TransactionRepository(db_session)
     up_repo = UploadRepository(db_session)
 
     alice = make_person(name="Alice")
     bob = make_person(name="Bob")
+    await person_repo.save_batch([alice, bob])
 
     alice_upload = make_upload(person_id=alice.id, filename="alice-jan.csv")
     bob_upload = make_upload(person_id=bob.id, filename="bob-jan.csv")
@@ -137,7 +150,6 @@ async def test_get_all_with_transaction_counts(db_session: AsyncSession) -> None
     result = await up_repo.get_all_with_transaction_counts()
 
     assert len(result) == 2
-    # Both uploads returned with correct counts
     by_filename = {r.filename: r for r in result}
     alice_row = by_filename["alice-jan.csv"]
     assert alice_row.transaction_count == 2
@@ -155,8 +167,13 @@ async def test_get_all_with_transaction_counts(db_session: AsyncSession) -> None
 async def test_get_all_with_transaction_counts_empty_upload(
     db_session: AsyncSession,
 ) -> None:
+    person_repo = PersonRepository(db_session)
     up_repo = UploadRepository(db_session)
-    upload = make_upload(filename="empty.csv")
+
+    person = make_person(name="Test")
+    await person_repo.save(person)
+
+    upload = make_upload(person_id=person.id, filename="empty.csv")
     await up_repo.save(upload)
     await db_session.commit()
 
@@ -170,10 +187,13 @@ async def test_get_all_with_transaction_counts_empty_upload(
 
 
 async def test_no_duplicate_uploads(db_session: AsyncSession) -> None:
+    person_repo = PersonRepository(db_session)
     tx_repo = TransactionRepository(db_session)
     up_repo = UploadRepository(db_session)
 
     alice = make_person(name="Alice")
+    await person_repo.save(alice)
+
     upload = make_upload(person_id=alice.id)
     await up_repo.save(upload)
 

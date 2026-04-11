@@ -1,7 +1,7 @@
 from httpx import AsyncClient
 import pytest
 
-from tests.integration.conftest import setup_and_login, upload_csv
+from tests.integration.conftest import login_as_bob, setup_and_login, upload_csv
 
 SHARED_CSV_ALICE = (
     "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
@@ -22,7 +22,8 @@ async def test_dashboard_with_data(client: AsyncClient) -> None:
     bob_id = persons[1]["id"]
 
     await upload_csv(client, alice_id, SHARED_CSV_ALICE, cookies=cookies)
-    await upload_csv(client, bob_id, SHARED_CSV_BOB, cookies=cookies)
+    bob_cookies = await login_as_bob(client)
+    await upload_csv(client, bob_id, SHARED_CSV_BOB, cookies=bob_cookies)
 
     response = await client.get("/api/v1/dashboard?year=2026&month=1", cookies=cookies)
     assert response.status_code == 200

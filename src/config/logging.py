@@ -7,9 +7,8 @@ import structlog
 
 from src.config.settings import get_settings
 
-_shared_processors: list[structlog.types.Processor] = [
+_foreign_processors: list[structlog.types.Processor] = [
     structlog.contextvars.merge_contextvars,
-    structlog.stdlib.filter_by_level,
     structlog.stdlib.add_logger_name,
     structlog.stdlib.add_log_level,
     structlog.processors.TimeStamper(fmt="iso"),
@@ -17,12 +16,17 @@ _shared_processors: list[structlog.types.Processor] = [
     structlog.processors.UnicodeDecoder(),
 ]
 
+_native_processors: list[structlog.types.Processor] = [
+    structlog.stdlib.filter_by_level,
+    *_foreign_processors,
+]
+
 
 def _make_formatter(
     renderer: structlog.types.Processor,
 ) -> structlog.stdlib.ProcessorFormatter:
     return structlog.stdlib.ProcessorFormatter(
-        foreign_pre_chain=_shared_processors,
+        foreign_pre_chain=_foreign_processors,
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
             renderer,
@@ -41,7 +45,7 @@ def setup_logging() -> None:
 
     structlog.configure(
         processors=[
-            *_shared_processors,
+            *_native_processors,
             structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
         ],
         wrapper_class=structlog.stdlib.BoundLogger,
