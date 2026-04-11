@@ -1,7 +1,126 @@
 import { Loader2 } from "lucide-react";
+import { Streamdown } from "streamdown";
+import "streamdown/styles.css";
 import type { ChatMessage as ChatMessageType } from "@/lib/chat";
 import { cn } from "@/lib/cn";
 import { ToolCallIndicator } from "./ToolCallIndicator";
+import { ToolResultCard } from "./ToolResultCard";
+
+const markdownComponents = {
+  p: ({ children, ...props }: React.HTMLAttributes<HTMLParagraphElement>) => (
+    <p className="mb-2 text-sm leading-relaxed last:mb-0" {...props}>
+      {children}
+    </p>
+  ),
+  h1: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <h1 className="mb-2 mt-4 text-base font-medium first:mt-0" {...props}>
+      {children}
+    </h1>
+  ),
+  h2: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <h2 className="mb-2 mt-3 text-sm font-medium first:mt-0" {...props}>
+      {children}
+    </h2>
+  ),
+  h3: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <h3 className="mb-1.5 mt-2.5 text-sm font-medium first:mt-0" {...props}>
+      {children}
+    </h3>
+  ),
+  ul: ({ children, ...props }: React.HTMLAttributes<HTMLUListElement>) => (
+    <ul className="mb-2 list-disc pl-5 last:mb-0" {...props}>
+      {children}
+    </ul>
+  ),
+  ol: ({ children, ...props }: React.OlHTMLAttributes<HTMLOListElement>) => (
+    <ol className="mb-2 list-decimal pl-5 last:mb-0" {...props}>
+      {children}
+    </ol>
+  ),
+  li: ({ children, ...props }: React.LiHTMLAttributes<HTMLLIElement>) => (
+    <li className="mb-0.5 text-sm leading-relaxed" {...props}>
+      {children}
+    </li>
+  ),
+  blockquote: ({
+    children,
+    ...props
+  }: React.BlockquoteHTMLAttributes<HTMLQuoteElement>) => (
+    <blockquote
+      className="mb-2 border-l-2 border-primary/30 pl-3 italic last:mb-0"
+      {...props}
+    >
+      {children}
+    </blockquote>
+  ),
+  pre: ({ children, ...props }: React.HTMLAttributes<HTMLPreElement>) => (
+    <pre
+      className="mb-2 overflow-x-auto rounded-lg bg-background p-3 font-mono text-xs leading-normal last:mb-0"
+      {...props}
+    >
+      {children}
+    </pre>
+  ),
+  code: ({
+    children,
+    className,
+    ...props
+  }: React.HTMLAttributes<HTMLElement>) => {
+    const isInline = !className;
+    if (isInline) {
+      return (
+        <code
+          className="rounded bg-background px-1 py-0.5 font-mono text-[0.85em]"
+          {...props}
+        >
+          {children}
+        </code>
+      );
+    }
+    return (
+      <code className={className} {...props}>
+        {children}
+      </code>
+    );
+  },
+  strong: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) => (
+    <strong className="font-medium" {...props}>
+      {children}
+    </strong>
+  ),
+  table: ({
+    children,
+    ...props
+  }: React.TableHTMLAttributes<HTMLTableElement>) => (
+    <table className="mb-2 w-full text-sm last:mb-0" {...props}>
+      {children}
+    </table>
+  ),
+  tr: ({ children, ...props }: React.HTMLAttributes<HTMLTableRowElement>) => (
+    <tr className="border-b border-border text-left" {...props}>
+      {children}
+    </tr>
+  ),
+  th: ({
+    children,
+    ...props
+  }: React.ThHTMLAttributes<HTMLTableCellElement>) => (
+    <th
+      className="py-1 pr-3 text-xs font-medium text-muted-foreground"
+      {...props}
+    >
+      {children}
+    </th>
+  ),
+  td: ({
+    children,
+    ...props
+  }: React.TdHTMLAttributes<HTMLTableCellElement>) => (
+    <td className="py-1 pr-3 tabular-nums" {...props}>
+      {children}
+    </td>
+  ),
+};
 
 export function ChatMessage({ message }: { message: ChatMessageType }) {
   const isUser = message.role === "user";
@@ -26,9 +145,18 @@ export function ChatMessage({ message }: { message: ChatMessageType }) {
             <Loader2 className="size-4 animate-spin text-muted-foreground" />
           </output>
         )}
-        {message.content && (
-          <p className="whitespace-pre-wrap">{message.content}</p>
-        )}
+        {message.content &&
+          (isUser ? (
+            <p className="whitespace-pre-wrap">{message.content}</p>
+          ) : (
+            <Streamdown
+              isAnimating={message.isStreaming}
+              animated={false}
+              components={markdownComponents}
+            >
+              {message.content}
+            </Streamdown>
+          ))}
         {message.error && (
           <p className="text-destructive-muted-foreground">
             {message.error.message}
@@ -36,9 +164,14 @@ export function ChatMessage({ message }: { message: ChatMessageType }) {
         )}
       </div>
       {message.toolCalls && message.toolCalls.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 px-1">
+        <div className="flex max-w-[85%] flex-col gap-2 px-1">
+          <div className="flex flex-wrap gap-1.5">
+            {message.toolCalls.map((tc) => (
+              <ToolCallIndicator key={tc.id} toolCall={tc} />
+            ))}
+          </div>
           {message.toolCalls.map((tc) => (
-            <ToolCallIndicator key={tc.id} toolCall={tc} />
+            <ToolResultCard key={`result-${tc.id}`} toolCall={tc} />
           ))}
         </div>
       )}

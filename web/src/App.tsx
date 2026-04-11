@@ -1,5 +1,5 @@
 import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { ApiError, setOnUnauthorized } from "./api/client";
 import { useGetMe, useListAuthPersons } from "./api/generated/auth/auth";
@@ -10,31 +10,69 @@ import { AppLayout } from "./layouts/AppLayout";
 import { useIdentityStore } from "./lib/identity";
 import { isValidTheme } from "./lib/theme";
 import { AccountPage } from "./pages/AccountPage";
-import { AskPage } from "./pages/AskPage";
 import { BudgetPage } from "./pages/BudgetPage";
 import { DashboardPage } from "./pages/DashboardPage";
-import { InsightsPage } from "./pages/InsightsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { SetInitialPasswordPage } from "./pages/SetInitialPasswordPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SettleUpPage } from "./pages/SettleUpPage";
 import { SetupPage } from "./pages/SetupPage";
-import { TransactionsPage } from "./pages/TransactionsPage";
 import { UploadPage } from "./pages/UploadPage";
+
+const TransactionsPage = lazy(() =>
+  import("./pages/TransactionsPage").then((m) => ({
+    default: m.TransactionsPage,
+  })),
+);
+const InsightsPage = lazy(() =>
+  import("./pages/InsightsPage").then((m) => ({ default: m.InsightsPage })),
+);
+const AskPage = lazy(() =>
+  import("./pages/AskPage").then((m) => ({ default: m.AskPage })),
+);
+
+function RouteLoading() {
+  return (
+    <div className="flex items-center justify-center py-24">
+      <Loader2 className="size-5 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
 
 const router = createBrowserRouter([
   {
     element: <AppLayout />,
     children: [
       { index: true, element: <DashboardPage /> },
-      { path: "transactions", element: <TransactionsPage /> },
+      {
+        path: "transactions",
+        element: (
+          <Suspense fallback={<RouteLoading />}>
+            <TransactionsPage />
+          </Suspense>
+        ),
+      },
       { path: "settle", element: <SettleUpPage /> },
       { path: "budget", element: <BudgetPage /> },
-      { path: "insights", element: <InsightsPage /> },
+      {
+        path: "insights",
+        element: (
+          <Suspense fallback={<RouteLoading />}>
+            <InsightsPage />
+          </Suspense>
+        ),
+      },
       { path: "upload", element: <UploadPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "account", element: <AccountPage /> },
-      { path: "ask", element: <AskPage /> },
+      {
+        path: "ask",
+        element: (
+          <Suspense fallback={<RouteLoading />}>
+            <AskPage />
+          </Suspense>
+        ),
+      },
       { path: "*", element: <Navigate to="/" replace /> },
     ],
   },

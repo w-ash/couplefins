@@ -1,10 +1,17 @@
-import { useCallback } from "react";
+import { Loader2 } from "lucide-react";
+import { lazy, Suspense, useCallback } from "react";
 import { Outlet } from "react-router";
 import { useHealthCheck } from "@/api/generated/health/health";
 import { BottomNav } from "@/components/BottomNav";
 import { ChatEdgeTab } from "@/components/chat/ChatEdgeTab";
-import { ChatPanel } from "@/components/chat/ChatPanel";
 import { Sidebar } from "@/components/Sidebar";
+
+const ChatPanel = lazy(() =>
+  import("@/components/chat/ChatPanel").then((m) => ({
+    default: m.ChatPanel,
+  })),
+);
+
 import { useKeyboardShortcut } from "@/hooks/useKeyboardShortcut";
 import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { useChatStore } from "@/lib/chat";
@@ -45,7 +52,15 @@ export function AppLayout() {
       {chatAvailable &&
         (isPanelOpen ? (
           <div className="hidden w-96 shrink-0 border-l border-border bg-card md:flex">
-            <ChatPanel />
+            <Suspense
+              fallback={
+                <div className="flex flex-1 items-center justify-center">
+                  <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                </div>
+              }
+            >
+              <ChatPanel />
+            </Suspense>
           </div>
         ) : (
           <ChatEdgeTab />

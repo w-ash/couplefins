@@ -81,6 +81,8 @@ Zero warnings, zero errors, zero test failures. Nothing is "pre-existing" — if
 
 Run each gate. If anything fails, fix it before moving on. If a fix would be a significant refactor (5+ files, public API change), present options to the user instead of silently choosing.
 
+**Vulture**: When vulture flags unused code, determine whether it's a **false positive** (framework-consumed field, Pydantic serialization, test utility) or **genuinely dead code**. If dead → **delete it**. If false positive → add to `vulture_whitelist.py` with an explanation. Never whitelist real dead code — that defeats the purpose of the tool.
+
 ```bash
 # Backend
 uv run ruff check . --fix && uv run ruff format .

@@ -67,10 +67,3 @@ class SearchTransactionsUseCase:
                 transactions=txns[: command.limit],
                 total_count=total,
             )
-
-
-async def search_transactions(
-    uow: UnitOfWorkProtocol,
-    command: SearchTransactionsCommand,
-) -> SearchTransactionsResult:
-    return await SearchTransactionsUseCase().execute(command, uow)

@@ -8,6 +8,17 @@ from src.domain.exceptions import AuthenticationError, ChatUnavailableError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 from src.infrastructure.auth.tokens import decode_access_token
 
+_anthropic_client: AsyncAnthropic | None = None
+
+
+def set_anthropic_client(client: AsyncAnthropic | None) -> None:
+    global _anthropic_client  # noqa: PLW0603
+    _anthropic_client = client
+
+
+def is_chat_available() -> bool:
+    return _anthropic_client is not None
+
 
 async def get_current_user(request: Request) -> Person:
     settings = get_settings()
@@ -28,10 +39,9 @@ async def get_current_user(request: Request) -> Person:
     return await execute_use_case(_lookup)
 
 
-def get_anthropic_client(request: Request) -> AsyncAnthropic:
-    client: AsyncAnthropic | None = getattr(request.app.state, "anthropic_client", None)
-    if client is None:
+def get_anthropic_client() -> AsyncAnthropic:
+    if _anthropic_client is None:
         raise ChatUnavailableError(
             "Chat is not available — no ANTHROPIC_API_KEY configured"
         )
-    return client
+    return _anthropic_client

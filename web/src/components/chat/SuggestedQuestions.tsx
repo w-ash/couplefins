@@ -1,3 +1,5 @@
+import { Button } from "@/components/Button";
+
 const DEFAULT_SUGGESTIONS = [
   "Who owes whom?",
   "Are we on budget?",
@@ -17,14 +19,15 @@ export function SuggestedQuestions({
       </p>
       <div className="flex flex-wrap justify-center gap-2">
         {DEFAULT_SUGGESTIONS.map((q) => (
-          <button
+          <Button
             key={q}
-            type="button"
+            variant="secondary"
+            size="sm"
+            className="rounded-full"
             onClick={() => onSelect(q)}
-            className="rounded-full border border-border px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-muted"
           >
             {q}
-          </button>
+          </Button>
         ))}
       </div>
     </div>

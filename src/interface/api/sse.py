@@ -11,7 +11,6 @@ import asyncio
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass, field
 import json
-from typing import Any
 
 from fastapi.responses import StreamingResponse
 from structlog.stdlib import get_logger
@@ -40,7 +39,7 @@ class ToolResultEvent:
 
     name: str
     tool_use_id: str
-    summary: dict[str, Any]
+    summary: dict[str, object]
     is_error: bool = field(default=False)
 
 
@@ -62,7 +61,7 @@ def _map_error_code(exc: BaseException) -> str:
     return "INTERNAL_ERROR"
 
 
-def _sse_line(payload: dict[str, Any]) -> str:
+def _sse_line(payload: dict[str, object]) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 

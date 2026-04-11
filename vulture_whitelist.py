@@ -58,6 +58,7 @@ HealthResponse.schema_version
 HealthResponse.schema_ok
 HealthResponse.database_host
 HealthResponse.database_mode
+HealthResponse.chat_available
 
 # --- Domain value objects: attrs fields accessed by callers ---
 
@@ -78,7 +79,6 @@ from src.domain.insights import compute_trailing_average
 
 assert_adjustments_zero_sum  # zero-sum invariant, tested in test_adjustments.py
 compute_trailing_average  # tested in test_insights.py, planned for future Insights enhancements
-
 # --- Test-only utility: called from tests/integration/conftest.py ---
 
 from src.config.settings import reset_settings

@@ -143,7 +143,7 @@ async def post_chat(
                         )
                     )
                 except Exception as e:
-                    error_summary = {"error": str(e)}
+                    error_summary: dict[str, object] = {"error": str(e)}
                     queue.put_nowait(
                         ToolResultEvent(
                             name=tu.name,

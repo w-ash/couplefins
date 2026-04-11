@@ -151,7 +151,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.4.1 | Import provenance — enriched edit history endpoint with upload-derived import event | Completed (2026-04-08) | S |
 | v1.4.2 | Transaction history timeline — vertical timeline UI with import anchor + person-attributed edits | Completed (2026-04-08) | M |
 | v1.5.0 | Chat assistant — right-edge panel, read-only queries via Claude API, mobile full-screen page, suggested questions | Completed (2026-04-10) | L |
-| v1.5.1 | Chat UX polish — streaming markdown, tool-call result cards | Not started | S |
+| v1.5.1 | Chat UX polish — streaming markdown, tool-call result cards | Completed (2026-04-10) | S |
 | v1.5.2 | Chat mutations — budget updates, transaction edits with confirmation cards | Not started | M |
 | v1.5.3 | Chat hardening — architecture layering fix, integration tests, rate limiting, input safety, a11y | Not started | M |
 

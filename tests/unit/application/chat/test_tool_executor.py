@@ -101,7 +101,7 @@ async def test_settlement_balance_no_owed() -> None:
         )
 
     assert result["gross_amount"] == pytest.approx(0.0)
-    assert "status" in result
+    assert result["status"] == "No settlement needed this month"
 
 
 @pytest.mark.asyncio
@@ -122,6 +122,30 @@ async def test_dashboard_status_happy_path() -> None:
     assert result["transaction_count"] == 82
     assert result["uploads"][0]["person"] == "Alice"
     assert result["uploads"][0]["uploaded"] is True
+    assert result["finalization_warnings"] == []
+
+
+@pytest.mark.asyncio
+async def test_dashboard_status_includes_warnings() -> None:
+    from attrs import evolve
+
+    result_with_warnings = evolve(
+        _settle_result(), finalization_warnings=["3 unmapped categories"]
+    )
+
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        return_value=result_with_warnings,
+    ):
+        result = await execute_tool(
+            "get_dashboard_status",
+            {"year": 2026, "month": 3},
+            ALICE,
+            PERSONS,
+        )
+
+    assert result["finalization_warnings"] == ["3 unmapped categories"]
 
 
 @pytest.mark.asyncio

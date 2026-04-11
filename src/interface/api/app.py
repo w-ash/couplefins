@@ -18,6 +18,7 @@ from src.infrastructure.persistence.database.db_connection import (
     dispose_engine,
     init_db,
 )
+from src.interface.api.dependencies import is_chat_available, set_anthropic_client
 from src.interface.api.error_handling import register_error_handlers
 from src.interface.api.request_logging import RequestLoggingMiddleware
 from src.interface.api.routes.auth import router as auth_router
@@ -39,20 +40,20 @@ logger = get_logger()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     setup_logging()
     await init_db()
     await execute_use_case(seed_category_groups)
     await execute_use_case(seed_settlement_merchants)
     settings = get_settings()
-    app.state.anthropic_client = (
+    set_anthropic_client(
         AsyncAnthropic(api_key=settings.chat.anthropic_api_key)
         if settings.chat.anthropic_api_key
         else None
     )
     logger.info(
         "application_started",
-        chat_available=app.state.anthropic_client is not None,
+        chat_available=is_chat_available(),
     )
     yield
     logger.info("application_shutting_down")

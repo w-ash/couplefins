@@ -8,7 +8,7 @@ raw entity dumps.
 
 from collections.abc import Awaitable, Callable
 from decimal import Decimal
-from typing import Any
+from typing import Literal, cast
 from uuid import UUID
 
 from src.application.runner import execute_use_case
@@ -40,7 +40,7 @@ from src.domain.entities.person import Person
 from src.domain.exceptions import ToolExecutionError
 
 type _ToolHandler = Callable[
-    [dict[str, Any], Person, list[Person]], Awaitable[dict[str, Any]]
+    [dict[str, object], Person, list[Person]], Awaitable[dict[str, object]]
 ]
 
 
@@ -55,10 +55,10 @@ def _ensure_handler(
 
 async def execute_tool(
     name: str,
-    tool_input: dict[str, Any],
+    tool_input: dict[str, object],
     current_user: Person,
     persons: list[Person],
-) -> dict[str, Any]:
+) -> dict[str, object]:
     """Dispatch a tool call to the appropriate use case and return a summary."""
     handler = _ensure_handler(name)
     try:
@@ -84,19 +84,19 @@ def _fmt(amount: Decimal) -> float:
 
 
 async def _handle_settlement_balance(
-    tool_input: dict[str, Any],
+    tool_input: dict[str, object],
     _current_user: Person,
     persons: list[Person],
-) -> dict[str, Any]:
+) -> dict[str, object]:
     command = GetSettleUpDataCommand(
-        year=tool_input["year"],
-        month=tool_input["month"],
+        year=cast(int, tool_input["year"]),
+        month=cast(int, tool_input["month"]),
     )
     result: GetSettleUpDataResult = await execute_use_case(
         lambda uow: GetSettleUpDataUseCase().execute(command, uow)
     )
 
-    summary: dict[str, Any] = {
+    summary: dict[str, object] = {
         "month": f"{result.year}-{result.month:02d}",
         "is_finalized": result.is_finalized,
         "remaining_balance": _fmt(result.remaining_balance),
@@ -107,7 +107,7 @@ async def _handle_settlement_balance(
         summary["gross_amount"] = _fmt(result.owed.amount)
     else:
         summary["gross_amount"] = 0.0
-        summary["status"] = "No split transactions this month"
+        summary["status"] = "No settlement needed this month"
 
     summary["uploads"] = [
         {"person": us.person_name, "uploaded": us.has_uploaded}
@@ -117,14 +117,14 @@ async def _handle_settlement_balance(
 
 
 async def _handle_budget_overview(
-    tool_input: dict[str, Any],
+    tool_input: dict[str, object],
     current_user: Person,
     _persons: list[Person],
-) -> dict[str, Any]:
-    scope = tool_input.get("scope", "household")
+) -> dict[str, object]:
+    scope = cast(Literal["household", "personal"], tool_input.get("scope", "household"))
     command = GetBudgetOverviewCommand(
-        year=tool_input["year"],
-        month=tool_input["month"],
+        year=cast(int, tool_input["year"]),
+        month=cast(int, tool_input["month"]),
         scope=scope,
         person_id=current_user.id if scope == "personal" else None,
     )
@@ -136,7 +136,7 @@ async def _handle_budget_overview(
     groups: list[dict[str, object]] = []
     over_budget: list[str] = []
     for gs in overview.group_statuses:
-        entry: dict[str, Any] = {
+        entry: dict[str, object] = {
             "name": gs.group_name,
             "spent": _fmt(gs.monthly_spent),
             "budget": _fmt(gs.monthly_budget)
@@ -159,21 +159,21 @@ async def _handle_budget_overview(
 
 
 async def _handle_search_transactions(
-    tool_input: dict[str, Any],
+    tool_input: dict[str, object],
     _current_user: Person,
     persons: list[Person],
-) -> dict[str, Any]:
+) -> dict[str, object]:
     group_id: UUID | None = None
-    group_name = tool_input.get("category_group")
+    group_name = cast(str | None, tool_input.get("category_group"))
     if group_name:
         group_id = await _resolve_category_group_id(group_name)
 
     command = SearchTransactionsCommand(
-        year=tool_input["year"],
-        month=tool_input["month"],
-        merchant=tool_input.get("merchant"),
+        year=cast(int, tool_input["year"]),
+        month=cast(int, tool_input["month"]),
+        merchant=cast(str | None, tool_input.get("merchant")),
         category_group_id=group_id,
-        tag=tool_input.get("tag"),
+        tag=cast(str | None, tool_input.get("tag")),
     )
     result: SearchTransactionsResult = await execute_use_case(
         lambda uow: SearchTransactionsUseCase().execute(command, uow)
@@ -212,12 +212,15 @@ async def _resolve_category_group_id(name: str) -> UUID | None:
 
 
 async def _handle_spending_by_group(
-    tool_input: dict[str, Any],
+    tool_input: dict[str, object],
     current_user: Person,
     persons: list[Person],
-) -> dict[str, Any]:
+) -> dict[str, object]:
     result = await _handle_budget_overview(tool_input, current_user, persons)
-    groups = [{"name": g["name"], "spent": g["spent"]} for g in result["groups"]]
+    groups_list = cast(list[dict[str, object]], result["groups"])
+    groups: list[dict[str, object]] = [
+        {"name": g["name"], "spent": g["spent"]} for g in groups_list
+    ]
     return {
         "month": result["month"],
         "groups": groups,
@@ -226,19 +229,19 @@ async def _handle_spending_by_group(
 
 
 async def _handle_spending_trends(
-    tool_input: dict[str, Any],
+    tool_input: dict[str, object],
     _current_user: Person,
     _persons: list[Person],
-) -> dict[str, Any]:
+) -> dict[str, object]:
     command = GetSpendingTrendsCommand(
-        year=tool_input["year"],
-        comparison_year=tool_input.get("comparison_year"),
+        year=cast(int, tool_input["year"]),
+        comparison_year=cast(int | None, tool_input.get("comparison_year")),
     )
     result: GetSpendingTrendsResult = await execute_use_case(
         lambda uow: GetSpendingTrendsUseCase().execute(command, uow)
     )
 
-    groups: dict[str, list[dict[str, Any]]] = {}
+    groups: dict[str, list[dict[str, object]]] = {}
     for mg in result.trends.monthly_group_spending:
         groups.setdefault(mg.group_name, []).append({
             "month": f"{result.year}-{mg.month:02d}",
@@ -252,13 +255,13 @@ async def _handle_spending_trends(
 
 
 async def _handle_dashboard_status(
-    tool_input: dict[str, Any],
+    tool_input: dict[str, object],
     _current_user: Person,
     _persons: list[Person],
-) -> dict[str, Any]:
+) -> dict[str, object]:
     command = GetSettleUpDataCommand(
-        year=tool_input["year"],
-        month=tool_input["month"],
+        year=cast(int, tool_input["year"]),
+        month=cast(int, tool_input["month"]),
     )
     result: GetSettleUpDataResult = await execute_use_case(
         lambda uow: GetSettleUpDataUseCase().execute(command, uow)
@@ -276,6 +279,7 @@ async def _handle_dashboard_status(
         ],
         "is_finalized": result.is_finalized,
         "transaction_count": result.transaction_count,
+        "finalization_warnings": result.finalization_warnings,
     }
 
 

@@ -94,6 +94,12 @@ with the answer, then add context. State which month or period you queried.
 When a tool returns no data or zero amounts, say so directly and suggest a \
 likely reason (no uploads yet, no budgets set, etc.).
 
+When describing transactions, reference actual field values \
+(household=true/false, payer_percentage=N) rather than classification labels \
+like "shared", "spotted", or "household-no-split". These labels are human \
+shorthand for field combinations, not stored types. Say "household expenses" \
+not "shared expenses". Say "50/50 split" not "shared transaction".
+
 When suggesting follow-up actions, suggest concrete things the user can \
 actually do next — checking another month, looking at a specific category, \
 or comparing to a previous period.

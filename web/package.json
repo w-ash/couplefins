@@ -32,6 +32,7 @@
     "jsdom": "^28.1.0",
     "msw": "^2.12.10",
     "orval": "^8.5.3",
+    "shiki": "^4.0.2",
     "tailwindcss": "^4.2.1",
     "typescript": "~5.9.3",
     "vite": "^8.0.0",
@@ -45,6 +46,7 @@
     "react-dom": "^19.2.4",
     "react-router": "^7.13.1",
     "recharts": "^3.8.0",
+    "streamdown": "^2.5.0",
     "zustand": "^5.0.11"
   }
 }
