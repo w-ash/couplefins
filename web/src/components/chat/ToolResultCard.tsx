@@ -1,6 +1,7 @@
 import { Check, X } from "lucide-react";
+import { ConfirmationCard } from "@/components/chat/ConfirmationCard";
 import { ProgressBar } from "@/components/ProgressBar";
-import type { ToolCall } from "@/lib/chat";
+import type { ConfirmationState, ToolCall } from "@/lib/chat";
 import { cn } from "@/lib/cn";
 import { amountColorClass, formatCurrency, formatDate } from "@/lib/format";
 import { getHealthStyle } from "@/lib/health-styles";
@@ -260,11 +261,52 @@ function DashboardStatusCard({ result }: { result: DashboardStatusResult }) {
   );
 }
 
+// --- Pending confirmation detection ---
+
+interface PendingConfirmationResult {
+  status: "pending_confirmation";
+  action_id: string;
+  description: string;
+  details: Record<string, unknown>;
+}
+
+function isPendingConfirmation(
+  result: unknown,
+): result is PendingConfirmationResult {
+  if (!result || typeof result !== "object") return false;
+  return (result as Record<string, unknown>).status === "pending_confirmation";
+}
+
 // --- Main dispatcher ---
 
-export function ToolResultCard({ toolCall }: { toolCall: ToolCall }) {
+export function ToolResultCard({
+  toolCall,
+  confirmationState,
+  onConfirm,
+  onCancel,
+}: {
+  toolCall: ToolCall;
+  confirmationState?: ConfirmationState;
+  onConfirm?: (actionId: string) => void;
+  onCancel?: (actionId: string) => void;
+}) {
   if (toolCall.result === undefined || toolCall.isError) return null;
   const result = toolCall.result;
+
+  // Mutation tools return pending_confirmation → render ConfirmationCard
+  if (isPendingConfirmation(result) && onConfirm && onCancel) {
+    return (
+      <ConfirmationCard
+        actionId={result.action_id}
+        description={result.description}
+        details={result.details}
+        toolName={toolCall.name}
+        state={confirmationState ?? "pending"}
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />
+    );
+  }
 
   switch (toolCall.name) {
     case "get_settlement_balance":

@@ -16,6 +16,7 @@ from fastapi.responses import StreamingResponse
 from structlog.stdlib import get_logger
 
 from src.domain.exceptions import (
+    ActionExpiredError,
     AnthropicApiError,
     ChatUnavailableError,
     MaxRoundsExceededError,
@@ -47,6 +48,7 @@ type QueueItem = str | ToolStartEvent | ToolResultEvent | None
 
 
 _ERROR_CODE_MAP: dict[type[Exception], str] = {
+    ActionExpiredError: "ACTION_EXPIRED",
     ChatUnavailableError: "CHAT_UNAVAILABLE",
     ToolExecutionError: "TOOL_EXECUTION_ERROR",
     MaxRoundsExceededError: "MAX_ROUNDS_EXCEEDED",

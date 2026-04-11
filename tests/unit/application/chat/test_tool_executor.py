@@ -256,5 +256,7 @@ async def test_search_transactions_happy_path() -> None:
 
     assert result["total_count"] == 1
     assert result["showing"] == 1
-    assert result["transactions"][0]["merchant"] == "Whole Foods"
-    assert result["transactions"][0]["payer"] == "Alice"
+    tx = result["transactions"][0]
+    assert tx["merchant"] == "<user_data>Whole Foods</user_data>"
+    assert tx["payer"] == "Alice"
+    assert "id" in tx

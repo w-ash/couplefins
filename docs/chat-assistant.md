@@ -60,18 +60,32 @@ The frontend is a simple SSE consumer — it receives text deltas, tool-start in
 
 ## Tools
 
-Each tool is a thin wrapper around an existing read-only use case. The assistant can query data but cannot modify it (mutations ship in v1.5.2 behind a confirmation step).
+### Read-only tools
+
+Each read-only tool is a thin wrapper around an existing query use case.
 
 | Tool | What it returns | Backs which use case |
 |---|---|---|
 | `get_settlement_balance` | Who owes whom for a given month, gross and remaining balance, upload status per person, finalization state | `GetSettleUpDataUseCase` |
 | `get_budget_overview` | Per-group budget progress: monthly amount, actual spending, YTD totals, health status (on_track / near_limit / over_budget) | `GetBudgetOverviewUseCase` |
-| `search_transactions` | Up to 20 household transactions matching optional filters (merchant substring, category group, tag), with date, amount, payer, and split details | `SearchTransactionsUseCase` |
+| `search_transactions` | Up to 20 household transactions matching optional filters (merchant substring, category group, tag), with id, date, amount, payer, and split details | `SearchTransactionsUseCase` |
 | `get_spending_by_group` | Spending totals per category group for a month (simpler than budget overview — no budget comparisons) | `GetBudgetOverviewUseCase` (different projection) |
 | `get_spending_trends` | Monthly spending per group across a full year, with optional year-over-year comparison | `GetSpendingTrendsUseCase` |
-| `get_dashboard_status` | Whether each person has uploaded their CSV, transaction count, finalization state | `GetSettleUpDataUseCase` |
+| `get_dashboard_status` | Whether each person has uploaded their CSV, transaction count, finalization state, unmapped category count | `GetSettleUpDataUseCase` |
 
 Tool results are projected into concise summaries (group name + spent + budget + health), not raw entity dumps. The model needs digestible context, not 200 transaction rows.
+
+### Mutation tools (v1.5.2)
+
+Mutation tools propose changes via a two-phase confirmation protocol — they never execute directly. Each returns `{status: "pending_confirmation", action_id, description, details}` and the change only executes when the user clicks Confirm.
+
+| Tool | What it proposes | Backs which use case |
+|---|---|---|
+| `update_budget` | Create or update a category group budget for a specific month and scope (household/personal) | `SaveBudgetUseCase` |
+| `update_transaction_split` | Change the payer split percentage on a single transaction (must reference a transaction ID from `search_transactions`) | `UpdateTransactionSplitsUseCase` |
+| `bulk_update_transactions` | Bulk field changes (household flag, split, category, tags) on up to 100 transactions | `BulkUpdateTransactionsUseCase` / `BulkModifyTagsUseCase` |
+
+Mutation tools validate inputs and check finalization before creating a pending action. If the target month is finalized, the tool returns an error prompting the user to unfinalize first.
 
 ---
 
@@ -85,9 +99,13 @@ The agentic loop (call Claude, execute tools, feed results back) runs server-sid
 
 Conversations aren't persisted. The chat panel starts fresh on page refresh. The couple asks quick questions during solo prep or the together session — they don't need searchable chat history. If usage patterns change, conversation persistence can be ported from the sister project (Mimir) which has it built.
 
-### Why read-only first
+### Why two-phase confirmation for mutations
 
-v1.5.0 ships with read-only tools only. The assistant can look up data but can't change splits, update budgets, or tag transactions. This keeps the first version simple and risk-free. Mutation tools (v1.5.2) will use a two-phase confirmation protocol — the model proposes a change, the frontend renders a Confirm/Cancel card, and the change only executes on explicit confirmation.
+Mutation tools (v1.5.2) use a two-phase confirmation protocol: the model proposes a change, the frontend renders a Confirm/Cancel card, and the change only executes on explicit user confirmation. Human-in-the-loop is the primary security control — the model can never silently modify financial data. Proposed actions are stored server-side in a `PendingActionStore` (in-memory dict with 5-minute TTL, keyed by UUID). The store validates that the confirming user matches the action creator.
+
+### Why an in-memory pending action store
+
+With exactly 2 users and a 5-minute TTL, an in-memory dict is sufficient. Actions are lost on server restart, which is acceptable — the user simply re-asks. No Redis, no database table, no background cleanup thread. The `_evict_expired()` method runs on every `create`/`claim` call.
 
 ### Why Sonnet 4.6, not Opus or Haiku
 
@@ -141,7 +159,22 @@ The chat endpoint streams responses as server-sent events. Each event is a JSON 
 | `done` | `{"type": "done"}` | Stream completed successfully |
 | `error` | `{"type": "error", "code": "...", "message": "..."}` | Something went wrong |
 
-The frontend renders `token` events as streaming text, `tool_start` as inline progress indicators ("Looking up settlement..."), and `tool_result` as resolved indicators ("Checked settlement"). Error events display inline and let the user retry.
+The frontend renders `token` events as streaming text, `tool_start` as inline progress indicators ("Looking up settlement..." for queries, "Proposing budget update..." for mutations), and `tool_result` as resolved indicators ("Checked settlement") or confirmation cards.
+
+### Confirmation via `tool_result`
+
+Mutation tools reuse the existing `tool_result` event type. When the summary contains `"status": "pending_confirmation"`, the frontend renders a `ConfirmationCard` instead of a normal result card. No new SSE event type is needed.
+
+The confirmation flow uses an optional `confirmation` field on `ChatRequest`:
+
+```json
+{
+  "messages": [...],
+  "confirmation": { "action_id": "uuid", "approved": true }
+}
+```
+
+When present, the backend intercepts the confirmation before the Claude loop, executes (or cancels) the pending action, injects the result into the conversation, and streams Claude's acknowledgment.
 
 ---
 
@@ -150,9 +183,11 @@ The frontend renders `token` events as streaming text, `tool_start` as inline pr
 The system prompt uses XML tags for structure (Claude is trained to parse them) and includes:
 
 - **`<identity>`** — the current user's name, their partner's name, today's date
+- **`<scope>`** — constrains the assistant to Couplefins domain only; declines off-topic requests
 - **`<category_groups>`** — the configured category group names (compact list)
 - **`<domain_model>`** — a thorough primer on household vs personal, payer_percentage, settlement math, budget tracking, and the monthly workflow
 - **`<response_format>`** — output style rules: plain text with `$` and `%`, markdown tables only for 3+ rows, concise answers, concrete follow-up suggestions
+- **`<mutation_rules>`** — behavioral constraints for mutation tools: one mutation per turn, always confirm, check finalization, never fabricate IDs
 
 The domain model section is intentionally detailed — it teaches the model enough context to answer follow-up questions without redundant tool calls, and it pushes the token count above the prompt caching threshold.
 

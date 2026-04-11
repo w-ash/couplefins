@@ -1,7 +1,10 @@
 import { Loader2 } from "lucide-react";
 import { Streamdown } from "streamdown";
 import "streamdown/styles.css";
-import type { ChatMessage as ChatMessageType } from "@/lib/chat";
+import type {
+  ChatMessage as ChatMessageType,
+  ConfirmationState,
+} from "@/lib/chat";
 import { cn } from "@/lib/cn";
 import { ToolCallIndicator } from "./ToolCallIndicator";
 import { ToolResultCard } from "./ToolResultCard";
@@ -122,7 +125,17 @@ const markdownComponents = {
   ),
 };
 
-export function ChatMessage({ message }: { message: ChatMessageType }) {
+export function ChatMessage({
+  message,
+  confirmationStates,
+  onConfirm,
+  onCancel,
+}: {
+  message: ChatMessageType;
+  confirmationStates?: Record<string, ConfirmationState>;
+  onConfirm?: (actionId: string) => void;
+  onCancel?: (actionId: string) => void;
+}) {
   const isUser = message.role === "user";
 
   return (
@@ -170,9 +183,21 @@ export function ChatMessage({ message }: { message: ChatMessageType }) {
               <ToolCallIndicator key={tc.id} toolCall={tc} />
             ))}
           </div>
-          {message.toolCalls.map((tc) => (
-            <ToolResultCard key={`result-${tc.id}`} toolCall={tc} />
-          ))}
+          {message.toolCalls.map((tc) => {
+            const result = tc.result as Record<string, unknown> | undefined;
+            const actionId = result?.action_id as string | undefined;
+            return (
+              <ToolResultCard
+                key={`result-${tc.id}`}
+                toolCall={tc}
+                confirmationState={
+                  actionId ? confirmationStates?.[actionId] : undefined
+                }
+                onConfirm={onConfirm}
+                onCancel={onCancel}
+              />
+            );
+          })}
         </div>
       )}
     </div>

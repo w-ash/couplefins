@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
 import { useCallback, useEffect } from "react";
-import type { ChatSSECallbacks } from "@/api/chat-sse";
+import type { ChatSSECallbacks, ConfirmationPayload } from "@/api/chat-sse";
 import { sendChatMessage } from "@/api/chat-sse";
 import { useKeyboardShortcut } from "@/hooks/useKeyboardShortcut";
 import { useChatStore } from "@/lib/chat";
@@ -9,6 +9,38 @@ import { ChatMessageList } from "./ChatMessageList";
 import { SuggestedQuestions } from "./SuggestedQuestions";
 
 const closePanel = () => useChatStore.getState().setPanelOpen(false);
+
+function buildApiMessages() {
+  return useChatStore
+    .getState()
+    .messages.filter((m) => !m.error)
+    .map((m) => ({ role: m.role, content: m.content }));
+}
+
+function buildCallbacks(assistantId: string): ChatSSECallbacks {
+  return {
+    onToken: (t) => useChatStore.getState().appendToken(assistantId, t),
+    onToolStart: (name, id) =>
+      useChatStore.getState().addToolCall(assistantId, id, name),
+    onToolResult: (_name, toolUseId, result, isError) =>
+      useChatStore
+        .getState()
+        .setToolResult(assistantId, toolUseId, result, isError),
+    onDone: () => useChatStore.getState().completeMessage(assistantId),
+    onError: (code, message) =>
+      useChatStore.getState().setMessageError(assistantId, code, message),
+  };
+}
+
+function startStream(assistantId: string, confirmation?: ConfirmationPayload) {
+  const controller = new AbortController();
+  useChatStore.getState().setAbortController(controller);
+
+  const apiMessages = buildApiMessages();
+  const callbacks = buildCallbacks(assistantId);
+
+  sendChatMessage(apiMessages, callbacks, controller.signal, confirmation);
+}
 
 export function ChatPanel({ fullScreen = false }: { fullScreen?: boolean }) {
   const messages = useChatStore((s) => s.messages);
@@ -21,31 +53,39 @@ export function ChatPanel({ fullScreen = false }: { fullScreen?: boolean }) {
 
     store.addUserMessage(text);
     const assistantId = store.startAssistantMessage();
-    const controller = new AbortController();
-    store.setAbortController(controller);
+    startStream(assistantId);
+  }, []);
 
-    // Build API messages from conversation history, excluding the
-    // empty assistant message we just added and any errored messages
-    const apiMessages = useChatStore
-      .getState()
-      .messages.filter((m) => !m.error && !(m.id === assistantId))
-      .map((m) => ({ role: m.role, content: m.content }));
+  const handleConfirm = useCallback((actionId: string) => {
+    const store = useChatStore.getState();
+    if (store.isStreaming) return;
 
-    const callbacks: ChatSSECallbacks = {
-      onToken: (t) => useChatStore.getState().appendToken(assistantId, t),
-      onToolStart: (_name, id) =>
-        useChatStore.getState().addToolCall(assistantId, id, _name),
-      onToolResult: (_name, toolUseId, result, isError) => {
-        useChatStore
-          .getState()
-          .setToolResult(assistantId, toolUseId, result, isError);
-      },
-      onDone: () => useChatStore.getState().completeMessage(assistantId),
-      onError: (code, message) =>
-        useChatStore.getState().setMessageError(assistantId, code, message),
-    };
+    store.setConfirmationState(actionId, "loading");
+    const assistantId = store.startAssistantMessage();
 
-    sendChatMessage(apiMessages, callbacks, controller.signal);
+    // Subscribe before starting stream to avoid race condition
+    const unsubscribe = useChatStore.subscribe((state) => {
+      if (!state.isStreaming) {
+        const msg = state.messages.find((m) => m.id === assistantId);
+        if (msg && !msg.error) {
+          useChatStore.getState().setConfirmationState(actionId, "confirmed");
+        } else if (msg?.error) {
+          useChatStore.getState().setConfirmationState(actionId, "pending");
+        }
+        unsubscribe();
+      }
+    });
+
+    startStream(assistantId, { action_id: actionId, approved: true });
+  }, []);
+
+  const handleCancel = useCallback((actionId: string) => {
+    const store = useChatStore.getState();
+    if (store.isStreaming) return;
+
+    store.setConfirmationState(actionId, "cancelled");
+    const assistantId = store.startAssistantMessage();
+    startStream(assistantId, { action_id: actionId, approved: false });
   }, []);
 
   const handleStop = useCallback(() => {
@@ -83,7 +123,11 @@ export function ChatPanel({ fullScreen = false }: { fullScreen?: boolean }) {
       )}
 
       {hasMessages ? (
-        <ChatMessageList messages={messages} />
+        <ChatMessageList
+          messages={messages}
+          onConfirm={handleConfirm}
+          onCancel={handleCancel}
+        />
       ) : (
         <SuggestedQuestions onSelect={sendQuestion} />
       )}

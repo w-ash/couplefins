@@ -36,6 +36,7 @@ const ENTITY_QUERY_KEYS: Record<string, readonly (readonly unknown[])[]> = {
     getGetSettleUpDataQueryKey(),
     getGetDashboardQueryKey(),
   ],
+  budgets: [getGetBudgetOverviewQueryKey(), getGetBudgetsQueryKey()],
 };
 
 export function useRealtimeSync(): void {

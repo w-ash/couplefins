@@ -42,5 +42,9 @@ class MaxRoundsExceededError(DomainError):
     pass
 
 
+class ActionExpiredError(DomainError):
+    pass
+
+
 class AnthropicApiError(DomainError):
     pass

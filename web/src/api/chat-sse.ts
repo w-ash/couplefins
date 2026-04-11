@@ -105,15 +105,24 @@ function handleChatEvents(callbacks: ChatSSECallbacks) {
   };
 }
 
+export interface ConfirmationPayload {
+  action_id: string;
+  approved: boolean;
+}
+
 export async function sendChatMessage(
   messages: { role: "user" | "assistant"; content: string }[],
   callbacks: ChatSSECallbacks,
   signal: AbortSignal,
+  confirmation?: ConfirmationPayload,
 ): Promise<void> {
+  const body: Record<string, unknown> = { messages };
+  if (confirmation) body.confirmation = confirmation;
+
   const response = await fetch("/api/v1/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify(body),
     signal,
   });
 

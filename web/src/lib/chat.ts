@@ -16,11 +16,18 @@ export interface ChatMessage {
   toolCalls?: ToolCall[];
 }
 
+export type ConfirmationState =
+  | "pending"
+  | "loading"
+  | "confirmed"
+  | "cancelled";
+
 interface ChatState {
   messages: ChatMessage[];
   isStreaming: boolean;
   abortController: AbortController | null;
   isPanelOpen: boolean;
+  confirmationStates: Record<string, ConfirmationState>;
 
   addUserMessage: (text: string) => string;
   startAssistantMessage: () => string;
@@ -38,6 +45,7 @@ interface ChatState {
   setPanelOpen: (open: boolean) => void;
   togglePanel: () => void;
   clearMessages: () => void;
+  setConfirmationState: (actionId: string, state: ConfirmationState) => void;
 }
 
 function updateMessage(
@@ -53,6 +61,7 @@ export const useChatStore = create<ChatState>()((set) => ({
   isStreaming: false,
   abortController: null,
   isPanelOpen: false,
+  confirmationStates: {},
 
   addUserMessage: (text) => {
     const id = crypto.randomUUID();
@@ -128,5 +137,15 @@ export const useChatStore = create<ChatState>()((set) => ({
   togglePanel: () => set((s) => ({ isPanelOpen: !s.isPanelOpen })),
 
   clearMessages: () =>
-    set({ messages: [], isStreaming: false, abortController: null }),
+    set({
+      messages: [],
+      isStreaming: false,
+      abortController: null,
+      confirmationStates: {},
+    }),
+
+  setConfirmationState: (actionId, state) =>
+    set((s) => ({
+      confirmationStates: { ...s.confirmationStates, [actionId]: state },
+    })),
 }));

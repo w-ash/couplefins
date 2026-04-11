@@ -175,6 +175,132 @@ TOOLS: list[ToolParam] = [
             },
             "required": ["year", "month"],
         },
+    },
+    # --- Mutation tools (two-phase confirmation) ---
+    {
+        "name": "update_budget",
+        "description": (
+            "Propose a budget update for a category group in a specific month. "
+            "Returns a pending confirmation — the change is NOT applied until "
+            "the user confirms via the confirmation card. The group_name must "
+            "match an existing category group exactly. Scope defaults to "
+            "'household'; use 'personal' for the current user's personal budget."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "group_name": {
+                    "type": "string",
+                    "description": "Category group name (exact match, e.g. 'Food & Dining').",
+                },
+                "amount": {
+                    "type": "number",
+                    "description": "Monthly budget amount in dollars (e.g. 700).",
+                },
+                "year": {
+                    "type": "integer",
+                    "description": "The year (e.g. 2026).",
+                },
+                "month": {
+                    "type": "integer",
+                    "description": "The month (1-12).",
+                },
+                "scope": {
+                    "type": "string",
+                    "enum": ["household", "personal"],
+                    "description": "Budget scope. Default 'household'.",
+                },
+            },
+            "required": ["group_name", "amount", "year", "month"],
+        },
+    },
+    {
+        "name": "update_transaction_split",
+        "description": (
+            "Propose changing the payer split percentage on a single "
+            "transaction. The transaction_id is a UUID returned by "
+            "search_transactions — never guess or fabricate an ID. Always call "
+            "search_transactions first to find the matching transaction, then "
+            "use its id field. Returns a pending confirmation card."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "transaction_id": {
+                    "type": "string",
+                    "description": "Transaction UUID from search_transactions results.",
+                },
+                "payer_percentage": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "description": "The payer's share (0-100). 50 = 50/50, 0 = spotted.",
+                },
+            },
+            "required": ["transaction_id", "payer_percentage"],
+        },
+    },
+    {
+        "name": "bulk_update_transactions",
+        "description": (
+            "Propose bulk changes to multiple transactions. Maximum 100 "
+            "transaction IDs per call. All transaction_ids must come from "
+            "search_transactions results — never fabricate IDs. Changes can "
+            "include the household flag, split percentage, exclusion status, "
+            "category, or tag modifications. Returns a pending confirmation "
+            "card listing the affected transactions and proposed changes."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "transaction_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": 100,
+                    "description": "Transaction UUIDs from search_transactions.",
+                },
+                "changes": {
+                    "type": "object",
+                    "description": "Fields to update on all transactions.",
+                    "properties": {
+                        "household": {
+                            "type": "boolean",
+                            "description": "Set the household flag.",
+                        },
+                        "payer_percentage": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 100,
+                            "description": "Set the payer's share (0-100).",
+                        },
+                        "is_excluded": {
+                            "type": "boolean",
+                            "description": "Exclude from settlement and budget.",
+                        },
+                        "category": {
+                            "type": "string",
+                            "description": "Set the category name.",
+                        },
+                        "tags": {
+                            "type": "object",
+                            "description": "Tag modification.",
+                            "properties": {
+                                "action": {
+                                    "type": "string",
+                                    "enum": ["add", "remove"],
+                                },
+                                "values": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                },
+                            },
+                            "required": ["action", "values"],
+                        },
+                    },
+                },
+            },
+            "required": ["transaction_ids", "changes"],
+        },
         "cache_control": {"type": "ephemeral"},
     },
 ]

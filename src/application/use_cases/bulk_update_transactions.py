@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from src.domain.entities.transaction import Transaction
 
 
-class _Unset(Enum):
+class Unset(Enum):
     UNSET = "UNSET"
 
 
@@ -34,9 +34,9 @@ class BulkUpdateTransactionsCommand:
     category: str | None = None
     notes: str | None = None
     tags: tuple[str, ...] | None = None
-    payer_percentage: int | _Unset = field(default=_Unset.UNSET)
-    household: bool | _Unset = field(default=_Unset.UNSET)
-    is_excluded: bool | _Unset = field(default=_Unset.UNSET)
+    payer_percentage: int | Unset = field(default=Unset.UNSET)
+    household: bool | Unset = field(default=Unset.UNSET)
+    is_excluded: bool | Unset = field(default=Unset.UNSET)
     edited_by_person_id: UUID | None = None
 
 
@@ -61,11 +61,11 @@ def _collect_updates(
         updates["notes"] = command.notes
     if command.tags is not None:
         updates["tags"] = tuple(t.lower() for t in command.tags)
-    if not isinstance(command.payer_percentage, _Unset):
+    if not isinstance(command.payer_percentage, Unset):
         updates["payer_percentage"] = command.payer_percentage
-    if not isinstance(command.household, _Unset):
+    if not isinstance(command.household, Unset):
         updates["household"] = command.household
-    if not isinstance(command.is_excluded, _Unset):
+    if not isinstance(command.is_excluded, Unset):
         updates["is_excluded"] = command.is_excluded
     return updates
 
@@ -93,7 +93,7 @@ def _validate_command(
         raise ValidationError(
             "date and amount can only be changed for a single transaction"
         )
-    if not isinstance(command.payer_percentage, _Unset):
+    if not isinstance(command.payer_percentage, Unset):
         validate_payer_percentage(command.payer_percentage)
 
 
