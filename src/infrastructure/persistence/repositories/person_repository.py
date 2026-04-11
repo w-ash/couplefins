@@ -18,6 +18,7 @@ class PersonRepository(BaseRepository[Person, PersonModel]):
             adjustment_account=model.adjustment_account,
             password_hash=model.password_hash,
             theme_preference=model.theme_preference,
+            chat_voice=model.chat_voice,
         )
 
     @staticmethod
@@ -28,6 +29,7 @@ class PersonRepository(BaseRepository[Person, PersonModel]):
             adjustment_account=entity.adjustment_account,
             password_hash=entity.password_hash,
             theme_preference=entity.theme_preference,
+            chat_voice=entity.chat_voice,
         )
 
     async def get_by_name(self, name: str) -> Person | None:

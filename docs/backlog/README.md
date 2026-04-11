@@ -154,7 +154,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.5.1 | Chat UX polish — streaming markdown, tool-call result cards | Completed (2026-04-10) | S |
 | v1.5.2 | Chat mutations — budget updates, transaction edits with confirmation cards | Completed (2026-04-10) | M |
 | v1.5.3 | Chat hardening — architecture layering fix, integration tests, rate limiting, input safety | Completed (2026-04-10) | M |
-| v1.5.4 | Chatbot persona — composable persona system, Fiona character, per-user persona setting | Not started | S |
+| v1.5.4 | Chatbot voice — composable voice system, Fiona character, per-user voice setting | Completed (2026-04-10) | S |
 
 ## Infrastructure Readiness
 

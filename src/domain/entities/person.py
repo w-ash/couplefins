@@ -10,3 +10,4 @@ class Person:
     adjustment_account: str = ""
     password_hash: str = ""
     theme_preference: str = "system"
+    chat_voice: str = "fiona"

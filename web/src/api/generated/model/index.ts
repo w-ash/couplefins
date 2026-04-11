@@ -32,6 +32,7 @@ export * from './changePasswordRequest';
 export * from './chatMessageInput';
 export * from './chatMessageInputRole';
 export * from './chatRequest';
+export * from './confirmationInput';
 export * from './copyBudgetsRequest';
 export * from './copyBudgetsResponse';
 export * from './createCategoryGroupRequest';

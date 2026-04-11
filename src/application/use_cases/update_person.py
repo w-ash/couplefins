@@ -13,6 +13,7 @@ class UpdatePersonCommand:
     id: UUID
     adjustment_account: str | None = None
     theme_preference: str | None = None
+    chat_voice: str | None = None
 
 
 @define(frozen=True, slots=True)
@@ -33,6 +34,8 @@ class UpdatePersonUseCase:
                 changes["adjustment_account"] = command.adjustment_account
             if command.theme_preference is not None:
                 changes["theme_preference"] = command.theme_preference
+            if command.chat_voice is not None:
+                changes["chat_voice"] = command.chat_voice
 
             if not changes:
                 return UpdatePersonResult(person=existing)

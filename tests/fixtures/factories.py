@@ -22,6 +22,7 @@ def make_person(
     adjustment_account: str = "",
     password_hash: str = "",
     theme_preference: str = "system",
+    chat_voice: str = "fiona",
 ) -> Person:
     return Person(
         id=id or uuid.uuid4(),
@@ -29,6 +30,7 @@ def make_person(
         adjustment_account=adjustment_account,
         password_hash=password_hash,
         theme_preference=theme_preference,
+        chat_voice=chat_voice,
     )
 
 

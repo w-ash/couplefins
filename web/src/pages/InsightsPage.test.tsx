@@ -19,12 +19,14 @@ const baseFields = {
       name: "Alice",
       adjustment_account: "",
       theme_preference: "system",
+      chat_voice: "fiona",
     },
     {
       id: "p2",
       name: "Bob",
       adjustment_account: "",
       theme_preference: "system",
+      chat_voice: "fiona",
     },
   ],
 };

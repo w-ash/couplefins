@@ -2,7 +2,16 @@
 
 from datetime import date
 
+from src.application.chat.voices import get_voice
 from src.domain.entities.person import Person
+
+
+def _xml_list_block(tag: str, items: list[str]) -> str:
+    """Render a list of items as a bulleted XML section, or empty string."""
+    if not items:
+        return ""
+    body = "\n".join(f"- {item}" for item in items)
+    return f"\n\n<{tag}>\n{body}\n</{tag}>"
 
 
 def build_system_prompt(
@@ -17,15 +26,23 @@ def build_system_prompt(
     prompt caching to activate. The domain primer section is intentionally
     thorough to meet this threshold.
     """
+    try:
+        voice = get_voice(person.chat_voice)
+    except ValueError:
+        voice = get_voice("standard")
+
     groups_list = ", ".join(category_groups) if category_groups else "(none configured)"
 
     text = f"""\
 <identity>
-You are Couplefins' household finance assistant for {person.name} and their \
-partner {partner.name}. Today is {today.isoformat()}. The current user is \
-{person.name}. When you say "you", you mean {person.name}. Refer to \
+{voice["identity"]}
+
+You are helping {person.name} and their partner {partner.name} with their \
+household finances on Couplefins. Today is {today.isoformat()}. The current \
+user is {person.name}. When you say "you", you mean {person.name}. Refer to \
 {partner.name} by name.
-</identity>
+</identity>{_xml_list_block("voice_examples", voice["voice_examples"])}\
+{_xml_list_block("voice_rules", voice["rules"])}
 
 <scope>
 You help with Couplefins data only: spending, budgets, settlement, \

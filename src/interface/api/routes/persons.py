@@ -68,6 +68,7 @@ async def update_person(
         id=person_id,
         adjustment_account=body.adjustment_account,
         theme_preference=body.theme_preference,
+        chat_voice=body.chat_voice,
     )
     result = await execute_use_case(
         lambda uow: UpdatePersonUseCase().execute(command, uow)

@@ -8,4 +8,5 @@
 export interface UpdatePersonRequest {
   adjustment_account?: string | null;
   theme_preference?: string | null;
+  chat_voice?: string | null;
 }

@@ -18,3 +18,6 @@ class PersonModel(Base):
     theme_preference: Mapped[str] = mapped_column(
         String, nullable=False, server_default="system"
     )
+    chat_voice: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="fiona"
+    )

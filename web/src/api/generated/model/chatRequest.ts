@@ -5,8 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChatMessageInput } from './chatMessageInput';
+import type { ConfirmationInput } from './confirmationInput';
 
 export interface ChatRequest {
   /** @maxItems 50 */
   messages: ChatMessageInput[];
+  confirmation?: ConfirmationInput | null;
 }

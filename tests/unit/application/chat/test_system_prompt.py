@@ -84,6 +84,46 @@ def test_uses_xml_structure() -> None:
     assert "<response_format>" in text
 
 
+def test_fiona_voice_includes_examples_and_rules() -> None:
+    blocks = build_system_prompt(
+        make_person(name="Alice", chat_voice="fiona"),
+        make_person(name="Bob"),
+        date(2026, 1, 1),
+        ["Food & Dining"],
+    )
+    text = blocks[0]["text"]
+    assert "<voice_examples>" in text
+    assert "</voice_examples>" in text
+    assert "<voice_rules>" in text
+    assert "</voice_rules>" in text
+    assert "hun" in text.lower()
+    assert "plain language" in text.lower()
+
+
+def test_standard_voice_omits_examples_and_rules() -> None:
+    blocks = build_system_prompt(
+        make_person(name="Alice", chat_voice="standard"),
+        make_person(name="Bob"),
+        date(2026, 1, 1),
+        ["Food & Dining"],
+    )
+    text = blocks[0]["text"]
+    assert "<voice_examples>" not in text
+    assert "<voice_rules>" not in text
+
+
+def test_invalid_voice_falls_back_to_standard() -> None:
+    blocks = build_system_prompt(
+        make_person(name="Alice", chat_voice="nonexistent"),
+        make_person(name="Bob"),
+        date(2026, 1, 1),
+        ["Food & Dining"],
+    )
+    text = blocks[0]["text"]
+    assert "financial assistant for Couplefins" in text
+    assert "<voice_examples>" not in text
+
+
 def test_response_format_uses_positive_framing() -> None:
     """Format instructions should say what to do, not what not to do."""
     blocks = build_system_prompt(

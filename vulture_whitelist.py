@@ -90,3 +90,11 @@ ChatRequest._check_total_content_size  # @model_validator called by Pydantic
 from src.config.settings import reset_settings
 
 reset_settings  # resets settings cache between tests
+
+# --- TypedDict fields: consumed by type checker + dict access ---
+
+from src.application.chat.voices import VoiceDict
+
+VoiceDict.identity  # accessed via dict["identity"] in system_prompt.py
+VoiceDict.voice_examples  # accessed via dict["voice_examples"] in system_prompt.py
+VoiceDict.rules  # accessed via dict["rules"] in system_prompt.py

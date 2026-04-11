@@ -12,6 +12,7 @@ const meResponse = {
   name: "Alice",
   adjustment_account: "adj-1",
   theme_preference: "system",
+  chat_voice: "fiona",
 };
 
 const authPersons = [

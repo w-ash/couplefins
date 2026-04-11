@@ -10,4 +10,5 @@ export interface PersonResponse {
   name: string;
   adjustment_account: string;
   theme_preference: string;
+  chat_voice: string;
 }
