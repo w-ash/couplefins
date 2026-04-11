@@ -1,6 +1,6 @@
-from anthropic import AsyncAnthropic
 from fastapi import Request
 
+from src.application.chat.protocols import LLMClientProtocol
 from src.application.runner import execute_use_case
 from src.config.settings import get_settings
 from src.domain.entities.person import Person
@@ -8,16 +8,16 @@ from src.domain.exceptions import AuthenticationError, ChatUnavailableError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 from src.infrastructure.auth.tokens import decode_access_token
 
-_anthropic_client: AsyncAnthropic | None = None
+_llm_client: LLMClientProtocol | None = None
 
 
-def set_anthropic_client(client: AsyncAnthropic | None) -> None:
-    global _anthropic_client  # noqa: PLW0603
-    _anthropic_client = client
+def set_llm_client(client: LLMClientProtocol | None) -> None:
+    global _llm_client  # noqa: PLW0603
+    _llm_client = client
 
 
 def is_chat_available() -> bool:
-    return _anthropic_client is not None
+    return _llm_client is not None
 
 
 async def get_current_user(request: Request) -> Person:
@@ -39,9 +39,9 @@ async def get_current_user(request: Request) -> Person:
     return await execute_use_case(_lookup)
 
 
-def get_anthropic_client() -> AsyncAnthropic:
-    if _anthropic_client is None:
+def get_llm_client() -> LLMClientProtocol:
+    if _llm_client is None:
         raise ChatUnavailableError(
             "Chat is not available — no ANTHROPIC_API_KEY configured"
         )
-    return _anthropic_client
+    return _llm_client

@@ -9,39 +9,22 @@ yields SSE-formatted lines.
 
 import asyncio
 from collections.abc import AsyncGenerator, Awaitable, Callable
-from dataclasses import dataclass, field
 import json
 
 from fastapi.responses import StreamingResponse
 from structlog.stdlib import get_logger
 
+from src.application.chat.events import ToolResultEvent, ToolStartEvent
 from src.domain.exceptions import (
     ActionExpiredError,
     AnthropicApiError,
     ChatUnavailableError,
     MaxRoundsExceededError,
+    RateLimitExceededError,
     ToolExecutionError,
 )
 
 logger = get_logger()
-
-
-@dataclass(frozen=True, slots=True)
-class ToolStartEvent:
-    """Emitted when the model invokes a tool."""
-
-    name: str
-    tool_use_id: str
-
-
-@dataclass(frozen=True, slots=True)
-class ToolResultEvent:
-    """Emitted after a tool executes."""
-
-    name: str
-    tool_use_id: str
-    summary: dict[str, object]
-    is_error: bool = field(default=False)
 
 
 type QueueItem = str | ToolStartEvent | ToolResultEvent | None
@@ -49,6 +32,7 @@ type QueueItem = str | ToolStartEvent | ToolResultEvent | None
 
 _ERROR_CODE_MAP: dict[type[Exception], str] = {
     ActionExpiredError: "ACTION_EXPIRED",
+    RateLimitExceededError: "RATE_LIMIT_EXCEEDED",
     ChatUnavailableError: "CHAT_UNAVAILABLE",
     ToolExecutionError: "TOOL_EXECUTION_ERROR",
     MaxRoundsExceededError: "MAX_ROUNDS_EXCEEDED",

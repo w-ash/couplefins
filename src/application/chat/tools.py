@@ -9,9 +9,7 @@ descriptions focus on what the tool does and returns rather than prescriptive
 "use this when..." routing (which causes overtriggering).
 """
 
-from anthropic.types import ToolParam
-
-TOOLS: list[ToolParam] = [
+TOOLS: list[dict[str, object]] = [
     {
         "name": "get_settlement_balance",
         "description": (

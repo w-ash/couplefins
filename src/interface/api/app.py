@@ -14,11 +14,12 @@ from src.application.use_cases.seed_settlement_merchants import (
 from src.config.constants import AppConfig
 from src.config.logging import setup_logging
 from src.config.settings import get_settings
+from src.infrastructure.chat.anthropic_adapter import AnthropicAdapter
 from src.infrastructure.persistence.database.db_connection import (
     dispose_engine,
     init_db,
 )
-from src.interface.api.dependencies import is_chat_available, set_anthropic_client
+from src.interface.api.dependencies import is_chat_available, set_llm_client
 from src.interface.api.error_handling import register_error_handlers
 from src.interface.api.request_logging import RequestLoggingMiddleware
 from src.interface.api.routes.auth import router as auth_router
@@ -46,8 +47,8 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     await execute_use_case(seed_category_groups)
     await execute_use_case(seed_settlement_merchants)
     settings = get_settings()
-    set_anthropic_client(
-        AsyncAnthropic(api_key=settings.chat.anthropic_api_key)
+    set_llm_client(
+        AnthropicAdapter(AsyncAnthropic(api_key=settings.chat.anthropic_api_key))
         if settings.chat.anthropic_api_key
         else None
     )

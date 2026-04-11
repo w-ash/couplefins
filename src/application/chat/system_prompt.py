@@ -2,8 +2,6 @@
 
 from datetime import date
 
-from anthropic.types import TextBlockParam
-
 from src.domain.entities.person import Person
 
 
@@ -12,7 +10,7 @@ def build_system_prompt(
     partner: Person,
     today: date,
     category_groups: list[str],
-) -> list[TextBlockParam]:
+) -> list[dict[str, object]]:
     """Build system prompt blocks with cache_control on the last block.
 
     The combined token count of tools + system must reach 2048 for Sonnet 4.6
@@ -133,9 +131,9 @@ matching transactions by merchant/date/tag. Never guess transaction IDs.
 </mutation_rules>"""
 
     return [
-        TextBlockParam(
-            type="text",
-            text=text,
-            cache_control={"type": "ephemeral"},
-        )
+        {
+            "type": "text",
+            "text": text,
+            "cache_control": {"type": "ephemeral"},
+        }
     ]

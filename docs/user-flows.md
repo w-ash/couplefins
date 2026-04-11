@@ -460,6 +460,19 @@ A natural language assistant for quick answers without page-hopping. Optional �
 - Given I confirm, then the transactions are updated (household flag set, audit trail recorded)
 - Given the count is large (>10), then the assistant confirms the count before showing the full confirmation
 
+**US-CHAT-11** (v1.5.x): As a partner, I want the chat assistant to have personality so it feels like talking to a person, not a robot.
+
+- Given I open the chat panel, when the assistant responds, then the tone matches the configured persona's voice — not a generic AI assistant
+- Given I ask about spending, then the assistant frames numbers conversationally using the persona's vocabulary and style
+- Given I ask about budgets, then the assistant uses the persona's terminology and gives actionable reads, not dry summaries
+
+**US-CHAT-12** (v1.5.x): As a partner, I want to choose between chat personalities so I can pick the tone I prefer.
+
+- Given the Account page, then I see a "Chat personality" selector alongside the theme toggle
+- Given I select "Fiona" (default), then chat responses use Fiona's warm Southern CPA voice
+- Given I select "Standard", then chat responses use a neutral, minimal-personality tone
+- Given I change my persona, then my next chat message uses the new voice (no page refresh needed — the system prompt rebuilds per request)
+
 ---
 
 ## User Journeys

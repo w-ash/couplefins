@@ -13,6 +13,7 @@ from src.domain.exceptions import (
     MaxRoundsExceededError,
     NotFoundError,
     PeriodFinalizedError,
+    RateLimitExceededError,
     ToolExecutionError,
     ValidationError,
 )
@@ -26,6 +27,7 @@ _DOMAIN_ERROR_MAP: dict[type[DomainError], tuple[int, str]] = {
     PeriodFinalizedError: (409, "PERIOD_FINALIZED"),
     AuthenticationError: (401, "AUTHENTICATION_ERROR"),
     ForbiddenError: (403, "FORBIDDEN"),
+    RateLimitExceededError: (429, "RATE_LIMIT_EXCEEDED"),
     ChatUnavailableError: (503, "CHAT_UNAVAILABLE"),
     ToolExecutionError: (500, "TOOL_EXECUTION_ERROR"),
     MaxRoundsExceededError: (400, "MAX_ROUNDS_EXCEEDED"),

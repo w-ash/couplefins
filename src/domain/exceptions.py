@@ -46,5 +46,9 @@ class ActionExpiredError(DomainError):
     pass
 
 
+class RateLimitExceededError(DomainError):
+    pass
+
+
 class AnthropicApiError(DomainError):
     pass
