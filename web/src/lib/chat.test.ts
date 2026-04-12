@@ -8,6 +8,7 @@ describe("chat store", () => {
       isStreaming: false,
       abortController: null,
       isPanelOpen: false,
+      confirmationStates: {},
     });
   });
 
@@ -97,15 +98,41 @@ describe("chat store", () => {
     expect(useChatStore.getState().isPanelOpen).toBe(false);
   });
 
-  it("clears all messages", () => {
+  it("clears all messages and confirmation states", () => {
     useChatStore.getState().addUserMessage("Hi");
     useChatStore.getState().startAssistantMessage();
+    useChatStore.getState().setConfirmationState("action-1", "pending");
     expect(useChatStore.getState().messages).toHaveLength(2);
 
     useChatStore.getState().clearMessages();
     const state = useChatStore.getState();
     expect(state.messages).toEqual([]);
     expect(state.isStreaming).toBe(false);
+    expect(state.confirmationStates).toEqual({});
+  });
+
+  describe("removeLastAssistantMessage", () => {
+    it("removes a trailing assistant message", () => {
+      useChatStore.getState().addUserMessage("Hi");
+      useChatStore.getState().startAssistantMessage();
+      expect(useChatStore.getState().messages).toHaveLength(2);
+
+      useChatStore.getState().removeLastAssistantMessage();
+      const state = useChatStore.getState();
+      expect(state.messages).toHaveLength(1);
+      expect(state.messages[0].role).toBe("user");
+    });
+
+    it("is a no-op when the trailing message is a user message", () => {
+      useChatStore.getState().addUserMessage("Hi");
+      useChatStore.getState().removeLastAssistantMessage();
+      expect(useChatStore.getState().messages).toHaveLength(1);
+    });
+
+    it("is a no-op on empty state", () => {
+      useChatStore.getState().removeLastAssistantMessage();
+      expect(useChatStore.getState().messages).toEqual([]);
+    });
   });
 
   it("stores and clears abort controller", () => {

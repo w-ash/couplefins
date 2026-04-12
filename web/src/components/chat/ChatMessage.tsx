@@ -1,4 +1,5 @@
-import { Loader2 } from "lucide-react";
+import { Check, Copy, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import "streamdown/styles.css";
 import type {
@@ -125,6 +126,47 @@ const markdownComponents = {
   ),
 };
 
+function CopyButton({ content }: { content: string }) {
+  const [copied, setCopied] = useState(false);
+  const timeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current !== null) {
+        window.clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleCopy = useCallback(async () => {
+    await navigator.clipboard.writeText(content);
+    setCopied(true);
+    if (timeoutRef.current !== null) {
+      window.clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = window.setTimeout(() => {
+      setCopied(false);
+      timeoutRef.current = null;
+    }, 1500);
+  }, [content]);
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title={copied ? "Copied" : "Copy"}
+      aria-label={copied ? "Copied" : "Copy message"}
+      className={cn(
+        "flex size-7 items-center justify-center rounded-md text-muted-foreground transition-opacity hover:text-foreground",
+        "max-md:size-11",
+        "opacity-0 focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100",
+      )}
+    >
+      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+    </button>
+  );
+}
+
 export function ChatMessage({
   message,
   confirmationStates,
@@ -137,11 +179,13 @@ export function ChatMessage({
   onCancel?: (actionId: string) => void;
 }) {
   const isUser = message.role === "user";
+  const showCopy =
+    !isUser && !message.isStreaming && !message.error && !!message.content;
 
   return (
     <div
       className={cn(
-        "flex flex-col gap-1",
+        "group flex flex-col gap-1",
         isUser ? "items-end" : "items-start",
       )}
     >
@@ -200,6 +244,7 @@ export function ChatMessage({
           })}
         </div>
       )}
+      {showCopy && <CopyButton content={message.content} />}
     </div>
   );
 }

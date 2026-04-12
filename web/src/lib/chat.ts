@@ -41,6 +41,7 @@ interface ChatState {
   ) => void;
   completeMessage: (id: string) => void;
   setMessageError: (id: string, code: string, message: string) => void;
+  removeLastAssistantMessage: () => void;
   setAbortController: (c: AbortController | null) => void;
   setPanelOpen: (open: boolean) => void;
   togglePanel: () => void;
@@ -129,6 +130,13 @@ export const useChatStore = create<ChatState>()((set) => ({
       isStreaming: false,
       abortController: null,
     })),
+
+  removeLastAssistantMessage: () =>
+    set((s) => {
+      const last = s.messages.at(-1);
+      if (!last || last.role !== "assistant") return s;
+      return { messages: s.messages.slice(0, -1) };
+    }),
 
   setAbortController: (c) => set({ abortController: c }),
 

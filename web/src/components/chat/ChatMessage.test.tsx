@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { fireEvent } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatMessage as ChatMessageType } from "@/lib/chat";
 import { renderWithProviders, screen } from "@/test/test-utils";
 import { ChatMessage } from "./ChatMessage";
@@ -100,6 +101,85 @@ describe("ChatMessage", () => {
         />,
       );
       expect(screen.getByText("Tool failed")).toBeInTheDocument();
+    });
+  });
+
+  describe("copy button", () => {
+    let writeText: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      writeText = vi.fn(() => Promise.resolve());
+      Object.defineProperty(navigator, "clipboard", {
+        value: { writeText },
+        configurable: true,
+        writable: true,
+      });
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("is not rendered for user messages", () => {
+      renderWithProviders(
+        <ChatMessage
+          message={makeMessage({ role: "user", content: "Hello" })}
+        />,
+      );
+      expect(
+        screen.queryByRole("button", { name: /copy message/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("is not rendered while streaming", () => {
+      renderWithProviders(
+        <ChatMessage
+          message={makeMessage({ content: "partial", isStreaming: true })}
+        />,
+      );
+      expect(
+        screen.queryByRole("button", { name: /copy message/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("is not rendered on error bubbles", () => {
+      renderWithProviders(
+        <ChatMessage
+          message={makeMessage({
+            content: "",
+            error: { code: "E", message: "broke" },
+          })}
+        />,
+      );
+      expect(
+        screen.queryByRole("button", { name: /copy message/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("copies content to clipboard and flashes Copied", async () => {
+      renderWithProviders(
+        <ChatMessage message={makeMessage({ content: "**hello** world" })} />,
+      );
+
+      const button = screen.getByRole("button", { name: /copy message/i });
+      fireEvent.click(button);
+      await vi.waitFor(() =>
+        expect(writeText).toHaveBeenCalledWith("**hello** world"),
+      );
+
+      await vi.waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: /copied/i }),
+        ).toBeInTheDocument(),
+      );
+
+      vi.advanceTimersByTime(1600);
+      await vi.waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: /copy message/i }),
+        ).toBeInTheDocument(),
+      );
     });
   });
 

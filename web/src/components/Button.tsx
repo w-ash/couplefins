@@ -3,21 +3,23 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 type Variant = "primary" | "secondary" | "destructive";
-type Size = "default" | "sm";
+type Size = "default" | "sm" | "icon";
 
 const base =
-  "inline-flex items-center justify-center gap-2 rounded-lg font-medium shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:enabled:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 font-medium shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:enabled:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50";
 
 const variants: Record<Variant, string> = {
-  primary: "bg-primary text-primary-foreground hover:bg-primary/80",
+  primary: "bg-primary text-primary-foreground hover:bg-primary-hover",
   secondary:
     "border border-input bg-card text-secondary-foreground hover:bg-muted",
-  destructive: "bg-destructive text-primary-foreground hover:bg-destructive/80",
+  destructive:
+    "bg-destructive text-primary-foreground hover:bg-destructive-hover",
 };
 
 const sizes: Record<Size, string> = {
-  default: "min-h-11 px-4 py-2.5",
-  sm: "px-3 py-2 text-sm",
+  default: "min-h-11 rounded-lg px-4 py-2.5",
+  sm: "rounded-lg px-3 py-2 text-sm",
+  icon: "size-9 rounded-full shadow-none",
 };
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

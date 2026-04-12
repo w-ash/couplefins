@@ -358,7 +358,8 @@ function BudgetGroupRow({
                           </span>
                         </div>
                         {cat.include_personal &&
-                        cat.personal_amounts.length > 0 ? (
+                        cat.personal_amounts.length > 0 &&
+                        cat.total_amount > 0 ? (
                           <div className="mt-0.5 flex h-1 overflow-hidden rounded-full bg-muted">
                             {cat.household_amount > 0 && (
                               <div

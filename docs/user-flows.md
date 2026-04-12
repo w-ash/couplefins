@@ -473,6 +473,30 @@ A natural language assistant for quick answers without page-hopping. Optional �
 - Given I select "Standard", then chat responses use a neutral, minimal-personality tone
 - Given I change my voice, then my next chat message uses the new voice (no page refresh needed — the system prompt rebuilds per request)
 
+**US-CHAT-13** (v1.5.x): As a partner, I want to start a new conversation so I can ask an unrelated question without earlier context biasing the assistant.
+
+- Given the chat panel has messages, then I see a "New conversation" control in the controls row above the input
+- Given I click "New conversation", then the message list clears immediately and the suggested questions reappear
+- Given no messages exist, then the control is hidden (nothing to clear)
+
+**US-CHAT-14** (v1.5.x): As a partner, I want to copy the assistant's reply so I can paste a figure into Monarch or a message.
+
+- Given a completed assistant reply, when I hover the bubble (desktop) or view it on mobile, then I see a Copy icon
+- Given I click Copy, then the reply's markdown is on my clipboard and the icon briefly changes to a check with "Copied" tooltip
+- Given a reply is still streaming, then Copy is disabled on that bubble until completion
+
+**US-CHAT-15** (v1.5.x): As a partner, I want to regenerate the assistant's last reply so I can try again when it missed the question or a tool failed.
+
+- Given the last message is a completed assistant reply, then I see a Regenerate control in the controls row above the input
+- Given I click Regenerate, then the last reply is removed and a new reply streams in its place (replace-in-place — no version toggle)
+- Given streaming is in progress, then Regenerate is disabled
+- Given the last reply errored, then Regenerate is still available
+
+**US-CHAT-16** (v1.5.x): As a partner hitting the conversation length limit, I want a clear message telling me what to do next.
+
+- Given I send a message and the conversation exceeds the backend cap (50 messages), then I see an inline error: "This conversation is full. Start a new one to continue."
+- Given the error, then the New Conversation control is visibly emphasized so recovery is a single click
+
 ---
 
 ## User Journeys

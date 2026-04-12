@@ -47,6 +47,11 @@ if (
   });
 }
 
+// Polyfill scrollIntoView for jsdom (used by chat message auto-scroll)
+if (typeof Element.prototype.scrollIntoView !== "function") {
+  Element.prototype.scrollIntoView = function scrollIntoView() {};
+}
+
 // Polyfill HTMLDialogElement for jsdom (no native <dialog> support)
 HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
   this.setAttribute("open", "");

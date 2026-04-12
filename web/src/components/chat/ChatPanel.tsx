@@ -1,12 +1,19 @@
-import { X } from "lucide-react";
-import { useCallback, useEffect } from "react";
+import { MessageSquarePlus, RotateCcw, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import type { ChatSSECallbacks, ConfirmationPayload } from "@/api/chat-sse";
 import { sendChatMessage } from "@/api/chat-sse";
+import { Button } from "@/components/Button";
+import { InlineError } from "@/components/InlineError";
 import { useKeyboardShortcut } from "@/hooks/useKeyboardShortcut";
 import { useChatStore } from "@/lib/chat";
 import { ChatInput } from "./ChatInput";
 import { ChatMessageList } from "./ChatMessageList";
 import { SuggestedQuestions } from "./SuggestedQuestions";
+
+// Mirrors the backend cap in src/interface/api/schemas/chat.py.
+const MAX_MESSAGES = 50;
+const LIMIT_FULL_MESSAGE =
+  "This conversation is full. Start a new one to continue.";
 
 const closePanel = () => useChatStore.getState().setPanelOpen(false);
 
@@ -46,14 +53,39 @@ export function ChatPanel({ fullScreen = false }: { fullScreen?: boolean }) {
   const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const abortController = useChatStore((s) => s.abortController);
+  const [limitError, setLimitError] = useState<string | null>(null);
 
   const sendQuestion = useCallback((text: string) => {
     const store = useChatStore.getState();
     if (store.isStreaming) return;
 
+    if (store.messages.length >= MAX_MESSAGES) {
+      setLimitError(LIMIT_FULL_MESSAGE);
+      return;
+    }
+
+    setLimitError(null);
     store.addUserMessage(text);
     const assistantId = store.startAssistantMessage();
     startStream(assistantId);
+  }, []);
+
+  const handleRegenerate = useCallback(() => {
+    const store = useChatStore.getState();
+    if (store.isStreaming) return;
+    const last = store.messages.at(-1);
+    if (!last || last.role !== "assistant") return;
+
+    store.removeLastAssistantMessage();
+    const assistantId = store.startAssistantMessage();
+    startStream(assistantId);
+  }, []);
+
+  const handleNewConversation = useCallback(() => {
+    const ctrl = useChatStore.getState().abortController;
+    ctrl?.abort();
+    useChatStore.getState().clearMessages();
+    setLimitError(null);
   }, []);
 
   const handleConfirm = useCallback((actionId: string) => {
@@ -105,6 +137,8 @@ export function ChatPanel({ fullScreen = false }: { fullScreen?: boolean }) {
   }, []);
 
   const hasMessages = messages.length > 0;
+  const canRegenerate = !isStreaming && messages.at(-1)?.role === "assistant";
+  const showNewConversation = hasMessages || limitError !== null;
 
   return (
     <div className="flex h-full flex-col">
@@ -130,6 +164,36 @@ export function ChatPanel({ fullScreen = false }: { fullScreen?: boolean }) {
         />
       ) : (
         <SuggestedQuestions onSelect={sendQuestion} />
+      )}
+
+      {(showNewConversation || canRegenerate) && (
+        <div className="flex flex-col gap-2 border-t border-border px-4 py-3">
+          {limitError && <InlineError>{limitError}</InlineError>}
+          <div className="flex items-center justify-between gap-2">
+            {showNewConversation ? (
+              <Button
+                size="sm"
+                variant={limitError ? "primary" : "secondary"}
+                onClick={handleNewConversation}
+                icon={<MessageSquarePlus className="size-3.5" />}
+              >
+                New conversation
+              </Button>
+            ) : (
+              <span />
+            )}
+            {canRegenerate && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleRegenerate}
+                icon={<RotateCcw className="size-3.5" />}
+              >
+                Regenerate
+              </Button>
+            )}
+          </div>
+        </div>
       )}
 
       <ChatInput
