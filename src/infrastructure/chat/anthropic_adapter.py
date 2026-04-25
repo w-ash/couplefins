@@ -1,6 +1,6 @@
 """Anthropic SDK adapter — implements LLMClientProtocol."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from typing import cast
 
@@ -96,7 +96,7 @@ class AnthropicAdapter:
         system: list[dict[str, object]],
         tools: list[dict[str, object]],
         messages: list[dict[str, object]],
-    ) -> AsyncIterator[_AdapterStream]:
+    ) -> AsyncGenerator[_AdapterStream]:
         async with self._client.messages.stream(
             model=model,
             max_tokens=max_tokens,
