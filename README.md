@@ -54,12 +54,15 @@ uv run alembic upgrade head
 
 ### Test database
 
-Integration tests use the same `DATABASE__URL` from your environment. Unit tests don't need a database. To run integration tests:
+Integration tests use a separate `TEST_DATABASE__URL` (never `DATABASE__URL`) and TRUNCATE all tables on teardown. The `.env.example` defaults to a local Postgres 18 container defined in `docker-compose.yml`:
 
 ```bash
-uv run pytest tests/integration/ -x    # Requires DATABASE__URL
+docker compose up -d                   # Start Postgres 18 on :5433
+uv run pytest tests/integration/ -x    # Requires TEST_DATABASE__URL
 uv run pytest tests/unit/ -x           # No database needed
 ```
+
+If `TEST_DATABASE__URL` is unset, integration tests are skipped.
 
 ## Quick Start
 
@@ -78,6 +81,9 @@ uv run alembic upgrade head
 
 # Install frontend dependencies
 pnpm --prefix web install
+
+# Start the local Postgres 18 test container (for `pytest tests/integration/`)
+docker compose up -d
 
 # Start both servers (API on 8001, UI on 5174)
 pnpm dev

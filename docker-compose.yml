@@ -1,0 +1,19 @@
+services:
+  test-db:
+    image: postgres:18-alpine
+    ports: ["5433:5432"]
+    environment:
+      POSTGRES_DB: couplefins_test
+      POSTGRES_USER: couplefins
+      POSTGRES_PASSWORD: couplefins
+    volumes:
+      - test-db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U couplefins -d couplefins_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  test-db-data:

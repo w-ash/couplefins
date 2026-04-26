@@ -53,6 +53,10 @@ pnpm --prefix web install
 
 # 6. Generate TypeScript API client from OpenAPI spec
 pnpm --prefix web generate
+
+# 7. Start the local Postgres 18 container for integration tests
+#    (compose file in repo root; matches TEST_DATABASE__URL in .env.example).
+docker compose up -d
 ```
 
 ### Run the app
