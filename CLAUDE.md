@@ -49,11 +49,12 @@ uv run ruff format .                    # Format
 uv run basedpyright src/                # Type check
 uv run vulture                          # Dead code detection
 
-# Frontend
-pnpm --prefix web dev                       # Vite dev server (port 5173)
-pnpm --prefix web test                      # Vitest
-pnpm --prefix web check                     # Biome lint + tsc
-pnpm --prefix web generate                  # Orval codegen
+# Frontend / full stack
+pnpm dev                                # API (:8001) + Vite (:5174) together
+pnpm test                               # Vitest
+pnpm check                              # Biome lint + tsc + vite build
+pnpm generate                           # Orval codegen (refreshes OpenAPI first)
+pnpm --prefix web dev                   # Vite alone, when API isn't needed
 
 # Quality gate (run before committing)
 uv run ruff check . --fix && uv run ruff format . && uv run basedpyright src/ && uv run vulture && uv run pytest

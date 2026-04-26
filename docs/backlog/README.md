@@ -58,7 +58,7 @@ pnpm --prefix web generate
 ### Run the app
 
 ```bash
-make dev
+pnpm dev
 ```
 
 This starts both servers concurrently:

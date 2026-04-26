@@ -80,7 +80,7 @@ uv run alembic upgrade head
 pnpm --prefix web install
 
 # Start both servers (API on 8001, UI on 5174)
-pnpm --prefix web start
+pnpm dev
 ```
 
 ## Development

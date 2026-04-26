@@ -5,8 +5,6 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "api": "cd .. && uv run uvicorn src.interface.api.app:app --reload --port 8001 --reload-dir src",
-    "start": "concurrently -n api,web -c blue,green \"pnpm api\" \"pnpm dev\"",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
@@ -28,7 +26,6 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
-    "concurrently": "^9.2.1",
     "jsdom": "^29.0.2",
     "msw": "^2.13.6",
     "orval": "^8.8.1",
@@ -48,5 +45,16 @@
     "recharts": "^3.8.1",
     "streamdown": "^2.5.0",
     "zustand": "^5.0.12"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "msw"
+    ],
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "tsconfck>typescript": "6"
+      }
+    }
   }
 }

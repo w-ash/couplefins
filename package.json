@@ -1,9 +1,12 @@
 {
   "private": true,
   "scripts": {
-    "dev": "pnpm --prefix web dev",
+    "dev": "concurrently -n api,web -c blue,green \"uv run uvicorn src.interface.api.app:app --reload --port 8001 --reload-dir src\" \"pnpm --prefix web dev\"",
     "test": "pnpm --prefix web test",
     "check": "pnpm --prefix web check",
     "generate": "pnpm --prefix web generate"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }
