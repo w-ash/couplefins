@@ -17,11 +17,8 @@ target_metadata = Base.metadata
 
 
 def _get_url() -> str:
-    """Resolve the sync DB URL: explicit alembic config URL wins over app settings.
-
-    Lets programmatic callers (e.g. integration test setup) target a different
-    database by passing `sqlalchemy.url` via `alembic_cfg.set_main_option`.
-    """
+    # Prefer an explicit URL from alembic_cfg so programmatic callers (e.g.
+    # integration test setup) can target a different database than .env.
     explicit = config.get_main_option("sqlalchemy.url")
     if explicit:
         return explicit

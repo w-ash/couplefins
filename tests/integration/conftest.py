@@ -12,7 +12,8 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from src.infrastructure.persistence.database.db_connection import _run_migrations
+from src.config.settings import get_settings, reset_settings
+from src.infrastructure.persistence.database.db_connection import run_migrations
 from src.infrastructure.persistence.models import Base
 
 load_dotenv()
@@ -44,20 +45,17 @@ async def _truncate_all(engine: AsyncEngine) -> None:
 
 @pytest.fixture(scope="session", autouse=True)
 def _setup_test_schema() -> None:
-    # Production builds the schema via Alembic; tests do too, for parity. Drop
-    # first so a stale state from a prior run (e.g. tables without an
-    # alembic_version row) can't break the upgrade. Pin DATABASE__URL to the
-    # test URL so any code path that resolves it via Settings (e.g.
-    # alembic/env.py's fallback) targets the test DB, not production.
-    url = _get_test_db_url()
-    os.environ["DATABASE__URL"] = url
-    sync_url = url.replace("+asyncpg", "+psycopg")
+    # Drop before upgrading so stale state — e.g. tables without an
+    # alembic_version row — can't trip the migration with DuplicateTable.
+    os.environ["DATABASE__URL"] = _get_test_db_url()
+    reset_settings()
+    sync_url = get_settings().database.sync_url
     engine = create_engine(sync_url)
     with engine.begin() as conn:
         Base.metadata.drop_all(conn)
         conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
     engine.dispose()
-    _run_migrations(sync_url)
+    run_migrations(sync_url)
 
 
 @pytest.fixture
@@ -72,7 +70,6 @@ async def db_session() -> AsyncGenerator[AsyncSession]:
 
 @pytest.fixture
 async def client() -> AsyncGenerator[AsyncClient]:
-    from src.config.settings import reset_settings
     from src.infrastructure.persistence.database.db_connection import (
         _get_engine,
         dispose_engine,

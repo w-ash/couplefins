@@ -52,7 +52,7 @@ async def get_session() -> AsyncGenerator[AsyncSession]:
         yield session
 
 
-def _run_migrations(sync_url: str) -> None:
+def run_migrations(sync_url: str) -> None:
     alembic_cfg = Config()
     alembic_cfg.set_main_option("script_location", "alembic")
     alembic_cfg.set_main_option("sqlalchemy.url", sync_url)
@@ -61,7 +61,7 @@ def _run_migrations(sync_url: str) -> None:
 
 async def init_db() -> None:
     settings = get_settings()
-    await asyncio.to_thread(_run_migrations, settings.database.sync_url)
+    await asyncio.to_thread(run_migrations, settings.database.sync_url)
 
 
 async def dispose_engine() -> None:
