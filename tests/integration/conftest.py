@@ -4,7 +4,7 @@ import os
 from dotenv import load_dotenv
 from httpx import ASGITransport, AsyncClient
 import pytest
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from src.infrastructure.persistence.database.db_connection import _run_migrations
 from src.infrastructure.persistence.models import Base
 
 load_dotenv()
@@ -41,12 +42,27 @@ async def _truncate_all(engine: AsyncEngine) -> None:
         )
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _setup_test_schema() -> None:
+    # Production builds the schema via Alembic; tests do too, for parity. Drop
+    # first so a stale state from a prior run (e.g. tables without an
+    # alembic_version row) can't break the upgrade. Pin DATABASE__URL to the
+    # test URL so any code path that resolves it via Settings (e.g.
+    # alembic/env.py's fallback) targets the test DB, not production.
+    url = _get_test_db_url()
+    os.environ["DATABASE__URL"] = url
+    sync_url = url.replace("+asyncpg", "+psycopg")
+    engine = create_engine(sync_url)
+    with engine.begin() as conn:
+        Base.metadata.drop_all(conn)
+        conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
+    engine.dispose()
+    _run_migrations(sync_url)
+
+
 @pytest.fixture
 async def db_session() -> AsyncGenerator[AsyncSession]:
-    url = _get_test_db_url()
-    engine = create_async_engine(url, echo=False)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    engine = create_async_engine(_get_test_db_url(), echo=False)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     async with session_factory() as session:
         yield session
@@ -74,10 +90,8 @@ async def client() -> AsyncGenerator[AsyncClient]:
     from src.application.use_cases.seed_settlement_merchants import (
         seed_settlement_merchants,
     )
-    from src.infrastructure.persistence.database.db_connection import init_db
 
     app = create_app()
-    await init_db()
     await execute_use_case(seed_category_groups)
     await execute_use_case(seed_settlement_merchants)
 
