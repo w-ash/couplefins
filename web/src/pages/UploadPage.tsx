@@ -158,7 +158,7 @@ function ActionPanel({
           type="button"
           onClick={onConfirm}
           loading={isUploading}
-          loadingText="Importing\u2026"
+          loadingText="Importing…"
           icon={<Check className="size-4" />}
           fullWidth
         >
@@ -621,7 +621,7 @@ export function UploadPage() {
             type="submit"
             disabled={!selectedFile || !!headerError}
             loading={previewMutation.isPending}
-            loadingText="Previewing\u2026"
+            loadingText="Previewing…"
             icon={<Eye className="size-4" />}
             fullWidth
           >
