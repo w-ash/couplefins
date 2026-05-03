@@ -10,7 +10,11 @@ from src.domain.categories import (
     build_category_lookup,
     compute_category_breakdowns,
 )
-from src.domain.constants import CoupleDefaults, SplitDefaults
+from src.domain.constants import (
+    UNCATEGORIZED_GROUP_NAME,
+    CoupleDefaults,
+    SplitDefaults,
+)
 from src.domain.date_math import month_bounds
 from src.domain.entities.category import Category
 from src.domain.entities.category_group import CategoryGroup
@@ -26,6 +30,34 @@ class PersonSummary:
     person_id: UUID
     total_paid: Decimal
     total_share: Decimal
+
+
+@define(frozen=True, slots=True)
+class PayerSplitSummary:
+    """Per-payer aggregate for the Settle Up audit table.
+
+    `total_share` here is the payer's share of the bills *they* fronted —
+    NOT their share across all bills (which is what `PersonSummary` tracks
+    for the broader reconcile-then-settle math). With this semantics each
+    audit row stands alone: `total_paid - total_share = partner_share`.
+    """
+
+    payer_person_id: UUID
+    total_paid: Decimal
+    total_share: Decimal
+    transaction_count: int
+
+
+@define(frozen=True, slots=True)
+class PayerGroupSummary:
+    """Same semantics as PayerSplitSummary, sliced by category-group."""
+
+    payer_person_id: UUID
+    group_id: UUID | None
+    group_name: str
+    total_paid: Decimal
+    total_share: Decimal
+    transaction_count: int
 
 
 @define(frozen=True, slots=True)
@@ -46,14 +78,35 @@ class ReconciliationSummary:
     settlement: SettlementResult | None
     category_group_breakdowns: list[CategoryGroupBreakdown]
     transaction_count: int
+    # Filtered split list — exposed so callers (e.g., audit-table builders)
+    # can reuse it without re-filtering the same transactions.
+    split_transactions: list[Transaction]
+
+
+def filter_split_transactions(
+    transactions: list[Transaction],
+) -> list[Transaction]:
+    """Transactions that participate in settlement math.
+
+    Excludes excluded rows, settlement transfers, and household-no-split
+    (payer_percentage == 100, which means the payer absorbs the whole bill
+    and nothing is owed back).
+    """
+    return [
+        tx
+        for tx in transactions
+        if not tx.is_excluded
+        and not tx.is_settlement
+        and tx.payer_percentage < SplitDefaults.MAX_PAYER_PERCENTAGE
+    ]
 
 
 def _compute_person_summaries(
     transactions: list[Transaction],
     person_ids: list[UUID],
 ) -> list[PersonSummary]:
-    paid: dict[UUID, Decimal] = {pid: Decimal(0) for pid in person_ids}
-    share: dict[UUID, Decimal] = {pid: Decimal(0) for pid in person_ids}
+    paid: dict[UUID, Decimal] = dict.fromkeys(person_ids, Decimal(0))
+    share: dict[UUID, Decimal] = dict.fromkeys(person_ids, Decimal(0))
     partner_of = {person_ids[i]: person_ids[1 - i] for i in range(len(person_ids))}
 
     for tx in transactions:
@@ -76,6 +129,93 @@ def _compute_person_summaries(
         PersonSummary(person_id=pid, total_paid=paid[pid], total_share=share[pid])
         for pid in person_ids
     ]
+
+
+def compute_payer_split_summaries(
+    transactions: list[Transaction],
+    person_ids: list[UUID],
+) -> list[PayerSplitSummary]:
+    """Per-payer aggregates over an already-filtered split list."""
+    paid: dict[UUID, Decimal] = dict.fromkeys(person_ids, Decimal(0))
+    share: dict[UUID, Decimal] = dict.fromkeys(person_ids, Decimal(0))
+    counts: dict[UUID, int] = dict.fromkeys(person_ids, 0)
+
+    for tx in transactions:
+        payer_share, _ = compute_shares(tx.amount, tx.payer_percentage)
+        sign = Decimal(1) if tx.amount < 0 else Decimal(-1)
+        paid[tx.payer_person_id] += sign * abs(tx.amount)
+        share[tx.payer_person_id] += sign * payer_share
+        counts[tx.payer_person_id] += 1
+
+    return [
+        PayerSplitSummary(
+            payer_person_id=pid,
+            total_paid=paid[pid],
+            total_share=share[pid],
+            transaction_count=counts[pid],
+        )
+        for pid in person_ids
+    ]
+
+
+type _PayerGroupKey = tuple[UUID, UUID | None]
+
+
+def compute_payer_group_summaries(
+    transactions: list[Transaction],
+    person_ids: list[UUID],
+    category_lookup: dict[str, tuple[UUID, str]],
+) -> list[PayerGroupSummary]:
+    """Per-(payer x category-group) split aggregates.
+
+    Each cell tracks bills the row's person fronted and their share of those
+    bills. `partner_share` for an audit row is derived as `paid - share` — the
+    amount the partner owes for the bills this person fronted.
+
+    Caller passes an already-filtered split list (see
+    `filter_split_transactions`). Output ordering: groups by absolute total
+    descending, then by `person_ids` order. Uncategorized rows sort last.
+    """
+    paid: dict[_PayerGroupKey, Decimal] = {}
+    share: dict[_PayerGroupKey, Decimal] = {}
+    counts: dict[_PayerGroupKey, int] = {}
+    group_names: dict[UUID | None, str] = {}
+
+    for tx in transactions:
+        payer_share, _ = compute_shares(tx.amount, tx.payer_percentage)
+        gid, gname = category_lookup.get(tx.category, (None, UNCATEGORIZED_GROUP_NAME))
+        group_names[gid] = gname
+        key: _PayerGroupKey = (tx.payer_person_id, gid)
+        sign = Decimal(1) if tx.amount < 0 else Decimal(-1)
+        paid[key] = paid.get(key, Decimal(0)) + sign * abs(tx.amount)
+        share[key] = share.get(key, Decimal(0)) + sign * payer_share
+        counts[key] = counts.get(key, 0) + 1
+
+    group_totals: dict[UUID | None, Decimal] = {}
+    for (_pid, gid), amount in paid.items():
+        group_totals[gid] = group_totals.get(gid, Decimal(0)) + abs(amount)
+
+    def _group_sort_key(gid: UUID | None) -> tuple[int, Decimal]:
+        return (1 if gid is None else 0, -group_totals.get(gid, Decimal(0)))
+
+    rows: list[PayerGroupSummary] = []
+    for gid in sorted(group_totals.keys(), key=_group_sort_key):
+        for pid in person_ids:
+            key = (pid, gid)
+            if key not in counts:
+                continue
+            rows.append(
+                PayerGroupSummary(
+                    payer_person_id=pid,
+                    group_id=gid,
+                    group_name=group_names[gid],
+                    total_paid=paid[key],
+                    total_share=share[key],
+                    transaction_count=counts[key],
+                )
+            )
+
+    return rows
 
 
 def _compute_settlement(
@@ -151,15 +291,10 @@ def reconcile(
 ) -> ReconciliationSummary:
     person_ids = [p.id for p in persons]
 
-    household: list[Transaction] = []
+    household = filter_split_transactions(transactions)
     total_spending = Decimal(0)
     total_refunds = Decimal(0)
-    for tx in transactions:
-        if tx.is_excluded or tx.is_settlement:
-            continue
-        if tx.payer_percentage == SplitDefaults.MAX_PAYER_PERCENTAGE:
-            continue
-        household.append(tx)
+    for tx in household:
         abs_amount = abs(tx.amount)
         if tx.amount < 0:
             total_spending += abs_amount
@@ -181,6 +316,7 @@ def reconcile(
         settlement=settlement,
         category_group_breakdowns=breakdowns,
         transaction_count=len(household),
+        split_transactions=household,
     )
 
 

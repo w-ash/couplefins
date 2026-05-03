@@ -24,10 +24,20 @@ from src.application.use_cases._shared.upload_status import (
     UploadStatus,
     build_upload_statuses,
 )
+from src.domain.categories import build_category_lookup
 from src.domain.entities.category import Category
+from src.domain.entities.category_group import CategoryGroup
 from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
-from src.domain.reconciliation import SettlementResult, compute_net_position, reconcile
+from src.domain.reconciliation import (
+    PayerGroupSummary,
+    PayerSplitSummary,
+    SettlementResult,
+    compute_net_position,
+    compute_payer_group_summaries,
+    compute_payer_split_summaries,
+    reconcile,
+)
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -52,6 +62,30 @@ class GetSettleUpDataResult:
     transaction_count: int
     latest_transaction_month: tuple[int, int] | None
     finalization_warnings: list[str]
+    payer_splits: list[PayerSplitSummary]
+    payer_group_splits: list[PayerGroupSummary]
+
+
+@define(frozen=True, slots=True)
+class _AuditSummaries:
+    payer_splits: list[PayerSplitSummary]
+    payer_group_splits: list[PayerGroupSummary]
+
+
+def _build_audit_summaries(
+    split_transactions: list[Transaction],
+    persons: list[Person],
+    categories: list[Category],
+    category_groups: list[CategoryGroup],
+) -> _AuditSummaries:
+    person_ids = [p.id for p in persons]
+    lookup = build_category_lookup(categories, category_groups)
+    return _AuditSummaries(
+        payer_splits=compute_payer_split_summaries(split_transactions, person_ids),
+        payer_group_splits=compute_payer_group_summaries(
+            split_transactions, person_ids, lookup
+        ),
+    )
 
 
 def _build_finalization_warnings(
@@ -100,6 +134,13 @@ class GetSettleUpDataUseCase:
                 end_date=end,
             )
 
+            audit = _build_audit_summaries(
+                summary.split_transactions,
+                ctx.persons,
+                ctx.categories,
+                ctx.category_groups,
+            )
+
             settlements = await uow.settlements.get_by_period(
                 command.year, command.month
             )
@@ -121,7 +162,6 @@ class GetSettleUpDataUseCase:
             is_finalized, finalized_at = await load_period_status(
                 uow, command.year, command.month
             )
-            latest_month = await get_latest_transaction_month(uow)
 
             warnings = _build_finalization_warnings(
                 is_finalized, upload_statuses, remaining, transactions, ctx.categories
@@ -139,6 +179,8 @@ class GetSettleUpDataUseCase:
                 is_finalized=is_finalized,
                 finalized_at=finalized_at,
                 transaction_count=summary.transaction_count,
-                latest_transaction_month=latest_month,
+                latest_transaction_month=await get_latest_transaction_month(uow),
                 finalization_warnings=warnings,
+                payer_splits=audit.payer_splits,
+                payer_group_splits=audit.payer_group_splits,
             )

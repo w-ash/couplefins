@@ -1,8 +1,12 @@
+import type { ReactNode } from "react";
+import { InfoPopover } from "@/components/InfoPopover";
+
 interface Stat {
   label: string;
   value: string;
   description?: string;
   valueClassName?: string;
+  info?: ReactNode;
 }
 
 export function StatsGrid({ stats }: { stats: Stat[] }) {
@@ -15,9 +19,16 @@ export function StatsGrid({ stats }: { stats: Stat[] }) {
           key={stat.label}
           className="flex flex-col justify-between rounded-lg border border-border bg-card p-4 shadow-sm"
         >
-          <p className="text-xs font-medium text-muted-foreground">
-            {stat.label}
-          </p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs font-medium text-muted-foreground">
+              {stat.label}
+            </p>
+            {stat.info && (
+              <InfoPopover label={`About ${stat.label}`}>
+                {stat.info}
+              </InfoPopover>
+            )}
+          </div>
           <p
             className={`mt-1 text-lg font-semibold tabular-nums text-right ${stat.valueClassName ?? "text-foreground"}`}
           >

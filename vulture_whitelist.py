@@ -91,6 +91,20 @@ from src.config.settings import reset_settings
 
 reset_settings  # resets settings cache between tests
 
+# --- Pydantic BaseModel fields: serialized to JSON by FastAPI ---
+
+from src.interface.api.schemas.settlements import (
+    PayerGroupSplitSummaryResponse,
+    PayerSplitSummaryResponse,
+)
+
+PayerSplitSummaryResponse.fronted  # serialized in GET /settle-up
+PayerSplitSummaryResponse.their_share
+PayerSplitSummaryResponse.partner_share
+PayerGroupSplitSummaryResponse.fronted
+PayerGroupSplitSummaryResponse.their_share
+PayerGroupSplitSummaryResponse.partner_share
+
 # --- TypedDict fields: consumed by type checker + dict access ---
 
 from src.application.chat.voices import VoiceDict

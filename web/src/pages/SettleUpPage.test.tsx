@@ -52,6 +52,8 @@ const settleUpResponse = {
   transaction_count: 5,
   latest_transaction_month: { year: 2026, month: 3 },
   finalization_warnings: [],
+  payer_splits: [],
+  payer_group_splits: [],
 };
 
 const emptyResponse = {
@@ -84,6 +86,8 @@ const emptyResponse = {
   transaction_count: 0,
   latest_transaction_month: null,
   finalization_warnings: [],
+  payer_splits: [],
+  payer_group_splits: [],
 };
 
 const emptyWithPriorDataResponse = {
@@ -115,6 +119,40 @@ describe("SettleUpPage", () => {
       expect(screen.getByText(/owes/)).toBeInTheDocument();
       expect(screen.getByText("$50.00")).toBeInTheDocument();
     });
+  });
+
+  it("renders the audit table when there are split aggregates or settlements", async () => {
+    const populated = {
+      ...settleUpResponse,
+      payer_splits: [
+        {
+          payer_person_id: "p1",
+          fronted: 100,
+          their_share: 50,
+          partner_share: 50,
+          transaction_count: 1,
+        },
+        {
+          payer_person_id: "p2",
+          fronted: 0,
+          their_share: 0,
+          partner_share: 0,
+          transaction_count: 0,
+        },
+      ],
+    };
+    server.use(
+      http.get("/api/v1/settle-up", () => HttpResponse.json(populated)),
+    );
+
+    renderWithProviders(<SettleUpPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Showing the work")).toBeInTheDocument();
+    });
+    expect(
+      screen.getByRole("button", { name: /show ledger/i }),
+    ).toBeInTheDocument();
   });
 
   it("shows empty state when no transactions", async () => {
@@ -169,6 +207,44 @@ describe("SettleUpPage", () => {
     expect(
       screen.queryByText(/No household transactions for/),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps the link UI available after balance reaches zero", async () => {
+    // Original gross balance still exposed via `owed` even when net_position is null
+    const settledWithGross = {
+      ...allSettledResponse,
+      owed: { amount: 50.0, from_person_id: "p2", to_person_id: "p1" },
+    };
+    server.use(
+      http.get("/api/v1/settle-up", () => HttpResponse.json(settledWithGross)),
+    );
+
+    renderWithProviders(<SettleUpPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("All settled!")).toBeInTheDocument();
+    });
+
+    // Link UI must remain so the user can record additional settlements
+    expect(screen.getByText("Link bank transactions")).toBeInTheDocument();
+  });
+
+  it("shows link UI in reversed direction when balance is overpaid", async () => {
+    const overpaidResponse = {
+      ...settleUpResponse,
+      owed: { amount: 50.0, from_person_id: "p2", to_person_id: "p1" },
+      net_position: { amount: 30.0, from_person_id: "p1", to_person_id: "p2" },
+      remaining_balance: 30.0,
+    };
+    server.use(
+      http.get("/api/v1/settle-up", () => HttpResponse.json(overpaidResponse)),
+    );
+
+    renderWithProviders(<SettleUpPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Link bank transactions")).toBeInTheDocument();
+    });
   });
 
   it("shows upload statuses in empty state", async () => {

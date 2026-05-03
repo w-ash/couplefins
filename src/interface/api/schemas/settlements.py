@@ -7,6 +7,7 @@ from src.application.use_cases._shared.settlement_records import SettlementRecor
 from src.application.use_cases.get_settle_up_data import GetSettleUpDataResult
 from src.domain.entities.settlement import Settlement
 from src.domain.entities.transaction import Transaction
+from src.domain.reconciliation import PayerGroupSummary, PayerSplitSummary
 from src.domain.settlement_matching import SettlementCandidate
 from src.interface.api.schemas.dashboard import DashboardPersonResponse
 from src.interface.api.schemas.reconciliation import (
@@ -143,6 +144,50 @@ class SettlementCandidateResponse(BaseModel):
         )
 
 
+class PayerSplitSummaryResponse(BaseModel):
+    """Per-payer aggregate over split transactions for the audit table."""
+
+    payer_person_id: UUID
+    fronted: MoneyField
+    their_share: MoneyField
+    partner_share: MoneyField
+    transaction_count: int
+
+    @classmethod
+    def from_domain(cls, ps: PayerSplitSummary) -> PayerSplitSummaryResponse:
+        return cls(
+            payer_person_id=ps.payer_person_id,
+            fronted=ps.total_paid,
+            their_share=ps.total_share,
+            partner_share=ps.total_paid - ps.total_share,
+            transaction_count=ps.transaction_count,
+        )
+
+
+class PayerGroupSplitSummaryResponse(BaseModel):
+    """Per-(payer x category-group) aggregate for the audit table."""
+
+    payer_person_id: UUID
+    group_id: UUID | None
+    group_name: str
+    fronted: MoneyField
+    their_share: MoneyField
+    partner_share: MoneyField
+    transaction_count: int
+
+    @classmethod
+    def from_domain(cls, ps: PayerGroupSummary) -> PayerGroupSplitSummaryResponse:
+        return cls(
+            payer_person_id=ps.payer_person_id,
+            group_id=ps.group_id,
+            group_name=ps.group_name,
+            fronted=ps.total_paid,
+            their_share=ps.total_share,
+            partner_share=ps.total_paid - ps.total_share,
+            transaction_count=ps.transaction_count,
+        )
+
+
 class SettleUpDataResponse(BaseModel):
     year: int
     month: int
@@ -157,6 +202,8 @@ class SettleUpDataResponse(BaseModel):
     transaction_count: int
     latest_transaction_month: MonthReference | None
     finalization_warnings: list[str]
+    payer_splits: list[PayerSplitSummaryResponse]
+    payer_group_splits: list[PayerGroupSplitSummaryResponse]
 
     @classmethod
     def from_result(cls, result: GetSettleUpDataResult) -> SettleUpDataResponse:
@@ -184,6 +231,13 @@ class SettleUpDataResponse(BaseModel):
                 result.latest_transaction_month
             ),
             finalization_warnings=result.finalization_warnings,
+            payer_splits=[
+                PayerSplitSummaryResponse.from_domain(ps) for ps in result.payer_splits
+            ],
+            payer_group_splits=[
+                PayerGroupSplitSummaryResponse.from_domain(ps)
+                for ps in result.payer_group_splits
+            ],
         )
 
 

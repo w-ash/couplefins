@@ -46,6 +46,11 @@ export function formatDate(dateStr: string): string {
   return dateFmt.format(new Date(`${dateStr}T00:00:00`));
 }
 
+// Short "Mon DD" format for an ISO timestamp (e.g. settlement.settled_at).
+export function formatShortDate(iso: string): string {
+  return dateFmt.format(new Date(iso));
+}
+
 export function formatDateTime(isoString: string): string {
   return dateTimeFmt.format(new Date(isoString));
 }

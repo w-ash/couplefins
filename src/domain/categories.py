@@ -5,11 +5,10 @@ from uuid import UUID
 
 from attrs import Factory, define
 
+from src.domain.constants import UNCATEGORIZED_GROUP_NAME
 from src.domain.entities.category import Category
 from src.domain.entities.category_group import CategoryGroup
 from src.domain.entities.transaction import Transaction
-
-_UNCATEGORIZED = "Uncategorized"
 
 
 @define(frozen=True, slots=True)
@@ -74,7 +73,7 @@ def compute_category_breakdowns(
     # Build CategoryBreakdown per category
     category_breakdowns: list[CategoryBreakdown] = []
     for cat, amount in cat_amounts.items():
-        gid, gname = category_lookup.get(cat, (None, _UNCATEGORIZED))
+        gid, gname = category_lookup.get(cat, (None, UNCATEGORIZED_GROUP_NAME))
         category_breakdowns.append(
             CategoryBreakdown(
                 category=cat,

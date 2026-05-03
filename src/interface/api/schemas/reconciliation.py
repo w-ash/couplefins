@@ -92,6 +92,7 @@ class TransactionResponse(BaseModel):
     payer_percentage: int
     household: bool
     is_excluded: bool
+    is_settlement: bool
     original_date: datetime.date | None
     original_amount: MoneyField | None
 
@@ -196,6 +197,7 @@ class ReconciliationResponse(BaseModel):
                     payer_percentage=tx.payer_percentage,
                     household=tx.household,
                     is_excluded=tx.is_excluded,
+                    is_settlement=tx.is_settlement,
                     original_date=tx.original_date,
                     original_amount=tx.original_amount,
                 )

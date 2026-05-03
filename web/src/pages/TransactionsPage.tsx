@@ -4,6 +4,7 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  HandCoins,
   MessageCircleQuestion,
   Pencil,
   StickyNote,
@@ -49,7 +50,6 @@ import {
 } from "@/components/PageStates";
 import { PersonBadge } from "@/components/PersonBadge";
 import { SegmentedControl } from "@/components/SegmentedControl";
-import { StatsGrid } from "@/components/StatsGrid";
 import { TransactionEditor } from "@/components/TransactionEditor";
 import {
   ActiveFilterPills,
@@ -60,9 +60,10 @@ import {
   TagFilter,
 } from "@/components/TransactionFilters";
 import { TransactionSearch } from "@/components/TransactionSearch";
-import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
+import { TransactionsHeaderCards } from "@/components/TransactionsHeaderCards";
 import { useSetToggle } from "@/hooks/useSetToggle";
 import { useTemporary } from "@/hooks/useTemporary";
+import { cn } from "@/lib/cn";
 import {
   formatRangeLabel,
   monthStartEnd,
@@ -76,66 +77,20 @@ import {
   formatSplit,
   plural,
 } from "@/lib/format";
-
+import { useIdentityStore } from "@/lib/identity";
 import { PAGE_PADDING, tableHeaderRowClass } from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
 import type { SortField, SortState } from "@/lib/transaction-filters";
 import {
   cycleSortState,
   hasDiscussTag,
+  SCOPE_LABELS,
   type TransactionScope,
   useTransactionFilters,
 } from "@/lib/transaction-filters";
 
 const checkboxTouchTarget =
   "flex min-h-11 min-w-8 items-center justify-center sm:min-h-0 sm:min-w-0";
-
-type FilteredStats = ReturnType<typeof computeStats>;
-
-function SummaryStats({
-  label,
-  stats,
-  getPersonName,
-}: {
-  label: string;
-  stats: FilteredStats;
-  getPersonName: (id: string) => string;
-}) {
-  return (
-    <StatsGrid
-      stats={[
-        { label, value: formatCurrency(stats.netSpending) },
-        ...[...stats.personPaid].map(([personId, total]) => ({
-          label: `${getPersonName(personId)} paid`,
-          value: formatCurrency(total),
-        })),
-        ...(stats.excludedCount > 0
-          ? [{ label: "Excluded", value: String(stats.excludedCount) }]
-          : []),
-      ]}
-    />
-  );
-}
-
-function computeStats(transactions: TransactionResponse[]) {
-  let netSpending = 0;
-  let excludedCount = 0;
-  const personPaid = new Map<string, number>();
-
-  for (const tx of transactions) {
-    if (tx.is_excluded) {
-      excludedCount++;
-      continue;
-    }
-    netSpending += tx.amount;
-    personPaid.set(
-      tx.payer_person_id,
-      (personPaid.get(tx.payer_person_id) ?? 0) + tx.amount,
-    );
-  }
-
-  return { netSpending, excludedCount, personPaid };
-}
 
 function SortIndicator({ field, sort }: { field: SortField; sort: SortState }) {
   if (sort.field !== field) return null;
@@ -165,12 +120,28 @@ function SortableHeader({
 }) {
   return (
     <th
-      className={`pb-2 pr-4 font-medium whitespace-nowrap cursor-pointer select-none transition-colors hover:text-foreground ${align === "right" ? "text-right" : ""} ${extraClassName ?? ""}`}
+      className={cn(
+        "pb-2 pr-4 font-medium whitespace-nowrap select-none",
+        align === "right" && "text-right",
+        extraClassName,
+      )}
       title={title}
-      onClick={() => onSort(cycleSortState(sort, field))}
+      aria-sort={
+        sort.field === field
+          ? sort.dir === "asc"
+            ? "ascending"
+            : "descending"
+          : "none"
+      }
     >
-      {children}
-      <SortIndicator field={field} sort={sort} />
+      <button
+        type="button"
+        onClick={() => onSort(cycleSortState(sort, field))}
+        className="inline-flex items-center font-medium transition-colors hover:text-foreground focus-visible:underline focus-visible:outline-none"
+      >
+        {children}
+        <SortIndicator field={field} sort={sort} />
+      </button>
     </th>
   );
 }
@@ -474,11 +445,27 @@ function TransactionRow({
     [...personNames].find(([id]) => id !== tx.payer_person_id)?.[1] ?? "Other";
   const categoryGroup = categoryGroups.get(tx.category) ?? "Uncategorized";
   const hasDiscuss = hasDiscussTag(tx);
+  const isSettlement = tx.is_settlement;
   const strikethrough = tx.is_excluded ? "line-through" : "";
+  // Visual precedence for the row tint (only one applies):
+  // 1. saved → positive flash, 2. expanded → muted active, 3. settlement → primary tint.
+  // is_excluded suppresses the settlement tint (excluded rows already read as muted via opacity).
+  const rowTint = isSaved
+    ? "bg-positive/10"
+    : isExpanded
+      ? "bg-muted/30"
+      : isSettlement && !tx.is_excluded
+        ? "bg-primary/5"
+        : null;
   return (
     <>
       <tr
-        className={`border-b border-border-muted transition-colors duration-150 ${canEdit ? "cursor-pointer hover:bg-muted/50" : ""} ${isExpanded ? "bg-muted/30" : ""} ${isSaved ? "bg-positive/10" : ""} ${tx.is_excluded ? "opacity-50" : ""}`}
+        className={cn(
+          "border-b border-border-muted transition-colors duration-150",
+          canEdit && "cursor-pointer hover:bg-muted/50",
+          rowTint,
+          tx.is_excluded && "opacity-50",
+        )}
         onClick={canEdit ? onToggleExpand : undefined}
       >
         {bulkMode && (
@@ -515,6 +502,12 @@ function TransactionRow({
               <MessageCircleQuestion
                 className="size-3.5 shrink-0 text-amber-500 dark:text-amber-400"
                 aria-label="Flagged for discussion"
+              />
+            )}
+            {isSettlement && (
+              <HandCoins
+                className="size-3.5 shrink-0 text-primary"
+                aria-label="Linked settlement payment"
               />
             )}
           </span>
@@ -647,7 +640,7 @@ export function TransactionsPage() {
     mutation: { onSuccess: invalidateReconciliation },
   });
 
-  const { personNames, getPersonName, getPersonColor } = usePersonMaps(persons);
+  const { personNames, getPersonColor } = usePersonMaps(persons);
 
   const categoryGroupLookup = useMemo(() => {
     const lookup = new Map<string, string>();
@@ -681,12 +674,12 @@ export function TransactionsPage() {
     [personNames],
   );
 
-  const filters = useTransactionFilters(allTransactions, categoryGroupLookup);
-  const filteredStats = useMemo(
-    () => computeStats(filters.filtered),
-    [filters.filtered],
+  const currentPersonId = useIdentityStore((s) => s.currentPersonId);
+  const filters = useTransactionFilters(
+    allTransactions,
+    categoryGroupLookup,
+    currentPersonId,
   );
-
   const periodLabel = formatRangeLabel(startDate, endDate);
   const isFinalized = data?.is_finalized === true;
 
@@ -729,9 +722,18 @@ export function TransactionsPage() {
             />
           ) : (
             <>
-              <UnmappedCategoriesWarning
-                categories={data.unmapped_categories}
-                compact
+              <TransactionsHeaderCards
+                data={data}
+                filtered={filters.filtered}
+                scope={filters.scope}
+                currentPersonId={currentPersonId}
+                personNames={personNames}
+                periodLabel={periodLabel}
+                singleMonth={singleMonth}
+                settlementChipActive={filters.settlement}
+                onShowSettlements={() =>
+                  filters.setSettlement(!filters.settlement)
+                }
               />
 
               <TransactionSearch
@@ -743,11 +745,14 @@ export function TransactionsPage() {
 
               <div className="flex flex-wrap items-center gap-2">
                 <SegmentedControl<TransactionScope>
-                  options={[
-                    { value: "all", label: "All" },
-                    { value: "household", label: "Household" },
-                    { value: "personal", label: "Personal" },
-                  ]}
+                  options={(
+                    Object.entries(SCOPE_LABELS) as Array<
+                      [TransactionScope, string]
+                    >
+                  ).map(([value, label]) => ({
+                    value,
+                    label: `${label} · ${filters.scopeCounts[value]}`,
+                  }))}
                   value={filters.scope}
                   onChange={filters.setScope}
                   shape="pill"
@@ -786,6 +791,13 @@ export function TransactionsPage() {
                   active={filters.discuss}
                   onClick={() => filters.setDiscuss(!filters.discuss)}
                 />
+                <QuickFilterChip
+                  icon={<HandCoins className="size-3.5" />}
+                  label="Settlement"
+                  count={filters.settlementCount}
+                  active={filters.settlement}
+                  onClick={() => filters.setSettlement(!filters.settlement)}
+                />
               </div>
 
               <ActiveFilterPills filters={filters} personNames={personNames} />
@@ -794,14 +806,6 @@ export function TransactionsPage() {
                 <p className="py-8 text-center text-sm text-muted-foreground">
                   No transactions match the current filters.
                 </p>
-              )}
-
-              {filters.filtered.length > 0 && (
-                <SummaryStats
-                  label="Total spending"
-                  stats={filteredStats}
-                  getPersonName={getPersonName}
-                />
               )}
 
               <TransactionTable

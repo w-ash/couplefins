@@ -3,7 +3,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CategoryGroupResponse } from "@/api/generated/model";
 import { Button } from "@/components/Button";
 import { ResponsivePopover } from "@/components/ResponsivePopover";
-import type { TransactionFilters as TransactionFiltersType } from "@/lib/transaction-filters";
+import {
+  SCOPE_LABELS,
+  type TransactionFilters as TransactionFiltersType,
+} from "@/lib/transaction-filters";
 
 function FilterButton({ label, count }: { label: string; count: number }) {
   return (
@@ -390,7 +393,7 @@ export function ActiveFilterPills({
   if (filters.scope !== "all") {
     pills.push({
       key: "scope",
-      label: filters.scope === "household" ? "Household" : "Personal",
+      label: SCOPE_LABELS[filters.scope],
       onRemove: () => filters.setScope("all"),
     });
   }

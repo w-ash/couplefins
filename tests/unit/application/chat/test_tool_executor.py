@@ -56,6 +56,8 @@ def _settle_result(
         transaction_count=82,
         latest_transaction_month=(2026, 3),
         finalization_warnings=[],
+        payer_splits=[],
+        payer_group_splits=[],
     )
 
 

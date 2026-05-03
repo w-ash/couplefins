@@ -135,6 +135,71 @@ class TestGetSettleUpData:
         assert result.remaining_balance == Decimal("1931.00")
 
 
+class TestAuditSummaries:
+    async def test_payer_splits_and_groups_populated(self) -> None:
+        alice = make_person(name="Alice")
+        bob = make_person(name="Bob")
+        food = make_category_group(name="Food & Dining")
+        travel = make_category_group(name="Travel")
+        food_cat = make_category(name="Dining Out", group_id=food.id)
+        travel_cat = make_category(name="Flights", group_id=travel.id)
+
+        # Alice paid $100 dining 50/50; Bob paid $200 flights 70/30 (Bob 70%).
+        txs = [
+            make_transaction(
+                category="Dining Out",
+                payer_person_id=alice.id,
+                amount=Decimal("-100.00"),
+                payer_percentage=50,
+            ),
+            make_transaction(
+                category="Flights",
+                payer_person_id=bob.id,
+                amount=Decimal("-200.00"),
+                payer_percentage=70,
+            ),
+        ]
+
+        uow = make_mock_uow()
+        uow.persons.get_all.return_value = [alice, bob]
+        uow.transactions.get_household_by_date_range.return_value = txs
+        uow.categories.get_all.return_value = [food_cat, travel_cat]
+        uow.category_groups.get_all.return_value = [food, travel]
+        uow.settlements.get_by_period.return_value = []
+        uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = []
+
+        result = await GetSettleUpDataUseCase().execute(
+            GetSettleUpDataCommand(year=2026, month=1), uow
+        )
+
+        # Per-payer aggregate
+        assert len(result.payer_splits) == 2
+        by_payer = {ps.payer_person_id: ps for ps in result.payer_splits}
+        assert by_payer[alice.id].total_paid == Decimal("100.00")
+        assert by_payer[alice.id].total_share == Decimal("50.00")
+        assert by_payer[alice.id].transaction_count == 1
+        assert by_payer[bob.id].total_paid == Decimal("200.00")
+        assert by_payer[bob.id].total_share == Decimal("140.00")
+        assert by_payer[bob.id].transaction_count == 1
+
+        # Per-(payer x group) — Travel sorts before Food & Dining (larger total)
+        assert len(result.payer_group_splits) == 2
+        assert result.payer_group_splits[0].group_name == "Travel"
+        assert result.payer_group_splits[0].payer_person_id == bob.id
+        assert result.payer_group_splits[0].total_paid == Decimal("200.00")
+        assert result.payer_group_splits[1].group_name == "Food & Dining"
+        assert result.payer_group_splits[1].payer_person_id == alice.id
+
+        # The audit-row sum (paid - share) reconciles to the gross owed amount.
+        # Alice fronted $100, owes $50 of it — Bob owes Alice $50.
+        # Bob fronted $200, owes $140 of it — Alice owes Bob $60.
+        # Net: Alice owes Bob $10 → owed: from=Alice, to=Bob, amount=$10.
+        assert result.owed is not None
+        assert result.owed.from_person_id == alice.id
+        assert result.owed.to_person_id == bob.id
+        assert result.owed.amount == Decimal("10.00")
+
+
 class TestFinalizationWarnings:
     def _setup_uow(
         self,

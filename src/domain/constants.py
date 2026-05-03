@@ -26,3 +26,7 @@ class SettlementTags:
 
 # Tags that are never treated as person names during spotted detection.
 RESERVED_TAGS: Final = SharedTags.TAGS | HouseholdTags.TAGS | SettlementTags.TAGS
+
+
+# Group label for transactions whose category is unmapped (group_id is None).
+UNCATEGORIZED_GROUP_NAME: Final = "Uncategorized"

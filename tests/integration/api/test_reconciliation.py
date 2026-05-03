@@ -39,6 +39,7 @@ async def test_full_reconciliation_both_uploaded(client: AsyncClient) -> None:
     assert data["settlement"] is not None
     assert data["settlement"]["amount"] > 0
     assert len(data["transactions"]) == 3
+    assert all(tx["is_settlement"] is False for tx in data["transactions"])
     assert len(data["upload_statuses"]) == 2
     assert all(s["has_uploaded"] for s in data["upload_statuses"])
 

@@ -52,10 +52,16 @@ import {
 import { PersonBadge } from "@/components/PersonBadge";
 import { PosthocLinkDialog } from "@/components/PosthocLinkDialog";
 import { SectionHeader } from "@/components/SectionHeader";
+import { SettleUpAuditTable } from "@/components/SettleUpAuditTable";
 import { UploadStatusRow } from "@/components/UploadStatusRow";
 import { useTemporary } from "@/hooks/useTemporary";
 import { cn } from "@/lib/cn";
-import { formatCurrency, MONTHS, useMonthYear } from "@/lib/format";
+import {
+  formatCurrency,
+  formatShortDate,
+  MONTHS,
+  useMonthYear,
+} from "@/lib/format";
 import { heroCardClass, PAGE_PADDING } from "@/lib/layout";
 import { usePersonMaps } from "@/lib/persons";
 
@@ -120,8 +126,7 @@ function LinkSettlementSection({
   getPersonName: (id: string) => string;
   onSuccess: () => void;
 }) {
-  const net = data.net_position;
-  const searchAmount = net ? net.amount.toFixed(2) : "0";
+  const direction = data.net_position ?? data.owed;
 
   const [selected, setSelected] = useState<SelectedCandidate[]>([]);
   const [successMessage, setSuccessMessage] = useTemporary<string | null>(
@@ -132,9 +137,9 @@ function LinkSettlementSection({
   const mutation = useRecordSettlement({
     mutation: {
       onSuccess: () => {
-        if (net) {
-          const fromName = getPersonName(net.from_person_id);
-          const toName = getPersonName(net.to_person_id);
+        if (direction) {
+          const fromName = getPersonName(direction.from_person_id);
+          const toName = getPersonName(direction.to_person_id);
           const amount = computeSettlementAmount(selected);
           setSuccessMessage(
             `Settlement linked — ${fromName} paid ${toName} ${formatCurrency(amount)}`,
@@ -146,10 +151,10 @@ function LinkSettlementSection({
     },
   });
 
-  // Hide when fully settled, no gross balance, or overpaid (direction reversed)
-  if (!net || !data.owed || net.from_person_id !== data.owed.from_person_id)
-    return null;
+  // Hide only when no settlement context exists for the month
+  if (!direction) return null;
 
+  const searchAmount = direction.amount.toFixed(2);
   const selectedIds = selected.map((c) => c.id);
   const amount = computeSettlementAmount(selected);
   const method = selected.length > 0 ? selected[0].merchant : "";
@@ -175,8 +180,8 @@ function LinkSettlementSection({
                   year: data.year,
                   month: data.month,
                   amount,
-                  from_person_id: net.from_person_id,
-                  to_person_id: net.to_person_id,
+                  from_person_id: direction.from_person_id,
+                  to_person_id: direction.to_person_id,
                   method,
                   linked_transaction_ids: selectedIds,
                 },
@@ -306,10 +311,7 @@ function PaymentHistory({
         {settlements.map((s) => {
           const fromName = getPersonName(s.from_person_id);
           const toName = getPersonName(s.to_person_id);
-          const settledDate = new Date(s.settled_at).toLocaleDateString(
-            "en-US",
-            { month: "short", day: "numeric" },
-          );
+          const settledDate = formatShortDate(s.settled_at);
           const hasLinks = (s.linked_transactions?.length ?? 0) > 0;
 
           return (
@@ -457,7 +459,9 @@ export function SettleUpPage() {
     },
   });
 
-  const { getPersonName, getPersonColor } = usePersonMaps(data?.persons);
+  const { personNames, getPersonName, getPersonColor } = usePersonMaps(
+    data?.persons,
+  );
 
   const isEmpty =
     data &&
@@ -527,6 +531,8 @@ export function SettleUpPage() {
             getPersonName={getPersonName}
             getPersonColor={getPersonColor}
           />
+
+          <SettleUpAuditTable data={data} personNames={personNames} />
 
           <LinkSettlementSection
             key={`${data.net_position?.amount ?? 0}-${data.recorded_settlements.length}`}

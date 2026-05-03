@@ -160,6 +160,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.5.3 | Chat hardening — architecture layering fix, integration tests, rate limiting, input safety | Completed (2026-04-10) | M |
 | v1.5.4 | Chatbot voice — composable voice system, Fiona character, per-user voice setting | Completed (2026-04-10) | S |
 | v1.5.5 | Chat UX affordances — new conversation, copy message, regenerate last reply, friendly limit error | Completed (2026-04-12) | S |
+| v1.6.0 | Settle Up audit table + Transactions buckets — payer-split ledger, "Showing the work" narrative, spotted scope, header cards | Completed (2026-05-02) | L |
 
 ## Infrastructure Readiness
 
