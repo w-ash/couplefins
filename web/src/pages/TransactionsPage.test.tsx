@@ -261,6 +261,38 @@ describe("TransactionsPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("multi-month range never claims Settled — prompts to select a single month", async () => {
+    renderWithProviders(<TransactionsPage />, {
+      routerProps: {
+        initialEntries: [
+          "/transactions?startDate=2026-01-01&endDate=2026-02-28",
+        ],
+      },
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Select a single month to see settlement balance"),
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Settled")).not.toBeInTheDocument();
+  });
+
+  it("does not claim Settled while the settle-up query is loading", async () => {
+    server.use(
+      http.get("/api/v1/settle-up", () => new Promise<never>(() => {})),
+    );
+    renderWithProviders(<TransactionsPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/2 transactions · \$160\.00 imported/),
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Settled")).not.toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+
   it("renders the Imported card with tx count and total throughput", async () => {
     renderWithProviders(<TransactionsPage />);
 

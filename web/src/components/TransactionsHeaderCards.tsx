@@ -94,9 +94,61 @@ function SettlementCard({
   onShowSettlements,
 }: SettlementCardProps) {
   const settleUp = useSettleUpForMonth(singleMonth);
-  const netDirection = settleUp.data?.net_position ?? null;
-  const grossDirection = settleUp.data?.owed ?? data.settlement ?? null;
-  const linked = settleUp.data?.recorded_settlements ?? [];
+
+  return (
+    <CardShell
+      label="Settlement"
+      info={
+        <SettlementInfo
+          hasSettleUp={settleUp.kind === "ready"}
+          singleMonth={singleMonth !== null}
+        />
+      }
+    >
+      {settleUp.kind === "ready" ? (
+        <SettlementBalance
+          settleUp={settleUp.data}
+          grossFallback={data.settlement ?? null}
+          personNames={personNames}
+          settlementChipActive={settlementChipActive}
+          onShowSettlements={onShowSettlements}
+        />
+      ) : (
+        <SettlementPlaceholder
+          kind={settleUp.kind}
+          gross={data.settlement ?? null}
+          personNames={personNames}
+        />
+      )}
+      {singleMonth !== null && (
+        <Link
+          to={`/settle?year=${singleMonth.year}&month=${singleMonth.month}`}
+          className="mt-1 inline-flex items-center gap-0.5 text-[11px] font-medium text-primary hover:underline"
+        >
+          View on Settle Up
+          <ArrowRight className="size-3" />
+        </Link>
+      )}
+    </CardShell>
+  );
+}
+
+function SettlementBalance({
+  settleUp,
+  grossFallback,
+  personNames,
+  settlementChipActive,
+  onShowSettlements,
+}: {
+  settleUp: SettleUpDataResponse;
+  grossFallback: OwedAmountResponse | null;
+  personNames: Map<string, string>;
+  settlementChipActive: boolean;
+  onShowSettlements: () => void;
+}) {
+  const netDirection = settleUp.net_position ?? null;
+  const grossDirection = settleUp.owed ?? grossFallback;
+  const linked = settleUp.recorded_settlements ?? [];
   const linkedTotal = linked.reduce((s, x) => s + x.amount, 0);
   const linkedCount = linked.length;
   const isSettled = !netDirection || isZeroCurrency(netDirection.amount);
@@ -107,21 +159,10 @@ function SettlementCard({
     grossDirection,
     linkedCount,
     linkedTotal,
-    haveSettleUp: settleUp.data !== null,
-    singleMonth: singleMonth !== null,
-    isError: settleUp.isError,
   });
 
   return (
-    <CardShell
-      label="Settlement"
-      info={
-        <SettlementInfo
-          hasSettleUp={settleUp.data !== null}
-          singleMonth={singleMonth !== null}
-        />
-      }
-    >
+    <>
       <button
         type="button"
         onClick={onShowSettlements}
@@ -153,16 +194,48 @@ function SettlementCard({
           {description}
         </p>
       )}
-      {singleMonth !== null && (
-        <Link
-          to={`/settle?year=${singleMonth.year}&month=${singleMonth.month}`}
-          className="mt-1 inline-flex items-center gap-0.5 text-[11px] font-medium text-primary hover:underline"
-        >
-          View on Settle Up
-          <ArrowRight className="size-3" />
-        </Link>
+    </>
+  );
+}
+
+// A "Settled" headline requires actual settle-up data confirming the net
+// position — without it, render an honest placeholder instead.
+function SettlementPlaceholder({
+  kind,
+  gross,
+  personNames,
+}: {
+  kind: "disabled" | "loading" | "error";
+  gross: OwedAmountResponse | null;
+  personNames: Map<string, string>;
+}) {
+  const showGross =
+    kind === "error" && gross !== null && !isZeroCurrency(gross.amount);
+  return (
+    <>
+      <p
+        className={cn(
+          "text-lg font-semibold tabular-nums",
+          showGross ? "text-foreground" : "text-muted-foreground",
+        )}
+      >
+        {showGross
+          ? buildSettlementLabel(gross, personNames, { includeToName: true })
+          : "—"}
+      </p>
+      {kind === "disabled" && (
+        <p className="text-[11px] leading-tight text-muted-foreground/70">
+          Select a single month to see settlement balance
+        </p>
       )}
-    </CardShell>
+      {kind === "error" && (
+        <p className="text-[11px] leading-tight text-muted-foreground/70">
+          {showGross
+            ? "Showing gross — settle-up data unavailable"
+            : "Settle-up data unavailable"}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -171,22 +244,8 @@ function settlementDescription(args: {
   grossDirection: OwedAmountResponse | null;
   linkedCount: number;
   linkedTotal: number;
-  haveSettleUp: boolean;
-  singleMonth: boolean;
-  isError: boolean;
 }): string | null {
-  const {
-    isSettled,
-    grossDirection,
-    linkedCount,
-    linkedTotal,
-    haveSettleUp,
-    singleMonth,
-    isError,
-  } = args;
-  if (isError && singleMonth) {
-    return "Showing gross — settle-up data unavailable";
-  }
+  const { isSettled, grossDirection, linkedCount, linkedTotal } = args;
   if (isSettled) {
     if (linkedCount > 0) {
       return `${plural("settlement", linkedCount)} linked · ${formatCurrency(linkedTotal)}`;
@@ -196,22 +255,20 @@ function settlementDescription(args: {
     }
     return "Fully paid";
   }
-  if (haveSettleUp && grossDirection) {
+  if (grossDirection) {
     if (linkedCount > 0) {
       return `Gross ${formatCurrency(grossDirection.amount)} · ${plural("payment", linkedCount)} linked (${formatCurrency(linkedTotal)})`;
     }
     return "Gross from this period · no settlements linked yet";
   }
-  if (!singleMonth) {
-    return "Select a single month to see settlement balance";
-  }
   return null;
 }
 
-interface SettleUpForMonth {
-  data: SettleUpDataResponse | null;
-  isError: boolean;
-}
+type SettleUpForMonth =
+  | { kind: "disabled" }
+  | { kind: "loading" }
+  | { kind: "error" }
+  | { kind: "ready"; data: SettleUpDataResponse };
 
 function useSettleUpForMonth(
   singleMonth: { year: number; month: number } | null,
@@ -219,12 +276,15 @@ function useSettleUpForMonth(
   const enabled = singleMonth !== null;
   // Fallback params are inert because `enabled: false` short-circuits the request.
   const params = singleMonth ?? { year: 1970, month: 1 };
-  const { data, isError } = useGetSettleUpData(params, {
+  const { data, isPending } = useGetSettleUpData(params, {
     query: { enabled, refetchInterval: enabled ? 5_000 : false },
   });
-  if (!enabled) return { data: null, isError: false };
-  if (data?.status !== 200) return { data: null, isError };
-  return { data: data.data, isError: false };
+  // Disabled queries stay pending forever, so this check must come first.
+  if (!enabled) return { kind: "disabled" };
+  if (data?.status === 200) return { kind: "ready", data: data.data };
+  // isPending (not isFetching) so background polls don't flash the card back to loading.
+  if (isPending) return { kind: "loading" };
+  return { kind: "error" };
 }
 
 interface ImportedCardProps {
