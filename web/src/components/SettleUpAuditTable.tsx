@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useGetCategoryGroups } from "@/api/generated/category-groups/category-groups";
 import type {
-  PayerGroupSplitSummaryResponse,
   PayerSplitSummaryResponse,
   SettlementResponse,
   SettleUpDataResponse,
@@ -17,10 +16,15 @@ import {
   buildSettlementLabel,
   formatCurrency,
   formatShortDate,
+  formatSignedCurrency,
+  isZeroCurrency,
   plural,
 } from "@/lib/format";
 import { tableHeaderRowClass } from "@/lib/layout";
-import type { TransactionScope } from "@/lib/transaction-filters";
+import {
+  type TransactionScope,
+  TX_FILTER_PARAMS,
+} from "@/lib/transaction-filters";
 
 interface Props {
   data: SettleUpDataResponse;
@@ -33,6 +37,28 @@ const VIEW_OPTIONS = [
   { value: "by-payer" as const, label: "By payer" },
   { value: "by-category" as const, label: "By category" },
 ];
+
+// Settlement entries set amount/txns/shares to null — they render as a "—"
+// dash and only contribute to the Net column.
+interface LedgerRow {
+  key: string;
+  activity: string;
+  href: string;
+  amount: number | null;
+  txns: number | null;
+  p0Share: number | null;
+  p1Share: number | null;
+  net: number;
+}
+
+interface LedgerRows {
+  splits: LedgerRow[];
+  settlements: LedgerRow[];
+}
+
+const EMPTY_ROWS: LedgerRows = { splits: [], settlements: [] };
+
+const DASH = <span className="text-muted-foreground/40">—</span>;
 
 export function SettleUpAuditTable({ data, personNames }: Props) {
   const [view, setView] = useState<ViewMode>("by-payer");
@@ -70,45 +96,23 @@ export function SettleUpAuditTable({ data, personNames }: Props) {
   const p0Name = (p0 && personNames.get(p0.id)) ?? "Person 1";
   const p1Name = (p1 && personNames.get(p1.id)) ?? "Person 2";
 
-  let totalAmount = 0;
-  let p0Share = 0;
-  let p1Share = 0;
-  let totalTxns = 0;
-  let totalNet = 0;
-  let p0Split: PayerSplitSummaryResponse | undefined;
-  let p1Split: PayerSplitSummaryResponse | undefined;
+  const rows = useMemo(
+    () =>
+      p0
+        ? buildLedgerRows({
+            data,
+            view,
+            p0Id: p0.id,
+            personNames,
+            groupCategories,
+          })
+        : EMPTY_ROWS,
+    [data, view, p0, personNames, groupCategories],
+  );
 
-  if (p0) {
-    for (const split of data.payer_splits) {
-      if (split.transaction_count === 0) continue;
-      totalAmount += split.fronted;
-      totalTxns += split.transaction_count;
-      const payerIsP0 = split.payer_person_id === p0.id;
-      if (payerIsP0) {
-        p0Split = split;
-        p0Share += split.their_share;
-        p1Share += split.partner_share;
-        totalNet += split.partner_share;
-      } else {
-        p1Split = split;
-        p1Share += split.their_share;
-        p0Share += split.partner_share;
-        totalNet -= split.partner_share;
-      }
-    }
-    for (const s of data.recorded_settlements) {
-      totalNet += s.from_person_id === p0.id ? s.amount : -s.amount;
-    }
-  }
+  const totals = useMemo(() => computeTotals(rows), [rows]);
 
   const handleCopy = useCallback(async () => {
-    if (!p0) return;
-    const rows = buildClipboardRows({
-      data,
-      view,
-      p0Id: p0.id,
-      personNames,
-    });
     const headers = [
       "Activity",
       "Amount",
@@ -119,14 +123,15 @@ export function SettleUpAuditTable({ data, personNames }: Props) {
     ];
     const totalRow: ClipboardRow = [
       "Total",
-      money(totalAmount),
-      int(totalTxns),
-      money(p0Share),
-      money(p1Share),
-      money(totalNet),
+      money(totals.amount),
+      int(totals.txns),
+      money(totals.p0Share),
+      money(totals.p1Share),
+      money(totals.net),
     ];
-    const tsv = buildTsv(headers, rows, totalRow);
-    const html = buildHtml(headers, rows, totalRow);
+    const allRows = [...rows.splits, ...rows.settlements];
+    const tsv = buildTsv(headers, allRows, totalRow);
+    const html = buildHtml(headers, allRows, totalRow);
     try {
       await navigator.clipboard.write([
         new ClipboardItem({
@@ -145,27 +150,22 @@ export function SettleUpAuditTable({ data, personNames }: Props) {
       setCopied(false);
       copyTimeoutRef.current = null;
     }, 1500);
-  }, [
-    data,
-    view,
-    p0,
-    personNames,
-    p0Name,
-    p1Name,
-    totalAmount,
-    totalTxns,
-    p0Share,
-    p1Share,
-    totalNet,
-  ]);
+  }, [rows, totals, p0Name, p1Name]);
 
   if (!p0 || !p1 || (!hasSplits && !hasSettlements)) return null;
+
+  const p0Split = data.payer_splits.find(
+    (s) => s.payer_person_id === p0.id && s.transaction_count > 0,
+  );
+  const p1Split = data.payer_splits.find(
+    (s) => s.payer_person_id === p1.id && s.transaction_count > 0,
+  );
 
   const narrative = buildBalanceNarrative({
     p0: { id: p0.id, name: p0Name, split: p0Split },
     p1: { id: p1.id, name: p1Name, split: p1Split },
     settlements: data.recorded_settlements,
-    totalNet,
+    totalNet: totals.net,
     personNames,
   });
 
@@ -248,42 +248,20 @@ export function SettleUpAuditTable({ data, personNames }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {hasSplits ? (
-                  view === "by-category" ? (
-                    <PayerGroupRows
-                      rows={data.payer_group_splits}
-                      personNames={personNames}
-                      p0Id={p0.id}
-                      year={data.year}
-                      month={data.month}
-                      groupCategories={groupCategories}
-                    />
-                  ) : (
-                    <PayerRows
-                      rows={data.payer_splits}
-                      personNames={personNames}
-                      p0Id={p0.id}
-                      year={data.year}
-                      month={data.month}
-                    />
-                  )
+                {rows.splits.length > 0 ? (
+                  rows.splits.map((r) => <LedgerRowTr key={r.key} row={r} />)
                 ) : (
                   <EmptyRow message="No split bills for this period yet." />
                 )}
-                {data.recorded_settlements.map((s) => (
-                  <SettlementLedgerRow
-                    key={s.id}
-                    settlement={s}
-                    personNames={personNames}
-                    p0Id={p0.id}
-                  />
+                {rows.settlements.map((r) => (
+                  <LedgerRowTr key={r.key} row={r} />
                 ))}
                 <TotalRow
-                  totalAmount={totalAmount}
-                  totalTxns={totalTxns}
-                  p0Share={p0Share}
-                  p1Share={p1Share}
-                  totalNet={totalNet}
+                  totalAmount={totals.amount}
+                  totalTxns={totals.txns}
+                  p0Share={totals.p0Share}
+                  p1Share={totals.p1Share}
+                  totalNet={totals.net}
                 />
               </tbody>
             </table>
@@ -298,174 +276,62 @@ export function SettleUpAuditTable({ data, personNames }: Props) {
   );
 }
 
-function PayerRows({
-  rows,
-  personNames,
-  p0Id,
-  year,
-  month,
-}: {
-  rows: PayerSplitSummaryResponse[];
-  personNames: Map<string, string>;
-  p0Id: string;
-  year: number;
-  month: number;
-}) {
-  return (
-    <>
-      {rows
-        .filter((r) => r.transaction_count > 0)
-        .map((r) => {
-          const payerName = personNames.get(r.payer_person_id) ?? "Unknown";
-          const isP0 = r.payer_person_id === p0Id;
-          return (
-            <LedgerRow
-              key={r.payer_person_id}
-              activity={`${payerName}'s bills`}
-              href={buildTransactionsUrl({
-                year,
-                month,
-                payerId: r.payer_person_id,
-                scope: "household",
-              })}
-              amount={r.fronted}
-              txns={r.transaction_count}
-              p0Share={isP0 ? r.their_share : r.partner_share}
-              p1Share={isP0 ? r.partner_share : r.their_share}
-              net={isP0 ? r.partner_share : -r.partner_share}
-            />
-          );
-        })}
-    </>
-  );
-}
-
-function PayerGroupRows({
-  rows,
-  personNames,
-  p0Id,
-  year,
-  month,
-  groupCategories,
-}: {
-  rows: PayerGroupSplitSummaryResponse[];
-  personNames: Map<string, string>;
-  p0Id: string;
-  year: number;
-  month: number;
-  groupCategories: Map<string, string[]>;
-}) {
-  return (
-    <>
-      {rows.map((r) => {
-        const payerName = personNames.get(r.payer_person_id) ?? "Unknown";
-        const isP0 = r.payer_person_id === p0Id;
-        const cats = r.group_id ? (groupCategories.get(r.group_id) ?? []) : [];
-        return (
-          <LedgerRow
-            key={`${r.group_id ?? "uncat"}-${r.payer_person_id}`}
-            activity={`${r.group_name} · ${payerName}`}
-            href={buildTransactionsUrl({
-              year,
-              month,
-              payerId: r.payer_person_id,
-              categoryNames: cats,
-              scope: "household",
-            })}
-            amount={r.fronted}
-            txns={r.transaction_count}
-            p0Share={isP0 ? r.their_share : r.partner_share}
-            p1Share={isP0 ? r.partner_share : r.their_share}
-            net={isP0 ? r.partner_share : -r.partner_share}
-          />
-        );
-      })}
-    </>
-  );
-}
-
-function SettlementLedgerRow({
-  settlement,
-  personNames,
-  p0Id,
-}: {
-  settlement: SettlementResponse;
-  personNames: Map<string, string>;
-  p0Id: string;
-}) {
-  const fromName = personNames.get(settlement.from_person_id) ?? "Unknown";
-  const toName = personNames.get(settlement.to_person_id) ?? "Unknown";
-  const settledAt = new Date(settlement.settled_at);
-  const settledDate = formatShortDate(settlement.settled_at);
-  const activity = settlement.is_waived
-    ? `${settledDate} · Balance waived`
-    : `${settledDate} · ${fromName} → ${toName}${settlement.method ? ` via ${settlement.method}` : ""}`;
-  const senderIsP0 = settlement.from_person_id === p0Id;
-  return (
-    <LedgerRow
-      activity={activity}
-      href={buildTransactionsUrl({
-        year: settledAt.getFullYear(),
-        month: settledAt.getMonth() + 1,
-        settlement: true,
-      })}
-      amount={null}
-      txns={null}
-      p0Share={null}
-      p1Share={null}
-      net={senderIsP0 ? settlement.amount : -settlement.amount}
-    />
-  );
-}
-
-function LedgerRow({
-  activity,
-  href,
-  amount,
-  txns,
-  p0Share,
-  p1Share,
-  net,
-}: {
-  activity: string;
-  href: string;
-  amount: number | null;
-  txns: number | null;
-  p0Share: number | null;
-  p1Share: number | null;
+interface AuditTotals {
+  amount: number;
+  txns: number;
+  p0Share: number;
+  p1Share: number;
   net: number;
-}) {
+}
+
+// Totals sum the rendered rows, so the Total line always ties to the table
+// body — in either view, and including settlement rows' Net contributions.
+function computeTotals(rows: LedgerRows): AuditTotals {
+  const totals: AuditTotals = {
+    amount: 0,
+    txns: 0,
+    p0Share: 0,
+    p1Share: 0,
+    net: 0,
+  };
+  for (const r of [...rows.splits, ...rows.settlements]) {
+    totals.amount += r.amount ?? 0;
+    totals.txns += r.txns ?? 0;
+    totals.p0Share += r.p0Share ?? 0;
+    totals.p1Share += r.p1Share ?? 0;
+    totals.net += r.net;
+  }
+  return totals;
+}
+
+function LedgerRowTr({ row }: { row: LedgerRow }) {
   return (
     <tr className="border-b border-border-muted">
       <td className="py-2 pr-4">
         <Link
-          to={href}
+          to={row.href}
           className="text-foreground underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
         >
-          {activity}
+          {row.activity}
         </Link>
       </td>
       <td className="py-2 pr-4 text-right tabular-nums">
-        {amount == null ? <Dash /> : formatCurrency(amount)}
+        {row.amount == null ? DASH : formatCurrency(row.amount)}
       </td>
       <td className="py-2 pr-4 text-right tabular-nums">
-        {txns == null ? <Dash /> : txns}
+        {row.txns == null ? DASH : row.txns}
       </td>
       <td className="py-2 pr-4 text-right tabular-nums">
-        {p0Share == null ? <Dash /> : formatCurrency(p0Share)}
+        {row.p0Share == null ? DASH : formatCurrency(row.p0Share)}
       </td>
       <td className="py-2 pr-4 text-right tabular-nums">
-        {p1Share == null ? <Dash /> : formatCurrency(p1Share)}
+        {row.p1Share == null ? DASH : formatCurrency(row.p1Share)}
       </td>
       <td className="py-2 text-right tabular-nums">
-        {formatSignedCurrency(net)}
+        {formatSignedCurrency(row.net)}
       </td>
     </tr>
   );
-}
-
-function Dash() {
-  return <span className="text-muted-foreground/40">—</span>;
 }
 
 function EmptyRow({ message }: { message: string }) {
@@ -516,12 +382,6 @@ function TotalRow({
   );
 }
 
-function formatSignedCurrency(amount: number): string {
-  if (Math.abs(amount) < 0.005) return formatCurrency(0);
-  const sign = amount > 0 ? "+" : "−";
-  return `${sign}${formatCurrency(Math.abs(amount))}`;
-}
-
 type Party = {
   id: string;
   name: string;
@@ -543,7 +403,7 @@ function buildBalanceNarrative({
   totalNet: number;
   personNames: Map<string, string>;
 }): string {
-  const settled = Math.abs(totalNet) < 0.005;
+  const settled = isZeroCurrency(totalNet);
   const result = buildSettlementLabel(
     settled
       ? null
@@ -584,12 +444,111 @@ function describeSettlements(settlements: SettlementResponse[]): string {
   return `one transfer on ${date}`;
 }
 
-// Constructs a Transactions page URL using existing URL params:
-//   year, month — date range for the period
-//   payer (multi) — filter by payer person id
-//   cat (multi) — filter by category name (use to drill into a category-group)
-//   scope — household / personal / spotted / all
-//   settlement=1 — filter to settlement-linked transactions
+function buildLedgerRows({
+  data,
+  view,
+  p0Id,
+  personNames,
+  groupCategories,
+}: {
+  data: SettleUpDataResponse;
+  view: ViewMode;
+  p0Id: string;
+  personNames: Map<string, string>;
+  groupCategories: Map<string, string[]>;
+}): LedgerRows {
+  const splits: LedgerRow[] = [];
+
+  if (view === "by-category") {
+    for (const r of data.payer_group_splits) {
+      const payerName = personNames.get(r.payer_person_id) ?? "Unknown";
+      const cats = r.group_id ? (groupCategories.get(r.group_id) ?? []) : [];
+      splits.push(
+        splitRow(r, p0Id, {
+          key: `${r.group_id ?? "uncat"}-${r.payer_person_id}`,
+          activity: `${r.group_name} · ${payerName}`,
+          href: buildTransactionsUrl({
+            year: data.year,
+            month: data.month,
+            payerId: r.payer_person_id,
+            categoryNames: cats,
+            scope: "household",
+          }),
+        }),
+      );
+    }
+  } else {
+    for (const r of data.payer_splits) {
+      if (r.transaction_count === 0) continue;
+      const payerName = personNames.get(r.payer_person_id) ?? "Unknown";
+      splits.push(
+        splitRow(r, p0Id, {
+          key: `payer-${r.payer_person_id}`,
+          activity: `${payerName}'s bills`,
+          href: buildTransactionsUrl({
+            year: data.year,
+            month: data.month,
+            payerId: r.payer_person_id,
+            scope: "household",
+          }),
+        }),
+      );
+    }
+  }
+
+  const settlements = data.recorded_settlements.map((s) =>
+    settlementRow(s, p0Id, personNames),
+  );
+
+  return { splits, settlements };
+}
+
+// PayerGroupSplitSummaryResponse is structurally a superset of
+// PayerSplitSummaryResponse — both views share the same row shape.
+function splitRow(
+  r: PayerSplitSummaryResponse,
+  p0Id: string,
+  parts: { key: string; activity: string; href: string },
+): LedgerRow {
+  const isP0 = r.payer_person_id === p0Id;
+  return {
+    ...parts,
+    amount: r.fronted,
+    txns: r.transaction_count,
+    p0Share: isP0 ? r.their_share : r.partner_share,
+    p1Share: isP0 ? r.partner_share : r.their_share,
+    net: isP0 ? r.partner_share : -r.partner_share,
+  };
+}
+
+function settlementRow(
+  s: SettlementResponse,
+  p0Id: string,
+  personNames: Map<string, string>,
+): LedgerRow {
+  const fromName = personNames.get(s.from_person_id) ?? "Unknown";
+  const toName = personNames.get(s.to_person_id) ?? "Unknown";
+  const settledAt = new Date(s.settled_at);
+  const settledDate = formatShortDate(s.settled_at);
+  const activity = s.is_waived
+    ? `${settledDate} · Balance waived`
+    : `${settledDate} · ${fromName} → ${toName}${s.method ? ` via ${s.method}` : ""}`;
+  return {
+    key: `settlement-${s.id}`,
+    activity,
+    href: buildTransactionsUrl({
+      year: settledAt.getFullYear(),
+      month: settledAt.getMonth() + 1,
+      settlement: true,
+    }),
+    amount: null,
+    txns: null,
+    p0Share: null,
+    p1Share: null,
+    net: s.from_person_id === p0Id ? s.amount : -s.amount,
+  };
+}
+
 function buildTransactionsUrl({
   year,
   month,
@@ -608,10 +567,11 @@ function buildTransactionsUrl({
   const params = new URLSearchParams();
   params.set("year", String(year));
   params.set("month", String(month));
-  if (scope && scope !== "all") params.set("scope", scope);
-  if (payerId) params.append("payer", payerId);
-  for (const cat of categoryNames ?? []) params.append("cat", cat);
-  if (settlement) params.set("settlement", "1");
+  if (scope && scope !== "all") params.set(TX_FILTER_PARAMS.scope, scope);
+  if (payerId) params.append(TX_FILTER_PARAMS.payer, payerId);
+  for (const cat of categoryNames ?? [])
+    params.append(TX_FILTER_PARAMS.category, cat);
+  if (settlement) params.set(TX_FILTER_PARAMS.settlement, "1");
   return `/transactions?${params.toString()}`;
 }
 
@@ -625,66 +585,15 @@ type ClipboardRow = ClipboardCell[];
 const money = (value: number): ClipboardCell => ({ kind: "money", value });
 const int = (value: number): ClipboardCell => ({ kind: "int", value });
 
-function buildClipboardRows({
-  data,
-  view,
-  p0Id,
-  personNames,
-}: {
-  data: SettleUpDataResponse;
-  view: ViewMode;
-  p0Id: string;
-  personNames: Map<string, string>;
-}): ClipboardRow[] {
-  const rows: ClipboardRow[] = [];
-
-  if (view === "by-category") {
-    for (const r of data.payer_group_splits) {
-      const isP0 = r.payer_person_id === p0Id;
-      const payerName = personNames.get(r.payer_person_id) ?? "Unknown";
-      rows.push([
-        `${r.group_name} · ${payerName}`,
-        money(r.fronted),
-        int(r.transaction_count),
-        money(isP0 ? r.their_share : r.partner_share),
-        money(isP0 ? r.partner_share : r.their_share),
-        money(isP0 ? r.partner_share : -r.partner_share),
-      ]);
-    }
-  } else {
-    for (const r of data.payer_splits) {
-      if (r.transaction_count === 0) continue;
-      const isP0 = r.payer_person_id === p0Id;
-      const payerName = personNames.get(r.payer_person_id) ?? "Unknown";
-      rows.push([
-        `${payerName}'s bills`,
-        money(r.fronted),
-        int(r.transaction_count),
-        money(isP0 ? r.their_share : r.partner_share),
-        money(isP0 ? r.partner_share : r.their_share),
-        money(isP0 ? r.partner_share : -r.partner_share),
-      ]);
-    }
-  }
-
-  for (const s of data.recorded_settlements) {
-    const fromName = personNames.get(s.from_person_id) ?? "Unknown";
-    const toName = personNames.get(s.to_person_id) ?? "Unknown";
-    const settledDate = formatShortDate(s.settled_at);
-    const activity = s.is_waived
-      ? `${settledDate} · Balance waived`
-      : `${settledDate} · ${fromName} → ${toName}${s.method ? ` via ${s.method}` : ""}`;
-    rows.push([
-      activity,
-      null,
-      null,
-      null,
-      null,
-      money(s.from_person_id === p0Id ? s.amount : -s.amount),
-    ]);
-  }
-
-  return rows;
+function rowToClipboard(row: LedgerRow): ClipboardRow {
+  return [
+    row.activity,
+    row.amount == null ? null : money(row.amount),
+    row.txns == null ? null : int(row.txns),
+    row.p0Share == null ? null : money(row.p0Share),
+    row.p1Share == null ? null : money(row.p1Share),
+    money(row.net),
+  ];
 }
 
 // Spreadsheet-friendly: money cells as raw decimals (no $ or commas) so Sheets
@@ -698,10 +607,10 @@ function tsvCell(cell: ClipboardCell): string {
 
 function buildTsv(
   headers: string[],
-  rows: ClipboardRow[],
+  rows: LedgerRow[],
   totalRow: ClipboardRow,
 ): string {
-  const allRows = [headers, ...rows, totalRow];
+  const allRows = [headers, ...rows.map(rowToClipboard), totalRow];
   return allRows.map((row) => row.map(tsvCell).join("\t")).join("\n");
 }
 
@@ -721,13 +630,16 @@ function htmlCell(cell: ClipboardCell): string {
 
 function buildHtml(
   headers: string[],
-  rows: ClipboardRow[],
+  rows: LedgerRow[],
   totalRow: ClipboardRow,
 ): string {
   const headerCells = headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("");
   const bodyRows = rows
     .map(
-      (row) => `<tr>${row.map((c) => `<td>${htmlCell(c)}</td>`).join("")}</tr>`,
+      (row) =>
+        `<tr>${rowToClipboard(row)
+          .map((c) => `<td>${htmlCell(c)}</td>`)
+          .join("")}</tr>`,
     )
     .join("");
   const totalCells = totalRow

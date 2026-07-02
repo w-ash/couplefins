@@ -67,6 +67,10 @@ function makeSettlement(
 function makeData(
   overrides: Partial<SettleUpDataResponse> = {},
 ): SettleUpDataResponse {
+  const splits = overrides.payer_splits ?? [
+    makePayerSplit({ payer_person_id: ALICE_ID }),
+    makePayerSplit({ payer_person_id: BOB_ID }),
+  ];
   return {
     year: 2026,
     month: 3,
@@ -81,13 +85,10 @@ function makeData(
     ],
     is_finalized: false,
     finalized_at: null,
-    transaction_count: 0,
+    transaction_count: splits.reduce((s, p) => s + p.transaction_count, 0),
     latest_transaction_month: null,
     finalization_warnings: [],
-    payer_splits: [
-      makePayerSplit({ payer_person_id: ALICE_ID }),
-      makePayerSplit({ payer_person_id: BOB_ID }),
-    ],
+    payer_splits: splits,
     payer_group_splits: [],
     ...overrides,
   };

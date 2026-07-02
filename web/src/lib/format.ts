@@ -59,6 +59,22 @@ export function formatCurrency(amount: number): string {
   return currencyFmt.format(amount);
 }
 
+// Half-cent: any amount within this of zero is indistinguishable from $0.00
+// once formatted to two decimals. Use for "is this balance settled?" checks.
+export const CURRENCY_EPSILON = 0.005;
+
+export function isZeroCurrency(amount: number): boolean {
+  return Math.abs(amount) < CURRENCY_EPSILON;
+}
+
+// Renders amounts with explicit + / − signs, except a near-zero value renders
+// as $0.00. Uses the proper minus sign (U+2212), not a hyphen.
+export function formatSignedCurrency(amount: number): string {
+  if (isZeroCurrency(amount)) return formatCurrency(0);
+  const sign = amount > 0 ? "+" : "−";
+  return `${sign}${formatCurrency(Math.abs(amount))}`;
+}
+
 export function plural(word: string, count: number): string {
   return `${count} ${word}${count !== 1 ? "s" : ""}`;
 }

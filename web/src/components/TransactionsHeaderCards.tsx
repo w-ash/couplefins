@@ -18,7 +18,12 @@ import { useGetSettleUpData } from "@/api/generated/settlements/settlements";
 import { Card } from "@/components/Card";
 import { InfoPopover } from "@/components/InfoPopover";
 import { cn } from "@/lib/cn";
-import { buildSettlementLabel, formatCurrency, plural } from "@/lib/format";
+import {
+  buildSettlementLabel,
+  formatCurrency,
+  isZeroCurrency,
+  plural,
+} from "@/lib/format";
 import {
   bucketTransactions,
   SCOPE_LABELS,
@@ -94,7 +99,7 @@ function SettlementCard({
   const linked = settleUp.data?.recorded_settlements ?? [];
   const linkedTotal = linked.reduce((s, x) => s + x.amount, 0);
   const linkedCount = linked.length;
-  const isSettled = !netDirection || netDirection.amount < 0.01;
+  const isSettled = !netDirection || isZeroCurrency(netDirection.amount);
   const canFilter = linkedCount > 0;
 
   const description = settlementDescription({
@@ -186,7 +191,7 @@ function settlementDescription(args: {
     if (linkedCount > 0) {
       return `${plural("settlement", linkedCount)} linked · ${formatCurrency(linkedTotal)}`;
     }
-    if (!grossDirection || grossDirection.amount < 0.01) {
+    if (!grossDirection || isZeroCurrency(grossDirection.amount)) {
       return "No transactions to settle this period";
     }
     return "Fully paid";

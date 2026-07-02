@@ -197,17 +197,36 @@ interface FilterState {
   sort: SortState;
 }
 
+// URL param names this hook owns. Exported so cross-page links (e.g. the
+// Settle Up audit table → Transactions) reference a single source of truth.
+export const TX_FILTER_PARAMS = {
+  scope: "scope",
+  query: "q",
+  payer: "payer",
+  category: "cat",
+  tag: "tag",
+  minAmount: "minAmt",
+  maxAmount: "maxAmt",
+  hasNotes: "hasNotes",
+  discuss: "discuss",
+  settlement: "settlement",
+  sort: "sort",
+} as const;
+
+const SORT_FIELDS: readonly SortField[] = [
+  "date",
+  "merchant",
+  "amount",
+  "group",
+];
+const SORT_DIRS: readonly SortDir[] = ["asc", "desc"];
+
 function parseSort(raw: string | null): SortState {
   if (!raw) return DEFAULT_SORT;
-  const parts = raw.split(":");
-  const field = parts[0] as SortField;
-  const dir = parts[1] as SortDir;
-  if (
-    ["date", "merchant", "amount", "group"].includes(field) &&
-    ["asc", "desc"].includes(dir)
-  ) {
-    return { field, dir };
-  }
+  const [rawField, rawDir] = raw.split(":");
+  const field = SORT_FIELDS.find((f) => f === rawField);
+  const dir = SORT_DIRS.find((d) => d === rawDir);
+  if (field && dir) return { field, dir };
   return DEFAULT_SORT;
 }
 
@@ -229,25 +248,20 @@ export function useTransactionFilters(
   const [searchParams, setSearchParams] = useSearchParams();
 
   const state: FilterState = useMemo(() => {
-    const pParam = searchParams.getAll("payer");
-    const cParam = searchParams.getAll("cat");
-    const tParam = searchParams.getAll("tag");
+    const minRaw = searchParams.get(TX_FILTER_PARAMS.minAmount);
+    const maxRaw = searchParams.get(TX_FILTER_PARAMS.maxAmount);
     return {
-      scope: parseScope(searchParams.get("scope")),
-      query: searchParams.get("q") ?? "",
-      payers: pParam,
-      categories: cParam,
-      tags: tParam,
-      minAmount: searchParams.get("minAmt")
-        ? Number(searchParams.get("minAmt"))
-        : null,
-      maxAmount: searchParams.get("maxAmt")
-        ? Number(searchParams.get("maxAmt"))
-        : null,
-      hasNotes: searchParams.get("hasNotes") === "1",
-      discuss: searchParams.get("discuss") === "1",
-      settlement: searchParams.get("settlement") === "1",
-      sort: parseSort(searchParams.get("sort")),
+      scope: parseScope(searchParams.get(TX_FILTER_PARAMS.scope)),
+      query: searchParams.get(TX_FILTER_PARAMS.query) ?? "",
+      payers: searchParams.getAll(TX_FILTER_PARAMS.payer),
+      categories: searchParams.getAll(TX_FILTER_PARAMS.category),
+      tags: searchParams.getAll(TX_FILTER_PARAMS.tag),
+      minAmount: minRaw ? Number(minRaw) : null,
+      maxAmount: maxRaw ? Number(maxRaw) : null,
+      hasNotes: searchParams.get(TX_FILTER_PARAMS.hasNotes) === "1",
+      discuss: searchParams.get(TX_FILTER_PARAMS.discuss) === "1",
+      settlement: searchParams.get(TX_FILTER_PARAMS.settlement) === "1",
+      sort: parseSort(searchParams.get(TX_FILTER_PARAMS.sort)),
     };
   }, [searchParams]);
 
@@ -256,54 +270,45 @@ export function useTransactionFilters(
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
+          const setStr = (k: string, v: string | null) =>
+            v !== null ? next.set(k, v) : next.delete(k);
+          const setMulti = (k: string, vs: readonly string[]) => {
+            next.delete(k);
+            for (const v of vs) next.append(k, v);
+          };
+          const setFlag = (k: string, v: boolean) => setStr(k, v ? "1" : null);
+          const optStr = (v: string | null | undefined) => v || null;
+          const optNum = (v: number | null | undefined) =>
+            v != null ? String(v) : null;
+
           if ("scope" in updates) {
-            if (updates.scope && updates.scope !== "all")
-              next.set("scope", updates.scope);
-            else next.delete("scope");
+            const s = updates.scope;
+            setStr(TX_FILTER_PARAMS.scope, !s || s === "all" ? null : s);
           }
-          if ("query" in updates) {
-            if (updates.query) next.set("q", updates.query);
-            else next.delete("q");
-          }
-          if ("payers" in updates) {
-            next.delete("payer");
-            for (const p of updates.payers ?? []) next.append("payer", p);
-          }
-          if ("categories" in updates) {
-            next.delete("cat");
-            for (const c of updates.categories ?? []) next.append("cat", c);
-          }
-          if ("tags" in updates) {
-            next.delete("tag");
-            for (const t of updates.tags ?? []) next.append("tag", t);
-          }
-          if ("minAmount" in updates) {
-            if (updates.minAmount != null)
-              next.set("minAmt", String(updates.minAmount));
-            else next.delete("minAmt");
-          }
-          if ("maxAmount" in updates) {
-            if (updates.maxAmount != null)
-              next.set("maxAmt", String(updates.maxAmount));
-            else next.delete("maxAmt");
-          }
-          if ("hasNotes" in updates) {
-            if (updates.hasNotes) next.set("hasNotes", "1");
-            else next.delete("hasNotes");
-          }
-          if ("discuss" in updates) {
-            if (updates.discuss) next.set("discuss", "1");
-            else next.delete("discuss");
-          }
-          if ("settlement" in updates) {
-            if (updates.settlement) next.set("settlement", "1");
-            else next.delete("settlement");
-          }
-          if ("sort" in updates) {
-            const s = serializeSort(updates.sort ?? DEFAULT_SORT);
-            if (s) next.set("sort", s);
-            else next.delete("sort");
-          }
+          if ("query" in updates)
+            setStr(TX_FILTER_PARAMS.query, optStr(updates.query));
+          if ("payers" in updates)
+            setMulti(TX_FILTER_PARAMS.payer, updates.payers ?? []);
+          if ("categories" in updates)
+            setMulti(TX_FILTER_PARAMS.category, updates.categories ?? []);
+          if ("tags" in updates)
+            setMulti(TX_FILTER_PARAMS.tag, updates.tags ?? []);
+          if ("minAmount" in updates)
+            setStr(TX_FILTER_PARAMS.minAmount, optNum(updates.minAmount));
+          if ("maxAmount" in updates)
+            setStr(TX_FILTER_PARAMS.maxAmount, optNum(updates.maxAmount));
+          if ("hasNotes" in updates)
+            setFlag(TX_FILTER_PARAMS.hasNotes, updates.hasNotes ?? false);
+          if ("discuss" in updates)
+            setFlag(TX_FILTER_PARAMS.discuss, updates.discuss ?? false);
+          if ("settlement" in updates)
+            setFlag(TX_FILTER_PARAMS.settlement, updates.settlement ?? false);
+          if ("sort" in updates)
+            setStr(
+              TX_FILTER_PARAMS.sort,
+              serializeSort(updates.sort ?? DEFAULT_SORT),
+            );
+
           return next;
         },
         { replace: true },

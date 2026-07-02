@@ -32,6 +32,7 @@ from src.domain.entities.transaction import Transaction
 from src.domain.reconciliation import (
     PayerGroupSummary,
     PayerSplitSummary,
+    ReconciliationSummary,
     SettlementResult,
     compute_net_position,
     compute_payer_group_summaries,
@@ -66,25 +67,17 @@ class GetSettleUpDataResult:
     payer_group_splits: list[PayerGroupSummary]
 
 
-@define(frozen=True, slots=True)
-class _AuditSummaries:
-    payer_splits: list[PayerSplitSummary]
-    payer_group_splits: list[PayerGroupSummary]
-
-
-def _build_audit_summaries(
-    split_transactions: list[Transaction],
+def _compute_audit_splits(
+    summary: ReconciliationSummary,
     persons: list[Person],
     categories: list[Category],
     category_groups: list[CategoryGroup],
-) -> _AuditSummaries:
+) -> tuple[list[PayerSplitSummary], list[PayerGroupSummary]]:
     person_ids = [p.id for p in persons]
     lookup = build_category_lookup(categories, category_groups)
-    return _AuditSummaries(
-        payer_splits=compute_payer_split_summaries(split_transactions, person_ids),
-        payer_group_splits=compute_payer_group_summaries(
-            split_transactions, person_ids, lookup
-        ),
+    return (
+        compute_payer_split_summaries(summary.split_transactions, person_ids),
+        compute_payer_group_summaries(summary.split_transactions, person_ids, lookup),
     )
 
 
@@ -134,17 +127,14 @@ class GetSettleUpDataUseCase:
                 end_date=end,
             )
 
-            audit = _build_audit_summaries(
-                summary.split_transactions,
-                ctx.persons,
-                ctx.categories,
-                ctx.category_groups,
+            payer_splits, payer_group_splits = _compute_audit_splits(
+                summary, ctx.persons, ctx.categories, ctx.category_groups
             )
 
-            settlements = await uow.settlements.get_by_period(
-                command.year, command.month
+            records = await enrich_with_links(
+                await uow.settlements.get_by_period(command.year, command.month),
+                uow,
             )
-            records = await enrich_with_links(settlements, uow)
 
             net_pos = compute_net_position(
                 summary.settlement,
@@ -152,12 +142,12 @@ class GetSettleUpDataUseCase:
             )
             remaining = net_pos.amount if net_pos else Decimal(0)
 
-            uploads = (
+            upload_statuses = build_upload_statuses(
+                ctx.persons,
                 await uow.uploads.get_by_person_ids_with_transactions_in_date_range(
                     ctx.person_ids, start, end
-                )
+                ),
             )
-            upload_statuses = build_upload_statuses(ctx.persons, uploads)
 
             is_finalized, finalized_at = await load_period_status(
                 uow, command.year, command.month
@@ -181,6 +171,6 @@ class GetSettleUpDataUseCase:
                 transaction_count=summary.transaction_count,
                 latest_transaction_month=await get_latest_transaction_month(uow),
                 finalization_warnings=warnings,
-                payer_splits=audit.payer_splits,
-                payer_group_splits=audit.payer_group_splits,
+                payer_splits=payer_splits,
+                payer_group_splits=payer_group_splits,
             )

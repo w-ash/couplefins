@@ -161,6 +161,13 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.5.4 | Chatbot voice — composable voice system, Fiona character, per-user voice setting | Completed (2026-04-10) | S |
 | v1.5.5 | Chat UX affordances — new conversation, copy message, regenerate last reply, friendly limit error | Completed (2026-04-12) | S |
 | v1.6.0 | Settle Up audit table + Transactions buckets — payer-split ledger, "Showing the work" narrative, spotted scope, header cards | Completed (2026-05-02) | L |
+| v1.6.1 | Audit table & header-card correctness follow-ups — settled-state honesty, derived totals, link targets | Planned | S |
+| v1.7.0 | Settlement correctness — waiver fix, settlement scope, sXX precedence, finalization guards | Planned | L |
+| v1.7.1 | Upload & re-upload integrity — true replace, flag preservation, dedup window, parser hardening | Planned | M |
+| v1.7.2 | Budget & dashboard math — sign-aware spending, YTD totals, unmapped visibility, copy-budgets gate | Planned | M |
+| v1.7.3 | Insights & chat accuracy — comparison cards, settled trend, YTD cutoff, chat scope & local dates | Planned | M |
+| v1.7.4 | Guardrails & DRY — shared exclusion predicate, suppression removal, fixture realism | Planned | S |
+| v1.7.5 | Settlement ledger — running outstanding balance, multi-month catch-ups, derived month status | Planned | L |
 
 ## Infrastructure Readiness
 
