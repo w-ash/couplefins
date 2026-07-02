@@ -1,7 +1,8 @@
 import { Check, Copy, Loader2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 import { Streamdown } from "streamdown";
 import "streamdown/styles.css";
+import { useCopyFeedback } from "@/hooks/useCopyFeedback";
 import type {
   ChatMessage as ChatMessageType,
   ConfirmationState,
@@ -127,28 +128,12 @@ const markdownComponents = {
 };
 
 function CopyButton({ content }: { content: string }) {
-  const [copied, setCopied] = useState(false);
-  const timeoutRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current !== null) {
-        window.clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
+  const { copied, markCopied } = useCopyFeedback();
 
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(content);
-    setCopied(true);
-    if (timeoutRef.current !== null) {
-      window.clearTimeout(timeoutRef.current);
-    }
-    timeoutRef.current = window.setTimeout(() => {
-      setCopied(false);
-      timeoutRef.current = null;
-    }, 1500);
-  }, [content]);
+    markCopied();
+  }, [content, markCopied]);
 
   return (
     <button

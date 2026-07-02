@@ -122,7 +122,10 @@ function SettlementCard({
       )}
       {singleMonth !== null && (
         <Link
-          to={`/settle?year=${singleMonth.year}&month=${singleMonth.month}`}
+          to={`/settle?${new URLSearchParams({
+            year: String(singleMonth.year),
+            month: String(singleMonth.month),
+          })}`}
           className="mt-1 inline-flex items-center gap-0.5 text-[11px] font-medium text-primary hover:underline"
         >
           View on Settle Up
@@ -331,9 +334,7 @@ function ImportedCard({
         {allUploaded ? (
           <UploadedPip label="Both uploaded" />
         ) : (
-          <PendingPip
-            label={`${pendingUploads.length} pending upload${pendingUploads.length === 1 ? "" : "s"}`}
-          />
+          <PendingPip label={plural("pending upload", pendingUploads.length)} />
         )}
         <span>·</span>
         <span>

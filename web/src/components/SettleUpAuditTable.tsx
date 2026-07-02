@@ -1,5 +1,5 @@
 import { Check, Copy } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router";
 import type {
   PayerSplitSummaryResponse,
@@ -10,6 +10,7 @@ import { Card } from "@/components/Card";
 import { ExpandChevron } from "@/components/ExpandChevron";
 import { SectionHeader } from "@/components/SectionHeader";
 import { SegmentedControl } from "@/components/SegmentedControl";
+import { useCopyFeedback } from "@/hooks/useCopyFeedback";
 import { cn } from "@/lib/cn";
 import {
   buildSettlementLabel,
@@ -62,16 +63,7 @@ const DASH = <span className="text-muted-foreground/40">—</span>;
 export function SettleUpAuditTable({ data, personNames }: Props) {
   const [view, setView] = useState<ViewMode>("by-payer");
   const [showLedger, setShowLedger] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const copyTimeoutRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (copyTimeoutRef.current !== null) {
-        window.clearTimeout(copyTimeoutRef.current);
-      }
-    };
-  }, []);
+  const { copied, markCopied } = useCopyFeedback();
 
   const hasSplits = data.payer_splits.some((p) => p.transaction_count > 0);
   const hasSettlements = data.recorded_settlements.length > 0;
@@ -129,15 +121,8 @@ export function SettleUpAuditTable({ data, personNames }: Props) {
     } catch {
       await navigator.clipboard.writeText(tsv);
     }
-    setCopied(true);
-    if (copyTimeoutRef.current !== null) {
-      window.clearTimeout(copyTimeoutRef.current);
-    }
-    copyTimeoutRef.current = window.setTimeout(() => {
-      setCopied(false);
-      copyTimeoutRef.current = null;
-    }, 1500);
-  }, [rows, totals, p0Name, p1Name]);
+    markCopied();
+  }, [rows, totals, p0Name, p1Name, markCopied]);
 
   if (!p0 || !p1 || (!hasSplits && !hasSettlements)) return null;
 
@@ -214,22 +199,40 @@ export function SettleUpAuditTable({ data, personNames }: Props) {
             <table className="w-full border-spacing-0 text-sm">
               <thead>
                 <tr className={tableHeaderRowClass}>
-                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">
+                  <th
+                    scope="col"
+                    className="pb-2 pr-4 font-medium whitespace-nowrap"
+                  >
                     Activity
                   </th>
-                  <th className="pb-2 pr-4 text-right font-medium whitespace-nowrap tabular-nums">
+                  <th
+                    scope="col"
+                    className="pb-2 pr-4 text-right font-medium whitespace-nowrap tabular-nums"
+                  >
                     Amount
                   </th>
-                  <th className="pb-2 pr-4 text-right font-medium whitespace-nowrap tabular-nums">
+                  <th
+                    scope="col"
+                    className="pb-2 pr-4 text-right font-medium whitespace-nowrap tabular-nums"
+                  >
                     Txns
                   </th>
-                  <th className="pb-2 pr-4 text-right font-medium whitespace-nowrap tabular-nums">
+                  <th
+                    scope="col"
+                    className="pb-2 pr-4 text-right font-medium whitespace-nowrap tabular-nums"
+                  >
                     {p0Name}'s share
                   </th>
-                  <th className="pb-2 pr-4 text-right font-medium whitespace-nowrap tabular-nums">
+                  <th
+                    scope="col"
+                    className="pb-2 pr-4 text-right font-medium whitespace-nowrap tabular-nums"
+                  >
                     {p1Name}'s share
                   </th>
-                  <th className="pb-2 text-right font-medium whitespace-nowrap tabular-nums">
+                  <th
+                    scope="col"
+                    className="pb-2 text-right font-medium whitespace-nowrap tabular-nums"
+                  >
                     Net
                   </th>
                 </tr>
@@ -629,7 +632,9 @@ function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function htmlCell(cell: ClipboardCell): string {

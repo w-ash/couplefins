@@ -391,6 +391,17 @@ describe("TransactionsPage", () => {
     });
   });
 
+  it("ignores malformed amount params instead of filtering everything out", async () => {
+    renderWithProviders(<TransactionsPage />, {
+      routerProps: { initialEntries: ["/transactions?minAmt=abc"] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Restaurant")).toBeInTheDocument();
+      expect(screen.getByText("Grocery Store")).toBeInTheDocument();
+    });
+  });
+
   it("shows empty state when no transactions", async () => {
     server.use(
       http.get("/api/v1/reconciliation", () =>

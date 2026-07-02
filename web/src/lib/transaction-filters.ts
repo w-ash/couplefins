@@ -243,6 +243,14 @@ function parseScope(raw: string | null): TransactionScope {
   return "all";
 }
 
+// A malformed amount param would parse to NaN, which passes the `!= null`
+// filter guards and silently filters everything out — treat it as unset.
+function parseAmountParam(raw: string | null): number | null {
+  if (!raw) return null;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
 export function useTransactionFilters(
   transactions: TransactionResponse[],
   categoryGroups: Map<string, string>,
@@ -251,16 +259,14 @@ export function useTransactionFilters(
   const [searchParams, setSearchParams] = useSearchParams();
 
   const state: FilterState = useMemo(() => {
-    const minRaw = searchParams.get(TX_FILTER_PARAMS.minAmount);
-    const maxRaw = searchParams.get(TX_FILTER_PARAMS.maxAmount);
     return {
       scope: parseScope(searchParams.get(TX_FILTER_PARAMS.scope)),
       query: searchParams.get(TX_FILTER_PARAMS.query) ?? "",
       payers: searchParams.getAll(TX_FILTER_PARAMS.payer),
       categories: searchParams.getAll(TX_FILTER_PARAMS.category),
       tags: searchParams.getAll(TX_FILTER_PARAMS.tag),
-      minAmount: minRaw ? Number(minRaw) : null,
-      maxAmount: maxRaw ? Number(maxRaw) : null,
+      minAmount: parseAmountParam(searchParams.get(TX_FILTER_PARAMS.minAmount)),
+      maxAmount: parseAmountParam(searchParams.get(TX_FILTER_PARAMS.maxAmount)),
       hasNotes: searchParams.get(TX_FILTER_PARAMS.hasNotes) === "1",
       discuss: searchParams.get(TX_FILTER_PARAMS.discuss) === "1",
       settlement: searchParams.get(TX_FILTER_PARAMS.settlement) === "1",
