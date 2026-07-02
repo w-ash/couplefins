@@ -50,3 +50,5 @@ Index of shipped versions. When all stories in a version file are done, move the
 | v0.11.2 | 2026-03-26 | Personal budget backend (per-person limits, spending computation) |
 | v0.11.3 | 2026-03-26 | Scope UI (budget toggle, transaction scope filter) |
 | v1.0.0 | 2026-03-27 | PostgreSQL migration — Neon, asyncpg, JSONB+GIN, data migration |
+| v1.6.0 | 2026-05-02 | Settle Up audit table + Transactions buckets — payer-split ledger, narrative, spotted scope, header cards |
+| v1.6.1 | 2026-07-02 | Audit table & header-card correctness — settled-state honesty, one sign convention, link anchors, drill-through fidelity |
