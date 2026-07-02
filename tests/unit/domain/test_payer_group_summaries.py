@@ -53,6 +53,7 @@ def test_two_payers_same_group() -> None:
     assert alice_row.total_paid == Decimal("100.00")
     assert alice_row.total_share == Decimal("50.00")
     assert alice_row.transaction_count == 1
+    assert alice_row.categories == ["Dining Out"]
 
     assert bob_row.total_paid == Decimal("40.00")
     assert bob_row.total_share == Decimal("20.00")
@@ -108,6 +109,41 @@ def test_unmapped_category_is_uncategorized() -> None:
     assert len(rows) == 1
     assert rows[0].group_id is None
     assert rows[0].group_name == "Uncategorized"
+    assert rows[0].categories == ["Random Service"]
+
+
+def test_row_categories_deduped_and_sorted() -> None:
+    alice, bob = _alice_bob()
+    group = make_category_group(name="Food & Dining")
+    dining = make_category(name="Dining Out", group_id=group.id)
+    groceries = make_category(name="Groceries", group_id=group.id)
+    lookup = build_category_lookup([dining, groceries], [group])
+
+    txs = filter_split_transactions([
+        make_transaction(
+            category="Groceries",
+            amount=Decimal("-60.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+        make_transaction(
+            category="Dining Out",
+            amount=Decimal("-100.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+        make_transaction(
+            category="Dining Out",
+            amount=Decimal("-40.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+    ])
+
+    rows = compute_payer_group_summaries(txs, [alice.id, bob.id], lookup)
+
+    assert len(rows) == 1
+    assert rows[0].categories == ["Dining Out", "Groceries"]
 
 
 def test_payer_percentage_100_filtered_out() -> None:

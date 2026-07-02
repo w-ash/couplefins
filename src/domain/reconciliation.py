@@ -58,6 +58,10 @@ class PayerGroupSummary:
     total_paid: Decimal
     total_share: Decimal
     transaction_count: int
+    # Distinct category names aggregated into this row — the exact filter
+    # payload a drill-through link needs (also covers Uncategorized rows,
+    # whose categories belong to no group).
+    categories: list[str]
 
 
 @define(frozen=True, slots=True)
@@ -81,6 +85,9 @@ class ReconciliationSummary:
     # Filtered split list — exposed so callers (e.g., audit-table builders)
     # can reuse it without re-filtering the same transactions.
     split_transactions: list[Transaction]
+    # Category → (group_id, group_name) lookup — exposed so callers reuse it
+    # instead of rebuilding the identical dict in the same request.
+    category_lookup: dict[str, tuple[UUID, str]]
 
 
 def filter_split_transactions(
@@ -179,6 +186,7 @@ def compute_payer_group_summaries(
     paid: dict[_PayerGroupKey, Decimal] = {}
     share: dict[_PayerGroupKey, Decimal] = {}
     counts: dict[_PayerGroupKey, int] = {}
+    cats: dict[_PayerGroupKey, set[str]] = {}
     group_names: dict[UUID | None, str] = {}
 
     for tx in transactions:
@@ -190,6 +198,7 @@ def compute_payer_group_summaries(
         paid[key] = paid.get(key, Decimal(0)) + sign * abs(tx.amount)
         share[key] = share.get(key, Decimal(0)) + sign * payer_share
         counts[key] = counts.get(key, 0) + 1
+        cats.setdefault(key, set()).add(tx.category)
 
     group_totals: dict[UUID | None, Decimal] = {}
     for (_pid, gid), amount in paid.items():
@@ -212,6 +221,7 @@ def compute_payer_group_summaries(
                     total_paid=paid[key],
                     total_share=share[key],
                     transaction_count=counts[key],
+                    categories=sorted(cats[key]),
                 )
             )
 
@@ -317,6 +327,7 @@ def reconcile(
         category_group_breakdowns=breakdowns,
         transaction_count=len(household),
         split_transactions=household,
+        category_lookup=category_lookup,
     )
 
 

@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router";
 import type { TransactionResponse } from "@/api/generated/model";
+import { isZeroCurrency } from "@/lib/format";
 
 export const DISCUSS_TAG = "discuss";
 
@@ -49,8 +50,10 @@ export function isSettlementLinked(tx: TransactionResponse): boolean {
 
 // Negated so expense-heavy sets render as a positive number.
 export function sumNet(transactions: TransactionResponse[]): number {
-  // `|| 0` collapses the `-0` produced by `-(0)` on an empty list.
-  return -transactions.reduce((s, t) => s + t.amount, 0) || 0;
+  const net = -transactions.reduce((s, t) => s + t.amount, 0);
+  // Collapse -0 and float dust (e.g. -5.55e-17 from summing signed amounts)
+  // so Intl never renders "-$0.00".
+  return isZeroCurrency(net) ? 0 : net;
 }
 
 export type TransactionScope = "household" | "personal" | "spotted" | "all";

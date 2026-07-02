@@ -1,7 +1,6 @@
 import { Check, Copy } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
-import { useGetCategoryGroups } from "@/api/generated/category-groups/category-groups";
 import type {
   PayerSplitSummaryResponse,
   SettlementResponse,
@@ -74,20 +73,6 @@ export function SettleUpAuditTable({ data, personNames }: Props) {
     };
   }, []);
 
-  const { data: categoryGroupsResponse } = useGetCategoryGroups();
-  const categoryGroupsList =
-    categoryGroupsResponse?.status === 200 ? categoryGroupsResponse.data : [];
-  const groupCategories = useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const g of categoryGroupsList) {
-      map.set(
-        g.id,
-        g.categories.map((c) => c.name),
-      );
-    }
-    return map;
-  }, [categoryGroupsList]);
-
   const hasSplits = data.payer_splits.some((p) => p.transaction_count > 0);
   const hasSettlements = data.recorded_settlements.length > 0;
 
@@ -104,13 +89,15 @@ export function SettleUpAuditTable({ data, personNames }: Props) {
             view,
             p0Id: p0.id,
             personNames,
-            groupCategories,
           })
         : EMPTY_ROWS,
-    [data, view, p0, personNames, groupCategories],
+    [data, view, p0, personNames],
   );
 
-  const totals = useMemo(() => computeTotals(rows), [rows]);
+  const totals = useMemo(
+    () => computeTotals(rows, p0?.id ?? null, p1?.id ?? null),
+    [rows, p0, p1],
+  );
 
   const handleCopy = useCallback(async () => {
     const headers = [
@@ -162,10 +149,10 @@ export function SettleUpAuditTable({ data, personNames }: Props) {
   );
 
   const narrative = buildBalanceNarrative({
-    p0: { id: p0.id, name: p0Name, split: p0Split },
-    p1: { id: p1.id, name: p1Name, split: p1Split },
+    p0: { name: p0Name, split: p0Split },
+    p1: { name: p1Name, split: p1Split },
     settlements: data.recorded_settlements,
-    totalNet: totals.net,
+    direction: totals.direction,
     personNames,
   });
 
@@ -282,26 +269,45 @@ interface AuditTotals {
   p0Share: number;
   p1Share: number;
   net: number;
+  // Single source of truth for who-owes-whom: both the Total row's Net cell
+  // and the narrative derive from the same row-summed net, gated by the same
+  // isZeroCurrency guard — so they can never disagree in float-dust cases.
+  direction: {
+    amount: number;
+    from_person_id: string;
+    to_person_id: string;
+  } | null;
 }
 
 // Totals sum the rendered rows, so the Total line always ties to the table
 // body — in either view, and including settlement rows' Net contributions.
-function computeTotals(rows: LedgerRows): AuditTotals {
-  const totals: AuditTotals = {
-    amount: 0,
-    txns: 0,
-    p0Share: 0,
-    p1Share: 0,
-    net: 0,
-  };
+function computeTotals(
+  rows: LedgerRows,
+  p0Id: string | null,
+  p1Id: string | null,
+): AuditTotals {
+  let amount = 0;
+  let txns = 0;
+  let p0Share = 0;
+  let p1Share = 0;
+  let net = 0;
   for (const r of [...rows.splits, ...rows.settlements]) {
-    totals.amount += r.amount ?? 0;
-    totals.txns += r.txns ?? 0;
-    totals.p0Share += r.p0Share ?? 0;
-    totals.p1Share += r.p1Share ?? 0;
-    totals.net += r.net;
+    amount += r.amount ?? 0;
+    txns += r.txns ?? 0;
+    p0Share += r.p0Share ?? 0;
+    p1Share += r.p1Share ?? 0;
+    net += r.net;
   }
-  return totals;
+  // + in Net favors p0, so a positive net means p1 owes p0.
+  const direction =
+    p0Id === null || p1Id === null || isZeroCurrency(net)
+      ? null
+      : {
+          amount: Math.abs(net),
+          from_person_id: net > 0 ? p1Id : p0Id,
+          to_person_id: net > 0 ? p0Id : p1Id,
+        };
+  return { amount, txns, p0Share, p1Share, net, direction };
 }
 
 function LedgerRowTr({ row }: { row: LedgerRow }) {
@@ -383,7 +389,6 @@ function TotalRow({
 }
 
 type Party = {
-  id: string;
   name: string;
   split: PayerSplitSummaryResponse | undefined;
 };
@@ -394,27 +399,19 @@ function buildBalanceNarrative({
   p0,
   p1,
   settlements,
-  totalNet,
+  direction,
   personNames,
 }: {
   p0: Party;
   p1: Party;
   settlements: SettlementResponse[];
-  totalNet: number;
+  direction: AuditTotals["direction"];
   personNames: Map<string, string>;
 }): string {
-  const settled = isZeroCurrency(totalNet);
-  const result = buildSettlementLabel(
-    settled
-      ? null
-      : {
-          amount: Math.abs(totalNet),
-          from_person_id: totalNet > 0 ? p1.id : p0.id,
-          to_person_id: totalNet > 0 ? p0.id : p1.id,
-        },
-    personNames,
-    { includeToName: true, settledLabel: "the balance is settled" },
-  );
+  const result = buildSettlementLabel(direction, personNames, {
+    includeToName: true,
+    settledLabel: "the balance is settled",
+  });
 
   const lead: string[] = [];
   for (const { name, split } of [p0, p1]) {
@@ -449,20 +446,17 @@ function buildLedgerRows({
   view,
   p0Id,
   personNames,
-  groupCategories,
 }: {
   data: SettleUpDataResponse;
   view: ViewMode;
   p0Id: string;
   personNames: Map<string, string>;
-  groupCategories: Map<string, string[]>;
 }): LedgerRows {
   const splits: LedgerRow[] = [];
 
   if (view === "by-category") {
     for (const r of data.payer_group_splits) {
       const payerName = personNames.get(r.payer_person_id) ?? "Unknown";
-      const cats = r.group_id ? (groupCategories.get(r.group_id) ?? []) : [];
       splits.push(
         splitRow(r, p0Id, {
           key: `${r.group_id ?? "uncat"}-${r.payer_person_id}`,
@@ -471,7 +465,9 @@ function buildLedgerRows({
             year: data.year,
             month: data.month,
             payerId: r.payer_person_id,
-            categoryNames: cats,
+            // Backend-provided per-row category names, so the link filters to
+            // exactly this row's transactions — including Uncategorized rows.
+            categoryNames: r.categories,
             scope: "household",
           }),
         }),
@@ -521,6 +517,23 @@ function splitRow(
   };
 }
 
+// Anchor the drill-through to the linked transfers' own dates — the month the
+// settlement actually settles — not settled_at, which is the recording moment
+// (a March settlement is often recorded during the April together session).
+// ISO "YYYY-MM-DD" strings compare lexically; no Date() means no TZ shifts.
+function settlementLinkMonth(s: SettlementResponse): {
+  year: number;
+  month: number;
+} {
+  let earliest: string | null = null;
+  for (const t of s.linked_transactions ?? []) {
+    if (earliest === null || t.date < earliest) earliest = t.date;
+  }
+  if (earliest === null) return { year: s.year, month: s.month };
+  const [y, m] = earliest.split("-").map(Number);
+  return { year: y ?? s.year, month: m ?? s.month };
+}
+
 function settlementRow(
   s: SettlementResponse,
   p0Id: string,
@@ -528,7 +541,6 @@ function settlementRow(
 ): LedgerRow {
   const fromName = personNames.get(s.from_person_id) ?? "Unknown";
   const toName = personNames.get(s.to_person_id) ?? "Unknown";
-  const settledAt = new Date(s.settled_at);
   const settledDate = formatShortDate(s.settled_at);
   const activity = s.is_waived
     ? `${settledDate} · Balance waived`
@@ -537,8 +549,7 @@ function settlementRow(
     key: `settlement-${s.id}`,
     activity,
     href: buildTransactionsUrl({
-      year: settledAt.getFullYear(),
-      month: settledAt.getMonth() + 1,
+      ...settlementLinkMonth(s),
       settlement: true,
     }),
     amount: null,

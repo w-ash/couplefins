@@ -16,4 +16,5 @@ export interface PayerGroupSplitSummaryResponse {
   their_share: number;
   partner_share: number;
   transaction_count: number;
+  categories: string[];
 }

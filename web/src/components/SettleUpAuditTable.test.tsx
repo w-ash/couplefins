@@ -40,6 +40,7 @@ function makeGroupSplit(
     their_share: 0,
     partner_share: 0,
     transaction_count: 0,
+    categories: ["Dining Out"],
     ...overrides,
   };
 }
@@ -60,6 +61,7 @@ function makeSettlement(
     settled_at: "2026-04-22T00:00:00Z",
     created_at: "2026-04-22T00:00:00Z",
     linked_transaction_ids: [],
+    linked_transactions: [],
     ...overrides,
   };
 }
@@ -489,14 +491,115 @@ describe("SettleUpAuditTable", () => {
     expect(billLink.getAttribute("href")).toContain(`payer=${ALICE_ID}`);
     expect(billLink.getAttribute("href")).toContain("scope=household");
 
-    // Settlement row links to Transactions for the settlement's paid month
-    // with the settlement filter chip on.
+    // With no linked transactions the settlement row falls back to its own
+    // year/month (waivers, manual records) — not the settled_at recording
+    // moment, which here is April.
     const settlementLink = screen.getByRole("link", {
       name: /Alice → Bob via venmo/,
     });
     expect(settlementLink.getAttribute("href")).toContain("year=2026");
-    expect(settlementLink.getAttribute("href")).toContain("month=4");
+    expect(settlementLink.getAttribute("href")).toContain("month=3");
     expect(settlementLink.getAttribute("href")).toContain("settlement=1");
+  });
+
+  it("settlement rows link via the earliest linked transaction's date, not settled_at", async () => {
+    const data = makeData({
+      recorded_settlements: [
+        makeSettlement({
+          amount: 10,
+          from_person_id: ALICE_ID,
+          to_person_id: BOB_ID,
+          method: "venmo",
+          // Recorded in May; the transfers themselves straddle March/April.
+          settled_at: "2026-05-01T02:00:00Z",
+          linked_transactions: [
+            {
+              id: "lt1",
+              date: "2026-04-02",
+              merchant: "Venmo",
+              amount: 10,
+              payer_person_id: BOB_ID,
+            },
+            {
+              id: "lt2",
+              date: "2026-03-31",
+              merchant: "Venmo",
+              amount: -10,
+              payer_person_id: ALICE_ID,
+            },
+          ],
+        }),
+      ],
+    });
+
+    renderWithProviders(
+      <SettleUpAuditTable data={data} personNames={PERSON_NAMES} />,
+    );
+
+    await expandLedger();
+
+    const settlementLink = screen.getByRole("link", {
+      name: /Alice → Bob via venmo/,
+    });
+    expect(settlementLink.getAttribute("href")).toContain("year=2026");
+    expect(settlementLink.getAttribute("href")).toContain("month=3");
+    expect(settlementLink.getAttribute("href")).toContain("settlement=1");
+  });
+
+  it("by-category rows link with their own category filters, including Uncategorized", async () => {
+    const user = userEvent.setup();
+    const data = makeData({
+      payer_splits: [
+        makePayerSplit({
+          payer_person_id: ALICE_ID,
+          fronted: 100,
+          their_share: 50,
+          partner_share: 50,
+          transaction_count: 1,
+        }),
+        makePayerSplit({ payer_person_id: BOB_ID }),
+      ],
+      payer_group_splits: [
+        makeGroupSplit({
+          payer_person_id: ALICE_ID,
+          group_name: "Food & Dining",
+          fronted: 100,
+          their_share: 50,
+          partner_share: 50,
+          transaction_count: 1,
+          categories: ["Dining Out", "Groceries"],
+        }),
+        makeGroupSplit({
+          payer_person_id: ALICE_ID,
+          group_id: null,
+          group_name: "Uncategorized",
+          fronted: 142,
+          their_share: 71,
+          partner_share: 71,
+          transaction_count: 3,
+          categories: ["Weird Import Name"],
+        }),
+      ],
+    });
+
+    renderWithProviders(
+      <SettleUpAuditTable data={data} personNames={PERSON_NAMES} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /show ledger/i }));
+    await user.click(screen.getByRole("radio", { name: /by category/i }));
+
+    const foodLink = screen.getByRole("link", {
+      name: "Food & Dining · Alice",
+    });
+    expect(foodLink.getAttribute("href")).toContain("cat=Dining+Out");
+    expect(foodLink.getAttribute("href")).toContain("cat=Groceries");
+
+    // Uncategorized rows must not produce an unfiltered URL.
+    const uncatLink = screen.getByRole("link", {
+      name: "Uncategorized · Alice",
+    });
+    expect(uncatLink.getAttribute("href")).toContain("cat=Weird+Import+Name");
   });
 
   it("shows empty-state row when there are no split bills", async () => {
@@ -592,6 +695,48 @@ describe("SettleUpAuditTable", () => {
       );
 
       expect(screen.getByText(/the balance is settled\.$/)).toBeInTheDocument();
+    });
+
+    it("treats float dust as settled — narrative and Total row agree", async () => {
+      // Net = 0.1 − 0.3 + 0.2 = 2.7755575615628914e-17 in JS floats.
+      const data = makeData({
+        payer_splits: [
+          makePayerSplit({
+            payer_person_id: ALICE_ID,
+            fronted: 0.2,
+            their_share: 0.1,
+            partner_share: 0.1,
+            transaction_count: 1,
+          }),
+          makePayerSplit({
+            payer_person_id: BOB_ID,
+            fronted: 0.6,
+            their_share: 0.3,
+            partner_share: 0.3,
+            transaction_count: 1,
+          }),
+        ],
+        recorded_settlements: [
+          makeSettlement({
+            amount: 0.2,
+            from_person_id: ALICE_ID,
+            to_person_id: BOB_ID,
+            method: "Venmo",
+          }),
+        ],
+      });
+
+      renderWithProviders(
+        <SettleUpAuditTable data={data} personNames={PERSON_NAMES} />,
+      );
+
+      expect(screen.getByText(/the balance is settled\.$/)).toBeInTheDocument();
+
+      await expandLedger();
+      const totalRow = screen.getByText("Total").closest("tr") as HTMLElement;
+      expect(totalRow.textContent).toContain("$0.00");
+      expect(totalRow.textContent).not.toContain("−$0.00");
+      expect(totalRow.textContent).not.toContain("+$0.00");
     });
 
     it("uses singular 'bill' when count is one", () => {

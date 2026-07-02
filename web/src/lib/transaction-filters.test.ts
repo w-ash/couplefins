@@ -537,4 +537,14 @@ describe("sumNet", () => {
   it("returns 0 for an empty list", () => {
     expect(sumNet([])).toBe(0);
   });
+
+  it("collapses float dust to exactly 0", () => {
+    // -(-0.1 + -0.2 + 0.3) = -5.551115123125783e-17 in JS floats.
+    const txs = [
+      makeTx({ amount: -0.1 }),
+      makeTx({ amount: -0.2 }),
+      makeTx({ amount: 0.3 }),
+    ];
+    expect(sumNet(txs)).toBe(0);
+  });
 });

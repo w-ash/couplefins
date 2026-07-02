@@ -24,9 +24,7 @@ from src.application.use_cases._shared.upload_status import (
     UploadStatus,
     build_upload_statuses,
 )
-from src.domain.categories import build_category_lookup
 from src.domain.entities.category import Category
-from src.domain.entities.category_group import CategoryGroup
 from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
 from src.domain.reconciliation import (
@@ -70,14 +68,13 @@ class GetSettleUpDataResult:
 def _compute_audit_splits(
     summary: ReconciliationSummary,
     persons: list[Person],
-    categories: list[Category],
-    category_groups: list[CategoryGroup],
 ) -> tuple[list[PayerSplitSummary], list[PayerGroupSummary]]:
     person_ids = [p.id for p in persons]
-    lookup = build_category_lookup(categories, category_groups)
     return (
         compute_payer_split_summaries(summary.split_transactions, person_ids),
-        compute_payer_group_summaries(summary.split_transactions, person_ids, lookup),
+        compute_payer_group_summaries(
+            summary.split_transactions, person_ids, summary.category_lookup
+        ),
     )
 
 
@@ -128,7 +125,7 @@ class GetSettleUpDataUseCase:
             )
 
             payer_splits, payer_group_splits = _compute_audit_splits(
-                summary, ctx.persons, ctx.categories, ctx.category_groups
+                summary, ctx.persons
             )
 
             records = await enrich_with_links(

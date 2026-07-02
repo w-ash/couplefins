@@ -174,6 +174,7 @@ class PayerGroupSplitSummaryResponse(BaseModel):
     their_share: MoneyField
     partner_share: MoneyField
     transaction_count: int
+    categories: list[str]
 
     @classmethod
     def from_domain(cls, ps: PayerGroupSummary) -> PayerGroupSplitSummaryResponse:
@@ -185,6 +186,7 @@ class PayerGroupSplitSummaryResponse(BaseModel):
             their_share=ps.total_share,
             partner_share=ps.total_paid - ps.total_share,
             transaction_count=ps.transaction_count,
+            categories=ps.categories,
         )
 
 
