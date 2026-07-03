@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from uuid import UUID
 
-from attrs import define
+from attrs import define, evolve
 
 from src.application.use_cases._shared.command_validators import (
     Scope as ReconciliationScope,
@@ -24,7 +24,11 @@ from src.application.use_cases._shared.upload_status import (
 )
 from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
-from src.domain.reconciliation import ReconciliationSummary, reconcile
+from src.domain.reconciliation import (
+    ReconciliationSummary,
+    compute_gross_settlement,
+    reconcile,
+)
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -120,6 +124,20 @@ class GetReconciliationUseCase:
                 ctx.category_groups,
                 start_date=command.start_date,
                 end_date=command.end_date,
+            )
+
+            # The settlement figure is computed over ALL settlement-relevant
+            # rows, not the scoped display set above — both partners and every
+            # scope see the same number, matching the Settle Up page.
+            # summary.split_transactions still describes the display set.
+            settlement_txs = (
+                await uow.transactions.get_settlement_relevant_by_date_range(
+                    command.start_date, command.end_date, tags=command.tags
+                )
+            )
+            summary = evolve(
+                summary,
+                settlement=compute_gross_settlement(settlement_txs, ctx.person_ids),
             )
 
             upload_statuses = build_upload_statuses(ctx.persons, uploads)

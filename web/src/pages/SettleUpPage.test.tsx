@@ -164,7 +164,7 @@ describe("SettleUpPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/No household transactions for/),
+        screen.getByText(/No transactions to settle for/),
       ).toBeInTheDocument();
       expect(screen.getByText("Upload CSV")).toBeInTheDocument();
     });
@@ -184,7 +184,7 @@ describe("SettleUpPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/No household transactions for/),
+        screen.getByText(/No transactions to settle for/),
       ).toBeInTheDocument();
       expect(screen.getByText("Upload CSV")).toBeInTheDocument();
       expect(screen.getByText("View February 2026")).toBeInTheDocument();
@@ -205,7 +205,7 @@ describe("SettleUpPage", () => {
     });
 
     expect(
-      screen.queryByText(/No household transactions for/),
+      screen.queryByText(/No transactions to settle for/),
     ).not.toBeInTheDocument();
   });
 

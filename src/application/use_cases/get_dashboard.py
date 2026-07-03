@@ -2,7 +2,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from attrs import define, field
+from attrs import define, evolve, field
 
 from src.application.use_cases._shared.command_validators import (
     Scope,
@@ -33,6 +33,7 @@ from src.domain.exceptions import ValidationError
 from src.domain.reconciliation import (
     ReconciliationSummary,
     SettlementResult,
+    compute_gross_settlement,
     compute_net_position,
     reconcile,
     reconcile_all_months,
@@ -118,11 +119,15 @@ def _build_month_history(
     year: int,
     finalized_months: set[int],
     settlements_by_month: dict[int, list[Settlement]],
+    gross_by_month: dict[int, SettlementResult | None],
     all_spending_by_month: dict[int, Decimal] | None = None,
 ) -> list[MonthHistoryEntry]:
     entries: list[MonthHistoryEntry] = []
-    for month in sorted(summaries, reverse=True):
-        gross = summaries[month].settlement
+    # Union: a month can have settlement-relevant rows (e.g. spotted) without
+    # any household spending, and vice versa.
+    for month in sorted(set(summaries) | set(gross_by_month), reverse=True):
+        gross = gross_by_month.get(month)
+        summary = summaries.get(month)
         month_settlements = settlements_by_month.get(month, [])
         net = compute_net_position(gross, month_settlements)
         no_balance = net is None or net.amount == Decimal(0)
@@ -135,7 +140,9 @@ def _build_month_history(
             MonthHistoryEntry(
                 year=year,
                 month=month,
-                total_household_spending=summaries[month].total_household_spending,
+                total_household_spending=(
+                    summary.total_household_spending if summary else Decimal(0)
+                ),
                 settlement_amount=net.amount if net else Decimal(0),
                 settlement_from_person_id=net.from_person_id if net else None,
                 settlement_to_person_id=net.to_person_id if net else None,
@@ -356,6 +363,22 @@ class GetDashboardUseCase:
                 household_txs, lambda tx: tx.date.month
             )
 
+            # Settlement math runs over payer_percentage < 100 rows regardless
+            # of the household flag — a different universe than the spending
+            # aggregations above.
+            settlement_year_txs = (
+                await uow.transactions.get_settlement_relevant_by_date_range(
+                    date(command.year, 1, 1), date(command.year, 12, 31)
+                )
+            )
+            by_month_settlement = partition_by_month(
+                settlement_year_txs, lambda tx: tx.date.month
+            )
+            gross_by_month = {
+                m: compute_gross_settlement(txs, ctx.person_ids)
+                for m, txs in by_month_settlement.items()
+            }
+
             year_periods = await uow.reconciliation_periods.get_by_year(command.year)
             finalized_months = {p.month for p in year_periods if p.is_finalized}
             all_year_settlements = await uow.settlements.get_by_year(command.year)
@@ -365,7 +388,9 @@ class GetDashboardUseCase:
                 command.month
                 if command.month is not None
                 else _resolve_active_month(
-                    by_month_household, finalized_months, now.month
+                    by_month_settlement | by_month_household,
+                    finalized_months,
+                    now.month,
                 )
             )
 
@@ -389,17 +414,21 @@ class GetDashboardUseCase:
                     end_date=end,
                 ),
             )
+            # The summary's spending figures describe household rows; its
+            # settlement figure must cover all settlement-relevant rows.
+            current_month = evolve(
+                current_month,
+                settlement=gross_by_month.get(
+                    active_month, compute_gross_settlement([], ctx.person_ids)
+                ),
+            )
 
             ytd_household_txs = [
                 tx for tx in household_txs if tx.date.month <= active_month
             ]
-            ytd_summary = reconcile(
-                ytd_household_txs,
-                ctx.persons,
-                ctx.categories,
-                ctx.category_groups,
-                start_date=date(command.year, 1, 1),
-                end_date=end,
+            ytd_gross_settlement = compute_gross_settlement(
+                [tx for tx in settlement_year_txs if tx.date.month <= active_month],
+                ctx.person_ids,
             )
 
             # True household spending (all household=true, including no-split)
@@ -466,9 +495,9 @@ class GetDashboardUseCase:
                 upload_statuses=upload_statuses,
                 household_spending_month=household_spending_month,
                 household_spending_ytd=household_spending_ytd,
-                ytd_settlement=ytd_summary.settlement,
+                ytd_settlement=ytd_gross_settlement,
                 ytd_net_settlement=compute_net_position(
-                    ytd_summary.settlement, ytd_settlements
+                    ytd_gross_settlement, ytd_settlements
                 ),
                 ytd_total_settled=sum(
                     (s.amount for s in ytd_settlements),
@@ -479,6 +508,7 @@ class GetDashboardUseCase:
                     command.year,
                     finalized_months,
                     partition_by_month(all_year_settlements, lambda s: s.month),
+                    gross_by_month,
                     all_spending_by_month=(
                         all_data.spending_by_month if all_data else None
                     ),

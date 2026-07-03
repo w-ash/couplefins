@@ -10,6 +10,7 @@ from src.domain.reconciliation import (
     PersonSummary,
     SettlementResult,
     _compute_settlement,
+    compute_gross_settlement,
     compute_net_position,
     reconcile,
 )
@@ -667,3 +668,52 @@ def test_broken_summaries_raise_invariant_violation() -> None:
     ]
     with pytest.raises(InvariantViolationError, match="Zero-sum invariant violated"):
         _compute_settlement(summaries)
+
+
+def test_compute_gross_settlement_ignores_household_flag() -> None:
+    alice, bob = _alice_bob()
+    txs = [
+        # Shared household expense: Bob owes Alice $50
+        make_transaction(
+            amount=Decimal("-100.00"), payer_person_id=alice.id, payer_percentage=50
+        ),
+        # Spotted (household=false): Bob owes Alice $40
+        make_transaction(
+            amount=Decimal("-40.00"),
+            payer_person_id=alice.id,
+            payer_percentage=0,
+            household=False,
+            tags=("bob",),
+        ),
+        # Non-participants: household no-split, excluded, settlement transfer
+        make_transaction(
+            amount=Decimal("-500.00"), payer_person_id=bob.id, payer_percentage=100
+        ),
+        make_transaction(
+            amount=Decimal("-30.00"),
+            payer_person_id=bob.id,
+            payer_percentage=50,
+            is_excluded=True,
+        ),
+        make_transaction(
+            amount=Decimal("-90.00"),
+            payer_person_id=bob.id,
+            payer_percentage=0,
+            is_settlement=True,
+            household=False,
+        ),
+    ]
+
+    result = compute_gross_settlement(txs, [alice.id, bob.id])
+
+    assert result is not None
+    assert result.amount == Decimal("90.00")
+    assert result.from_person_id == bob.id
+    assert result.to_person_id == alice.id
+
+
+def test_compute_gross_settlement_empty_is_zero_amount() -> None:
+    alice, bob = _alice_bob()
+    result = compute_gross_settlement([], [alice.id, bob.id])
+    assert result is not None
+    assert result.amount == Decimal(0)

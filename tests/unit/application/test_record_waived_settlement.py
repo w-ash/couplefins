@@ -35,7 +35,9 @@ def _setup_uow(
     uow = make_mock_uow()
     uow.persons.get_by_ids.return_value = [alice, bob]
     uow.persons.get_all.return_value = [alice, bob]
-    uow.transactions.get_household_by_date_range.return_value = transactions or []
+    uow.transactions.get_settlement_relevant_by_date_range.return_value = (
+        transactions or []
+    )
     uow.categories.get_all.return_value = [category]
     uow.category_groups.get_all.return_value = [group]
     uow.settlements.get_by_period.return_value = settlements or []

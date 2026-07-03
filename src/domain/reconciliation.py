@@ -258,6 +258,20 @@ def _compute_settlement(
     )
 
 
+def compute_gross_settlement(
+    transactions: list[Transaction],
+    person_ids: list[UUID],
+) -> SettlementResult | None:
+    """Gross settlement over any transaction set, independent of reconcile().
+
+    For callers whose settlement universe differs from their display set
+    (e.g. scoped views): applies filter_split_transactions, so passing an
+    unfiltered fetch is safe.
+    """
+    splits = filter_split_transactions(transactions)
+    return _compute_settlement(_compute_person_summaries(splits, person_ids))
+
+
 def compute_net_position(
     gross: SettlementResult | None,
     settlements: Sequence[Settlement],

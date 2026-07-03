@@ -44,7 +44,11 @@ async def load_month_settlement_snapshot(
     ctx: ReconciliationContext,
 ) -> MonthSettlementSnapshot:
     start, end = month_bounds(year, month)
-    transactions = await uow.transactions.get_household_by_date_range(start, end)
+    # Settlement relevance is payer_percentage < 100, independent of the
+    # household flag — spotted and personal-split rows enter the math.
+    transactions = await uow.transactions.get_settlement_relevant_by_date_range(
+        start, end
+    )
 
     summary = reconcile(
         transactions,

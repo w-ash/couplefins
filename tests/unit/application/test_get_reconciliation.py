@@ -66,6 +66,68 @@ async def test_happy_path_both_uploaded() -> None:
     assert result.month == 1
 
 
+async def test_settlement_covers_all_settlement_relevant_rows() -> None:
+    """The settlement figure spans household AND non-household split rows,
+    and is identical across scopes — both partners see the same number."""
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    uow.persons.get_all.return_value = [alice, bob]
+    uow.category_groups.get_all.return_value = []
+    uow.categories.get_all.return_value = []
+
+    shared = make_transaction(
+        amount=Decimal("-100.00"), payer_person_id=alice.id, payer_percentage=50
+    )
+    spotted = make_transaction(
+        amount=Decimal("-40.00"),
+        payer_person_id=alice.id,
+        payer_percentage=0,
+        household=False,
+        tags=("bob",),
+    )
+    personal_split = make_transaction(
+        amount=Decimal("-60.00"),
+        payer_person_id=alice.id,
+        payer_percentage=50,
+        household=False,
+    )
+    uow.transactions.get_household_by_date_range.return_value = [shared]
+    uow.transactions.get_by_person_and_date_range.return_value = [
+        shared,
+        spotted,
+        personal_split,
+    ]
+    uow.transactions.get_settlement_relevant_by_date_range.return_value = [
+        shared,
+        spotted,
+        personal_split,
+    ]
+    uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = []
+
+    # Bob owes Alice: 50 (shared) + 40 (spotted) + 30 (personal split) = 120
+    expected = Decimal("120.00")
+    for scope, person_id in (
+        ("household", None),
+        ("all", alice.id),
+        ("all", bob.id),
+        ("personal", bob.id),
+    ):
+        command = GetReconciliationCommand.from_month(
+            2026, 1, scope=scope, person_id=person_id
+        )
+        result = await GetReconciliationUseCase().execute(command, uow)
+        assert result.summary.settlement is not None, scope
+        assert result.summary.settlement.amount == expected, scope
+        assert result.summary.settlement.from_person_id == bob.id, scope
+        assert result.summary.settlement.to_person_id == alice.id, scope
+
+    # The display set stays scope-appropriate: household scope shows only
+    # the household row even though the settlement covers all three.
+    household_result = await GetReconciliationUseCase().execute(_make_command(), uow)
+    assert len(household_result.transactions) == 1
+
+
 async def test_partial_upload_one_person() -> None:
     uow = make_mock_uow()
     alice = make_person(name="Alice")

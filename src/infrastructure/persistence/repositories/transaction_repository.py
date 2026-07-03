@@ -14,11 +14,11 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
+from src.domain.constants import SplitDefaults
 from src.domain.entities.transaction import Transaction
 from src.infrastructure.persistence.models.transaction_model import TransactionModel
 from src.infrastructure.persistence.repositories.base import (
     BaseRepository,
-    date_month_prefix,
     date_year_prefix,
 )
 
@@ -135,13 +135,6 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             TransactionModel.date <= end_date.isoformat(),
         )
 
-    async def get_household_by_period(self, year: int, month: int) -> list[Transaction]:
-        return await self._query(
-            TransactionModel.date.startswith(date_month_prefix(year, month)),
-            TransactionModel.household.is_(True),
-            TransactionModel.is_settlement.is_(False),
-        )
-
     async def get_household_by_year(self, year: int) -> list[Transaction]:
         return await self._query(
             TransactionModel.date.startswith(date_year_prefix(year)),
@@ -167,6 +160,22 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             TransactionModel.date <= end_date.isoformat(),
             TransactionModel.household.is_(True),
             TransactionModel.is_settlement.is_(False),
+            *self._tag_filter(tags),
+        )
+
+    async def get_settlement_relevant_by_date_range(
+        self,
+        start_date: date,
+        end_date: date,
+        *,
+        tags: tuple[str, ...] | None = None,
+    ) -> list[Transaction]:
+        return await self._query(
+            TransactionModel.date >= start_date.isoformat(),
+            TransactionModel.date <= end_date.isoformat(),
+            TransactionModel.payer_percentage < SplitDefaults.MAX_PAYER_PERCENTAGE,
+            TransactionModel.is_settlement.is_(False),
+            TransactionModel.is_excluded.is_(False),
             *self._tag_filter(tags),
         )
 

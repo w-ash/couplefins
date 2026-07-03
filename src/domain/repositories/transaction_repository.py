@@ -8,9 +8,6 @@ from src.domain.entities.transaction import Transaction
 class TransactionRepositoryProtocol(Protocol):
     async def get_by_id(self, id: UUID) -> Transaction | None: ...
     async def get_by_ids(self, ids: list[UUID]) -> list[Transaction]: ...
-    async def get_household_by_period(
-        self, year: int, month: int
-    ) -> list[Transaction]: ...
     async def get_household_by_year(self, year: int) -> list[Transaction]: ...
     async def get_by_year(self, year: int) -> list[Transaction]: ...
     async def get_by_date_range(
@@ -19,6 +16,13 @@ class TransactionRepositoryProtocol(Protocol):
         end_date: date,
     ) -> list[Transaction]: ...
     async def get_household_by_date_range(
+        self,
+        start_date: date,
+        end_date: date,
+        *,
+        tags: tuple[str, ...] | None = None,
+    ) -> list[Transaction]: ...
+    async def get_settlement_relevant_by_date_range(
         self,
         start_date: date,
         end_date: date,

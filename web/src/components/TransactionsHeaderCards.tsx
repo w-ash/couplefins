@@ -433,8 +433,8 @@ function SettlementInfo({
     <>
       <p>
         <strong>Formula:</strong> gross balance from this period's split
-        household transactions, minus any linked settlement payments. Matches
-        the Settle Up page exactly.
+        transactions — any split under 100%, household or personal — minus any
+        linked settlement payments. Matches the Settle Up page exactly.
       </p>
       {!singleMonth && (
         <p>

@@ -36,7 +36,7 @@ async def test_happy_path_returns_csv() -> None:
             payer_percentage=50,
         )
     ]
-    uow.transactions.get_household_by_period.return_value = txs
+    uow.transactions.get_settlement_relevant_by_date_range.return_value = txs
 
     command = _make_command(person_id=alice.id)
     result = await ExportAdjustmentsUseCase().execute(command, uow)
@@ -84,7 +84,7 @@ async def test_empty_month_returns_header_only_csv() -> None:
     alice = make_person(name="Alice", adjustment_account="Adj")
     bob = make_person(name="Bob", adjustment_account="Adj")
     uow.persons.get_all.return_value = [alice, bob]
-    uow.transactions.get_household_by_period.return_value = []
+    uow.transactions.get_settlement_relevant_by_date_range.return_value = []
 
     command = _make_command(person_id=alice.id)
     result = await ExportAdjustmentsUseCase().execute(command, uow)
@@ -99,7 +99,7 @@ async def test_read_only_no_commit() -> None:
     alice = make_person(name="Alice", adjustment_account="Adj")
     bob = make_person(name="Bob", adjustment_account="Adj")
     uow.persons.get_all.return_value = [alice, bob]
-    uow.transactions.get_household_by_period.return_value = []
+    uow.transactions.get_settlement_relevant_by_date_range.return_value = []
 
     command = _make_command(person_id=alice.id)
     await ExportAdjustmentsUseCase().execute(command, uow)
@@ -128,7 +128,7 @@ async def test_preview_returns_structured_adjustments() -> None:
             payer_percentage=70,
         ),
     ]
-    uow.transactions.get_household_by_period.return_value = txs
+    uow.transactions.get_settlement_relevant_by_date_range.return_value = txs
 
     command = _make_command(person_id=alice.id)
     result = await PreviewAdjustmentsUseCase().execute(command, uow)
@@ -146,7 +146,7 @@ async def test_preview_empty_month_returns_empty_list() -> None:
     alice = make_person(name="Alice", adjustment_account="Adj")
     bob = make_person(name="Bob", adjustment_account="Adj")
     uow.persons.get_all.return_value = [alice, bob]
-    uow.transactions.get_household_by_period.return_value = []
+    uow.transactions.get_settlement_relevant_by_date_range.return_value = []
 
     command = _make_command(person_id=alice.id)
     result = await PreviewAdjustmentsUseCase().execute(command, uow)

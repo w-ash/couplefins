@@ -503,7 +503,7 @@ export function SettleUpPage() {
       {isEmpty && (
         <PageEmpty
           icon={<Upload />}
-          heading={`No household transactions for ${MONTHS[month - 1]} ${year}`}
+          heading={`No transactions to settle for ${MONTHS[month - 1]} ${year}`}
           description="Upload a CSV to get started with settlement."
           action={
             <EmptyStateActions

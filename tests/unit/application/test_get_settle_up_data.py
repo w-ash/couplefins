@@ -37,7 +37,7 @@ class TestGetSettleUpData:
 
         uow = make_mock_uow()
         uow.persons.get_all.return_value = [alice, bob]
-        uow.transactions.get_household_by_date_range.return_value = [tx]
+        uow.transactions.get_settlement_relevant_by_date_range.return_value = [tx]
         uow.categories.get_all.return_value = [category]
         uow.category_groups.get_all.return_value = [group]
         uow.settlements.get_by_period.return_value = [settlement]
@@ -80,7 +80,7 @@ class TestGetSettleUpData:
 
         uow = make_mock_uow()
         uow.persons.get_all.return_value = [alice, bob]
-        uow.transactions.get_household_by_date_range.return_value = [tx]
+        uow.transactions.get_settlement_relevant_by_date_range.return_value = [tx]
         uow.categories.get_all.return_value = [category]
         uow.category_groups.get_all.return_value = [group]
         uow.settlements.get_by_period.return_value = [settlement]
@@ -113,7 +113,7 @@ class TestGetSettleUpData:
 
         uow = make_mock_uow()
         uow.persons.get_all.return_value = [alice, bob]
-        uow.transactions.get_household_by_date_range.return_value = [tx]
+        uow.transactions.get_settlement_relevant_by_date_range.return_value = [tx]
         uow.categories.get_all.return_value = [category]
         uow.category_groups.get_all.return_value = [group]
         uow.settlements.get_by_period.return_value = [settlement]
@@ -133,6 +133,54 @@ class TestGetSettleUpData:
         assert result.net_position.from_person_id == alice.id
         assert result.net_position.to_person_id == bob.id
         assert result.remaining_balance == Decimal("1931.00")
+
+
+class TestSettlementRelevantRows:
+    async def test_non_household_split_rows_enter_balance_and_audit(self) -> None:
+        """Spotted and personal-split rows (household=false) drive the
+        settlement balance and appear in the audit splits."""
+        alice = make_person(name="Alice")
+        bob = make_person(name="Bob")
+        spotted = make_transaction(
+            amount=Decimal("-40.00"),
+            payer_person_id=alice.id,
+            payer_percentage=0,
+            household=False,
+            tags=("bob",),
+        )
+        personal_split = make_transaction(
+            amount=Decimal("-60.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+            household=False,
+        )
+        group = make_category_group()
+        category = make_category(group_id=group.id)
+
+        uow = make_mock_uow()
+        uow.persons.get_all.return_value = [alice, bob]
+        uow.transactions.get_settlement_relevant_by_date_range.return_value = [
+            spotted,
+            personal_split,
+        ]
+        uow.categories.get_all.return_value = [category]
+        uow.category_groups.get_all.return_value = [group]
+        uow.settlements.get_by_period.return_value = []
+        uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = []
+
+        result = await GetSettleUpDataUseCase().execute(
+            GetSettleUpDataCommand(year=2026, month=1), uow
+        )
+
+        # Bob owes Alice: 40 (spotted) + 30 (personal split) = 70
+        assert result.owed is not None
+        assert result.owed.amount == Decimal("70.00")
+        assert result.owed.from_person_id == bob.id
+        assert result.owed.to_person_id == alice.id
+
+        by_payer = {ps.payer_person_id: ps for ps in result.payer_splits}
+        assert by_payer[alice.id].total_paid == Decimal("100.00")
+        assert by_payer[alice.id].transaction_count == 2
 
 
 class TestAuditSummaries:
@@ -162,7 +210,7 @@ class TestAuditSummaries:
 
         uow = make_mock_uow()
         uow.persons.get_all.return_value = [alice, bob]
-        uow.transactions.get_household_by_date_range.return_value = txs
+        uow.transactions.get_settlement_relevant_by_date_range.return_value = txs
         uow.categories.get_all.return_value = [food_cat, travel_cat]
         uow.category_groups.get_all.return_value = [food, travel]
         uow.settlements.get_by_period.return_value = []
@@ -241,7 +289,7 @@ class TestFinalizationWarnings:
 
         uow = make_mock_uow()
         uow.persons.get_all.return_value = [alice, bob]
-        uow.transactions.get_household_by_date_range.return_value = txs
+        uow.transactions.get_settlement_relevant_by_date_range.return_value = txs
         uow.categories.get_all.return_value = categories
         uow.category_groups.get_all.return_value = [group]
         uow.settlements.get_by_period.return_value = []

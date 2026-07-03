@@ -6,6 +6,7 @@ from src.application.use_cases._shared.command_validators import (
     month_range,
     positive_int,
 )
+from src.application.use_cases._shared.date_math import month_bounds
 from src.domain.constants import CoupleDefaults
 from src.domain.entities.person import Person
 from src.domain.exceptions import NotFoundError, ValidationError
@@ -53,8 +54,11 @@ async def _load_adjustments(
     if not target.adjustment_account.strip():
         raise ValidationError(f"Adjustment account not configured for {target.name}")
 
-    transactions = await uow.transactions.get_household_by_period(
-        command.year, command.month
+    # Adjustments cover every settlement-relevant row (pct < 100), household
+    # or not — spotted and personal-split expenses adjust Monarch too.
+    start, end = month_bounds(command.year, command.month)
+    transactions = await uow.transactions.get_settlement_relevant_by_date_range(
+        start, end
     )
     adjustments = compute_adjustments(transactions, target)
     return target, adjustments
