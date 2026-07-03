@@ -7,9 +7,11 @@ import {
   DEFAULT_SORT,
   DISCUSS_TAG,
   hasDiscussTag,
+  isInHouseholdScope,
   isInPersonalScope,
   isInSpottedScope,
   isSettlementLinked,
+  previewScopeKind,
   type SortState,
   sortList,
   sumNet,
@@ -289,6 +291,17 @@ describe("isInPersonalScope", () => {
     expect(isInPersonalScope(personal, null)).toBe(true);
     expect(isInPersonalScope(household, null)).toBe(false);
   });
+
+  it("excludes linked settlement transfers (money movement, not spending)", () => {
+    const tx = makeTx({
+      household: false,
+      payer_person_id: me,
+      payer_percentage: 100,
+      is_settlement: true,
+    });
+    expect(isInPersonalScope(tx, me)).toBe(false);
+    expect(isInPersonalScope(tx, null)).toBe(false);
+  });
 });
 
 // ─── isInSpottedScope ───
@@ -306,11 +319,22 @@ describe("isInSpottedScope", () => {
     expect(isInSpottedScope(tx, me)).toBe(true);
   });
 
-  it("excludes I-paid-zero-share household (household guard wins)", () => {
+  it("includes I-paid-zero-share household rows (household is irrelevant)", () => {
+    // e.g. a `household, bob` tag combo — drives settlement like any spot
     const tx = makeTx({
       household: true,
       payer_person_id: me,
       payer_percentage: 0,
+    });
+    expect(isInSpottedScope(tx, me)).toBe(true);
+  });
+
+  it("excludes linked settlement transfers", () => {
+    const tx = makeTx({
+      household: false,
+      payer_person_id: me,
+      payer_percentage: 0,
+      is_settlement: true,
     });
     expect(isInSpottedScope(tx, me)).toBe(false);
   });
@@ -441,6 +465,58 @@ describe("bucketTransactions", () => {
     expect(b.personal.count).toBe(0);
   });
 
+  it("routes linked settlement transfers to the settlement bucket", () => {
+    const tx = makeTx({
+      amount: -500,
+      household: false,
+      payer_person_id: me,
+      payer_percentage: 100,
+      is_settlement: true,
+    });
+    const b = bucketTransactions([tx], me);
+    expect(b.settlement).toEqual({ count: 1, amount: 500 });
+    expect(b.personal.count).toBe(0);
+    expect(b.total.count).toBe(1);
+  });
+
+  it("routes household spotted rows (household, bob) to spotted, not household", () => {
+    const tx = makeTx({
+      amount: -40,
+      household: true,
+      payer_person_id: me,
+      payer_percentage: 0,
+    });
+    const b = bucketTransactions([tx], me);
+    expect(b.spotted).toEqual({ count: 1, amount: 40 });
+    expect(b.household.count).toBe(0);
+  });
+
+  it("keeps partner-paid household-spotted rows in household", () => {
+    // Partner fronted for me; from my view it's still couple-flagged
+    // spending they paid — not something I'm owed back.
+    const tx = makeTx({
+      amount: -40,
+      household: true,
+      payer_person_id: partner,
+      payer_percentage: 0,
+    });
+    const b = bucketTransactions([tx], me);
+    expect(b.household.count).toBe(1);
+    expect(b.spotted.count).toBe(0);
+    expect(b.partnerPaid.count).toBe(0);
+  });
+
+  it("keeps partner-paid non-household pct-0 rows in partnerPaid", () => {
+    const tx = makeTx({
+      household: false,
+      payer_person_id: partner,
+      payer_percentage: 0,
+    });
+    const b = bucketTransactions([tx], me);
+    expect(b.partnerPaid.count).toBe(1);
+    expect(b.spotted.count).toBe(0);
+  });
+
   it("buckets sum to total for non-overlapping rows", () => {
     const txs = [
       makeTx({
@@ -464,6 +540,7 @@ describe("bucketTransactions", () => {
         payer_percentage: 0,
       }),
       makeTx({ id: "4", amount: -5, is_excluded: true }),
+      makeTx({ id: "5", amount: -95, is_settlement: true, household: false }),
     ];
     const b = bucketTransactions(txs, me);
     const sum =
@@ -471,6 +548,7 @@ describe("bucketTransactions", () => {
       b.personal.amount +
       b.spotted.amount +
       b.partnerPaid.amount +
+      b.settlement.amount +
       b.excluded.amount;
     expect(sum).toBeCloseTo(b.total.amount, 2);
   });
@@ -506,6 +584,59 @@ describe("computeScopeCounts", () => {
     ];
     const counts = computeScopeCounts(txs, me);
     expect(counts).toEqual({ all: 4, household: 1, personal: 1, spotted: 1 });
+  });
+
+  it("excludes linked settlement transfers from every spending scope", () => {
+    const txs = [
+      makeTx({ id: "h", household: true, is_settlement: true }),
+      makeTx({
+        id: "p",
+        household: false,
+        payer_person_id: me,
+        payer_percentage: 100,
+        is_settlement: true,
+      }),
+    ];
+    const counts = computeScopeCounts(txs, me);
+    expect(counts).toEqual({ all: 2, household: 0, personal: 0, spotted: 0 });
+  });
+});
+
+// ─── isInHouseholdScope ───
+
+describe("isInHouseholdScope", () => {
+  it("includes household rows and excludes linked transfers", () => {
+    expect(isInHouseholdScope(makeTx({ household: true }))).toBe(true);
+    expect(
+      isInHouseholdScope(makeTx({ household: true, is_settlement: true })),
+    ).toBe(false);
+    expect(isInHouseholdScope(makeTx({ household: false }))).toBe(false);
+  });
+});
+
+// ─── previewScopeKind ───
+
+describe("previewScopeKind", () => {
+  it("classifies household, personal, and spotted preview rows", () => {
+    expect(previewScopeKind({ household: true, payer_percentage: 50 })).toBe(
+      "household",
+    );
+    expect(previewScopeKind({ household: true, payer_percentage: 100 })).toBe(
+      "household",
+    );
+    expect(previewScopeKind({ household: false, payer_percentage: 100 })).toBe(
+      "personal",
+    );
+    expect(previewScopeKind({ household: false, payer_percentage: 70 })).toBe(
+      "personal",
+    );
+    // Uploader is always the payer, so pct 0 = partner owes it all back
+    expect(previewScopeKind({ household: false, payer_percentage: 0 })).toBe(
+      "spotted",
+    );
+    expect(previewScopeKind({ household: true, payer_percentage: 0 })).toBe(
+      "spotted",
+    );
   });
 });
 

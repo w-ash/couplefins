@@ -9,13 +9,21 @@ export function hasDiscussTag(tx: TransactionResponse): boolean {
   return tx.tags.some((t) => t.toLowerCase() === DISCUSS_TAG);
 }
 
+// Household spending, excluding linked settlement transfers (money movement,
+// not spending).
+export function isInHouseholdScope(tx: TransactionResponse): boolean {
+  return tx.household && !tx.is_settlement;
+}
+
 // A non-household transaction is in the current user's Personal scope only
 // when their share of the cost (derived from payer_percentage) is greater than
-// zero. Falls back to !household when identity isn't yet hydrated.
+// zero. Linked settlement transfers are money movement, not spending. Falls
+// back to !household when identity isn't yet hydrated.
 export function isInPersonalScope(
   tx: TransactionResponse,
   currentPersonId: string | null,
 ): boolean {
+  if (tx.is_settlement) return false;
   if (tx.household) return false;
   if (!currentPersonId) return true;
   const myShare =
@@ -26,9 +34,10 @@ export function isInPersonalScope(
 }
 
 // "Spotted" = I fronted cash for an expense that is entirely my partner's.
-// Detected purely by payer fields (never by tags): I am the payer, my share is
-// 0%, and it isn't a household expense. Returns false when identity isn't
-// hydrated — there's no sensible default for an ownership-based scope.
+// Detected purely by payer fields (never by tags): I am the payer and my
+// share is 0%. The household flag is irrelevant — `household, bob` rows drive
+// settlement the same way. Returns false when identity isn't hydrated —
+// there's no sensible default for an ownership-based scope.
 //
 // Note: the backend `get_reconciliation` use case (scope=all) returns
 // `household ∪ {tx where current user is the payer}`, so this filter only
@@ -40,12 +49,25 @@ export function isInSpottedScope(
   currentPersonId: string | null,
 ): boolean {
   if (!currentPersonId) return false;
-  if (tx.household) return false;
+  if (tx.is_settlement) return false;
   return tx.payer_person_id === currentPersonId && tx.payer_percentage === 0;
 }
 
 export function isSettlementLinked(tx: TransactionResponse): boolean {
   return tx.is_settlement === true;
+}
+
+// Upload-preview classification. Preview rows are always paid by the
+// uploader, so payer_percentage === 0 means the partner owes the full
+// amount back (spotted).
+export type PreviewScopeKind = "household" | "personal" | "spotted";
+
+export function previewScopeKind(tx: {
+  household: boolean;
+  payer_percentage: number;
+}): PreviewScopeKind {
+  if (tx.payer_percentage === 0) return "spotted";
+  return tx.household ? "household" : "personal";
 }
 
 // Negated so expense-heavy sets render as a positive number.
@@ -82,6 +104,7 @@ export interface ReconciliationBuckets {
   personalSplit: BucketStat;
   spotted: BucketStat;
   partnerPaid: BucketStat;
+  settlement: BucketStat;
   excluded: BucketStat;
 }
 
@@ -108,6 +131,7 @@ export function bucketTransactions(
     personalSplit: emptyStat(),
     spotted: emptyStat(),
     partnerPaid: emptyStat(),
+    settlement: emptyStat(),
     excluded: emptyStat(),
   };
 
@@ -117,6 +141,22 @@ export function bucketTransactions(
 
     if (tx.is_excluded) {
       add(buckets.excluded, abs);
+      continue;
+    }
+
+    if (tx.is_settlement) {
+      add(buckets.settlement, abs);
+      continue;
+    }
+
+    // Spotted beats household: a `household, bob` row is money I'm owed
+    // back, not couple spending (requires hydrated identity).
+    if (
+      currentPersonId !== null &&
+      tx.payer_person_id === currentPersonId &&
+      tx.payer_percentage === 0
+    ) {
+      add(buckets.spotted, abs);
       continue;
     }
 
@@ -158,7 +198,7 @@ export function computeScopeCounts(
   let personal = 0;
   let spotted = 0;
   for (const tx of transactions) {
-    if (tx.household) household++;
+    if (isInHouseholdScope(tx)) household++;
     if (isInPersonalScope(tx, currentPersonId)) personal++;
     if (isInSpottedScope(tx, currentPersonId)) spotted++;
   }
@@ -406,7 +446,7 @@ export function useTransactionFilters(
 
     // Scope filter (household / personal / spotted)
     if (state.scope === "household") {
-      result = result.filter((tx) => tx.household);
+      result = result.filter((tx) => isInHouseholdScope(tx));
     } else if (state.scope === "personal") {
       result = result.filter((tx) => isInPersonalScope(tx, currentPersonId));
     } else if (state.scope === "spotted") {

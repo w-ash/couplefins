@@ -320,6 +320,7 @@ function ImportedCard({
             ["Personal (you)", buckets.personal],
             ["Spotted", buckets.spotted],
             ["Partner-paid", buckets.partnerPaid],
+            ["Settlement", buckets.settlement],
             ["Excluded", buckets.excluded],
           ]}
           periodLabel={periodLabel}
@@ -393,7 +394,7 @@ function InViewCard({ data, filtered, scope, periodLabel }: InViewCardProps) {
   return (
     <CardShell label="In view" info={<InViewInfo periodLabel={periodLabel} />}>
       <p className="text-lg font-semibold tabular-nums text-foreground">
-        {formatCurrency(sumNet(filtered))}
+        {formatCurrency(sumNet(filtered.filter((tx) => !tx.is_settlement)))}
       </p>
       <p className="text-[11px] leading-tight text-muted-foreground/70">
         {filtered.length} of {data.transactions.length} · {SCOPE_LABELS[scope]}
@@ -498,7 +499,8 @@ function InViewInfo({ periodLabel }: { periodLabel: string }) {
   return (
     <p>
       Net total of every transaction matching the active filters. Refunds reduce
-      the total. Filter-scoped — changes as you adjust filters within{" "}
+      the total; linked settlement transfers don't count (money movement, not
+      spending). Filter-scoped — changes as you adjust filters within{" "}
       {periodLabel}.
     </p>
   );

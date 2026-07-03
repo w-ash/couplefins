@@ -40,6 +40,7 @@ import { UploadHistory } from "@/components/UploadHistory";
 import { useSetToggle } from "@/hooks/useSetToggle";
 import { useUploadProgress } from "@/hooks/useUploadProgress";
 import { useInvalidateCategories } from "@/lib/categories";
+import { cn } from "@/lib/cn";
 import { validateCsvHeaders } from "@/lib/csv-validation";
 import {
   amountColorClass,
@@ -51,6 +52,11 @@ import {
 } from "@/lib/format";
 import { useIdentityStore } from "@/lib/identity";
 import { PAGE_PADDING, tableHeaderRowClass } from "@/lib/layout";
+import {
+  type PreviewScopeKind,
+  previewScopeKind,
+} from "@/lib/transaction-filters";
+import { getPersonAccentColor } from "@/types/person";
 
 const PREVIEW_LIMIT = 5;
 const MAX_CSV_SIZE = 10 * 1024 * 1024;
@@ -187,34 +193,63 @@ function ActionPanel({
   );
 }
 
-function typeBreakdown(transactions: { household: boolean }[]): string {
-  let householdCount = 0;
-  let personalCount = 0;
+function typeBreakdown(
+  transactions: { household: boolean; payer_percentage: number }[],
+): string {
+  const counts = { household: 0, personal: 0, spotted: 0 };
   for (const tx of transactions) {
-    if (tx.household) householdCount++;
-    else personalCount++;
+    counts[previewScopeKind(tx)]++;
   }
   const parts: string[] = [];
-  if (householdCount) parts.push(`${householdCount} household`);
-  if (personalCount) parts.push(`${personalCount} personal`);
+  if (counts.household) parts.push(`${counts.household} household`);
+  if (counts.personal) parts.push(`${counts.personal} personal`);
+  if (counts.spotted) parts.push(`${counts.spotted} spotted`);
   return parts.join(", ");
 }
 
-function ScopeBadge({ household }: { household: boolean }) {
+const SCOPE_BADGE_CLASSES: Record<PreviewScopeKind, string> = {
+  household: "bg-primary-muted text-primary-muted-foreground",
+  personal: "bg-muted/50 text-muted-foreground/50",
+  spotted: "", // partner accent, supplied per-render
+};
+
+function ScopeBadge({
+  tx,
+  partnerName,
+  partnerAccentClass,
+}: {
+  tx: { household: boolean; payer_percentage: number };
+  partnerName: string | null;
+  partnerAccentClass: string;
+}) {
+  const kind = previewScopeKind(tx);
+  const label =
+    kind === "spotted"
+      ? `Spotted → ${partnerName ?? "partner"}`
+      : kind === "household"
+        ? "Household"
+        : "Personal";
   return (
     <span
-      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-        household
-          ? "bg-primary-muted text-primary-muted-foreground"
-          : "bg-muted/50 text-muted-foreground/50"
-      }`}
+      className={cn(
+        "inline-block rounded-full px-2 py-0.5 text-xs font-medium",
+        kind === "spotted" ? partnerAccentClass : SCOPE_BADGE_CLASSES[kind],
+      )}
     >
-      {household ? "Household" : "Personal"}
+      {label}
     </span>
   );
 }
 
-function PreviewCard({ preview }: { preview: PreviewUploadResponse }) {
+function PreviewCard({
+  preview,
+  partnerName,
+  partnerAccentClass,
+}: {
+  preview: PreviewUploadResponse;
+  partnerName: string | null;
+  partnerAccentClass: string;
+}) {
   const visibleNew = preview.new_transactions.slice(0, PREVIEW_LIMIT);
   const remainingCount = Math.max(
     0,
@@ -254,8 +289,12 @@ function PreviewCard({ preview }: { preview: PreviewUploadResponse }) {
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span className="tabular-nums">{formatDate(tx.date)}</span>
               <span>{tx.category}</span>
-              <ScopeBadge household={tx.household} />
-              {tx.household && tx.payer_percentage < 100 && (
+              <ScopeBadge
+                tx={tx}
+                partnerName={partnerName}
+                partnerAccentClass={partnerAccentClass}
+              />
+              {tx.payer_percentage < 100 && (
                 <span className="tabular-nums">
                   {formatSplit(tx.payer_percentage)}
                 </span>
@@ -298,10 +337,14 @@ function PreviewCard({ preview }: { preview: PreviewUploadResponse }) {
                   {formatCurrency(tx.amount)}
                 </td>
                 <td className="py-2 pr-4">
-                  <ScopeBadge household={tx.household} />
+                  <ScopeBadge
+                    tx={tx}
+                    partnerName={partnerName}
+                    partnerAccentClass={partnerAccentClass}
+                  />
                 </td>
                 <td className="py-2 text-muted-foreground tabular-nums">
-                  {tx.household && tx.payer_percentage < 100 ? (
+                  {tx.payer_percentage < 100 ? (
                     formatSplit(tx.payer_percentage)
                   ) : (
                     <Minus className="size-4 text-icon-muted" />
@@ -467,6 +510,10 @@ export function UploadPage() {
 
   const { data: personsResponse } = useGetPersons();
   const persons = personsResponse?.data;
+  const partnerIndex = persons?.findIndex((p) => p.id !== personId) ?? -1;
+  const partnerName =
+    partnerIndex >= 0 ? (persons?.[partnerIndex]?.name ?? null) : null;
+  const partnerAccentClass = getPersonAccentColor(partnerIndex);
   const { data: historyResponse } = useUploadHistory();
 
   const previewMutation = usePostUploadPreview({
@@ -670,7 +717,11 @@ export function UploadPage() {
           <div className="space-y-6">
             {/* Preview summary + capped transaction table */}
             {step === "preview" && hasNewTransactions && (
-              <PreviewCard preview={preview} />
+              <PreviewCard
+                preview={preview}
+                partnerName={partnerName}
+                partnerAccentClass={partnerAccentClass}
+              />
             )}
 
             {/* Review — changed transactions with checkboxes */}
