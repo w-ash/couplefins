@@ -9,6 +9,9 @@ from src.application.use_cases._shared.budget_ownership import (
 )
 from src.application.use_cases._shared.command_validators import positive_decimal
 from src.application.use_cases._shared.entity_lookup import require_by_id
+from src.application.use_cases._shared.finalization import (
+    assert_period_not_finalized,
+)
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
@@ -36,6 +39,7 @@ class UpdateBudgetUseCase:
             )
 
             require_budget_ownership(existing, command.person_id)
+            await assert_period_not_finalized(uow, existing.year, existing.month)
 
             updated = attrs.evolve(existing, monthly_amount=command.monthly_amount)
             saved = await uow.category_group_budgets.save(updated)

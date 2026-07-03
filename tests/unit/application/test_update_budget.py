@@ -7,8 +7,15 @@ from src.application.use_cases.update_budget import (
     UpdateBudgetCommand,
     UpdateBudgetUseCase,
 )
-from src.domain.exceptions import ForbiddenError, NotFoundError
-from tests.fixtures.factories import make_category_group_budget
+from src.domain.exceptions import (
+    ForbiddenError,
+    NotFoundError,
+    PeriodFinalizedError,
+)
+from tests.fixtures.factories import (
+    make_category_group_budget,
+    make_reconciliation_period,
+)
 from tests.fixtures.mocks import make_mock_uow
 
 ALICE = UUID("bbbbbbbb-0000-0000-0000-000000000001")
@@ -90,3 +97,21 @@ async def test_allows_editing_household_budget() -> None:
     )
     result = await UpdateBudgetUseCase().execute(command, uow)
     assert result.budget is not None
+
+
+async def test_finalized_period_raises() -> None:
+    existing = make_category_group_budget(year=2026, month=1)
+    uow = make_mock_uow()
+    uow.category_group_budgets.get_by_id.return_value = existing
+    uow.reconciliation_periods.get_by_period.return_value = make_reconciliation_period(
+        year=2026, month=1, is_finalized=True
+    )
+
+    command = UpdateBudgetCommand(
+        budget_id=existing.id,
+        monthly_amount=Decimal("600.00"),
+        person_id=UUID(int=1),
+    )
+    with pytest.raises(PeriodFinalizedError):
+        await UpdateBudgetUseCase().execute(command, uow)
+    uow.category_group_budgets.save.assert_not_called()

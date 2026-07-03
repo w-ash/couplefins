@@ -4,6 +4,9 @@ import attrs
 from attrs import define
 
 from src.application.use_cases._shared.entity_lookup import require_by_id
+from src.application.use_cases._shared.finalization import (
+    assert_periods_not_finalized,
+)
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -26,11 +29,19 @@ class UnlinkSettlementTransactionUseCase:
         uow: UnitOfWorkProtocol,
     ) -> UnlinkSettlementTransactionResult:
         async with uow:
-            await require_by_id(
+            settlement = await require_by_id(
                 uow.settlements.get_by_id, command.settlement_id, "Settlement"
             )
             tx = await require_by_id(
                 uow.transactions.get_by_id, command.transaction_id, "Transaction"
+            )
+
+            await assert_periods_not_finalized(
+                uow,
+                {
+                    (settlement.year, settlement.month),
+                    (tx.date.year, tx.date.month),
+                },
             )
 
             deleted = await uow.settlement_transaction_links.delete_by_settlement_and_transaction(

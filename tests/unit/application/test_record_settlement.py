@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 import uuid
 
@@ -8,8 +9,16 @@ from src.application.use_cases.record_settlement import (
     RecordSettlementUseCase,
 )
 from src.domain.entities.settlement_transaction_link import SettlementTransactionLink
-from src.domain.exceptions import NotFoundError, ValidationError
-from tests.fixtures.factories import make_person, make_transaction
+from src.domain.exceptions import (
+    NotFoundError,
+    PeriodFinalizedError,
+    ValidationError,
+)
+from tests.fixtures.factories import (
+    make_person,
+    make_reconciliation_period,
+    make_transaction,
+)
 from tests.fixtures.mocks import make_mock_uow, set_passthrough_save
 
 
@@ -177,3 +186,51 @@ class TestRecordSettlement:
         )
         result = await RecordSettlementUseCase().execute(command, uow)
         assert result.settlement.amount == Decimal("50.00")
+
+
+async def test_finalized_period_raises() -> None:
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    uow = make_mock_uow()
+    uow.persons.get_by_ids.return_value = [alice, bob]
+    uow.reconciliation_periods.get_by_periods.return_value = [
+        make_reconciliation_period(year=2026, month=1, is_finalized=True)
+    ]
+
+    command = RecordSettlementCommand(
+        year=2026,
+        month=1,
+        amount=Decimal("50.00"),
+        from_person_id=alice.id,
+        to_person_id=bob.id,
+        method="Venmo",
+    )
+    with pytest.raises(PeriodFinalizedError):
+        await RecordSettlementUseCase().execute(command, uow)
+    uow.settlements.save.assert_not_called()
+
+
+async def test_finalized_linked_transaction_month_raises() -> None:
+    # Feb settlement linking a Jan transaction while Jan is locked.
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    tx = make_transaction(date=date(2026, 1, 30), payer_person_id=alice.id)
+    uow = make_mock_uow()
+    uow.persons.get_by_ids.return_value = [alice, bob]
+    uow.transactions.get_by_ids.return_value = [tx]
+    uow.reconciliation_periods.get_by_periods.return_value = [
+        make_reconciliation_period(year=2026, month=1, is_finalized=True)
+    ]
+
+    command = RecordSettlementCommand(
+        year=2026,
+        month=2,
+        amount=Decimal("50.00"),
+        from_person_id=alice.id,
+        to_person_id=bob.id,
+        method="Venmo",
+        linked_transaction_ids=[tx.id],
+    )
+    with pytest.raises(PeriodFinalizedError):
+        await RecordSettlementUseCase().execute(command, uow)
+    uow.settlements.save.assert_not_called()

@@ -545,21 +545,25 @@ export function SettleUpPage() {
 
           <SettleUpAuditTable data={data} personNames={personNames} />
 
-          <LinkSettlementSection
-            key={`${data.net_position?.amount ?? 0}-${data.recorded_settlements.length}`}
-            data={data}
-            getPersonName={getPersonName}
-            onSuccess={invalidateAll}
-          />
+          {!data.is_finalized && (
+            <LinkSettlementSection
+              key={`${data.net_position?.amount ?? 0}-${data.recorded_settlements.length}`}
+              data={data}
+              getPersonName={getPersonName}
+              onSuccess={invalidateAll}
+            />
+          )}
 
-          <WaiveAction
-            data={data}
-            getPersonName={getPersonName}
-            onSuccess={(warnings) => {
-              setWaiveWarnings(warnings.length > 0 ? warnings : null);
-              invalidateAll();
-            }}
-          />
+          {!data.is_finalized && (
+            <WaiveAction
+              data={data}
+              getPersonName={getPersonName}
+              onSuccess={(warnings) => {
+                setWaiveWarnings(warnings.length > 0 ? warnings : null);
+                invalidateAll();
+              }}
+            />
+          )}
 
           {waiveWarnings && (
             <ul className="space-y-0.5 rounded-lg border border-border-muted px-4 py-3">

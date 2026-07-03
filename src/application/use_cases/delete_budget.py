@@ -6,6 +6,9 @@ from src.application.use_cases._shared.budget_ownership import (
     require_budget_ownership,
 )
 from src.application.use_cases._shared.entity_lookup import require_by_id
+from src.application.use_cases._shared.finalization import (
+    assert_period_not_finalized,
+)
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -31,6 +34,7 @@ class DeleteBudgetUseCase:
             )
 
             require_budget_ownership(existing, command.person_id)
+            await assert_period_not_finalized(uow, existing.year, existing.month)
 
             await uow.category_group_budgets.delete(command.budget_id)
             await uow.commit()

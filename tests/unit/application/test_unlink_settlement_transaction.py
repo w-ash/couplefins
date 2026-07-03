@@ -1,11 +1,14 @@
+from datetime import date
+
 import pytest
 
 from src.application.use_cases.unlink_settlement_transaction import (
     UnlinkSettlementTransactionCommand,
     UnlinkSettlementTransactionUseCase,
 )
-from src.domain.exceptions import NotFoundError
+from src.domain.exceptions import NotFoundError, PeriodFinalizedError
 from tests.fixtures.factories import (
+    make_reconciliation_period,
     make_settlement,
     make_settlement_transaction_link,
     make_transaction,
@@ -77,3 +80,21 @@ class TestUnlinkSettlementTransaction:
         )
         with pytest.raises(NotFoundError):
             await UnlinkSettlementTransactionUseCase().execute(command, uow)
+
+
+async def test_finalized_period_raises() -> None:
+    settlement = make_settlement(year=2026, month=1)
+    tx = make_transaction(date=date(2026, 1, 20), is_settlement=True)
+    uow = make_mock_uow()
+    uow.settlements.get_by_id.return_value = settlement
+    uow.transactions.get_by_id.return_value = tx
+    uow.reconciliation_periods.get_by_periods.return_value = [
+        make_reconciliation_period(year=2026, month=1, is_finalized=True)
+    ]
+
+    command = UnlinkSettlementTransactionCommand(
+        settlement_id=settlement.id, transaction_id=tx.id
+    )
+    with pytest.raises(PeriodFinalizedError):
+        await UnlinkSettlementTransactionUseCase().execute(command, uow)
+    uow.settlement_transaction_links.delete_by_settlement_and_transaction.assert_not_called()

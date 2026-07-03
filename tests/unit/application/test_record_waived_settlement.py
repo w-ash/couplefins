@@ -9,11 +9,16 @@ from src.application.use_cases.record_waived_settlement import (
     RecordWaivedSettlementUseCase,
 )
 from src.domain.entities.person import Person
-from src.domain.exceptions import NotFoundError, ValidationError
+from src.domain.exceptions import (
+    NotFoundError,
+    PeriodFinalizedError,
+    ValidationError,
+)
 from tests.fixtures.factories import (
     make_category,
     make_category_group,
     make_person,
+    make_reconciliation_period,
     make_settlement,
     make_transaction,
     make_upload,
@@ -176,3 +181,23 @@ class TestRecordWaivedSettlement:
         )
         with pytest.raises(NotFoundError):
             await RecordWaivedSettlementUseCase().execute(command, uow)
+
+
+async def test_finalized_period_raises() -> None:
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    uow = make_mock_uow()
+    uow.persons.get_by_ids.return_value = [alice, bob]
+    uow.reconciliation_periods.get_by_period.return_value = make_reconciliation_period(
+        year=2026, month=1, is_finalized=True
+    )
+
+    command = RecordWaivedSettlementCommand(
+        year=2026,
+        month=1,
+        from_person_id=bob.id,
+        to_person_id=alice.id,
+    )
+    with pytest.raises(PeriodFinalizedError):
+        await RecordWaivedSettlementUseCase().execute(command, uow)
+    uow.settlements.save.assert_not_called()

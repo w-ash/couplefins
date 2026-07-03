@@ -4,11 +4,12 @@ from uuid import UUID
 import pytest
 
 from src.application.use_cases.save_budget import SaveBudgetCommand, SaveBudgetUseCase
-from src.domain.exceptions import NotFoundError
+from src.domain.exceptions import NotFoundError, PeriodFinalizedError
 from tests.fixtures.factories import (
     make_category_group,
     make_category_group_budget,
     make_person,
+    make_reconciliation_period,
 )
 from tests.fixtures.mocks import make_mock_uow
 
@@ -140,3 +141,22 @@ async def test_raises_not_found_for_missing_person() -> None:
 
     with pytest.raises(NotFoundError, match="Person"):
         await SaveBudgetUseCase().execute(command, uow)
+
+
+async def test_finalized_period_raises() -> None:
+    group = make_category_group()
+    uow = make_mock_uow()
+    uow.category_groups.get_by_id.return_value = group
+    uow.reconciliation_periods.get_by_period.return_value = make_reconciliation_period(
+        year=2026, month=1, is_finalized=True
+    )
+
+    command = SaveBudgetCommand(
+        group_id=group.id,
+        monthly_amount=Decimal("500.00"),
+        year=2026,
+        month=1,
+    )
+    with pytest.raises(PeriodFinalizedError):
+        await SaveBudgetUseCase().execute(command, uow)
+    uow.category_group_budgets.save.assert_not_called()

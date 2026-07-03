@@ -10,6 +10,9 @@ from src.application.use_cases._shared.command_validators import (
     positive_decimal,
     positive_int,
 )
+from src.application.use_cases._shared.finalization import (
+    assert_periods_not_finalized,
+)
 from src.application.use_cases._shared.settlement_records import (
     build_settlement,
     validate_settlement_persons,
@@ -83,6 +86,14 @@ class RecordSettlementUseCase:
                     raise ValidationError(
                         "All linked transactions are from the same person"
                     )
+
+            # Linked transactions may sit in a different month than the
+            # settlement (7-day candidate window crosses month boundaries).
+            await assert_periods_not_finalized(
+                uow,
+                {(command.year, command.month)}
+                | {(tx.date.year, tx.date.month) for tx in linked_txs},
+            )
 
             warnings: list[str] = []
             if linked_txs:

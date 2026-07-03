@@ -9,6 +9,9 @@ from src.application.use_cases._shared.command_validators import (
     positive_int,
 )
 from src.application.use_cases._shared.entity_lookup import require_by_id
+from src.application.use_cases._shared.finalization import (
+    assert_period_not_finalized,
+)
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
@@ -38,6 +41,7 @@ class SaveBudgetUseCase:
             )
             if command.person_id is not None:
                 await require_by_id(uow.persons.get_by_id, command.person_id, "Person")
+            await assert_period_not_finalized(uow, command.year, command.month)
 
             existing = await uow.category_group_budgets.get_by_month(
                 command.year, command.month, command.person_id

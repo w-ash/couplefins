@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 
 from src.application.use_cases.delete_settlement import (
@@ -8,6 +10,8 @@ from src.domain.exceptions import NotFoundError, PeriodFinalizedError
 from tests.fixtures.factories import (
     make_reconciliation_period,
     make_settlement,
+    make_settlement_transaction_link,
+    make_transaction,
 )
 from tests.fixtures.mocks import make_mock_uow
 
@@ -40,13 +44,35 @@ class TestDeleteSettlement:
         settlement = make_settlement(year=2026, month=1)
         uow = make_mock_uow()
         uow.settlements.get_by_id.return_value = settlement
-        uow.reconciliation_periods.get_by_period.return_value = (
+        uow.settlement_transaction_links.get_by_settlement_ids.return_value = []
+        uow.reconciliation_periods.get_by_periods.return_value = [
             make_reconciliation_period(year=2026, month=1, is_finalized=True)
-        )
+        ]
 
         command = DeleteSettlementCommand(settlement_id=settlement.id)
         with pytest.raises(PeriodFinalizedError):
             await DeleteSettlementUseCase().execute(command, uow)
+
+    async def test_finalized_linked_transaction_month_raises(self) -> None:
+        # Feb settlement linked to a Jan transaction; Jan is locked.
+        settlement = make_settlement(year=2026, month=2)
+        tx = make_transaction(date=date(2026, 1, 30), is_settlement=True)
+        link = make_settlement_transaction_link(
+            settlement_id=settlement.id, transaction_id=tx.id
+        )
+        uow = make_mock_uow()
+        uow.settlements.get_by_id.return_value = settlement
+        uow.settlement_transaction_links.get_by_settlement_ids.return_value = [link]
+        uow.transactions.get_by_ids.return_value = [tx]
+        uow.reconciliation_periods.get_by_periods.return_value = [
+            make_reconciliation_period(year=2026, month=1, is_finalized=True)
+        ]
+
+        command = DeleteSettlementCommand(settlement_id=settlement.id)
+        with pytest.raises(PeriodFinalizedError):
+            await DeleteSettlementUseCase().execute(command, uow)
+        uow.transactions.update_mutable_fields.assert_not_called()
+        uow.settlements.delete.assert_not_called()
 
     async def test_does_not_unmark_linked_transactions(self) -> None:
         settlement = make_settlement()

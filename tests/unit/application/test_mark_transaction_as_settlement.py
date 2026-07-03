@@ -1,11 +1,17 @@
+from datetime import date
+
 import pytest
 
 from src.application.use_cases.mark_transaction_as_settlement import (
     MarkTransactionAsSettlementCommand,
     MarkTransactionAsSettlementUseCase,
 )
-from src.domain.exceptions import NotFoundError
-from tests.fixtures.factories import make_settlement, make_transaction
+from src.domain.exceptions import NotFoundError, PeriodFinalizedError
+from tests.fixtures.factories import (
+    make_reconciliation_period,
+    make_settlement,
+    make_transaction,
+)
 from tests.fixtures.mocks import make_mock_uow
 
 
@@ -106,3 +112,36 @@ class TestMarkTransactionAsSettlement:
         assert result.is_settlement is False
         uow.settlements.get_by_id.assert_not_called()
         uow.settlement_transaction_links.save_batch.assert_not_called()
+
+
+async def test_finalized_transaction_month_raises() -> None:
+    tx = make_transaction(date=date(2026, 1, 15), is_settlement=False)
+    uow = make_mock_uow()
+    uow.transactions.get_by_id.return_value = tx
+    uow.reconciliation_periods.get_by_periods.return_value = [
+        make_reconciliation_period(year=2026, month=1, is_finalized=True)
+    ]
+
+    command = MarkTransactionAsSettlementCommand(transaction_id=tx.id)
+    with pytest.raises(PeriodFinalizedError):
+        await MarkTransactionAsSettlementUseCase().execute(command, uow)
+    uow.transactions.update_mutable_fields.assert_not_called()
+
+
+async def test_finalized_settlement_month_raises_on_link() -> None:
+    # Feb transaction linking into a Jan settlement while Jan is locked.
+    tx = make_transaction(date=date(2026, 2, 10), is_settlement=False)
+    settlement = make_settlement(year=2026, month=1)
+    uow = make_mock_uow()
+    uow.transactions.get_by_id.return_value = tx
+    uow.settlements.get_by_id.return_value = settlement
+    uow.reconciliation_periods.get_by_periods.return_value = [
+        make_reconciliation_period(year=2026, month=1, is_finalized=True)
+    ]
+
+    command = MarkTransactionAsSettlementCommand(
+        transaction_id=tx.id, settlement_id=settlement.id
+    )
+    with pytest.raises(PeriodFinalizedError):
+        await MarkTransactionAsSettlementUseCase().execute(command, uow)
+    uow.settlement_transaction_links.save_batch.assert_not_called()

@@ -3,7 +3,9 @@ import uuid
 from attrs import define, evolve
 
 from src.application.use_cases._shared.entity_lookup import require_by_id
-from src.application.use_cases._shared.finalization import assert_period_not_finalized
+from src.application.use_cases._shared.finalization import (
+    assert_periods_not_finalized,
+)
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -27,20 +29,30 @@ class DeleteSettlementUseCase:
                 uow.settlements.get_by_id, command.settlement_id, "Settlement"
             )
 
-            await assert_period_not_finalized(uow, settlement.year, settlement.month)
-
             links = await uow.settlement_transaction_links.get_by_settlement_ids([
                 settlement.id
             ])
-            if links:
-                linked_txs = await uow.transactions.get_by_ids([
+            linked_txs = (
+                await uow.transactions.get_by_ids([
                     link.transaction_id for link in links
                 ])
-                for tx in linked_txs:
-                    if tx.is_settlement:
-                        await uow.transactions.update_mutable_fields(
-                            evolve(tx, is_settlement=False)
-                        )
+                if links
+                else []
+            )
+
+            # Unlinking flips is_settlement in each linked tx's own month
+            # (cross-month links exist via the 7-day candidate window).
+            await assert_periods_not_finalized(
+                uow,
+                {(settlement.year, settlement.month)}
+                | {(tx.date.year, tx.date.month) for tx in linked_txs},
+            )
+
+            for tx in linked_txs:
+                if tx.is_settlement:
+                    await uow.transactions.update_mutable_fields(
+                        evolve(tx, is_settlement=False)
+                    )
 
             await uow.settlement_transaction_links.delete_by_settlement_id(
                 settlement.id

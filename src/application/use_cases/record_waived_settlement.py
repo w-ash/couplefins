@@ -7,6 +7,9 @@ from src.application.use_cases._shared.command_validators import (
     month_range,
     positive_int,
 )
+from src.application.use_cases._shared.finalization import (
+    assert_period_not_finalized,
+)
 from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
@@ -46,6 +49,7 @@ class RecordWaivedSettlementUseCase:
             await validate_settlement_persons(
                 command.from_person_id, command.to_person_id, uow
             )
+            await assert_period_not_finalized(uow, command.year, command.month)
 
             ctx = await load_reconciliation_context(uow)
             snapshot = await load_month_settlement_snapshot(

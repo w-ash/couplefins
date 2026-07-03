@@ -146,3 +146,61 @@ async def test_dashboard_includes_finalization_status(client: AsyncClient) -> No
     data = response.json()
     assert data["is_finalized"] is True
     assert data["finalized_at"] is not None
+
+
+async def test_finalized_month_rejects_balance_changing_mutations(
+    client: AsyncClient,
+) -> None:
+    """Settlements, waivers, and budget writes are all rejected with 409
+    once the month is locked."""
+    persons, cookies = await setup_and_login(client)
+    alice_id = persons[0]["id"]
+    bob_id = persons[1]["id"]
+
+    groups = await client.get("/api/v1/category-groups", cookies=cookies)
+    group_id = groups.json()[0]["id"]
+
+    finalize = await client.post(
+        "/api/v1/reconciliation/finalize",
+        json={"year": 2026, "month": 1, "notes": ""},
+        cookies=cookies,
+    )
+    assert finalize.status_code == 200
+
+    record = await client.post(
+        "/api/v1/settlements",
+        json={
+            "year": 2026,
+            "month": 1,
+            "amount": 50.0,
+            "from_person_id": bob_id,
+            "to_person_id": alice_id,
+            "method": "Venmo",
+        },
+        cookies=cookies,
+    )
+    assert record.status_code == 409
+
+    waive = await client.post(
+        "/api/v1/settlements/waive",
+        json={
+            "year": 2026,
+            "month": 1,
+            "from_person_id": bob_id,
+            "to_person_id": alice_id,
+        },
+        cookies=cookies,
+    )
+    assert waive.status_code == 409
+
+    budget = await client.post(
+        "/api/v1/budgets",
+        json={
+            "group_id": group_id,
+            "monthly_amount": 500.0,
+            "year": 2026,
+            "month": 1,
+        },
+        cookies=cookies,
+    )
+    assert budget.status_code == 409
