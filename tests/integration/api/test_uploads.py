@@ -293,6 +293,21 @@ async def test_upload_history_empty(client: AsyncClient) -> None:
     assert response.json()["entries"] == []
 
 
+async def test_upload_nan_amount_returns_422(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
+    nan_csv = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        "2026-01-15,Starbucks,Dining Out,Chase,STARBUCKS,,NaN,shared\n"
+    )
+    response = await client.post(
+        "/api/v1/uploads/",
+        files={"file": ("test.csv", io.BytesIO(nan_csv.encode()), "text/csv")},
+        cookies=cookies,
+    )
+    assert response.status_code == 422
+    assert "non-finite amount" in response.json()["error"]["message"]
+
+
 async def test_preview_binary_file_returns_422(client: AsyncClient) -> None:
     persons, cookies = await setup_and_login(client)
     person_id = persons[0]["id"]

@@ -247,6 +247,59 @@ def test_error_cap_at_max_row_errors() -> None:
     assert "...and 5 more" in lines[-1]
 
 
+def test_nan_amount_is_row_error() -> None:
+    csv = _make_csv({"Amount": "NaN", "Merchant": "Starbucks"})
+    with pytest.raises(
+        ValidationError, match=r"Row 2 \(Starbucks\).*non-finite amount"
+    ):
+        parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+
+
+def test_infinity_amount_is_row_error() -> None:
+    for raw in ("Infinity", "-Infinity", "inf"):
+        csv = _make_csv({"Amount": raw, "Merchant": "Target"})
+        with pytest.raises(
+            ValidationError, match=r"Row 2 \(Target\).*non-finite amount"
+        ):
+            parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+
+
+def test_truncated_row_is_row_error_not_typeerror() -> None:
+    # Fewer columns than headers — csv.DictReader fills the rest with None.
+    csv = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        "2026-01-15,Starbucks\n"
+    )
+    with pytest.raises(ValidationError, match=r"Row 2 \(Starbucks\).*invalid amount"):
+        parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+
+
+def test_truncated_row_without_merchant_uses_placeholder() -> None:
+    csv = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        "2026-01-15\n"
+    )
+    with pytest.raises(ValidationError, match=r"Row 2 \(\?\).*invalid amount"):
+        parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+
+
+def test_non_finite_and_truncated_errors_batch_together() -> None:
+    csv = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        "2026-01-15,Starbucks,Dining Out,Chase,STARBUCKS,,NaN,\n"
+        '2026-01-16,Valid,Dining Out,Chase,VALID,,"-25.00",\n'
+        "2026-01-17,Amazon\n"
+    )
+    with pytest.raises(ValidationError) as exc_info:
+        parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+
+    message = str(exc_info.value)
+    assert "Row 2 (Starbucks)" in message
+    assert "non-finite amount" in message
+    assert "Row 4 (Amazon)" in message
+    assert len(message.split("\n")) == 2
+
+
 def test_no_partial_import_when_errors_exist() -> None:
     csv = _make_csv(
         {"Amount": "-25.00", "Merchant": "Valid"},

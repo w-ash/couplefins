@@ -62,20 +62,31 @@ def parse_monarch_csv(
         else:
             household, payer_percentage = _classify(tags, person_names)
 
+        # Truncated rows (fewer columns than headers) surface as None values —
+        # csv.DictReader fills missing fields with None. TypeError from
+        # Decimal(None)/fromisoformat(None) must be a row error, not a 500.
+        merchant = row.get("Merchant") or "?"
+
         try:
             amount = Decimal(row["Amount"])
-        except InvalidOperation, ValueError:
+        except InvalidOperation, ValueError, TypeError:
             errors.append(
-                f'Row {row_num} ({row["Merchant"]}): invalid amount "{row["Amount"]}"'
+                f'Row {row_num} ({merchant}): invalid amount "{row["Amount"]}"'
+            )
+            continue
+
+        if not amount.is_finite():
+            # NaN/Infinity construct fine but poison every downstream sum
+            # and comparison (tx.amount < 0 raises InvalidOperation).
+            errors.append(
+                f'Row {row_num} ({merchant}): non-finite amount "{row["Amount"]}"'
             )
             continue
 
         try:
             tx_date = date.fromisoformat(row["Date"])
-        except ValueError:
-            errors.append(
-                f'Row {row_num} ({row["Merchant"]}): invalid date "{row["Date"]}"'
-            )
+        except ValueError, TypeError:
+            errors.append(f'Row {row_num} ({merchant}): invalid date "{row["Date"]}"')
             continue
 
         base_key = (tx_date, amount, row["Account"], row["Original Statement"])
