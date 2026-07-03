@@ -50,5 +50,31 @@ Index of shipped versions. When all stories in a version file are done, move the
 | v0.11.2 | 2026-03-26 | Personal budget backend (per-person limits, spending computation) |
 | v0.11.3 | 2026-03-26 | Scope UI (budget toggle, transaction scope filter) |
 | v1.0.0 | 2026-03-27 | PostgreSQL migration — Neon, asyncpg, JSONB+GIN, data migration |
+| v1.0.1 | 2026-03-28 | Multi-user readiness — smart polling, SSE event bus, index audit |
+| v1.0.2 | 2026-03-28 | Query optimization — Neon pool tuning, query batching, tag filtering |
+| v1.0.3 | 2026-03-28 | DRY audit, DB-backed theme preference, auth UX, sslmode fix |
+| v1.0.4 | 2026-03-30 | Structured logging — loguru → structlog, request middleware, JSON logs |
+| v1.1.0 | 2026-03-31 | Notes, discuss elevation, case-insensitive tags, editor & layout polish |
+| v1.1.1 | 2026-03-31 | Schema version guard — health endpoint versioning, upgrade screen |
+| v1.2.0 | 2026-04-01 | Scoped dashboard — household/personal/all toggle, budget alerts, self-documenting metrics |
+| v1.2.1 | 2026-04-01 | Terminology cleanup — "shared" → "household" throughout codebase, remove `TransactionType` |
+| v1.2.2 | 2026-04-03 | Settlement transaction linking — candidate matching, Settle Up linking UI |
+| v1.2.3 | 2026-04-03 | Brand identity — CoupleFins logo, favicon, Lucide v1 upgrade, lighter strokes |
+| v1.2.4 | 2026-04-04 | Transaction-first settlement flow — link transactions instead of recording payments |
+| v1.3.0 | 2026-04-04 | Per-month budget model — replace cascading effective dates with year/month |
+| v1.3.1 | 2026-04-06 | Copy from last month + budget page UX polish |
+| v1.3.2 | 2026-04-07 | Budget trends on Insights page — budget overlay lines on spending charts |
+| v1.3.3 | 2026-04-05 | Accounting guardrails — rounding fix, zero-sum assertion, settlement link validation, pre-finalization warnings |
+| v1.3.4 | 2026-04-06 | Monetary type consistency, budget/adjustment invariants, settlement amount validation |
+| v1.3.5 | 2026-04-06 | Graceful degradation, zero-tolerance type safety, error handling split |
+| v1.4.0 | 2026-04-07 | Edit attribution — `edited_by_person_id` on TransactionEdit, threaded through all edit use cases |
+| v1.4.1 | 2026-04-08 | Import provenance — enriched edit history endpoint with upload-derived import event |
+| v1.4.2 | 2026-04-08 | Transaction history timeline — vertical timeline UI with import anchor + person-attributed edits |
+| v1.5.0 | 2026-04-10 | Chat assistant — right-edge panel, read-only queries via Claude API, mobile full-screen page, suggested questions |
+| v1.5.1 | 2026-04-10 | Chat UX polish — streaming markdown, tool-call result cards |
+| v1.5.2 | 2026-04-10 | Chat mutations — budget updates, transaction edits with confirmation cards |
+| v1.5.3 | 2026-04-10 | Chat hardening — architecture layering fix, integration tests, rate limiting, input safety |
+| v1.5.4 | 2026-04-10 | Chatbot voice — composable voice system, Fiona character, per-user voice setting |
+| v1.5.5 | 2026-04-12 | Chat UX affordances — new conversation, copy message, regenerate last reply, friendly limit error |
 | v1.6.0 | 2026-05-02 | Settle Up audit table + Transactions buckets — payer-split ledger, narrative, spotted scope, header cards |
 | v1.6.1 | 2026-07-02 | Audit table & header-card correctness — settled-state honesty, one sign convention, link anchors, drill-through fidelity |
