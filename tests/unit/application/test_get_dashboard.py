@@ -425,6 +425,8 @@ async def test_multiple_settlements_summing_to_full() -> None:
 
 
 async def test_waived_settlement_counts_as_settled() -> None:
+    # Waivers persist the remaining balance as their amount (here $5 against
+    # a -$10 tx at 50%), exactly what RecordWaivedSettlementUseCase writes.
     uow = make_mock_uow()
     alice = make_person(name="Alice")
     bob = make_person(name="Bob")

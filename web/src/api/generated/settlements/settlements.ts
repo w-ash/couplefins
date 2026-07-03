@@ -35,7 +35,6 @@ import type {
   RecordWaivedSettlementRequest,
   SettleUpDataResponse,
   SettlementCandidateResponse,
-  SettlementResponse,
   UnlinkSettlementTransaction200
 } from '../model';
 
@@ -139,7 +138,7 @@ export const useRecordSettlement = <TError = HTTPValidationError,
  * @summary Waive Settlement
  */
 export type waiveSettlementResponse201 = {
-  data: SettlementResponse
+  data: RecordSettlementResponse
   status: 201
 }
 

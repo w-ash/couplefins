@@ -219,12 +219,16 @@ function WaiveAction({
 }: {
   data: SettleUpDataResponse;
   getPersonName: (id: string) => string;
-  onSuccess: () => void;
+  onSuccess: (warnings: string[]) => void;
 }) {
   const net = data.net_position;
 
   const mutation = useWaiveSettlement({
-    mutation: { onSuccess },
+    mutation: {
+      onSuccess: (response) => {
+        onSuccess(response.status === 201 ? response.data.warnings : []);
+      },
+    },
   });
 
   if (!net) return null;
@@ -450,6 +454,13 @@ export function SettleUpPage() {
     string | null
   >(null);
 
+  // Waiving hides WaiveAction on refetch (net position goes to zero), so
+  // its warnings must outlive the component.
+  const [waiveWarnings, setWaiveWarnings] = useTemporary<string[] | null>(
+    null,
+    8000,
+  );
+
   const deleteMutation = useDeleteSettlement({
     mutation: {
       onSuccess: () => {
@@ -544,8 +555,21 @@ export function SettleUpPage() {
           <WaiveAction
             data={data}
             getPersonName={getPersonName}
-            onSuccess={invalidateAll}
+            onSuccess={(warnings) => {
+              setWaiveWarnings(warnings.length > 0 ? warnings : null);
+              invalidateAll();
+            }}
           />
+
+          {waiveWarnings && (
+            <ul className="space-y-0.5 rounded-lg border border-border-muted px-4 py-3">
+              {waiveWarnings.map((w) => (
+                <li key={w} className="text-xs text-warning-muted-foreground">
+                  {w}
+                </li>
+              ))}
+            </ul>
+          )}
 
           <PaymentHistory
             settlements={data.recorded_settlements}

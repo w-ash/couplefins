@@ -7,23 +7,19 @@ from src.application.use_cases._shared.command_validators import (
     month_range,
     positive_int,
 )
-from src.application.use_cases._shared.date_math import month_bounds
 from src.application.use_cases._shared.finalization import load_period_status
 from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
-from src.application.use_cases._shared.settlement_records import (
-    SettlementRecord,
-    enrich_with_links,
+from src.application.use_cases._shared.settlement_math import (
+    load_month_settlement_snapshot,
 )
+from src.application.use_cases._shared.settlement_records import SettlementRecord
 from src.application.use_cases._shared.transactions import (
     find_all_unmapped_categories,
     get_latest_transaction_month,
 )
-from src.application.use_cases._shared.upload_status import (
-    UploadStatus,
-    build_upload_statuses,
-)
+from src.application.use_cases._shared.upload_status import UploadStatus
 from src.domain.entities.category import Category
 from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
@@ -32,10 +28,8 @@ from src.domain.reconciliation import (
     PayerSplitSummary,
     ReconciliationSummary,
     SettlementResult,
-    compute_net_position,
     compute_payer_group_summaries,
     compute_payer_split_summaries,
-    reconcile,
 )
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
@@ -110,40 +104,12 @@ class GetSettleUpDataUseCase:
         async with uow:
             ctx = await load_reconciliation_context(uow)
 
-            start, end = month_bounds(command.year, command.month)
-            transactions = await uow.transactions.get_household_by_date_range(
-                start, end
-            )
-
-            summary = reconcile(
-                transactions,
-                ctx.persons,
-                ctx.categories,
-                ctx.category_groups,
-                start_date=start,
-                end_date=end,
+            snapshot = await load_month_settlement_snapshot(
+                uow, command.year, command.month, ctx
             )
 
             payer_splits, payer_group_splits = _compute_audit_splits(
-                summary, ctx.persons
-            )
-
-            records = await enrich_with_links(
-                await uow.settlements.get_by_period(command.year, command.month),
-                uow,
-            )
-
-            net_pos = compute_net_position(
-                summary.settlement,
-                [r.settlement for r in records],
-            )
-            remaining = net_pos.amount if net_pos else Decimal(0)
-
-            upload_statuses = build_upload_statuses(
-                ctx.persons,
-                await uow.uploads.get_by_person_ids_with_transactions_in_date_range(
-                    ctx.person_ids, start, end
-                ),
+                snapshot.summary, ctx.persons
             )
 
             is_finalized, finalized_at = await load_period_status(
@@ -151,21 +117,25 @@ class GetSettleUpDataUseCase:
             )
 
             warnings = _build_finalization_warnings(
-                is_finalized, upload_statuses, remaining, transactions, ctx.categories
+                is_finalized,
+                snapshot.upload_statuses,
+                snapshot.remaining,
+                snapshot.transactions,
+                ctx.categories,
             )
 
             return GetSettleUpDataResult(
                 year=command.year,
                 month=command.month,
-                owed=summary.settlement,
-                net_position=net_pos,
-                recorded_settlements=records,
-                remaining_balance=remaining,
-                upload_statuses=upload_statuses,
+                owed=snapshot.summary.settlement,
+                net_position=snapshot.net_position,
+                recorded_settlements=snapshot.records,
+                remaining_balance=snapshot.remaining,
+                upload_statuses=snapshot.upload_statuses,
                 persons=ctx.persons,
                 is_finalized=is_finalized,
                 finalized_at=finalized_at,
-                transaction_count=summary.transaction_count,
+                transaction_count=snapshot.summary.transaction_count,
                 latest_transaction_month=await get_latest_transaction_month(uow),
                 finalization_warnings=warnings,
                 payer_splits=payer_splits,

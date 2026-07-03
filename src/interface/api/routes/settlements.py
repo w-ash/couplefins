@@ -87,7 +87,7 @@ async def record_settlement(
 async def waive_settlement(
     body: RecordWaivedSettlementRequest,
     current_user: Person = Depends(get_current_user),
-) -> SettlementResponse:
+) -> RecordSettlementResponse:
     _assert_participant(current_user, body.from_person_id, body.to_person_id)
     command = RecordWaivedSettlementCommand(
         year=body.year,
@@ -100,7 +100,10 @@ async def waive_settlement(
         lambda uow: RecordWaivedSettlementUseCase().execute(command, uow)
     )
     event_bus.broadcast("settlements")
-    return SettlementResponse.from_domain(result.settlement)
+    return RecordSettlementResponse(
+        settlement=SettlementResponse.from_domain(result.settlement),
+        warnings=result.warnings,
+    )
 
 
 @router.get("/settle-up")
