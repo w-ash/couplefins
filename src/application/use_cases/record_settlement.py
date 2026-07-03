@@ -15,6 +15,7 @@ from src.application.use_cases._shared.finalization import (
     assert_periods_not_finalized,
 )
 from src.application.use_cases._shared.settlement_records import (
+    assert_transactions_not_linked,
     build_settlement,
     validate_settlement_persons,
 )
@@ -68,16 +69,9 @@ class RecordSettlementUseCase:
                 if missing:
                     raise NotFoundError(f"Transactions not found: {missing}")
 
-                for tx_id in command.linked_transaction_ids:
-                    existing = (
-                        await uow.settlement_transaction_links.get_by_transaction_id(
-                            tx_id
-                        )
-                    )
-                    if existing:
-                        raise ValidationError(
-                            f"Transaction {tx_id} is already linked to a settlement"
-                        )
+                await assert_transactions_not_linked(
+                    uow, command.linked_transaction_ids
+                )
 
                 payer_ids = {tx.payer_person_id for tx in linked_txs}
                 if (

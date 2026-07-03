@@ -7,6 +7,9 @@ from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.application.use_cases._shared.finalization import (
     assert_periods_not_finalized,
 )
+from src.application.use_cases._shared.settlement_records import (
+    assert_transactions_not_linked,
+)
 from src.domain.entities.settlement_transaction_link import SettlementTransactionLink
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
@@ -47,12 +50,21 @@ class MarkTransactionAsSettlementUseCase:
             await assert_periods_not_finalized(uow, periods)
 
             if command.is_settlement and command.settlement_id:
+                await assert_transactions_not_linked(uow, [command.transaction_id])
                 link = SettlementTransactionLink(
                     id=uuid.uuid4(),
                     settlement_id=command.settlement_id,
                     transaction_id=command.transaction_id,
                 )
                 await uow.settlement_transaction_links.save_batch([link])
+
+            if not command.is_settlement:
+                # Unmarking must drop any stale links, or the transaction
+                # would appear as both a recorded payment and an
+                # outstanding split.
+                await uow.settlement_transaction_links.delete_by_transaction_id(
+                    command.transaction_id
+                )
 
             if tx.is_settlement != command.is_settlement:
                 updated = attrs.evolve(tx, is_settlement=command.is_settlement)

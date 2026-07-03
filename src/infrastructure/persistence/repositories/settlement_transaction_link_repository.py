@@ -58,6 +58,12 @@ class SettlementTransactionLinkRepository(
         )
         return await self._execute_rowcount(stmt)
 
+    async def delete_by_transaction_id(self, transaction_id: UUID) -> int:
+        stmt = delete(SettlementTransactionLinkModel).where(
+            SettlementTransactionLinkModel.transaction_id == str(transaction_id)
+        )
+        return await self._execute_rowcount(stmt)
+
     async def delete_by_settlement_and_transaction(
         self, settlement_id: UUID, transaction_id: UUID
     ) -> int:

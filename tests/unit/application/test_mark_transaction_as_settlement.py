@@ -6,10 +6,15 @@ from src.application.use_cases.mark_transaction_as_settlement import (
     MarkTransactionAsSettlementCommand,
     MarkTransactionAsSettlementUseCase,
 )
-from src.domain.exceptions import NotFoundError, PeriodFinalizedError
+from src.domain.exceptions import (
+    NotFoundError,
+    PeriodFinalizedError,
+    ValidationError,
+)
 from tests.fixtures.factories import (
     make_reconciliation_period,
     make_settlement,
+    make_settlement_transaction_link,
     make_transaction,
 )
 from tests.fixtures.mocks import make_mock_uow
@@ -95,7 +100,9 @@ class TestMarkTransactionAsSettlement:
         assert result.is_settlement is False
         uow.transactions.update_mutable_fields.assert_not_called()
 
-    async def test_unmark_skips_settlement_link(self) -> None:
+    async def test_unmark_deletes_stale_links(self) -> None:
+        # A transaction can't stay listed under a settlement while also
+        # counting as an outstanding split.
         tx = make_transaction(is_settlement=True)
         settlement = make_settlement()
         uow = make_mock_uow()
@@ -111,6 +118,45 @@ class TestMarkTransactionAsSettlement:
 
         assert result.is_settlement is False
         uow.settlements.get_by_id.assert_not_called()
+        uow.settlement_transaction_links.save_batch.assert_not_called()
+        uow.settlement_transaction_links.delete_by_transaction_id.assert_called_once_with(
+            tx.id
+        )
+
+    async def test_unmark_without_links_still_succeeds(self) -> None:
+        tx = make_transaction(is_settlement=False)
+        uow = make_mock_uow()
+        uow.transactions.get_by_id.return_value = tx
+        uow.settlement_transaction_links.delete_by_transaction_id.return_value = 0
+
+        command = MarkTransactionAsSettlementCommand(
+            transaction_id=tx.id, is_settlement=False
+        )
+        result = await MarkTransactionAsSettlementUseCase().execute(command, uow)
+
+        assert result.is_settlement is False
+        uow.commit.assert_called_once()
+
+    async def test_duplicate_link_raises_validation_error(self) -> None:
+        # Clean 422 instead of an IntegrityError 500 from the unique index.
+        tx = make_transaction(is_settlement=False)
+        settlement = make_settlement()
+        other = make_settlement()
+        uow = make_mock_uow()
+        uow.transactions.get_by_id.return_value = tx
+        uow.settlements.get_by_id.return_value = settlement
+        uow.settlement_transaction_links.get_by_transaction_id.return_value = [
+            make_settlement_transaction_link(
+                settlement_id=other.id, transaction_id=tx.id
+            )
+        ]
+
+        command = MarkTransactionAsSettlementCommand(
+            transaction_id=tx.id,
+            settlement_id=settlement.id,
+        )
+        with pytest.raises(ValidationError, match="already linked"):
+            await MarkTransactionAsSettlementUseCase().execute(command, uow)
         uow.settlement_transaction_links.save_batch.assert_not_called()
 
 

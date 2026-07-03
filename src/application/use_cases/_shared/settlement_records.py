@@ -1,4 +1,5 @@
 from collections import defaultdict
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
@@ -78,6 +79,22 @@ async def enrich_with_links(
         )
         for s in settlements
     ]
+
+
+async def assert_transactions_not_linked(
+    uow: UnitOfWorkProtocol, transaction_ids: Iterable[UUID]
+) -> None:
+    """Reject linking a transaction that already belongs to a settlement.
+
+    A clean 422 instead of the IntegrityError 500 the unique index on
+    settlement_transaction_links.transaction_id would raise.
+    """
+    for tx_id in transaction_ids:
+        existing = await uow.settlement_transaction_links.get_by_transaction_id(tx_id)
+        if existing:
+            raise ValidationError(
+                f"Transaction {tx_id} is already linked to a settlement"
+            )
 
 
 async def validate_settlement_persons(
