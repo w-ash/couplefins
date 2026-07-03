@@ -13,27 +13,33 @@ def _csv(tags: str, amount: str = "-50.00") -> str:
 
 class TestSettlementTagParsing:
     def test_settlement_tag_sets_is_settlement(self) -> None:
-        txs = parse_monarch_csv(_csv("settlement"), uuid.uuid4(), uuid.uuid4())
+        txs = parse_monarch_csv(
+            _csv("settlement"), uuid.uuid4(), uuid.uuid4()
+        ).transactions
         assert len(txs) == 1
         assert txs[0].is_settlement is True
         assert txs[0].payer_percentage == 100
         assert txs[0].household is False
 
     def test_settlement_tag_case_insensitive(self) -> None:
-        txs = parse_monarch_csv(_csv("Settlement"), uuid.uuid4(), uuid.uuid4())
+        txs = parse_monarch_csv(
+            _csv("Settlement"), uuid.uuid4(), uuid.uuid4()
+        ).transactions
         assert txs[0].is_settlement is True
 
     def test_settlement_overrides_household(self) -> None:
-        txs = parse_monarch_csv(_csv("shared, settlement"), uuid.uuid4(), uuid.uuid4())
+        txs = parse_monarch_csv(
+            _csv("shared, settlement"), uuid.uuid4(), uuid.uuid4()
+        ).transactions
         assert txs[0].is_settlement is True
         assert txs[0].household is False
         assert txs[0].payer_percentage == 100
 
     def test_no_settlement_tag(self) -> None:
-        txs = parse_monarch_csv(_csv("shared"), uuid.uuid4(), uuid.uuid4())
+        txs = parse_monarch_csv(_csv("shared"), uuid.uuid4(), uuid.uuid4()).transactions
         assert txs[0].is_settlement is False
         assert txs[0].household is True
 
     def test_empty_tags_not_settlement(self) -> None:
-        txs = parse_monarch_csv(_csv(""), uuid.uuid4(), uuid.uuid4())
+        txs = parse_monarch_csv(_csv(""), uuid.uuid4(), uuid.uuid4()).transactions
         assert txs[0].is_settlement is False

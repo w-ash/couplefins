@@ -47,6 +47,7 @@ class UploadCsvResult:
     updated_count: int
     skipped_count: int
     removed_count: int
+    skipped_adjustment_count: int
     unmapped_categories: list[str]
     warnings: list[str]
 
@@ -133,9 +134,10 @@ class UploadCsvUseCase:
 
             upload_id = uuid.uuid4()
             other_names = await get_other_person_names(uow, command.person_id)
-            incoming = parse_monarch_csv(
+            parsed = parse_monarch_csv(
                 command.csv_text, command.person_id, upload_id, person_names=other_names
             )
+            incoming = parsed.transactions
 
             classified, _, removed = await classify_against_existing(
                 incoming, command.person_id, uow
@@ -192,6 +194,7 @@ class UploadCsvUseCase:
                 updated_count=len(updated_txs),
                 skipped_count=skipped_count,
                 removed_count=len(removed),
+                skipped_adjustment_count=parsed.skipped_adjustment_count,
                 unmapped_categories=unmapped,
                 warnings=warnings,
             )

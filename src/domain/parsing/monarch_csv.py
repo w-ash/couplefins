@@ -5,7 +5,10 @@ from decimal import Decimal, InvalidOperation
 import io
 import uuid
 
+from attrs import define
+
 from src.domain.constants import (
+    ADJUSTMENT_TAG,
     RESERVED_TAGS,
     HouseholdTags,
     SettlementTags,
@@ -29,31 +32,80 @@ REQUIRED_COLUMNS = {
 MAX_ROW_ERRORS = 25
 
 
-def parse_monarch_csv(
-    csv_text: str,
-    payer_person_id: uuid.UUID,
-    upload_id: uuid.UUID,
-    *,
-    person_names: frozenset[str] = frozenset(),
-) -> list[Transaction]:
-    reader = csv.DictReader(io.StringIO(csv_text))
+@define(frozen=True, slots=True)
+class ParseResult:
+    transactions: list[Transaction]
+    skipped_adjustment_count: int
 
+
+def _validate_headers(reader: csv.DictReader[str]) -> None:
     if reader.fieldnames is None:
         raise ValidationError("CSV is empty or has no headers")
-
     missing = REQUIRED_COLUMNS - set(reader.fieldnames)
     if missing:
         raise ValidationError(
             f"CSV missing required columns: {', '.join(sorted(missing))}"
         )
 
+
+def _parse_amount_and_date(
+    row: dict[str, str], row_num: int, errors: list[str]
+) -> tuple[Decimal, date] | None:
+    """Validate the money cells; append a row error and return None on failure.
+
+    Truncated rows (fewer columns than headers) surface as None values —
+    csv.DictReader fills missing fields with None. TypeError from
+    Decimal(None)/fromisoformat(None) must be a row error, not a 500.
+    """
+    merchant = row.get("Merchant") or "?"
+
+    try:
+        amount = Decimal(row["Amount"])
+    except InvalidOperation, ValueError, TypeError:
+        errors.append(f'Row {row_num} ({merchant}): invalid amount "{row["Amount"]}"')
+        return None
+
+    if not amount.is_finite():
+        # NaN/Infinity construct fine but poison every downstream sum
+        # and comparison (tx.amount < 0 raises InvalidOperation).
+        errors.append(
+            f'Row {row_num} ({merchant}): non-finite amount "{row["Amount"]}"'
+        )
+        return None
+
+    try:
+        tx_date = date.fromisoformat(row["Date"])
+    except ValueError, TypeError:
+        errors.append(f'Row {row_num} ({merchant}): invalid date "{row["Date"]}"')
+        return None
+
+    return amount, tx_date
+
+
+def parse_monarch_csv(
+    csv_text: str,
+    payer_person_id: uuid.UUID,
+    upload_id: uuid.UUID,
+    *,
+    person_names: frozenset[str] = frozenset(),
+) -> ParseResult:
+    reader = csv.DictReader(io.StringIO(csv_text))
+    _validate_headers(reader)
+
     occurrence_counter: collections.Counter[tuple[date, Decimal, str, str]] = (
         collections.Counter()
     )
     transactions: list[Transaction] = []
     errors: list[str] = []
+    skipped_adjustment_count = 0
     for row_num, row in enumerate(reader, start=2):
         tags = _parse_tags(row["Tags"])
+
+        if ADJUSTMENT_TAG in tags:
+            # Re-imported adjustment export rows are derived data, not source.
+            skipped_adjustment_count += 1
+            continue
+
         is_settlement = _is_settlement(tags)
 
         if is_settlement:
@@ -62,32 +114,10 @@ def parse_monarch_csv(
         else:
             household, payer_percentage = _classify(tags, person_names)
 
-        # Truncated rows (fewer columns than headers) surface as None values —
-        # csv.DictReader fills missing fields with None. TypeError from
-        # Decimal(None)/fromisoformat(None) must be a row error, not a 500.
-        merchant = row.get("Merchant") or "?"
-
-        try:
-            amount = Decimal(row["Amount"])
-        except InvalidOperation, ValueError, TypeError:
-            errors.append(
-                f'Row {row_num} ({merchant}): invalid amount "{row["Amount"]}"'
-            )
+        parsed_cells = _parse_amount_and_date(row, row_num, errors)
+        if parsed_cells is None:
             continue
-
-        if not amount.is_finite():
-            # NaN/Infinity construct fine but poison every downstream sum
-            # and comparison (tx.amount < 0 raises InvalidOperation).
-            errors.append(
-                f'Row {row_num} ({merchant}): non-finite amount "{row["Amount"]}"'
-            )
-            continue
-
-        try:
-            tx_date = date.fromisoformat(row["Date"])
-        except ValueError, TypeError:
-            errors.append(f'Row {row_num} ({merchant}): invalid date "{row["Date"]}"')
-            continue
+        amount, tx_date = parsed_cells
 
         base_key = (tx_date, amount, row["Account"], row["Original Statement"])
         occurrence = occurrence_counter[base_key]
@@ -119,7 +149,10 @@ def parse_monarch_csv(
             displayed.append(f"...and {len(errors) - MAX_ROW_ERRORS} more")
         raise ValidationError("\n".join(displayed))
 
-    return transactions
+    return ParseResult(
+        transactions=transactions,
+        skipped_adjustment_count=skipped_adjustment_count,
+    )
 
 
 def _parse_tags(tags_str: str) -> tuple[str, ...]:

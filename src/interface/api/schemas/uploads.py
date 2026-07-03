@@ -75,6 +75,7 @@ class PreviewUploadResponse(BaseModel):
     unchanged_count: int
     changed_transactions: list[ChangedTransactionResponse]
     removed_transactions: list[PreviewTransactionResponse]
+    skipped_adjustment_count: int
     unmapped_categories: list[str]
 
     @classmethod
@@ -111,6 +112,7 @@ class PreviewUploadResponse(BaseModel):
             removed_transactions=[
                 _tx_response(tx) for tx in result.removed_transactions
             ],
+            skipped_adjustment_count=result.skipped_adjustment_count,
             unmapped_categories=result.unmapped_categories,
         )
 
@@ -122,6 +124,7 @@ class UploadSummaryResponse(BaseModel):
     updated_count: int
     skipped_count: int
     removed_count: int
+    skipped_adjustment_count: int
     unmapped_categories: list[str]
     warnings: list[str]
 
@@ -134,6 +137,7 @@ class UploadSummaryResponse(BaseModel):
             updated_count=result.updated_count,
             skipped_count=result.skipped_count,
             removed_count=result.removed_count,
+            skipped_adjustment_count=result.skipped_adjustment_count,
             unmapped_categories=result.unmapped_categories,
             warnings=result.warnings,
         )

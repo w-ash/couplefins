@@ -43,6 +43,7 @@ const previewResponseAllNew = {
     },
   ],
   unchanged_count: 0,
+  skipped_adjustment_count: 0,
   changed_transactions: [],
   removed_transactions: [],
   unmapped_categories: [],
@@ -51,6 +52,7 @@ const previewResponseAllNew = {
 const previewResponseNothingNew = {
   new_transactions: [],
   unchanged_count: 3,
+  skipped_adjustment_count: 0,
   changed_transactions: [],
   removed_transactions: [],
   unmapped_categories: [],
@@ -59,6 +61,7 @@ const previewResponseNothingNew = {
 const previewResponseWithRemovals = {
   new_transactions: [],
   unchanged_count: 2,
+  skipped_adjustment_count: 0,
   changed_transactions: [],
   removed_transactions: [
     {
@@ -76,6 +79,7 @@ const previewResponseWithRemovals = {
 const previewResponseWithChanges = {
   new_transactions: [],
   unchanged_count: 1,
+  skipped_adjustment_count: 0,
   changed_transactions: [
     {
       existing_id: "tx-123",
@@ -230,6 +234,7 @@ describe("UploadPage", () => {
             updated_count: 0,
             skipped_count: 2,
             removed_count: 1,
+            skipped_adjustment_count: 0,
             unmapped_categories: [],
             warnings: [
               "Removed transaction Gas Station (2026-01-16) was linked to a settlement — the link was removed",
@@ -257,6 +262,24 @@ describe("UploadPage", () => {
     expect(screen.getByText("Removed")).toBeInTheDocument();
     expect(screen.getByText("1 warning")).toBeInTheDocument();
     expect(screen.getByText(/linked to a settlement/)).toBeInTheDocument();
+  });
+
+  it("shows skipped adjustment note in preview", async () => {
+    server.use(
+      http.post("/api/v1/uploads/preview", () =>
+        HttpResponse.json({
+          ...previewResponseAllNew,
+          skipped_adjustment_count: 3,
+        }),
+      ),
+    );
+
+    renderWithProviders(<UploadPage />);
+    setFileAndSubmit();
+
+    await waitFor(() => {
+      expect(screen.getByText(/3 adjustment rows skipped/)).toBeInTheDocument();
+    });
   });
 
   it("shows review step with checkboxes when changes detected", async () => {
@@ -422,6 +445,7 @@ describe("UploadPage", () => {
             updated_count: 0,
             skipped_count: 0,
             removed_count: 0,
+            skipped_adjustment_count: 0,
             unmapped_categories: [],
             warnings: [],
           },
@@ -463,6 +487,7 @@ describe("UploadPage", () => {
             updated_count: 0,
             skipped_count: 0,
             removed_count: 0,
+            skipped_adjustment_count: 0,
             unmapped_categories: [],
             warnings: [],
           },
@@ -503,6 +528,7 @@ describe("UploadPage", () => {
             updated_count: 0,
             skipped_count: 0,
             removed_count: 0,
+            skipped_adjustment_count: 0,
             unmapped_categories: [],
             warnings: [],
           },
@@ -561,6 +587,7 @@ describe("UploadPage", () => {
             updated_count: 0,
             skipped_count: 0,
             removed_count: 0,
+            skipped_adjustment_count: 0,
             unmapped_categories: [],
             warnings: [],
           },

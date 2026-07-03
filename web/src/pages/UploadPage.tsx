@@ -140,6 +140,13 @@ function ActionPanel({
         )}
       </dl>
 
+      {preview.skipped_adjustment_count > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {plural("adjustment row", preview.skipped_adjustment_count)} skipped
+          (re-imported couplefins adjustments)
+        </p>
+      )}
+
       <UnmappedCategoriesWarning
         categories={preview.unmapped_categories}
         compact
@@ -779,6 +786,12 @@ export function UploadPage() {
           <p className="mt-3 text-sm text-muted-foreground">
             All transactions already imported — you're up to date.
           </p>
+          {preview.skipped_adjustment_count > 0 && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {plural("adjustment row", preview.skipped_adjustment_count)}{" "}
+              skipped (re-imported couplefins adjustments)
+            </p>
+          )}
           <Button
             type="button"
             variant="secondary"

@@ -241,8 +241,28 @@ async def test_preview_csv_full_flow(client: AsyncClient) -> None:
     assert len(data["new_transactions"]) == 2
     assert data["unchanged_count"] == 0
     assert data["changed_transactions"] == []
+    assert data["skipped_adjustment_count"] == 0
     assert data["new_transactions"][0]["merchant"] == "Grocery Store"
     assert data["new_transactions"][0]["household"] is True
+
+
+async def test_preview_skips_adjustment_rows(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
+    csv_with_adjustment = (
+        VALID_CSV
+        + "2026-01-17,Adjustment,Groceries,Shared Adjustments,ADJ,[cf:abc],25.00,couplefins-adjustment\n"
+    )
+    response = await client.post(
+        "/api/v1/uploads/preview",
+        files={
+            "file": ("test.csv", io.BytesIO(csv_with_adjustment.encode()), "text/csv")
+        },
+        cookies=cookies,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["skipped_adjustment_count"] == 1
+    assert len(data["new_transactions"]) == 2
 
 
 @pytest.mark.skip(

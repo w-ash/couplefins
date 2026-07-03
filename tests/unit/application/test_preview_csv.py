@@ -149,6 +149,24 @@ async def test_reports_existing_unmapped_categories() -> None:
     assert result.unmapped_categories == ["Dining Out", "Gas"]
 
 
+async def test_reports_skipped_adjustment_rows() -> None:
+    uow = make_mock_uow()
+    uow.persons.get_by_id.return_value = make_person()
+    uow.categories.get_all.return_value = []
+
+    csv = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        '2026-01-15,Grocery Store,Groceries,Chase,GROCERY STORE,,"-50.00",shared\n'
+        '2026-01-16,Adjustment,Groceries,Adj,ADJ,,"25.00",couplefins-adjustment\n'
+    )
+    command = _make_command(csv_text=csv)
+
+    result = await PreviewCsvUseCase().execute(command, uow)
+
+    assert result.skipped_adjustment_count == 1
+    assert len(result.new_transactions) == 1
+
+
 async def test_reports_removed_transactions() -> None:
     uow = make_mock_uow()
     person = make_person()

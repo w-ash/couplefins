@@ -52,6 +52,7 @@ class PreviewCsvResult:
     unchanged_count: int
     changed_transactions: list[ChangedTransaction]
     removed_transactions: list[PreviewTransaction]
+    skipped_adjustment_count: int
     unmapped_categories: list[str]
 
 
@@ -77,12 +78,13 @@ class PreviewCsvUseCase:
             )
 
             other_names = await get_other_person_names(uow, command.person_id)
-            incoming = parse_monarch_csv(
+            parsed = parse_monarch_csv(
                 command.csv_text,
                 command.person_id,
                 _SENTINEL_UPLOAD_ID,
                 person_names=other_names,
             )
+            incoming = parsed.transactions
 
             all_categories = await uow.categories.get_all()
             tx_categories = {tx.category for tx in incoming}
@@ -95,6 +97,7 @@ class PreviewCsvUseCase:
                     unchanged_count=0,
                     changed_transactions=[],
                     removed_transactions=[],
+                    skipped_adjustment_count=parsed.skipped_adjustment_count,
                     unmapped_categories=unmapped,
                 )
 
@@ -131,5 +134,6 @@ class PreviewCsvUseCase:
                 unchanged_count=unchanged_count,
                 changed_transactions=changed_txs,
                 removed_transactions=[_to_preview(tx) for tx in removed],
+                skipped_adjustment_count=parsed.skipped_adjustment_count,
                 unmapped_categories=unmapped,
             )

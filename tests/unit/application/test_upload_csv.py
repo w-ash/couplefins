@@ -269,6 +269,27 @@ async def test_handles_empty_csv() -> None:
     uow.transactions.save_batch.assert_not_called()
 
 
+async def test_adjustment_rows_not_imported() -> None:
+    uow = make_mock_uow()
+    person = make_person()
+    uow.persons.get_by_id.return_value = person
+    uow.categories.get_all.return_value = []
+
+    csv = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        '2026-01-15,Grocery Store,Groceries,Chase,GROCERY STORE,,"-50.00",shared\n'
+        '2026-01-16,Adjustment,Groceries,Adj,ADJ,,"25.00",couplefins-adjustment\n'
+    )
+    command = _make_command(csv_text=csv, person_id=person.id)
+
+    result = await UploadCsvUseCase().execute(command, uow)
+
+    assert result.new_count == 1
+    assert result.skipped_adjustment_count == 1
+    saved = uow.transactions.save_batch.call_args[0][0]
+    assert [tx.merchant for tx in saved] == ["Grocery Store"]
+
+
 async def test_reupload_deletes_rows_missing_from_csv() -> None:
     """Rows in the window that the new CSV no longer contains are deleted."""
     uow = make_mock_uow()

@@ -12,5 +12,6 @@ export interface PreviewUploadResponse {
   unchanged_count: number;
   changed_transactions: ChangedTransactionResponse[];
   removed_transactions: PreviewTransactionResponse[];
+  skipped_adjustment_count: number;
   unmapped_categories: string[];
 }

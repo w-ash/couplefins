@@ -30,3 +30,9 @@ RESERVED_TAGS: Final = SharedTags.TAGS | HouseholdTags.TAGS | SettlementTags.TAG
 
 # Group label for transactions whose category is unmapped (group_id is None).
 UNCATEGORIZED_GROUP_NAME: Final = "Uncategorized"
+
+
+# Tag stamped on exported adjustment rows (see src/domain/export/csv_renderer.py).
+# Adjustments are imported into Monarch and come back in the next export —
+# the parser skips rows carrying this tag so derived data never re-ingests.
+ADJUSTMENT_TAG: Final = "couplefins-adjustment"

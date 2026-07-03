@@ -1,9 +1,9 @@
 import csv
 import io
 
+from src.domain.constants import ADJUSTMENT_TAG
 from src.domain.export.adjustments import Adjustment
 
-ADJUSTMENT_TAG = "couplefins-adjustment"
 _COLUMNS = ("Date", "Amount", "Merchant", "Category", "Account", "Tags", "Notes")
 
 
