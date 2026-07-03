@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from src.domain.entities.transaction_edit import TransactionEdit
 from src.infrastructure.persistence.models.transaction_edit_model import (
@@ -51,3 +51,13 @@ class TransactionEditRepository(BaseRepository[TransactionEdit, TransactionEditM
         )
         result = await self._session.execute(stmt)
         return [self._to_domain(row) for row in result.scalars().all()]
+
+    async def delete_by_transaction_ids(self, transaction_ids: list[UUID]) -> int:
+        if not transaction_ids:
+            return 0
+        stmt = delete(TransactionEditModel).where(
+            TransactionEditModel.transaction_id.in_([
+                str(tid) for tid in transaction_ids
+            ]),
+        )
+        return await self._execute_rowcount(stmt)

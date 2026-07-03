@@ -28,6 +28,8 @@ async def test_upload_csv_full_flow(client: AsyncClient) -> None:
     assert data["new_count"] == 2
     assert data["updated_count"] == 0
     assert data["skipped_count"] == 0
+    assert data["removed_count"] == 0
+    assert data["warnings"] == []
     assert data["filename"] == "test.csv"
 
 
@@ -55,6 +57,7 @@ async def test_upload_csv_idempotent_reupload(client: AsyncClient) -> None:
     assert data["new_count"] == 0
     assert data["updated_count"] == 0
     assert data["skipped_count"] == 2
+    assert data["removed_count"] == 0
 
 
 async def test_upload_csv_with_accepted_changes(client: AsyncClient) -> None:
@@ -110,6 +113,117 @@ async def test_upload_csv_unknown_person_returns_404(client: AsyncClient) -> Non
         cookies=cookies,
     )
     assert response.status_code == 404
+
+
+THREE_ROW_SHARED_CSV = (
+    "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+    "2026-01-15,Grocery Store,Groceries,Chase,GROCERY STORE,,-50.00,shared\n"
+    "2026-01-16,Gas Station,Gas,Chase,GAS STATION,,-30.00,shared\n"
+    "2026-01-17,Restaurant,Dining Out,Chase,RESTAURANT,,-80.00,shared\n"
+)
+# Same window (Jan 15-17), Gas Station row deleted in Monarch.
+TWO_ROW_SHARED_CSV = (
+    "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+    "2026-01-15,Grocery Store,Groceries,Chase,GROCERY STORE,,-50.00,shared\n"
+    "2026-01-17,Restaurant,Dining Out,Chase,RESTAURANT,,-80.00,shared\n"
+)
+
+
+async def _upload(client: AsyncClient, csv: str, cookies: dict[str, str]) -> dict:
+    response = await client.post(
+        "/api/v1/uploads/",
+        files={"file": ("test.csv", io.BytesIO(csv.encode()), "text/csv")},
+        cookies=cookies,
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+async def test_reupload_removes_rows_missing_from_csv(client: AsyncClient) -> None:
+    """US-IMPORT-1: re-upload replaces — stale rows inside the window are deleted."""
+    _, cookies = await setup_and_login(client)
+    await _upload(client, THREE_ROW_SHARED_CSV, cookies)
+
+    # Preview reports the removal before anything is deleted.
+    preview = await client.post(
+        "/api/v1/uploads/preview",
+        files={
+            "file": ("test.csv", io.BytesIO(TWO_ROW_SHARED_CSV.encode()), "text/csv")
+        },
+        cookies=cookies,
+    )
+    assert preview.status_code == 200
+    removed_preview = preview.json()["removed_transactions"]
+    assert [tx["merchant"] for tx in removed_preview] == ["Gas Station"]
+
+    data = await _upload(client, TWO_ROW_SHARED_CSV, cookies)
+    assert data["removed_count"] == 1
+    assert data["new_count"] == 0
+    assert data["skipped_count"] == 2
+    assert data["warnings"] == []
+
+    recon = await client.get(
+        "/api/v1/reconciliation?year=2026&month=1", cookies=cookies
+    )
+    merchants = {tx["merchant"] for tx in recon.json()["transactions"]}
+    assert merchants == {"Grocery Store", "Restaurant"}
+
+
+async def test_reupload_unlinks_settlement_on_removed_row(
+    client: AsyncClient,
+) -> None:
+    persons, cookies = await setup_and_login(client)
+    alice_id = persons[0]["id"]
+    bob_id = persons[1]["id"]
+    await _upload(client, THREE_ROW_SHARED_CSV, cookies)
+
+    recon = await client.get(
+        "/api/v1/reconciliation?year=2026&month=1", cookies=cookies
+    )
+    gas_tx_id = next(
+        tx["id"]
+        for tx in recon.json()["transactions"]
+        if tx["merchant"] == "Gas Station"
+    )
+
+    settlement = await client.post(
+        "/api/v1/settlements",
+        json={
+            "year": 2026,
+            "month": 1,
+            "amount": 30.0,
+            "from_person_id": bob_id,
+            "to_person_id": alice_id,
+            "method": "Venmo",
+        },
+        cookies=cookies,
+    )
+    settlement_id = settlement.json()["settlement"]["id"]
+    mark = await client.post(
+        "/api/v1/settlements/mark-transaction",
+        json={
+            "transaction_id": gas_tx_id,
+            "settlement_id": settlement_id,
+            "is_settlement": True,
+        },
+        cookies=cookies,
+    )
+    assert mark.status_code == 200
+
+    data = await _upload(client, TWO_ROW_SHARED_CSV, cookies)
+    assert data["removed_count"] == 1
+    assert len(data["warnings"]) == 1
+    assert "Gas Station" in data["warnings"][0]
+    assert "linked to a settlement" in data["warnings"][0]
+
+    settle_up = await client.get(
+        "/api/v1/settle-up",
+        params={"year": 2026, "month": 1},
+        cookies=cookies,
+    )
+    recorded = settle_up.json()["recorded_settlements"]
+    assert len(recorded) == 1
+    assert recorded[0]["linked_transaction_ids"] == []
 
 
 async def test_preview_csv_full_flow(client: AsyncClient) -> None:

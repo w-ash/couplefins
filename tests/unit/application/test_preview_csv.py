@@ -149,6 +149,46 @@ async def test_reports_existing_unmapped_categories() -> None:
     assert result.unmapped_categories == ["Dining Out", "Gas"]
 
 
+async def test_reports_removed_transactions() -> None:
+    uow = make_mock_uow()
+    person = make_person()
+    uow.persons.get_by_id.return_value = person
+    uow.categories.get_all.return_value = []
+    kept = make_transaction(
+        payer_person_id=person.id,
+        original_statement="GROCERY STORE",
+        account="Chase",
+        merchant="Grocery Store",
+        category="Groceries",
+        tags=("shared",),
+        payer_percentage=50,
+        notes="",
+    )
+    dropped = make_transaction(
+        payer_person_id=person.id,
+        original_statement="COFFEE SHOP",
+        account="Chase",
+        merchant="Coffee Shop",
+        date=kept.date,
+    )
+    uow.transactions.get_by_person_and_original_date_range.return_value = [
+        kept,
+        dropped,
+    ]
+
+    csv = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        f'{kept.date.isoformat()},Grocery Store,Groceries,Chase,GROCERY STORE,,"{kept.amount}",shared\n'
+    )
+    command = _make_command(csv_text=csv, person_id=person.id)
+
+    result = await PreviewCsvUseCase().execute(command, uow)
+
+    assert result.unchanged_count == 1
+    assert len(result.removed_transactions) == 1
+    assert result.removed_transactions[0].merchant == "Coffee Shop"
+
+
 async def test_raises_not_found_for_missing_person() -> None:
     uow = make_mock_uow()
     uow.persons.get_by_id.return_value = None
@@ -183,5 +223,8 @@ async def test_never_persists_data() -> None:
 
     uow.uploads.save.assert_not_called()
     uow.transactions.save_batch.assert_not_called()
+    uow.transactions.delete_by_ids.assert_not_called()
+    uow.transaction_edits.delete_by_transaction_ids.assert_not_called()
+    uow.settlement_transaction_links.delete_by_transaction_ids.assert_not_called()
     uow.categories.save_batch.assert_not_called()
     uow.commit.assert_not_called()

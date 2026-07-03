@@ -103,9 +103,11 @@ Getting transaction data into the system. Each person does this solo, on their o
 
 **US-IMPORT-2**: As a partner, I want to preview what will be imported before committing.
 
-- Given I select a CSV, then I see a table of parsed transactions: classification (personal, shared, spotted, household), split percentages, and counts (new, changed, unchanged)
+- Given I select a CSV, then I see a table of parsed transactions: classification (personal, shared, spotted, household), split percentages, and counts (new, changed, unchanged, removed)
+- Given previously imported transactions in the CSV's date window that the new file no longer contains, then the preview lists them as "removed" — confirming the upload deletes them (v1.7.1)
 - Given transactions tagged with my partner's name, then the preview shows them as "spotted" with the beneficiary identified
 - Given transactions tagged `household`, then the preview shows them as "household" with no split
+- Given my CSV contains rows tagged `couplefins-adjustment` (re-imported adjustment exports), then the preview reports them as skipped and they are not imported (v1.7.1)
 - Given the preview, then I can go back and change my file selection
 
 **US-IMPORT-3**: As a partner, I want to know about unmapped categories so I can fix them before or after importing.

@@ -1,6 +1,10 @@
 from uuid import UUID
 
-from src.domain.dedup import ClassifiedTransaction, classify_transactions
+from src.domain.dedup import (
+    ClassifiedTransaction,
+    classify_transactions,
+    find_removed_transactions,
+)
 from src.domain.entities.category import Category
 from src.domain.entities.transaction import Transaction
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
@@ -57,19 +61,26 @@ async def get_latest_transaction_month(
 
 async def classify_against_existing(
     incoming: list[Transaction], person_id: UUID, uow: UnitOfWorkProtocol
-) -> tuple[list[ClassifiedTransaction], list[Transaction]]:
+) -> tuple[list[ClassifiedTransaction], list[Transaction], list[Transaction]]:
     """Fetch existing transactions for the incoming date range and classify.
 
     The fetch matches on original_date-or-date so rows whose date was edited
     in-app past the CSV window boundary still pair with their CSV twins
     (natural_key uses the same original-* fallback).
 
-    Returns (classified, existing) — existing is needed by preview to show diffs.
+    Returns (classified, existing, removed):
+    - existing is needed by preview to show diffs
+    - removed are the uploader's rows within the window that the new CSV no
+      longer contains (re-upload is a true replace)
     """
     if not incoming:
-        return [], []
+        return [], [], []
     dates = [tx.date for tx in incoming]
     existing = await uow.transactions.get_by_person_and_original_date_range(
         person_id, min(dates), max(dates)
     )
-    return classify_transactions(incoming, existing), existing
+    return (
+        classify_transactions(incoming, existing),
+        existing,
+        find_removed_transactions(incoming, existing),
+    )

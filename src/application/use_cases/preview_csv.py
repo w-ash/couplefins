@@ -51,6 +51,7 @@ class PreviewCsvResult:
     new_transactions: list[PreviewTransaction]
     unchanged_count: int
     changed_transactions: list[ChangedTransaction]
+    removed_transactions: list[PreviewTransaction]
     unmapped_categories: list[str]
 
 
@@ -93,10 +94,11 @@ class PreviewCsvUseCase:
                     new_transactions=[],
                     unchanged_count=0,
                     changed_transactions=[],
+                    removed_transactions=[],
                     unmapped_categories=unmapped,
                 )
 
-            classified, existing = await classify_against_existing(
+            classified, existing, removed = await classify_against_existing(
                 incoming, command.person_id, uow
             )
             existing_by_id = {e.id: e for e in existing}
@@ -120,6 +122,7 @@ class PreviewCsvUseCase:
                 new=len(new_txs),
                 unchanged=unchanged_count,
                 changed=len(changed_txs),
+                removed=len(removed),
                 person=person.name,
             )
 
@@ -127,5 +130,6 @@ class PreviewCsvUseCase:
                 new_transactions=new_txs,
                 unchanged_count=unchanged_count,
                 changed_transactions=changed_txs,
+                removed_transactions=[_to_preview(tx) for tx in removed],
                 unmapped_categories=unmapped,
             )

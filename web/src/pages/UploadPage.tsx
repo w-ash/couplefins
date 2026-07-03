@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Check,
@@ -15,6 +16,7 @@ import { Link } from "react-router";
 import type {
   ChangedTransactionResponse,
   PersonResponse,
+  PreviewTransactionResponse,
   PreviewUploadResponse,
   UploadHistoryEntryResponse,
   UploadSummaryResponse,
@@ -125,6 +127,14 @@ function ActionPanel({
             <dt className="text-muted-foreground">Unchanged</dt>
             <dd className="text-right font-medium text-muted-foreground tabular-nums">
               {preview.unchanged_count}
+            </dd>
+          </>
+        )}
+        {preview.removed_transactions.length > 0 && (
+          <>
+            <dt className="text-muted-foreground">Removed</dt>
+            <dd className="text-right font-medium text-negative tabular-nums">
+              {preview.removed_transactions.length}
             </dd>
           </>
         )}
@@ -365,6 +375,49 @@ function PreviewCard({
   );
 }
 
+function RemovedCard({ removed }: { removed: PreviewTransactionResponse[] }) {
+  const visible = removed.slice(0, PREVIEW_LIMIT);
+  const remainingCount = Math.max(0, removed.length - PREVIEW_LIMIT);
+
+  return (
+    <Card>
+      <h2 className="mb-1 flex items-center gap-2 font-medium text-lg text-foreground">
+        <Minus className="size-5" />
+        No Longer in CSV
+      </h2>
+      <p className="mb-4 text-sm text-muted-foreground">
+        {plural("previously imported transaction", removed.length)} missing from
+        this file — confirming will remove{" "}
+        {removed.length === 1 ? "it" : "them"}.
+      </p>
+      <ul className="space-y-2">
+        {visible.map((tx, i) => (
+          <li
+            // biome-ignore lint/suspicious/noArrayIndexKey: static preview rows, never reordered
+            key={i}
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border-muted p-3 text-sm"
+          >
+            <span className="font-medium text-foreground">{tx.merchant}</span>
+            <span className="text-muted-foreground tabular-nums">
+              {formatDate(tx.date)}
+            </span>
+            <span
+              className={`ml-auto tabular-nums ${amountColorClass(tx.amount)}`}
+            >
+              {formatCurrency(tx.amount)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {remainingCount > 0 && (
+        <p className="mt-3 text-center text-sm text-muted-foreground">
+          and {plural("more transaction", remainingCount)}
+        </p>
+      )}
+    </Card>
+  );
+}
+
 function ConfirmedCard({
   summary,
   preview,
@@ -424,7 +477,12 @@ function ConfirmedCard({
       </div>
 
       {/* Stats grid */}
-      <dl className="mt-5 grid grid-cols-3 gap-4 text-sm">
+      <dl
+        className={cn(
+          "mt-5 grid gap-4 text-sm",
+          summary.removed_count > 0 ? "grid-cols-4" : "grid-cols-3",
+        )}
+      >
         <div className="flex flex-col-reverse text-center">
           <dt className="text-muted-foreground">New</dt>
           <dd className="text-lg font-semibold text-foreground tabular-nums">
@@ -443,7 +501,32 @@ function ConfirmedCard({
             {summary.skipped_count}
           </dd>
         </div>
+        {summary.removed_count > 0 && (
+          <div className="flex flex-col-reverse text-center">
+            <dt className="text-muted-foreground">Removed</dt>
+            <dd className="text-lg font-semibold text-negative tabular-nums">
+              {summary.removed_count}
+            </dd>
+          </div>
+        )}
       </dl>
+
+      {summary.warnings.length > 0 && (
+        <div
+          role="alert"
+          className="mt-4 rounded-lg border border-warning-border bg-warning-muted p-3"
+        >
+          <p className="mb-2 flex items-center gap-1.5 font-medium text-sm text-warning">
+            <AlertTriangle className="size-4 shrink-0" />
+            {plural("warning", summary.warnings.length)}
+          </p>
+          <ul className="list-disc pl-4 text-sm text-warning-muted-foreground">
+            {summary.warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <UnmappedCategoriesWarning
         categories={summary.unmapped_categories}
@@ -622,7 +705,9 @@ export function UploadPage() {
 
   const hasNewTransactions = preview && preview.new_transactions.length > 0;
   const hasChanges = preview && preview.changed_transactions.length > 0;
-  const nothingToImport = preview && !hasNewTransactions && !hasChanges;
+  const hasRemovals = preview && preview.removed_transactions.length > 0;
+  const nothingToImport =
+    preview && !hasNewTransactions && !hasChanges && !hasRemovals;
   const actionStep =
     (step === "preview" || step === "review") && !nothingToImport ? step : null;
   const showGrid = actionStep !== null && preview;
@@ -781,6 +866,11 @@ export function UploadPage() {
                   ))}
                 </div>
               </Card>
+            )}
+
+            {/* Rows the new CSV no longer contains — deleted on confirm */}
+            {hasRemovals && (
+              <RemovedCard removed={preview.removed_transactions} />
             )}
           </div>
 

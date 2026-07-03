@@ -44,6 +44,7 @@ const previewResponseAllNew = {
   ],
   unchanged_count: 0,
   changed_transactions: [],
+  removed_transactions: [],
   unmapped_categories: [],
 };
 
@@ -51,6 +52,24 @@ const previewResponseNothingNew = {
   new_transactions: [],
   unchanged_count: 3,
   changed_transactions: [],
+  removed_transactions: [],
+  unmapped_categories: [],
+};
+
+const previewResponseWithRemovals = {
+  new_transactions: [],
+  unchanged_count: 2,
+  changed_transactions: [],
+  removed_transactions: [
+    {
+      date: "2026-01-16",
+      merchant: "Gas Station",
+      category: "Gas",
+      amount: -30.0,
+      household: true,
+      payer_percentage: 50,
+    },
+  ],
   unmapped_categories: [],
 };
 
@@ -85,6 +104,7 @@ const previewResponseWithChanges = {
       ],
     },
   ],
+  removed_transactions: [],
   unmapped_categories: [],
 };
 
@@ -169,6 +189,74 @@ describe("UploadPage", () => {
     expect(
       screen.queryByRole("button", { name: "Confirm Import" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows removed transactions with confirm button when rows disappear", async () => {
+    server.use(
+      http.post("/api/v1/uploads/preview", () =>
+        HttpResponse.json(previewResponseWithRemovals),
+      ),
+    );
+
+    renderWithProviders(<UploadPage />);
+    setFileAndSubmit();
+
+    await waitFor(() => {
+      expect(screen.getByText("No Longer in CSV")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Gas Station")).toBeInTheDocument();
+    expect(screen.getByText("Removed")).toBeInTheDocument();
+    // Removals alone are importable — not "Already Up to Date".
+    expect(
+      screen.queryByText(/All transactions already imported/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Confirm Import" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows removed stat and settlement warnings after upload", async () => {
+    server.use(
+      http.post("/api/v1/uploads/preview", () =>
+        HttpResponse.json(previewResponseWithRemovals),
+      ),
+      http.post("/api/v1/uploads/", () =>
+        HttpResponse.json(
+          {
+            upload_id: "u1",
+            filename: "test.csv",
+            new_count: 0,
+            updated_count: 0,
+            skipped_count: 2,
+            removed_count: 1,
+            unmapped_categories: [],
+            warnings: [
+              "Removed transaction Gas Station (2026-01-16) was linked to a settlement — the link was removed",
+            ],
+          },
+          { status: 201 },
+        ),
+      ),
+    );
+
+    renderWithProviders(<UploadPage />);
+    setFileAndSubmit();
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Confirm Import" }),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Import" }));
+    await waitFor(() => {
+      expect(screen.getByText("Upload Complete")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Removed")).toBeInTheDocument();
+    expect(screen.getByText("1 warning")).toBeInTheDocument();
+    expect(screen.getByText(/linked to a settlement/)).toBeInTheDocument();
   });
 
   it("shows review step with checkboxes when changes detected", async () => {
@@ -333,7 +421,9 @@ describe("UploadPage", () => {
             new_count: 2,
             updated_count: 0,
             skipped_count: 0,
+            removed_count: 0,
             unmapped_categories: [],
+            warnings: [],
           },
           { status: 201 },
         ),
@@ -372,7 +462,9 @@ describe("UploadPage", () => {
             new_count: 2,
             updated_count: 0,
             skipped_count: 0,
+            removed_count: 0,
             unmapped_categories: [],
+            warnings: [],
           },
           { status: 201 },
         ),
@@ -410,7 +502,9 @@ describe("UploadPage", () => {
             new_count: 2,
             updated_count: 0,
             skipped_count: 0,
+            removed_count: 0,
             unmapped_categories: [],
+            warnings: [],
           },
           { status: 201 },
         ),
@@ -466,7 +560,9 @@ describe("UploadPage", () => {
             new_count: 2,
             updated_count: 0,
             skipped_count: 0,
+            removed_count: 0,
             unmapped_categories: [],
+            warnings: [],
           },
           { status: 201 },
         ),

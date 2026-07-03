@@ -52,6 +52,29 @@ class SettlementTransactionLinkRepository(
         result = await self._session.execute(stmt)
         return [self._to_domain(row) for row in result.scalars().all()]
 
+    async def get_by_transaction_ids(
+        self, transaction_ids: list[UUID]
+    ) -> list[SettlementTransactionLink]:
+        if not transaction_ids:
+            return []
+        stmt = select(SettlementTransactionLinkModel).where(
+            SettlementTransactionLinkModel.transaction_id.in_([
+                str(tid) for tid in transaction_ids
+            ]),
+        )
+        result = await self._session.execute(stmt)
+        return [self._to_domain(row) for row in result.scalars().all()]
+
+    async def delete_by_transaction_ids(self, transaction_ids: list[UUID]) -> int:
+        if not transaction_ids:
+            return 0
+        stmt = delete(SettlementTransactionLinkModel).where(
+            SettlementTransactionLinkModel.transaction_id.in_([
+                str(tid) for tid in transaction_ids
+            ]),
+        )
+        return await self._execute_rowcount(stmt)
+
     async def delete_by_settlement_id(self, settlement_id: UUID) -> int:
         stmt = delete(SettlementTransactionLinkModel).where(
             SettlementTransactionLinkModel.settlement_id == str(settlement_id)

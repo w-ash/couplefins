@@ -1,6 +1,10 @@
 from decimal import Decimal
 
-from src.domain.dedup import classify_transactions, natural_key
+from src.domain.dedup import (
+    classify_transactions,
+    find_removed_transactions,
+    natural_key,
+)
 from tests.fixtures.factories import make_transaction
 
 
@@ -193,3 +197,69 @@ def test_natural_key_falls_back_to_current_when_no_originals() -> None:
     assert key.amount == tx.amount
     assert tx.original_date is None
     assert tx.original_amount is None
+
+
+def test_find_removed_empty_when_all_present() -> None:
+    person_id = make_transaction().payer_person_id
+    existing = make_transaction(payer_person_id=person_id)
+    incoming = make_transaction(
+        date=existing.date,
+        amount=existing.amount,
+        account=existing.account,
+        original_statement=existing.original_statement,
+        payer_person_id=person_id,
+    )
+
+    assert find_removed_transactions([incoming], [existing]) == []
+
+
+def test_find_removed_detects_missing_row() -> None:
+    person_id = make_transaction().payer_person_id
+    kept = make_transaction(
+        original_statement="GROCERY STORE", payer_person_id=person_id
+    )
+    dropped = make_transaction(
+        original_statement="COFFEE SHOP", payer_person_id=person_id
+    )
+    incoming = make_transaction(
+        date=kept.date,
+        amount=kept.amount,
+        account=kept.account,
+        original_statement=kept.original_statement,
+        payer_person_id=person_id,
+    )
+
+    removed = find_removed_transactions([incoming], [kept, dropped])
+
+    assert removed == [dropped]
+
+
+def test_find_removed_matches_edited_rows_by_original_key() -> None:
+    """An in-app edited row (date/amount changed, originals kept) is still
+    matched to its CSV twin via the original-* natural key — not removed."""
+    from datetime import date
+
+    person_id = make_transaction().payer_person_id
+    edited = make_transaction(
+        date=date(2026, 2, 20),
+        amount=Decimal("-99.00"),
+        original_date=date(2026, 1, 15),
+        original_amount=Decimal("-50.00"),
+        payer_person_id=person_id,
+    )
+    incoming = make_transaction(
+        date=date(2026, 1, 15),
+        amount=Decimal("-50.00"),
+        account=edited.account,
+        original_statement=edited.original_statement,
+        payer_person_id=person_id,
+    )
+
+    assert find_removed_transactions([incoming], [edited]) == []
+
+
+def test_find_removed_with_no_incoming_removes_all_existing() -> None:
+    person_id = make_transaction().payer_person_id
+    existing = make_transaction(payer_person_id=person_id)
+
+    assert find_removed_transactions([], [existing]) == [existing]

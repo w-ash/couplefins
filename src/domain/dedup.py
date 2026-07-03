@@ -73,6 +73,20 @@ def _diff_fields(incoming: Transaction, existing: Transaction) -> tuple[FieldDif
     )
 
 
+def find_removed_transactions(
+    incoming: list[Transaction], existing: list[Transaction]
+) -> list[Transaction]:
+    """Existing rows whose natural key no longer appears in the incoming CSV.
+
+    Re-upload is a true replace: these rows were deleted (or re-keyed) in
+    Monarch and must be removed. The caller guarantees `existing` is scoped
+    to the uploader's own rows within the upload's date window — rows outside
+    that window are never removal candidates.
+    """
+    incoming_keys = {natural_key(tx) for tx in incoming}
+    return [tx for tx in existing if natural_key(tx) not in incoming_keys]
+
+
 def classify_transactions(
     incoming: list[Transaction], existing: list[Transaction]
 ) -> list[ClassifiedTransaction]:

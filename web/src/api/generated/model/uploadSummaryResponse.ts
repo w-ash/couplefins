@@ -11,5 +11,7 @@ export interface UploadSummaryResponse {
   new_count: number;
   updated_count: number;
   skipped_count: number;
+  removed_count: number;
   unmapped_categories: string[];
+  warnings: string[];
 }

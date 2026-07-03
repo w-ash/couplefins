@@ -74,6 +74,7 @@ class PreviewUploadResponse(BaseModel):
     new_transactions: list[PreviewTransactionResponse]
     unchanged_count: int
     changed_transactions: list[ChangedTransactionResponse]
+    removed_transactions: list[PreviewTransactionResponse]
     unmapped_categories: list[str]
 
     @classmethod
@@ -107,6 +108,9 @@ class PreviewUploadResponse(BaseModel):
                 )
                 for ct in result.changed_transactions
             ],
+            removed_transactions=[
+                _tx_response(tx) for tx in result.removed_transactions
+            ],
             unmapped_categories=result.unmapped_categories,
         )
 
@@ -117,7 +121,9 @@ class UploadSummaryResponse(BaseModel):
     new_count: int
     updated_count: int
     skipped_count: int
+    removed_count: int
     unmapped_categories: list[str]
+    warnings: list[str]
 
     @classmethod
     def from_result(cls, result: UploadCsvResult) -> UploadSummaryResponse:
@@ -127,5 +133,7 @@ class UploadSummaryResponse(BaseModel):
             new_count=result.new_count,
             updated_count=result.updated_count,
             skipped_count=result.skipped_count,
+            removed_count=result.removed_count,
             unmapped_categories=result.unmapped_categories,
+            warnings=result.warnings,
         )

@@ -5,6 +5,7 @@ from uuid import UUID
 from sqlalchemy import (
     ColumnElement,
     cast,
+    delete as sa_delete,
     func,
     insert,
     select,
@@ -92,6 +93,14 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         await self._session.execute(insert(TransactionModel), values)
         await self._session.flush()
         return entities
+
+    async def delete_by_ids(self, ids: list[UUID]) -> int:
+        if not ids:
+            return 0
+        stmt = sa_delete(TransactionModel).where(
+            TransactionModel.id.in_([str(i) for i in ids])
+        )
+        return await self._execute_rowcount(stmt)
 
     async def update_mutable_fields_batch(
         self, entities: list[Transaction]

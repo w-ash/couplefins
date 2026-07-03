@@ -15,6 +15,7 @@ from src.application.use_cases._shared.transactions import (
     find_unmapped_categories,
     get_other_person_names,
 )
+from src.domain.dedup import ClassifiedTransaction
 from src.domain.entities.category import Category
 from src.domain.entities.transaction import Transaction
 from src.domain.entities.upload import Upload
@@ -45,7 +46,74 @@ class UploadCsvResult:
     new_count: int
     updated_count: int
     skipped_count: int
+    removed_count: int
     unmapped_categories: list[str]
+    warnings: list[str]
+
+
+async def _ensure_categories(
+    uow: UnitOfWorkProtocol, incoming: list[Transaction]
+) -> list[str]:
+    """Auto-create unknown categories (group_id=None); return unmapped names."""
+    all_categories = await uow.categories.get_all()
+    categories_in_csv = {tx.category for tx in incoming}
+    auto_created = [
+        Category(id=uuid.uuid4(), name=cat, group_id=None)
+        for cat in find_new_categories(all_categories, categories_in_csv)
+    ]
+    if auto_created:
+        await uow.categories.save_batch(auto_created)
+        all_categories = [*all_categories, *auto_created]
+    return find_unmapped_categories(all_categories, categories_in_csv)
+
+
+def _partition_changes(
+    classified: list[ClassifiedTransaction],
+    accepted_change_ids: frozenset[uuid.UUID],
+    upload_id: uuid.UUID,
+) -> tuple[list[Transaction], list[Transaction], int]:
+    """Split classified rows into (new, accepted updates, skipped count)."""
+    new_txs = [c.incoming for c in classified if c.status == "new"]
+    updated_txs: list[Transaction] = []
+    skipped_count = 0
+    for c in classified:
+        if c.status == "unchanged":
+            skipped_count += 1
+        elif c.status == "changed":
+            if c.existing_id is None or c.existing_id not in accepted_change_ids:
+                skipped_count += 1
+            else:
+                updated_txs.append(
+                    attrs.evolve(c.incoming, id=c.existing_id, upload_id=upload_id)
+                )
+    return new_txs, updated_txs, skipped_count
+
+
+async def _delete_removed(
+    uow: UnitOfWorkProtocol, removed: list[Transaction]
+) -> list[str]:
+    """Delete rows the new CSV no longer contains; unlink settlements first.
+
+    Returns warnings for rows that were linked to a settlement — the link is
+    removed but the settlement record itself stays.
+    """
+    if not removed:
+        return []
+    removed_ids = [tx.id for tx in removed]
+    warnings: list[str] = []
+    links = await uow.settlement_transaction_links.get_by_transaction_ids(removed_ids)
+    if links:
+        linked_ids = {link.transaction_id for link in links}
+        warnings = [
+            f"Removed transaction {tx.merchant} ({tx.date.isoformat()}) "
+            "was linked to a settlement — the link was removed"
+            for tx in removed
+            if tx.id in linked_ids
+        ]
+        await uow.settlement_transaction_links.delete_by_transaction_ids(removed_ids)
+    await uow.transaction_edits.delete_by_transaction_ids(removed_ids)
+    await uow.transactions.delete_by_ids(removed_ids)
+    return warnings
 
 
 @define(slots=True)
@@ -69,28 +137,20 @@ class UploadCsvUseCase:
                 command.csv_text, command.person_id, upload_id, person_names=other_names
             )
 
+            classified, _, removed = await classify_against_existing(
+                incoming, command.person_id, uow
+            )
+
+            # Guard every month the upload touches — removed rows can sit in a
+            # month with no incoming rows (date edited across the boundary).
             await assert_periods_not_finalized(
-                uow, {(tx.date.year, tx.date.month) for tx in incoming}
+                uow,
+                {(tx.date.year, tx.date.month) for tx in [*incoming, *removed]},
             )
 
             on_progress(2, 4, "Classifying transactions")
 
-            all_categories = await uow.categories.get_all()
-            categories_in_csv = {tx.category for tx in incoming}
-
-            auto_created = [
-                Category(id=uuid.uuid4(), name=cat, group_id=None)
-                for cat in find_new_categories(all_categories, categories_in_csv)
-            ]
-            if auto_created:
-                await uow.categories.save_batch(auto_created)
-                all_categories = [*all_categories, *auto_created]
-
-            unmapped = find_unmapped_categories(all_categories, categories_in_csv)
-
-            classified, _ = await classify_against_existing(
-                incoming, command.person_id, uow
-            )
+            unmapped = await _ensure_categories(uow, incoming)
 
             on_progress(3, 4, f"Saving {len(classified)} transactions")
 
@@ -102,29 +162,15 @@ class UploadCsvUseCase:
             )
             await uow.uploads.save(upload)
 
-            new_txs = [c.incoming for c in classified if c.status == "new"]
+            new_txs, updated_txs, skipped_count = _partition_changes(
+                classified, command.accepted_change_ids, upload_id
+            )
             if new_txs:
                 await uow.transactions.save_batch(new_txs)
-
-            updated_txs: list[Transaction] = []
-            skipped_count = 0
-            for c in classified:
-                if c.status == "unchanged":
-                    skipped_count += 1
-                elif c.status == "changed":
-                    if c.existing_id in command.accepted_change_ids:
-                        updated_txs.append(
-                            attrs.evolve(
-                                c.incoming,
-                                id=c.existing_id,  # type: ignore[arg-type]
-                                upload_id=upload_id,
-                            )
-                        )
-                    else:
-                        skipped_count += 1
-
             if updated_txs:
                 await uow.transactions.update_mutable_fields_batch(updated_txs)
+
+            warnings = await _delete_removed(uow, removed)
 
             await uow.commit()
             on_progress(4, 4, "Complete")
@@ -135,6 +181,7 @@ class UploadCsvUseCase:
                 new=len(new_txs),
                 updated=len(updated_txs),
                 skipped=skipped_count,
+                removed=len(removed),
                 person=person.name,
             )
 
@@ -144,5 +191,7 @@ class UploadCsvUseCase:
                 new_count=len(new_txs),
                 updated_count=len(updated_txs),
                 skipped_count=skipped_count,
+                removed_count=len(removed),
                 unmapped_categories=unmapped,
+                warnings=warnings,
             )

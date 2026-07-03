@@ -48,6 +48,7 @@ def make_mock_uow() -> AsyncMock:
         spec=SettlementTransactionLinkRepositoryProtocol
     )
     uow.settlement_transaction_links.get_by_transaction_id.return_value = []
+    uow.settlement_transaction_links.get_by_transaction_ids.return_value = []
     uow.reconciliation_periods.get_by_period.return_value = None
     uow.reconciliation_periods.get_by_periods.return_value = []
     uow.reconciliation_periods.get_by_year.return_value = []
