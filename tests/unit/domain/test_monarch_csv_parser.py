@@ -310,15 +310,16 @@ def test_reserved_tag_not_treated_as_person_name() -> None:
     assert tx.payer_percentage == 50
 
 
-def test_sxx_alone_without_household_tag_is_personal() -> None:
+def test_sxx_alone_without_household_tag_is_personal_split() -> None:
     csv = _make_csv({"Tags": "s70"})
     result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
 
     assert len(result) == 1
     tx = result[0]
-    # sXX without a household-setting tag has no effect
+    # sXX is authoritative even without a household-setting tag:
+    # a personal split that enters settlement but not the household budget
     assert tx.household is False
-    assert tx.payer_percentage == 100
+    assert tx.payer_percentage == 70
 
 
 def test_person_name_with_sxx_without_household_tag() -> None:
@@ -329,9 +330,22 @@ def test_person_name_with_sxx_without_household_tag() -> None:
 
     assert len(result) == 1
     tx = result[0]
-    # Person-name + sXX without shared/household tag = personal, spotted
+    # sXX overrides the spotted default (0%); still personal
     assert tx.household is False
-    assert tx.payer_percentage == 0
+    assert tx.payer_percentage == 30
+
+
+def test_household_person_name_and_sxx_uses_sxx() -> None:
+    csv = _make_csv({"Tags": "household, bob, s70"})
+    result = parse_monarch_csv(
+        csv, PAYER_ID, UPLOAD_ID, person_names=frozenset({"bob"})
+    )
+
+    assert len(result) == 1
+    tx = result[0]
+    # sXX beats the spotted default; household tag still sets budget relevance
+    assert tx.household is True
+    assert tx.payer_percentage == 70
 
 
 def test_household_plus_person_name_is_household_spotted() -> None:

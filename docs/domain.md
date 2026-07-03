@@ -26,7 +26,7 @@ The couple uses Monarch tags to classify transactions:
 - **`shared`** or **`split`** tag (case-insensitive): marks a transaction as a household expense and defaults to a 50/50 split
 - **`household`** tag (case-insensitive): marks a transaction as a household expense without implying a split — for expenses relevant to the couple's shared life but paid individually (e.g., concert tickets bought separately for an event you attend together)
 - **`sXX`** tag (e.g., `s70`): sets the payer's share to XX%. Authoritative — overrides any default from other tags. If multiple `sXX` tags are present, the highest value wins (payer takes the most share)
-- **Person name** tag (e.g., `bob`): marks a transaction as spotted — the payer fronted the money but the other person owes 100%. Detected by matching tags against known person names (case-insensitive). Reserved tags (`shared`, `split`, `household`, `settlement`) are never treated as person names.
+- **Person name** tag (e.g., `bob`): marks a transaction as spotted — the payer fronted the money but the other person owes 100%. A spotted expense is the *beneficiary's* personal spending, so `household` stays false. Detected by matching tags against known person names (case-insensitive). Reserved tags (`shared`, `split`, `household`, `settlement`) are never treated as person names.
 - **`settlement`** tag (case-insensitive): marks a transaction as a settlement payment (e.g., Venmo transfer to your partner). Sets `is_settlement=true`, which excludes the transaction from both spending totals and budget calculations. You can also link settlement transactions from the Settle Up page instead of tagging in Monarch.
 - Tags are dynamic — any integer 0-100 is valid for `sXX` (e.g., `s0`, `s30`, `s100`)
 
@@ -40,7 +40,9 @@ The couple uses Monarch tags to classify transactions:
 | `shared, s100` | true | 100 | Household (no settlement) |
 | `household` | true | 100 (no split implied) | Household (no settlement) |
 | `household, sXX` | true | XX | Household + split |
-| person-name (e.g., `bob`) | true | 0 | Spotted |
+| `sXX` alone | false | XX | Personal split |
+| person-name (e.g., `bob`) | false | 0 | Spotted |
+| person-name + `sXX` | false | XX | Personal split (sXX overrides spotted) |
 | `settlement` | false | 100 | Settlement payment |
 
 The `settlement` tag also sets `is_settlement=true`, which excludes the transaction from both reconciliation math and budget totals.
@@ -74,10 +76,12 @@ Neither field implies the other. A transaction can be household without being sp
 |---|---|---|---|---|
 | Personal | false | 100 | No | Only if category has `include_personal` |
 | Shared | true | 1-99 | Yes (split) | Yes |
-| Spotted | true | 0 | Yes (100% reimbursement) | Yes |
+| Spotted | false | 0 | Yes (100% reimbursement) | Beneficiary's personal (not household) |
 | Household (no split) | true | 100 | No | Yes |
 
-**Spotted**: One person pays for something that is entirely the other person's expense — their subscription, their parking ticket, a hat they forgot their wallet for. The payer fronts the money and gets 100% back at settlement.
+**Spotted**: One person pays for something that is entirely the other person's expense — their subscription, their parking ticket, a hat they forgot their wallet for. The payer fronts the money and gets 100% back at settlement. It's the beneficiary's personal spending — a debt, not a household expense — so it never counts toward the household budget.
+
+**Confirmed definitions** (2026-07-02): *household* = something the couple did together, regardless of who paid. *Personal* = not household — spending for yourself. *Spotted* = personal spending where one partner paid for the other; it attributes to the beneficiary's personal spending. *Settlement* is orthogonal to all of it: any `payer_percentage < 100` transaction enters settlement math, household or not — if Bob pays for Alice, Alice pays it back either way.
 
 **Household (no split)**: An expense relevant to the couple's shared life but paid individually — concert tickets bought separately for a show they attend together, or groceries one person picked up but isn't splitting. Tagged `household` (or `shared, s100`) in Monarch. No settlement impact, but counts toward the shared budget.
 
@@ -136,7 +140,7 @@ Couplefins vocabulary mapped to standard accounting terms:
 | Adjustment (v0.3.x) | Correcting Entry (Reversal pattern) | Offsetting entries for accurate per-person spend |
 | Settlement | Payment Record | Records that Person A paid Person B (amount, method, notes). Linked transactions excluded from reconciliation. |
 | `payer_percentage` | Allocation Rule / Split Ratio | Determines each person's share (0-100, always set). Settlement: any transaction where `payer_percentage < 100` |
-| `household` | Expense Classification | Per-transaction flag — "relevant to the couple's shared life." Set by `shared`, `split`, `household`, or person-name tags |
+| `household` | Expense Classification | Per-transaction flag — "relevant to the couple's shared life." Set by `shared`, `split`, or `household` tags (person-name tags do NOT set it — spotted is the beneficiary's personal spending) |
 | `include_personal` | Budget Scope Flag | Per-category toggle to also include personal (non-household) transactions in budget totals |
 | `is_finalized` | Period Close | Prevents modification after agreement |
 | TransactionEdit | Audit Log Entry | Records post-upload changes to a transaction (field, old value, new value, timestamp) |

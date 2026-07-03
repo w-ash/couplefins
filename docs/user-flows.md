@@ -153,7 +153,7 @@ Making sure the data is right before settling. This is solo prep work — each p
 **US-REVIEW-5** (v0.9.x): As a partner, I want to see transaction classifications correctly after upload.
 
 - Given my CSV contains transactions tagged with my partner's name, then they appear as "spotted" with my partner identified as the beneficiary
-- Given a spotted transaction, then I see it marked as 100% owed back to me — it enters settlement but is not a shared budget expense (it's a debt)
+- Given a spotted transaction, then I see it marked as 100% owed back to me — it enters settlement but is not a shared budget expense (it's a debt; since v1.7.0, `household=false` and it attributes to the beneficiary's personal spending)
 - Given my CSV contains transactions tagged `household`, then they appear as "household" — they count toward the shared budget but don't generate a settlement entry
 - Given my CSV contains transactions tagged `shared`, then they enter both settlement (split) and budget
 

@@ -125,8 +125,10 @@ def _classify(tags: tuple[str, ...], person_names: frozenset[str]) -> tuple[bool
     """Classify a transaction from its tags into (household, payer_percentage).
 
     household is set by shared/split or household tags — budget relevance.
-    Person-name tags set payer_percentage=0 (spotted) but do NOT imply household.
-    sXX is authoritative for payer_percentage when a household tag is present.
+    sXX is authoritative for payer_percentage in every tag combination — it
+    overrides the defaults implied by shared, household, or person-name tags.
+    Person-name tags set payer_percentage=0 (spotted) but do NOT imply
+    household — a spotted expense is the beneficiary's personal spending.
     """
     lower_tags = [tag.lower() for tag in tags]
 
@@ -137,11 +139,11 @@ def _classify(tags: tuple[str, ...], person_names: frozenset[str]) -> tuple[bool
 
     household = has_shared or has_household
 
-    if explicit_split is not None and household:
-        return True, explicit_split
+    if explicit_split is not None:
+        return household, explicit_split
 
-    if household and has_person_name:
-        return True, 0
+    if has_person_name:
+        return household, 0
 
     if has_shared:
         return True, SplitDefaults.DEFAULT_PAYER_PERCENTAGE
@@ -149,8 +151,7 @@ def _classify(tags: tuple[str, ...], person_names: frozenset[str]) -> tuple[bool
     if has_household:
         return True, 100
 
-    # Person-name tag alone = spotted but not household
-    return (False, 0) if has_person_name else (False, 100)
+    return False, 100
 
 
 def _extract_max_split_percentage(lower_tags: list[str]) -> int | None:
