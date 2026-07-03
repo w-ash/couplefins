@@ -84,3 +84,37 @@ async def test_unlink_requires_auth(client: AsyncClient) -> None:
         "/api/v1/settlements/00000000-0000-0000-0000-000000000001/links/00000000-0000-0000-0000-000000000002",
     )
     assert response.status_code in {401, 403}
+
+
+async def test_recording_the_gross_nets_month_to_exactly_zero(
+    client: AsyncClient,
+) -> None:
+    persons, cookies = await setup_and_login(client)
+    alice_id = persons[0]["id"]
+    bob_id = persons[1]["id"]
+    await upload_csv(client, alice_id, SPLIT_CSV, cookies=cookies)
+
+    # Bob owes Alice exactly $50 — pay with a float-dusty amount.
+    record = await client.post(
+        "/api/v1/settlements",
+        json={
+            "year": 2026,
+            "month": 1,
+            "amount": 49.999999999999996,
+            "from_person_id": bob_id,
+            "to_person_id": alice_id,
+            "method": "Venmo",
+        },
+        cookies=cookies,
+    )
+    assert record.status_code == 201
+    assert record.json()["settlement"]["amount"] == pytest.approx(50.0)
+
+    settle_up = await client.get(
+        "/api/v1/settle-up",
+        params={"year": 2026, "month": 1},
+        cookies=cookies,
+    )
+    data = settle_up.json()
+    assert data["net_position"] is None
+    assert data["remaining_balance"] == pytest.approx(0.0)

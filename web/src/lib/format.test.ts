@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CURRENCY_EPSILON,
+  computeShares,
   formatSignedCurrency,
   isZeroCurrency,
 } from "./format";
@@ -42,5 +43,36 @@ describe("formatSignedCurrency", () => {
   it("prefixes negative amounts with a true minus sign (U+2212)", () => {
     expect(formatSignedCurrency(-50)).toBe("−$50.00");
     expect(formatSignedCurrency(-73.4)).toBe("−$73.40");
+  });
+});
+
+describe("computeShares", () => {
+  it("uses complementary rounding matching the backend (4.15 at 50%)", () => {
+    // Backend: payer 2.075 → ROUND_HALF_UP 2.08; other = 4.15 − 2.08 = 2.07
+    expect(computeShares(4.15, 50)).toEqual({
+      payerShare: 2.08,
+      otherShare: 2.07,
+    });
+  });
+
+  it("shares always sum to the transaction amount", () => {
+    const cases: [number, number][] = [
+      [4.15, 50],
+      [0.01, 50],
+      [99.99, 33],
+      [10.05, 70],
+      [123.45, 1],
+    ];
+    for (const [amount, pct] of cases) {
+      const { payerShare, otherShare } = computeShares(amount, pct);
+      expect(payerShare + otherShare).toBeCloseTo(amount, 10);
+    }
+  });
+
+  it("gives the rounding cent to the payer at half-cent splits", () => {
+    expect(computeShares(0.01, 50)).toEqual({
+      payerShare: 0.01,
+      otherShare: 0,
+    });
   });
 });

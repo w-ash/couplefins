@@ -68,17 +68,20 @@ export type SelectedCandidate = Pick<
   "id" | "amount" | "merchant" | "payer_person_id"
 >;
 
+// Integer-cents arithmetic — a float sum of two transfers would persist
+// dust like 20.369999999999997 and the month would never net to zero.
 export function computeSettlementAmount(
   candidates: SelectedCandidate[],
 ): number {
   if (candidates.length === 0) return 0;
+  const cents = (n: number) => Math.round(n * 100);
   const sumPositive = candidates
     .filter((c) => c.amount >= 0)
-    .reduce((sum, c) => sum + c.amount, 0);
+    .reduce((sum, c) => sum + cents(c.amount), 0);
   const sumAbsNegative = candidates
     .filter((c) => c.amount < 0)
-    .reduce((sum, c) => sum + Math.abs(c.amount), 0);
-  return Math.max(sumPositive, sumAbsNegative);
+    .reduce((sum, c) => sum + cents(Math.abs(c.amount)), 0);
+  return Math.max(sumPositive, sumAbsNegative) / 100;
 }
 
 export function CandidateChecklist({

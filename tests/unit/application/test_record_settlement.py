@@ -234,3 +234,25 @@ async def test_finalized_linked_transaction_month_raises() -> None:
     with pytest.raises(PeriodFinalizedError):
         await RecordSettlementUseCase().execute(command, uow)
     uow.settlements.save.assert_not_called()
+
+
+async def test_amount_quantized_to_cents() -> None:
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    uow = make_mock_uow()
+    uow.persons.get_by_ids.return_value = [alice, bob]
+    set_passthrough_save(uow)
+
+    # Float dust from a frontend float sum must not persist.
+    command = RecordSettlementCommand(
+        year=2026,
+        month=1,
+        amount=Decimal("20.369999999999997"),
+        from_person_id=alice.id,
+        to_person_id=bob.id,
+        method="Venmo",
+    )
+    assert command.amount == Decimal("20.37")
+
+    result = await RecordSettlementUseCase().execute(command, uow)
+    assert result.settlement.amount == Decimal("20.37")

@@ -98,13 +98,18 @@ export function parsePercent(value: string): number | null {
   return !Number.isNaN(parsed) && parsed >= 0 && parsed <= 100 ? parsed : null;
 }
 
+// Complementary rounding in integer cents, matching src/domain/splits.py:
+// the payer share rounds half-up, the other share absorbs the remainder so
+// the two always sum to the transaction amount.
 export function computeShares(
   absAmount: number,
   payerPct: number,
 ): { payerShare: number; otherShare: number } {
+  const totalCents = Math.round(absAmount * 100);
+  const payerCents = Math.round((totalCents * payerPct) / 100);
   return {
-    payerShare: +((absAmount * payerPct) / 100).toFixed(2),
-    otherShare: +((absAmount * (100 - payerPct)) / 100).toFixed(2),
+    payerShare: payerCents / 100,
+    otherShare: (totalCents - payerCents) / 100,
   };
 }
 

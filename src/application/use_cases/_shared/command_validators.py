@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
 from attrs import Attribute
@@ -6,6 +6,15 @@ from attrs import Attribute
 Scope = Literal["household", "personal", "all"]
 
 _MAX_MONTH = 12
+
+
+def quantize_cents(value: Decimal) -> Decimal:
+    """attrs converter — monetary amounts persist as exact cents.
+
+    Guards against float dust arriving via JSON (e.g. a frontend float sum
+    of 20.369999999999997), which would keep a month from netting to zero.
+    """
+    return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def non_empty_string(_instance: object, attribute: Attribute[str], value: str) -> None:

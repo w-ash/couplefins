@@ -9,6 +9,7 @@ from src.application.use_cases._shared.command_validators import (
     month_range,
     positive_decimal,
     positive_int,
+    quantize_cents,
 )
 from src.application.use_cases._shared.finalization import (
     assert_periods_not_finalized,
@@ -29,7 +30,7 @@ from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 class RecordSettlementCommand:
     year: int = field(validator=positive_int)
     month: int = field(validator=month_range)
-    amount: Decimal = field(validator=positive_decimal)
+    amount: Decimal = field(converter=quantize_cents, validator=positive_decimal)
     from_person_id: uuid.UUID
     to_person_id: uuid.UUID
     method: str
