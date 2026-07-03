@@ -57,9 +57,6 @@ async def test_upload_csv_idempotent_reupload(client: AsyncClient) -> None:
     assert data["skipped_count"] == 2
 
 
-@pytest.mark.skip(
-    reason="SQLAlchemy bulk sync incompatibility with PG 18 — needs investigation"
-)
 async def test_upload_csv_with_accepted_changes(client: AsyncClient) -> None:
     persons, cookies = await setup_and_login(client)
     person_id = persons[0]["id"]

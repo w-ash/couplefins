@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
+import attrs
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.infrastructure.persistence.repositories.person_repository import (
@@ -123,3 +124,60 @@ async def test_household_by_date_range_empty_db(db_session: AsyncSession) -> Non
     repo = TransactionRepository(db_session)
     result = await repo.get_household_by_date_range(date(2026, 1, 1), date(2026, 1, 31))
     assert result == []
+
+
+async def _seed_flagged_transaction(repo: TransactionRepository, session: AsyncSession):
+    """One saved transaction with both in-app flags set (linked + excluded)."""
+    alice = make_person(name="Alice")
+    upload = make_upload(person_id=alice.id)
+    await PersonRepository(session).save(alice)
+    await UploadRepository(session).save(upload)
+
+    tx = make_transaction(
+        upload_id=upload.id,
+        payer_person_id=alice.id,
+        merchant="Venmo",
+        is_settlement=True,
+        is_excluded=True,
+    )
+    await repo.save_batch([tx])
+    await session.commit()
+    return tx
+
+
+async def test_update_mutable_fields_batch_preserves_in_app_flags(
+    db_session: AsyncSession,
+) -> None:
+    """Accepting a re-upload "changed" row must not revert is_settlement/is_excluded."""
+    repo = TransactionRepository(db_session)
+    tx = await _seed_flagged_transaction(repo, db_session)
+
+    # A freshly parsed CSV row carries default flags (False) and a new merchant.
+    reparsed = attrs.evolve(
+        tx, merchant="Venmo Payment", is_settlement=False, is_excluded=False
+    )
+    await repo.update_mutable_fields_batch([reparsed])
+    await db_session.commit()
+
+    stored = await repo.get_by_id(tx.id)
+    assert stored is not None
+    assert stored.merchant == "Venmo Payment"
+    assert stored.is_settlement is True
+    assert stored.is_excluded is True
+
+
+async def test_update_mutable_fields_still_writes_in_app_flags(
+    db_session: AsyncSession,
+) -> None:
+    """The singular update serves mark/unlink flows — it must flip the flags."""
+    repo = TransactionRepository(db_session)
+    tx = await _seed_flagged_transaction(repo, db_session)
+
+    unmarked = attrs.evolve(tx, is_settlement=False, is_excluded=False)
+    await repo.update_mutable_fields(unmarked)
+    await db_session.commit()
+
+    stored = await repo.get_by_id(tx.id)
+    assert stored is not None
+    assert stored.is_settlement is False
+    assert stored.is_excluded is False

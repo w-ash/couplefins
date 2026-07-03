@@ -4,7 +4,6 @@ from uuid import UUID
 
 from sqlalchemy import (
     ColumnElement,
-    bindparam as sa_bindparam,
     cast,
     func,
     insert,
@@ -97,22 +96,27 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
     async def update_mutable_fields_batch(
         self, entities: list[Transaction]
     ) -> list[Transaction]:
+        """Batch update for CSV re-upload — accepted "changed" rows only.
+
+        Excludes _IN_APP_KEYS on top of the usual write set: freshly parsed
+        rows always carry is_settlement/is_excluded defaults, and writing
+        them would silently revert flags set in-app (settlement linking,
+        exclusion toggle). The singular update_mutable_fields keeps writing
+        those flags — it serves the mark/unlink flows that flip them.
+        """
         if not entities:
             return []
-        exclude = self._IMMUTABLE_KEYS | self._UPLOAD_ONLY_KEYS
+        exclude = self._IMMUTABLE_KEYS | self._UPLOAD_ONLY_KEYS | self._IN_APP_KEYS
         params: list[dict[str, object]] = []
         for entity in entities:
             vals = self._to_column_values(entity)
-            vals["_id"] = vals.pop("id")
             for k in exclude:
                 del vals[k]
             params.append(vals)
-        stmt = (
-            update(TransactionModel)
-            .where(TransactionModel.id == sa_bindparam("_id"))
-            .values({col: sa_bindparam(col) for col in params[0] if col != "_id"})
-        )
-        await self._session.execute(stmt, params)
+        # ORM "bulk UPDATE by primary key": no WHERE/VALUES — each param dict
+        # carries the pk plus the columns to write. A hand-rolled WHERE with
+        # bindparams trips ORM session synchronization instead.
+        await self._session.execute(update(TransactionModel), params)
         await self._session.flush()
         return entities
 
@@ -201,6 +205,9 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         "original_date",
         "original_amount",
     })
+    # Flags owned by in-app actions (settlement linking, exclusion toggle) —
+    # never overwritten by the re-upload batch path.
+    _IN_APP_KEYS = frozenset({"is_settlement", "is_excluded"})
 
     async def _update(
         self, entity: Transaction, exclude: frozenset[str]
