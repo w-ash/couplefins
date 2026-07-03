@@ -39,7 +39,7 @@ async def test_all_new_transactions() -> None:
         make_category(name="Gas"),
         make_category(name="Dining Out"),
     ]
-    uow.transactions.get_by_person_and_date_range.return_value = []
+    uow.transactions.get_by_person_and_original_date_range.return_value = []
     command = _make_command(person_id=person.id)
 
     result = await PreviewCsvUseCase().execute(command, uow)
@@ -69,7 +69,7 @@ async def test_detects_unchanged_transactions() -> None:
         tags=("shared",),
         payer_percentage=50,
     )
-    uow.transactions.get_by_person_and_date_range.return_value = [existing]
+    uow.transactions.get_by_person_and_original_date_range.return_value = [existing]
 
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
@@ -98,7 +98,7 @@ async def test_detects_changed_transactions() -> None:
         tags=("shared",),
         payer_percentage=50,
     )
-    uow.transactions.get_by_person_and_date_range.return_value = [existing]
+    uow.transactions.get_by_person_and_original_date_range.return_value = [existing]
 
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
@@ -124,7 +124,7 @@ async def test_reports_new_and_unmapped_categories_without_creating() -> None:
     uow.categories.get_all.return_value = [
         make_category(name="Groceries"),
     ]
-    uow.transactions.get_by_person_and_date_range.return_value = []
+    uow.transactions.get_by_person_and_original_date_range.return_value = []
     command = _make_command()
 
     result = await PreviewCsvUseCase().execute(command, uow)
@@ -140,7 +140,7 @@ async def test_reports_existing_unmapped_categories() -> None:
         make_category(name="Groceries"),
         Category(id=uuid.uuid4(), name="Gas", group_id=None),
     ]
-    uow.transactions.get_by_person_and_date_range.return_value = []
+    uow.transactions.get_by_person_and_original_date_range.return_value = []
     command = _make_command()
 
     result = await PreviewCsvUseCase().execute(command, uow)
@@ -176,7 +176,7 @@ async def test_never_persists_data() -> None:
     uow = make_mock_uow()
     uow.persons.get_by_id.return_value = make_person()
     uow.categories.get_all.return_value = []
-    uow.transactions.get_by_person_and_date_range.return_value = []
+    uow.transactions.get_by_person_and_original_date_range.return_value = []
     command = _make_command()
 
     await PreviewCsvUseCase().execute(command, uow)

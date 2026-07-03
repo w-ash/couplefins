@@ -43,7 +43,7 @@ async def test_uploads_all_new_transactions() -> None:
         make_category(name="Gas"),
         make_category(name="Dining Out"),
     ]
-    uow.transactions.get_by_person_and_date_range.return_value = []
+    uow.transactions.get_by_person_and_original_date_range.return_value = []
     command = _make_command(person_id=person.id)
 
     result = await UploadCsvUseCase().execute(command, uow)
@@ -75,7 +75,7 @@ async def test_skips_unchanged_transactions() -> None:
         payer_percentage=50,
         notes="",
     )
-    uow.transactions.get_by_person_and_date_range.return_value = [existing]
+    uow.transactions.get_by_person_and_original_date_range.return_value = [existing]
 
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
@@ -107,7 +107,7 @@ async def test_updates_accepted_changes() -> None:
         payer_percentage=50,
         notes="",
     )
-    uow.transactions.get_by_person_and_date_range.return_value = [existing]
+    uow.transactions.get_by_person_and_original_date_range.return_value = [existing]
 
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
@@ -145,7 +145,7 @@ async def test_skips_rejected_changes() -> None:
         payer_percentage=50,
         notes="",
     )
-    uow.transactions.get_by_person_and_date_range.return_value = [existing]
+    uow.transactions.get_by_person_and_original_date_range.return_value = [existing]
 
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
@@ -162,13 +162,56 @@ async def test_skips_rejected_changes() -> None:
     uow.transactions.update_mutable_fields.assert_not_called()
 
 
+async def test_date_edited_row_still_matches_by_original_date() -> None:
+    """A row whose date was edited in-app past the CSV window is fetched via
+    original_date and classified unchanged — not re-inserted as a duplicate."""
+    from datetime import date
+
+    uow = make_mock_uow()
+    person = make_person()
+    uow.persons.get_by_id.return_value = person
+    uow.categories.get_all.return_value = []
+    # CSV row dated Jan 15; the stored twin was moved to Feb 20 in-app,
+    # keeping original_date = Jan 15 (what the CSV still says).
+    existing = make_transaction(
+        payer_person_id=person.id,
+        date=date(2026, 2, 20),
+        original_date=date(2026, 1, 15),
+        original_statement="GROCERY STORE",
+        account="Chase",
+        merchant="Grocery Store",
+        category="Groceries",
+        amount=Decimal("-50.00"),
+        tags=("shared",),
+        payer_percentage=50,
+        notes="",
+    )
+    uow.transactions.get_by_person_and_original_date_range.return_value = [existing]
+
+    csv = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        '2026-01-15,Grocery Store,Groceries,Chase,GROCERY STORE,,"-50.00",shared\n'
+    )
+    command = _make_command(csv_text=csv, person_id=person.id)
+
+    result = await UploadCsvUseCase().execute(command, uow)
+
+    assert result.new_count == 0
+    assert result.skipped_count == 1
+    uow.transactions.save_batch.assert_not_called()
+    # The dedup fetch window is min/max of the incoming CSV dates.
+    uow.transactions.get_by_person_and_original_date_range.assert_called_once_with(
+        person.id, date(2026, 1, 15), date(2026, 1, 15)
+    )
+
+
 async def test_auto_creates_unmapped_categories_on_upload() -> None:
     uow = make_mock_uow()
     uow.persons.get_by_id.return_value = make_person()
     uow.categories.get_all.return_value = [
         make_category(name="Groceries"),
     ]
-    uow.transactions.get_by_person_and_date_range.return_value = []
+    uow.transactions.get_by_person_and_original_date_range.return_value = []
     command = _make_command()
 
     result = await UploadCsvUseCase().execute(command, uow)
@@ -191,7 +234,7 @@ async def test_reports_existing_unmapped_categories() -> None:
         Category(id=uuid.uuid4(), name="Gas", group_id=None),
         Category(id=uuid.uuid4(), name="Dining Out", group_id=None),
     ]
-    uow.transactions.get_by_person_and_date_range.return_value = []
+    uow.transactions.get_by_person_and_original_date_range.return_value = []
     command = _make_command()
 
     result = await UploadCsvUseCase().execute(command, uow)

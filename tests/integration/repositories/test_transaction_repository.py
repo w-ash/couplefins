@@ -126,6 +126,55 @@ async def test_household_by_date_range_empty_db(db_session: AsyncSession) -> Non
     assert result == []
 
 
+async def test_get_by_person_and_original_date_range_coalesces_dates(
+    db_session: AsyncSession,
+) -> None:
+    repo = TransactionRepository(db_session)
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    upload = make_upload(person_id=alice.id)
+
+    persons = PersonRepository(db_session)
+    await persons.save(alice)
+    await persons.save(bob)
+    await UploadRepository(db_session).save(upload)
+
+    in_window = make_transaction(
+        upload_id=upload.id,
+        date=date(2026, 1, 15),
+        payer_person_id=alice.id,
+        original_statement="IN WINDOW",
+    )
+    # Date edited out of the window in-app; original_date still inside.
+    edited_out = make_transaction(
+        upload_id=upload.id,
+        date=date(2026, 2, 20),
+        original_date=date(2026, 1, 10),
+        payer_person_id=alice.id,
+        original_statement="EDITED OUT",
+    )
+    outside = make_transaction(
+        upload_id=upload.id,
+        date=date(2026, 2, 5),
+        payer_person_id=alice.id,
+        original_statement="OUTSIDE",
+    )
+    other_person = make_transaction(
+        upload_id=upload.id,
+        date=date(2026, 1, 20),
+        payer_person_id=bob.id,
+        original_statement="OTHER PERSON",
+    )
+    await repo.save_batch([in_window, edited_out, outside, other_person])
+    await db_session.commit()
+
+    result = await repo.get_by_person_and_original_date_range(
+        alice.id, date(2026, 1, 1), date(2026, 1, 31)
+    )
+    ids = {tx.id for tx in result}
+    assert ids == {in_window.id, edited_out.id}
+
+
 async def _seed_flagged_transaction(repo: TransactionRepository, session: AsyncSession):
     """One saved transaction with both in-app flags set (linked + excluded)."""
     alice = make_person(name="Alice")

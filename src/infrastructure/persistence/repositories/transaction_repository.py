@@ -198,6 +198,26 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             *self._tag_filter(tags),
         )
 
+    async def get_by_person_and_original_date_range(
+        self,
+        person_id: UUID,
+        start_date: date,
+        end_date: date,
+    ) -> list[Transaction]:
+        """Dedup fetch for CSV re-upload: match rows by the date the CSV knows
+        (original_date when the current date was edited in-app), so edited
+        rows still pair with their CSV twins instead of duplicating.
+        ISO-string comparison is chronological.
+        """
+        effective_date = func.coalesce(
+            TransactionModel.original_date, TransactionModel.date
+        )
+        return await self._query(
+            TransactionModel.payer_person_id == str(person_id),
+            effective_date >= start_date.isoformat(),
+            effective_date <= end_date.isoformat(),
+        )
+
     _IMMUTABLE_KEYS = frozenset({"account", "original_statement", "occurrence"})
     _UPLOAD_ONLY_KEYS = frozenset({
         "date",

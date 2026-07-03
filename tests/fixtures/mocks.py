@@ -53,6 +53,7 @@ def make_mock_uow() -> AsyncMock:
     uow.reconciliation_periods.get_by_year.return_value = []
     uow.settlements.get_by_year.return_value = []
     uow.transactions.get_settlement_relevant_by_date_range.return_value = []
+    uow.transactions.get_by_person_and_original_date_range.return_value = []
     return uow
 
 

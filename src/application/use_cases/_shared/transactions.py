@@ -60,12 +60,16 @@ async def classify_against_existing(
 ) -> tuple[list[ClassifiedTransaction], list[Transaction]]:
     """Fetch existing transactions for the incoming date range and classify.
 
+    The fetch matches on original_date-or-date so rows whose date was edited
+    in-app past the CSV window boundary still pair with their CSV twins
+    (natural_key uses the same original-* fallback).
+
     Returns (classified, existing) — existing is needed by preview to show diffs.
     """
     if not incoming:
         return [], []
     dates = [tx.date for tx in incoming]
-    existing = await uow.transactions.get_by_person_and_date_range(
+    existing = await uow.transactions.get_by_person_and_original_date_range(
         person_id, min(dates), max(dates)
     )
     return classify_transactions(incoming, existing), existing
