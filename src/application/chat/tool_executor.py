@@ -121,6 +121,11 @@ async def _handle_settlement_balance(
     else:
         summary["gross_amount"] = 0.0
         summary["status"] = "No settlement needed this month"
+    # Payments can reverse the direction (overpayment) — the net debtor is
+    # authoritative, not the gross one.
+    if result.net_position:
+        summary["net_from"] = _person_name(result.net_position.from_person_id, persons)
+        summary["net_to"] = _person_name(result.net_position.to_person_id, persons)
 
     summary["uploads"] = [
         {"person": us.person_name, "uploaded": us.has_uploaded}

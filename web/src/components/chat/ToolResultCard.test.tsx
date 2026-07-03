@@ -47,6 +47,8 @@ describe("ToolResultCard", () => {
               from: "Alice",
               to: "Bob",
               gross_amount: 147.5,
+              net_from: "Alice",
+              net_to: "Bob",
               uploads: [],
             },
           }}
@@ -57,7 +59,7 @@ describe("ToolResultCard", () => {
       expect(screen.getByText("2026-03 settlement")).toBeInTheDocument();
     });
 
-    it("renders remaining balance when different from gross", () => {
+    it("leads with the remaining balance after a partial payment", () => {
       renderWithProviders(
         <ToolResultCard
           toolCall={{
@@ -70,13 +72,63 @@ describe("ToolResultCard", () => {
               from: "Alice",
               to: "Bob",
               gross_amount: 147.5,
+              net_from: "Alice",
+              net_to: "Bob",
               uploads: [],
             },
           }}
         />,
       );
-      expect(screen.getByText(/Remaining/)).toBeInTheDocument();
+      expect(screen.getByText(/Alice owes Bob/)).toBeInTheDocument();
       expect(screen.getByText("$47.50")).toBeInTheDocument();
+      expect(screen.getByText(/before payments/)).toBeInTheDocument();
+    });
+
+    it("names the reversed debtor after an overpayment", () => {
+      renderWithProviders(
+        <ToolResultCard
+          toolCall={{
+            id: "1",
+            name: "get_settlement_balance",
+            result: {
+              month: "2026-03",
+              is_finalized: false,
+              remaining_balance: 10,
+              from: "Alice",
+              to: "Bob",
+              gross_amount: 50,
+              net_from: "Bob",
+              net_to: "Alice",
+              uploads: [],
+            },
+          }}
+        />,
+      );
+      expect(screen.getByText(/Bob owes Alice/)).toBeInTheDocument();
+      expect(screen.getByText("$10.00")).toBeInTheDocument();
+      expect(screen.getByText(/Alice owed Bob/)).toBeInTheDocument();
+    });
+
+    it("shows settled state when the balance is fully paid", () => {
+      renderWithProviders(
+        <ToolResultCard
+          toolCall={{
+            id: "1",
+            name: "get_settlement_balance",
+            result: {
+              month: "2026-03",
+              is_finalized: false,
+              remaining_balance: 0,
+              from: "Alice",
+              to: "Bob",
+              gross_amount: 147.5,
+              uploads: [],
+            },
+          }}
+        />,
+      );
+      expect(screen.getByText("All settled")).toBeInTheDocument();
+      expect(screen.getByText(/Alice owed Bob/)).toBeInTheDocument();
     });
 
     it("renders status message when no owed amount", () => {

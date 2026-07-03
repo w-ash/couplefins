@@ -83,6 +83,40 @@ async def test_settlement_balance_happy_path() -> None:
 
 
 @pytest.mark.asyncio
+async def test_settlement_balance_overpayment_names_reversed_debtor() -> None:
+    # Gross: Alice owes Bob $50; Alice paid $60 → net: Bob owes Alice $10.
+    from attrs import evolve
+
+    overpaid = evolve(
+        _settle_result(owed_amount=Decimal("50.00")),
+        net_position=SettlementResult(
+            amount=Decimal("10.00"),
+            from_person_id=BOB.id,
+            to_person_id=ALICE.id,
+        ),
+        remaining_balance=Decimal("10.00"),
+    )
+
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        return_value=overpaid,
+    ):
+        result = await execute_tool(
+            "get_settlement_balance",
+            {"year": 2026, "month": 3},
+            ALICE,
+            PERSONS,
+        )
+
+    assert result["from"] == "Alice"
+    assert result["to"] == "Bob"
+    assert result["net_from"] == "Bob"
+    assert result["net_to"] == "Alice"
+    assert result["remaining_balance"] == pytest.approx(10.0)
+
+
+@pytest.mark.asyncio
 async def test_settlement_balance_no_owed() -> None:
     no_owed = _settle_result()
     # Create a new result with owed=None

@@ -16,6 +16,8 @@ interface SettlementResult {
   from?: string;
   to?: string;
   gross_amount: number;
+  net_from?: string;
+  net_to?: string;
   status?: string;
   uploads: { person: string; uploaded: boolean }[];
 }
@@ -74,27 +76,44 @@ interface DashboardStatusResult {
 // --- Card variants ---
 
 function SettlementCard({ result }: { result: SettlementResult }) {
+  // The net direction is authoritative — payments can reverse who owes whom.
+  // A missing net direction with a gross balance means the month is settled.
+  const settled = result.from && !result.net_from;
+  const grossDiffers =
+    result.remaining_balance !== result.gross_amount ||
+    result.net_from !== result.from;
+  const grossContext = result.from && result.to && grossDiffers && (
+    <p className="text-xs text-muted-foreground">
+      {result.from} owed {result.to}{" "}
+      <span className="tabular-nums">
+        {formatCurrency(result.gross_amount)}
+      </span>{" "}
+      before payments
+    </p>
+  );
+
   return (
     <div className={cn(heroCardClass, "px-4 py-3")}>
-      {result.from && result.to ? (
+      {result.net_from && result.net_to ? (
         <>
           <p className="text-xs text-muted-foreground">
             {result.month} settlement
           </p>
           <p className="text-base font-medium">
-            {result.from} owes {result.to}{" "}
+            {result.net_from} owes {result.net_to}{" "}
             <span className="tabular-nums">
-              {formatCurrency(result.gross_amount)}
+              {formatCurrency(result.remaining_balance)}
             </span>
           </p>
-          {result.remaining_balance !== result.gross_amount && (
-            <p className="text-xs text-muted-foreground">
-              Remaining:{" "}
-              <span className="tabular-nums">
-                {formatCurrency(result.remaining_balance)}
-              </span>
-            </p>
-          )}
+          {grossContext}
+        </>
+      ) : settled ? (
+        <>
+          <p className="text-xs text-muted-foreground">
+            {result.month} settlement
+          </p>
+          <p className="text-base font-medium">All settled</p>
+          {grossContext}
         </>
       ) : (
         <p className="text-sm text-muted-foreground">{result.status}</p>

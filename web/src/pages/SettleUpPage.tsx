@@ -89,8 +89,13 @@ function HeroCard({
     );
   }
 
+  // An overpayment can mirror the gross amount while reversing who owes
+  // whom — compare direction too.
   const gross = data.owed;
-  const hasPayments = gross && gross.amount !== net.amount;
+  const hasPayments =
+    gross &&
+    (gross.amount !== net.amount ||
+      gross.from_person_id !== net.from_person_id);
 
   return (
     <div className={cn(heroCardClass, "p-5 sm:p-8")}>

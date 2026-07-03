@@ -212,6 +212,8 @@ describe("ChatMessage", () => {
                   from: "Alice",
                   to: "Bob",
                   gross_amount: 147.5,
+                  net_from: "Alice",
+                  net_to: "Bob",
                   uploads: [],
                 },
               },

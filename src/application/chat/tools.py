@@ -15,7 +15,9 @@ TOOLS: list[dict[str, object]] = [
         "description": (
             "Look up settlement status for a given month. Returns the gross "
             "settlement amount (who owes whom before any payments), remaining "
-            "balance after recorded settlements, upload status for each person, "
+            "balance after recorded settlements with its net direction "
+            "(net_from/net_to — authoritative, since an overpayment can "
+            "reverse who owes whom), upload status for each person, "
             "and whether the month is finalized. Also returns warning flags if "
             "uploads are missing or the balance is unsettled."
         ),
