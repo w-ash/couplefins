@@ -68,26 +68,47 @@ async def _ensure_categories(
     return find_unmapped_categories(all_categories, categories_in_csv)
 
 
+@define(frozen=True, slots=True)
+class _Partition:
+    """Outcome of splitting classified rows for a re-upload.
+
+    `updated_existing` carries the *stored* rows behind each accepted update —
+    their current `date` (which may differ from the CSV date after an in-app
+    edit) is needed to guard the right period against finalization.
+    """
+
+    new_txs: list[Transaction]
+    updated_txs: list[Transaction]
+    updated_existing: list[Transaction]
+    skipped_count: int
+
+
 def _partition_changes(
     classified: list[ClassifiedTransaction],
     accepted_change_ids: frozenset[uuid.UUID],
     upload_id: uuid.UUID,
-) -> tuple[list[Transaction], list[Transaction], int]:
-    """Split classified rows into (new, accepted updates, skipped count)."""
-    new_txs = [c.incoming for c in classified if c.status == "new"]
+    existing_by_id: dict[uuid.UUID, Transaction],
+) -> _Partition:
+    """Split classified rows into new / accepted-updates / skipped in one pass."""
+    new_txs: list[Transaction] = []
     updated_txs: list[Transaction] = []
+    updated_existing: list[Transaction] = []
     skipped_count = 0
     for c in classified:
-        if c.status == "unchanged":
+        if c.status == "new":
+            new_txs.append(c.incoming)
+        elif c.status == "unchanged":
             skipped_count += 1
-        elif c.status == "changed":
-            if c.existing_id is None or c.existing_id not in accepted_change_ids:
-                skipped_count += 1
-            else:
+        else:  # changed
+            existing = existing_by_id.get(c.existing_id) if c.existing_id else None
+            if existing is not None and c.existing_id in accepted_change_ids:
                 updated_txs.append(
                     attrs.evolve(c.incoming, id=c.existing_id, upload_id=upload_id)
                 )
-    return new_txs, updated_txs, skipped_count
+                updated_existing.append(existing)
+            else:
+                skipped_count += 1
+    return _Partition(new_txs, updated_txs, updated_existing, skipped_count)
 
 
 async def _delete_removed(
@@ -139,15 +160,25 @@ class UploadCsvUseCase:
             )
             incoming = parsed.transactions
 
-            classified, _, removed = await classify_against_existing(
+            classified, existing, removed = await classify_against_existing(
                 incoming, command.person_id, uow
             )
+            partition = _partition_changes(
+                classified,
+                command.accepted_change_ids,
+                upload_id,
+                {e.id: e for e in existing},
+            )
 
-            # Guard every month the upload touches — removed rows can sit in a
-            # month with no incoming rows (date edited across the boundary).
+            # Guard every month the upload touches by the row's CURRENT date:
+            # removed rows and in-app date-edited updates can live in a month
+            # with no incoming rows (date moved across the period boundary).
             await assert_periods_not_finalized(
                 uow,
-                {(tx.date.year, tx.date.month) for tx in [*incoming, *removed]},
+                {
+                    (tx.date.year, tx.date.month)
+                    for tx in [*incoming, *removed, *partition.updated_existing]
+                },
             )
 
             on_progress(2, 4, "Classifying transactions")
@@ -164,9 +195,9 @@ class UploadCsvUseCase:
             )
             await uow.uploads.save(upload)
 
-            new_txs, updated_txs, skipped_count = _partition_changes(
-                classified, command.accepted_change_ids, upload_id
-            )
+            new_txs = partition.new_txs
+            updated_txs = partition.updated_txs
+            skipped_count = partition.skipped_count
             if new_txs:
                 await uow.transactions.save_batch(new_txs)
             if updated_txs:

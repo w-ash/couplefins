@@ -45,9 +45,12 @@ _MUTABLE_FIELDS = (
 
 
 def natural_key(tx: Transaction) -> TransactionNaturalKey:
+    # `is not None`, not truthiness: a Decimal('0.00') original_amount is falsy,
+    # so `or` would key an edited zero-dollar row on its current amount and
+    # break the pairing with its CSV twin (misclassifying it new/removed).
     return TransactionNaturalKey(
-        date=tx.original_date or tx.date,
-        amount=tx.original_amount or tx.amount,
+        date=tx.original_date if tx.original_date is not None else tx.date,
+        amount=tx.original_amount if tx.original_amount is not None else tx.amount,
         account=tx.account,
         original_statement=tx.original_statement,
         occurrence=tx.occurrence,
