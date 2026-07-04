@@ -196,6 +196,64 @@ class TestComputeSpendingTrends:
         assert cat_amounts["Dining Out"] == Decimal("40.00")
         assert cat_amounts["Groceries"] == Decimal("60.00")
 
+    def test_through_month_bounds_ytd_but_not_monthly_lists(self) -> None:
+        food_id, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                date=date(2026, 1, 10), category="Dining Out", amount=Decimal("-50.00")
+            ),
+            make_transaction(
+                date=date(2026, 2, 10), category="Dining Out", amount=Decimal("-70.00")
+            ),
+            make_transaction(
+                date=date(2026, 3, 10), category="Dining Out", amount=Decimal("-900.00")
+            ),
+        ]
+
+        result = compute_spending_trends(txs, lookup, 2026, through_month=2)
+
+        # Per-month breakdown still covers the whole year...
+        assert len(result.monthly_totals) == 3
+        assert len(result.monthly_group_spending) == 3
+        # ...but the YTD group summary stops at the selected month.
+        assert len(result.group_summaries) == 1
+        assert result.group_summaries[0].group_id == food_id
+        assert result.group_summaries[0].ytd_total == Decimal("120.00")
+        assert result.group_summaries[0].transaction_count == 2
+
+    def test_through_month_none_is_unbounded(self) -> None:
+        _, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                date=date(2026, 1, 10), category="Dining Out", amount=Decimal("-50.00")
+            ),
+            make_transaction(
+                date=date(2026, 3, 10), category="Dining Out", amount=Decimal("-70.00")
+            ),
+        ]
+
+        result = compute_spending_trends(txs, lookup, 2026, through_month=None)
+
+        assert result.group_summaries[0].ytd_total == Decimal("120.00")
+
+    def test_through_month_excludes_group_only_present_later(self) -> None:
+        food_id, travel_id, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                date=date(2026, 1, 10), category="Dining Out", amount=Decimal("-50.00")
+            ),
+            # Travel only appears after the selected month.
+            make_transaction(
+                date=date(2026, 3, 10), category="Flights", amount=Decimal("-500.00")
+            ),
+        ]
+
+        result = compute_spending_trends(txs, lookup, 2026, through_month=1)
+
+        group_ids = {g.group_id for g in result.group_summaries}
+        assert group_ids == {food_id}
+        assert travel_id not in group_ids
+
 
 class TestComputeTrailingAverage:
     def test_normal_three_month_window(self) -> None:

@@ -98,7 +98,17 @@ def compute_spending_trends(
     year_txs: list[Transaction],
     category_lookup: dict[str, tuple[UUID, str]],
     year: int,
+    through_month: int | None = None,
 ) -> SpendingTrends:
+    """Compute per-month trends (full year) and YTD group summaries.
+
+    `monthly_group_spending`/`monthly_totals` cover every month present in
+    `year_txs` — the "Spending by category" sparklines want the whole
+    year's shape. `group_summaries.ytd_total` is bounded at `through_month`
+    when given (the selected month), so "Year to date" agrees with Budget
+    and Dashboard's YTD instead of silently including months after the
+    one being viewed.
+    """
     by_month = _group_by_month(_household_expenses(year_txs))
 
     monthly_group_spending: list[MonthlyGroupSpending] = []
@@ -110,6 +120,7 @@ def compute_spending_trends(
     for month in sorted(by_month):
         breakdowns = compute_category_breakdowns(by_month[month], category_lookup)
         month_total = Decimal(0)
+        within_ytd = through_month is None or month <= through_month
         for bd in breakdowns:
             monthly_group_spending.append(
                 MonthlyGroupSpending(
@@ -125,8 +136,9 @@ def compute_spending_trends(
                 )
             )
             month_total += bd.total_amount
-            group_ytd[bd.group_id] += bd.total_amount
-            group_counts[bd.group_id] += bd.transaction_count
+            if within_ytd:
+                group_ytd[bd.group_id] += bd.total_amount
+                group_counts[bd.group_id] += bd.transaction_count
             group_names[bd.group_id] = bd.group_name
 
         monthly_totals.append(

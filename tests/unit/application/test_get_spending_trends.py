@@ -53,7 +53,10 @@ async def test_happy_path() -> None:
         ),
     ]
 
-    command = GetSpendingTrendsCommand(year=2026)
+    # Pin the month explicitly — the YTD total is now bounded at the
+    # selected month, so leaving this to the real-clock default would make
+    # the assertion depend on what month the test happens to run in.
+    command = GetSpendingTrendsCommand(year=2026, month=2)
     result = await GetSpendingTrendsUseCase().execute(command, uow)
 
     assert result.year == 2026
@@ -61,6 +64,41 @@ async def test_happy_path() -> None:
     assert len(result.trends.monthly_totals) == 2
     assert len(result.trends.group_summaries) == 1
     assert result.trends.group_summaries[0].group_id == food_group.id
+    assert result.trends.group_summaries[0].ytd_total == Decimal("140.00")
+
+
+async def test_ytd_bounded_at_selected_month() -> None:
+    """Viewing an earlier month must not pull in later months' spending —
+    matches Budget/Dashboard's YTD, which is always bounded at the
+    selected month."""
+    uow, alice, _, _food_group = _setup_uow()
+    uow.transactions.get_household_by_year.return_value = [
+        make_transaction(
+            date=date(2026, 1, 10),
+            category="Dining Out",
+            amount=Decimal("-80.00"),
+            payer_person_id=alice.id,
+        ),
+        make_transaction(
+            date=date(2026, 2, 5),
+            category="Dining Out",
+            amount=Decimal("-60.00"),
+            payer_person_id=alice.id,
+        ),
+        make_transaction(
+            date=date(2026, 3, 5),
+            category="Dining Out",
+            amount=Decimal("-1000.00"),
+            payer_person_id=alice.id,
+        ),
+    ]
+
+    command = GetSpendingTrendsCommand(year=2026, month=2)
+    result = await GetSpendingTrendsUseCase().execute(command, uow)
+
+    # Per-month lists still cover the whole year (sparklines want the shape)...
+    assert len(result.trends.monthly_totals) == 3
+    # ...but the YTD total is bounded through February.
     assert result.trends.group_summaries[0].ytd_total == Decimal("140.00")
 
 

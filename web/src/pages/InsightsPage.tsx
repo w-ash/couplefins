@@ -110,8 +110,12 @@ function buildKpiData(
   if (totals.length === 0) return null;
 
   const ytdTotal = groups.reduce((sum, g) => sum + g.ytd_total, 0);
-  const monthCount = totals.length;
-  const avg = ytdTotal / monthCount;
+  // `totals` covers the whole year (for the sparklines below), but the
+  // "averaging $X/mo" hint must divide by months through the selection —
+  // otherwise viewing March later in the year would average YTD spending
+  // over months that haven't happened yet from the selected month's view.
+  const monthCount = totals.filter((t) => t.month <= month).length;
+  const avg = monthCount > 0 ? ytdTotal / monthCount : 0;
 
   const selectedAmount =
     totals.find((t) => t.month === month)?.total_amount ?? 0;

@@ -103,9 +103,12 @@ class GetSpendingTrendsUseCase:
             ctx = await load_reconciliation_context(uow)
             year_txs = await uow.transactions.get_household_by_year(command.year)
             category_lookup = build_category_lookup(ctx.categories, ctx.category_groups)
-            trends = compute_spending_trends(year_txs, category_lookup, command.year)
 
             target_month = command.month or datetime.now(UTC).month
+
+            trends = compute_spending_trends(
+                year_txs, category_lookup, command.year, through_month=target_month
+            )
 
             comparison_cards = compute_comparison_cards(
                 year_txs, category_lookup, target_month
