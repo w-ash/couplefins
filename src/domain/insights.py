@@ -35,6 +35,7 @@ class GroupComparison:
     trailing_average: Decimal
     delta_amount: Decimal
     delta_percentage: Decimal
+    is_new: bool
 
 
 @define(frozen=True, slots=True)
@@ -213,6 +214,7 @@ def compute_comparison_cards(
         if not current_name:
             current_name = group_names.get(gid, "Unknown")
 
+        is_new = avg == 0
         delta = current_amount - avg
         pct = (delta / avg * 100) if avg > 0 else Decimal(0)
 
@@ -224,10 +226,21 @@ def compute_comparison_cards(
                 trailing_average=avg,
                 delta_amount=delta,
                 delta_percentage=pct,
+                is_new=is_new,
             )
         )
 
-    cards.sort(key=lambda c: abs(c.delta_percentage), reverse=True)
+    # A brand-new group (no trailing average) has an undefined percentage
+    # change — treat it as the most significant kind of swing (ranks above
+    # any finite percentage) and break ties among new groups by dollar
+    # delta, since percentage is meaningless when the baseline is zero.
+    cards.sort(
+        key=lambda c: (
+            c.is_new,
+            abs(c.delta_amount if c.is_new else c.delta_percentage),
+        ),
+        reverse=True,
+    )
     return cards
 
 

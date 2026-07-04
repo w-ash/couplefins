@@ -12,4 +12,5 @@ export interface GroupComparisonItem {
   trailing_average: number;
   delta_amount: number;
   delta_percentage: number;
+  is_new: boolean;
 }

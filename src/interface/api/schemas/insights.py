@@ -42,6 +42,7 @@ class GroupComparisonItem(BaseModel):
     trailing_average: MoneyField
     delta_amount: MoneyField
     delta_percentage: MoneyField
+    is_new: bool
 
 
 class BudgetLineItem(BaseModel):
@@ -128,6 +129,7 @@ class SpendingTrendsResponse(BaseModel):
                     trailing_average=cc.trailing_average,
                     delta_amount=cc.delta_amount,
                     delta_percentage=cc.delta_percentage,
+                    is_new=cc.is_new,
                 )
                 for cc in result.comparison_cards
             ],

@@ -316,6 +316,7 @@ class TestComputeComparisonCards:
         assert card.trailing_average == Decimal("100.00")
         assert card.delta_amount == Decimal("100.00")
         assert card.delta_percentage == Decimal(100)
+        assert card.is_new is False
 
     def test_below_average(self) -> None:
         _food_id, _, lookup = _setup_groups()
@@ -336,6 +337,7 @@ class TestComputeComparisonCards:
         card = cards[0]
         assert card.delta_amount == Decimal("-100.00")
         assert card.delta_percentage == Decimal(-50)
+        assert card.is_new is False
 
     def test_current_month_only_no_trailing(self) -> None:
         _food_id, _, lookup = _setup_groups()
@@ -352,6 +354,7 @@ class TestComputeComparisonCards:
         assert card.current_month_amount == Decimal("100.00")
         assert card.trailing_average == Decimal(0)
         assert card.delta_percentage == Decimal(0)
+        assert card.is_new is True
 
     def test_trailing_only_no_current(self) -> None:
         _food_id, _, lookup = _setup_groups()
@@ -367,6 +370,7 @@ class TestComputeComparisonCards:
         card = cards[0]
         assert card.current_month_amount == Decimal(0)
         assert card.trailing_average == Decimal("100.00")
+        assert card.is_new is False
 
     def test_empty_returns_empty(self) -> None:
         cards = compute_comparison_cards([], {}, target_month=3)
@@ -395,6 +399,48 @@ class TestComputeComparisonCards:
 
         assert cards[0].group_id == travel_id  # 50% delta > 10%
         assert cards[1].group_id == food_id
+
+    def test_new_group_sorts_before_existing_percentage_deltas(self) -> None:
+        food_id, travel_id, lookup = _setup_groups()
+        txs = [
+            # Food: avg 100, current 110 → +10% (existing group, small % swing)
+            make_transaction(
+                date=date(2026, 1, 10), category="Dining Out", amount=Decimal("-100.00")
+            ),
+            make_transaction(
+                date=date(2026, 2, 10), category="Dining Out", amount=Decimal("-110.00")
+            ),
+            # Travel: brand new this month, avg 0 → "+0%" under the old bug,
+            # but represents real new spending and should rank first.
+            make_transaction(
+                date=date(2026, 2, 15), category="Flights", amount=Decimal("-800.00")
+            ),
+        ]
+
+        cards = compute_comparison_cards(txs, lookup, target_month=2)
+
+        assert cards[0].group_id == travel_id
+        assert cards[0].is_new is True
+        assert cards[1].group_id == food_id
+        assert cards[1].is_new is False
+
+    def test_new_groups_tie_broken_by_dollar_delta(self) -> None:
+        food_id, travel_id, lookup = _setup_groups()
+        txs = [
+            # Both groups are brand new this month (no trailing average).
+            make_transaction(
+                date=date(2026, 2, 10), category="Dining Out", amount=Decimal("-50.00")
+            ),
+            make_transaction(
+                date=date(2026, 2, 15), category="Flights", amount=Decimal("-500.00")
+            ),
+        ]
+
+        cards = compute_comparison_cards(txs, lookup, target_month=2)
+
+        assert cards[0].group_id == travel_id
+        assert cards[1].group_id == food_id
+        assert all(c.is_new for c in cards)
 
 
 class TestComputePersonPaidByMonth:

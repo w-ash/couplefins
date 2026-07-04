@@ -9,6 +9,7 @@ interface ComparisonCardProps {
   trailingAverage: number;
   deltaAmount: number;
   deltaPercentage: number;
+  isNew: boolean;
 }
 
 export function ComparisonCard({
@@ -18,6 +19,7 @@ export function ComparisonCard({
   trailingAverage,
   deltaAmount,
   deltaPercentage,
+  isNew,
 }: ComparisonCardProps) {
   const Icon = getCategoryGroupIcon(groupIcon);
   const sign = deltaAmount >= 0 ? "+" : "";
@@ -38,13 +40,19 @@ export function ComparisonCard({
             3-mo avg: {formatCurrency(trailingAverage)}
           </span>
         </div>
-        <span
-          className={`text-sm font-medium tabular-nums ${getDeltaColorClass(deltaPercentage)}`}
-        >
-          {sign}
-          {formatCurrency(Math.abs(deltaAmount))} ({pctSign}
-          {Math.round(deltaPercentage)}%)
-        </span>
+        {isNew ? (
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+            New
+          </span>
+        ) : (
+          <span
+            className={`text-sm font-medium tabular-nums ${getDeltaColorClass(deltaPercentage)}`}
+          >
+            {sign}
+            {formatCurrency(Math.abs(deltaAmount))} ({pctSign}
+            {Math.round(deltaPercentage)}%)
+          </span>
+        )}
       </div>
     </Card>
   );

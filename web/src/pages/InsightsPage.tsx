@@ -461,6 +461,7 @@ export function InsightsPage() {
                     trailingAverage={card.trailing_average}
                     deltaAmount={card.delta_amount}
                     deltaPercentage={card.delta_percentage}
+                    isNew={card.is_new}
                   />
                 ))}
               </div>

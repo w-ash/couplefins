@@ -108,6 +108,7 @@ const populatedResponse: SpendingTrendsResponse = {
       trailing_average: 400,
       delta_amount: 50,
       delta_percentage: 12.5,
+      is_new: false,
     },
   ],
   budget_lines: [{ group_id: "g1", month: 1, monthly_budget: 500 }],
