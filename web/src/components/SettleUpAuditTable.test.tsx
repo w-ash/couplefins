@@ -483,13 +483,15 @@ describe("SettleUpAuditTable", () => {
 
     await expandLedger();
 
-    // Bill row links to Transactions filtered by year/month/payer/scope.
+    // Bill row links to Transactions filtered by year/month/payer. It must NOT
+    // pin scope=household — audit rows include non-household settlement splits
+    // (spotted / personal-split) that a household filter would drop.
     const billLink = screen.getByRole("link", { name: "Alice's bills" });
     expect(billLink.getAttribute("href")).toContain("/transactions?");
     expect(billLink.getAttribute("href")).toContain("year=2026");
     expect(billLink.getAttribute("href")).toContain("month=3");
     expect(billLink.getAttribute("href")).toContain(`payer=${ALICE_ID}`);
-    expect(billLink.getAttribute("href")).toContain("scope=household");
+    expect(billLink.getAttribute("href")).not.toContain("scope=household");
 
     // With no linked transactions the settlement row falls back to its own
     // year/month (waivers, manual records) — not the settled_at recording

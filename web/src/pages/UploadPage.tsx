@@ -63,6 +63,12 @@ import { getPersonAccentColor } from "@/types/person";
 const PREVIEW_LIMIT = 5;
 const MAX_CSV_SIZE = 10 * 1024 * 1024;
 
+// Static Tailwind classes (JIT can't see `grid-cols-${n}`) keyed by stat count.
+const GRID_COLS: Record<number, string> = {
+  3: "grid-cols-3",
+  4: "grid-cols-4",
+};
+
 type Step = "form" | "preview" | "review" | "confirmed";
 
 function stepToIndex(step: Step): number {
@@ -76,10 +82,29 @@ function deriveUploadMonth(
 ): { year: number; month: number } | null {
   const dateStr =
     preview?.new_transactions[0]?.date ??
-    preview?.changed_transactions[0]?.incoming.date;
+    preview?.changed_transactions[0]?.incoming.date ??
+    // A removals-only re-upload has no new/changed rows but still targets a
+    // month — fall back to a removed row so the confirmation resolves it.
+    preview?.removed_transactions[0]?.date;
   if (!dateStr) return null;
   const [yearStr, monthStr] = dateStr.split("-");
   return { year: Number(yearStr), month: Number(monthStr) };
+}
+
+function AdjustmentSkippedNote({
+  count,
+  className,
+}: {
+  count: number;
+  className?: string;
+}) {
+  if (count <= 0) return null;
+  return (
+    <p className={cn("text-xs text-muted-foreground", className)}>
+      {plural("adjustment row", count)} skipped (re-imported couplefins
+      adjustments)
+    </p>
+  );
 }
 
 function ActionPanel({
@@ -140,12 +165,7 @@ function ActionPanel({
         )}
       </dl>
 
-      {preview.skipped_adjustment_count > 0 && (
-        <p className="text-xs text-muted-foreground">
-          {plural("adjustment row", preview.skipped_adjustment_count)} skipped
-          (re-imported couplefins adjustments)
-        </p>
-      )}
+      <AdjustmentSkippedNote count={preview.skipped_adjustment_count} />
 
       <UnmappedCategoriesWarning
         categories={preview.unmapped_categories}
@@ -466,6 +486,29 @@ function ConfirmedCard({
   // Partner prompt requires uploadMonth too, so this simplifies to just uploadMonth
   const hasNextSteps = uploadMonth !== null;
 
+  const stats = [
+    { label: "New", value: summary.new_count, valueClass: "text-foreground" },
+    {
+      label: "Updated",
+      value: summary.updated_count,
+      valueClass: "text-accent-foreground",
+    },
+    {
+      label: "Skipped",
+      value: summary.skipped_count,
+      valueClass: "text-muted-foreground",
+    },
+    ...(summary.removed_count > 0
+      ? [
+          {
+            label: "Removed",
+            value: summary.removed_count,
+            valueClass: "text-negative",
+          },
+        ]
+      : []),
+  ];
+
   return (
     <Card aria-live="polite" className="step-enter mt-6">
       {/* Success header */}
@@ -483,39 +526,21 @@ function ConfirmedCard({
         </div>
       </div>
 
-      {/* Stats grid */}
-      <dl
-        className={cn(
-          "mt-5 grid gap-4 text-sm",
-          summary.removed_count > 0 ? "grid-cols-4" : "grid-cols-3",
-        )}
-      >
-        <div className="flex flex-col-reverse text-center">
-          <dt className="text-muted-foreground">New</dt>
-          <dd className="text-lg font-semibold text-foreground tabular-nums">
-            {summary.new_count}
-          </dd>
-        </div>
-        <div className="flex flex-col-reverse text-center">
-          <dt className="text-muted-foreground">Updated</dt>
-          <dd className="text-lg font-semibold text-accent-foreground tabular-nums">
-            {summary.updated_count}
-          </dd>
-        </div>
-        <div className="flex flex-col-reverse text-center">
-          <dt className="text-muted-foreground">Skipped</dt>
-          <dd className="text-lg font-semibold text-muted-foreground tabular-nums">
-            {summary.skipped_count}
-          </dd>
-        </div>
-        {summary.removed_count > 0 && (
-          <div className="flex flex-col-reverse text-center">
-            <dt className="text-muted-foreground">Removed</dt>
-            <dd className="text-lg font-semibold text-negative tabular-nums">
-              {summary.removed_count}
+      {/* Stats grid — columns follow the number of stats actually rendered */}
+      <dl className={cn("mt-5 grid gap-4 text-sm", GRID_COLS[stats.length])}>
+        {stats.map((stat) => (
+          <div key={stat.label} className="flex flex-col-reverse text-center">
+            <dt className="text-muted-foreground">{stat.label}</dt>
+            <dd
+              className={cn(
+                "text-lg font-semibold tabular-nums",
+                stat.valueClass,
+              )}
+            >
+              {stat.value}
             </dd>
           </div>
-        )}
+        ))}
       </dl>
 
       {summary.warnings.length > 0 && (
@@ -528,8 +553,9 @@ function ConfirmedCard({
             {plural("warning", summary.warnings.length)}
           </p>
           <ul className="list-disc pl-4 text-sm text-warning-muted-foreground">
-            {summary.warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
+            {summary.warnings.map((warning, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: static result rows, never reordered; warnings can repeat verbatim
+              <li key={i}>{warning}</li>
             ))}
           </ul>
         </div>
@@ -786,12 +812,10 @@ export function UploadPage() {
           <p className="mt-3 text-sm text-muted-foreground">
             All transactions already imported — you're up to date.
           </p>
-          {preview.skipped_adjustment_count > 0 && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              {plural("adjustment row", preview.skipped_adjustment_count)}{" "}
-              skipped (re-imported couplefins adjustments)
-            </p>
-          )}
+          <AdjustmentSkippedNote
+            count={preview.skipped_adjustment_count}
+            className="mt-2"
+          />
           <Button
             type="button"
             variant="secondary"

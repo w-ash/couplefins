@@ -431,7 +431,7 @@ function buildBalanceNarrative({
     .join(" and ");
   const afterClause = action ? `After ${action}, ${result}` : result;
 
-  return [lead.join("; "), afterClause].filter(Boolean).join(". ") + ".";
+  return `${[lead.join("; "), afterClause].filter(Boolean).join(". ")}.`;
 }
 
 function describeSettlements(settlements: SettlementResponse[]): string {
@@ -471,7 +471,10 @@ function buildLedgerRows({
             // Backend-provided per-row category names, so the link filters to
             // exactly this row's transactions — including Uncategorized rows.
             categoryNames: r.categories,
-            scope: "household",
+            // scope=all, not household: audit rows aggregate every settlement
+            // split (payer_percentage < 100), including non-household spotted /
+            // personal-split rows a household filter would drop from the view.
+            scope: "all",
           }),
         }),
       );
@@ -488,7 +491,8 @@ function buildLedgerRows({
             year: data.year,
             month: data.month,
             payerId: r.payer_person_id,
-            scope: "household",
+            // scope=all: include the non-household settlement splits this row counts.
+            scope: "all",
           }),
         }),
       );

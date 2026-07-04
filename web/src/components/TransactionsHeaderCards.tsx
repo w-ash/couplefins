@@ -152,8 +152,12 @@ function SettlementBalance({
   const netDirection = settleUp.net_position ?? null;
   const grossDirection = settleUp.owed ?? grossFallback;
   const linked = settleUp.recorded_settlements ?? [];
-  const linkedTotal = linked.reduce((s, x) => s + x.amount, 0);
-  const linkedCount = linked.length;
+  // Waivers forgive a balance — they carry no linked transfers, so they must
+  // not inflate the linked count/total or gate the "show linked" filter.
+  const transfers = linked.filter((s) => !s.is_waived);
+  const linkedTotal = transfers.reduce((s, x) => s + x.amount, 0);
+  const linkedCount = transfers.length;
+  const waivedCount = linked.length - transfers.length;
   const isSettled = !netDirection || isZeroCurrency(netDirection.amount);
   const canFilter = linkedCount > 0;
 
@@ -162,6 +166,7 @@ function SettlementBalance({
     grossDirection,
     linkedCount,
     linkedTotal,
+    waivedCount,
   });
 
   return (
@@ -242,16 +247,23 @@ function SettlementPlaceholder({
   );
 }
 
-function settlementDescription(args: {
+export function settlementDescription(args: {
   isSettled: boolean;
   grossDirection: OwedAmountResponse | null;
   linkedCount: number;
   linkedTotal: number;
+  waivedCount: number;
 }): string | null {
-  const { isSettled, grossDirection, linkedCount, linkedTotal } = args;
+  const { isSettled, grossDirection, linkedCount, linkedTotal, waivedCount } =
+    args;
   if (isSettled) {
     if (linkedCount > 0) {
       return `${plural("settlement", linkedCount)} linked · ${formatCurrency(linkedTotal)}`;
+    }
+    if (waivedCount > 0) {
+      return waivedCount === 1
+        ? "Balance waived"
+        : `${waivedCount} balances waived`;
     }
     if (!grossDirection || isZeroCurrency(grossDirection.amount)) {
       return "No transactions to settle this period";
@@ -394,7 +406,9 @@ function InViewCard({ data, filtered, scope, periodLabel }: InViewCardProps) {
   return (
     <CardShell label="In view" info={<InViewInfo periodLabel={periodLabel} />}>
       <p className="text-lg font-semibold tabular-nums text-foreground">
-        {formatCurrency(sumNet(filtered.filter((tx) => !tx.is_settlement)))}
+        {formatCurrency(
+          sumNet(filtered.filter((tx) => !tx.is_settlement && !tx.is_excluded)),
+        )}
       </p>
       <p className="text-[11px] leading-tight text-muted-foreground/70">
         {filtered.length} of {data.transactions.length} · {SCOPE_LABELS[scope]}

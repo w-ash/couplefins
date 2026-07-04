@@ -149,13 +149,11 @@ export function bucketTransactions(
       continue;
     }
 
-    // Spotted beats household: a `household, bob` row is money I'm owed
-    // back, not couple spending (requires hydrated identity).
-    if (
-      currentPersonId !== null &&
-      tx.payer_person_id === currentPersonId &&
-      tx.payer_percentage === 0
-    ) {
+    // Spotted beats household: a `household, bob` row is money I'm owed back,
+    // not couple spending. Single source of truth for the rule (isInSpottedScope
+    // returns false without a hydrated identity, so such rows fall through to
+    // personal — matching this function's header contract).
+    if (isInSpottedScope(tx, currentPersonId)) {
       add(buckets.spotted, abs);
       continue;
     }
@@ -172,12 +170,10 @@ export function bucketTransactions(
       add(buckets.partnerPaid, abs);
       continue;
     }
-    if (tx.payer_percentage === 0) {
-      add(buckets.spotted, abs);
-    } else {
-      add(buckets.personal, abs);
-      if (tx.payer_percentage < 100) add(buckets.personalSplit, abs);
-    }
+    // Spotted was already handled above; anything reaching here is the current
+    // user's own personal spending (defensively personal without an identity).
+    add(buckets.personal, abs);
+    if (tx.payer_percentage < 100) add(buckets.personalSplit, abs);
   }
 
   return buckets;
