@@ -81,7 +81,9 @@ class CategorySpendResponse(BaseModel):
 
 
 class GroupBudgetStatusResponse(BaseModel):
-    group_id: UUID
+    # None for the synthetic "Uncategorized" row — spending in categories
+    # with no group mapping, surfaced so it doesn't vanish from the totals.
+    group_id: UUID | None
     group_name: str
     budget_id: UUID | None
     monthly_budget: MoneyField | None

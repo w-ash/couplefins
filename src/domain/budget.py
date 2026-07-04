@@ -12,7 +12,7 @@ from src.domain.categories import (
     compute_category_breakdowns,
     group_category_breakdowns,
 )
-from src.domain.constants import SplitDefaults
+from src.domain.constants import UNCATEGORIZED_GROUP_NAME, SplitDefaults
 from src.domain.entities.category_group import CategoryGroup
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.entities.transaction import Transaction
@@ -25,7 +25,10 @@ _NEAR_LIMIT_THRESHOLD = Decimal("0.80")
 
 @define(frozen=True, slots=True)
 class CategoryGroupBudgetStatus:
-    group_id: UUID
+    # None for the synthetic "Uncategorized" row (spending in categories
+    # with no group mapping) — it has no CategoryGroup entity behind it and
+    # can never carry a budget.
+    group_id: UUID | None
     group_name: str
     budget_id: UUID | None
     monthly_budget: Decimal | None
@@ -117,7 +120,10 @@ def _check_spending_integrity(
     ytd_by_group: dict[UUID | None, CategoryGroupBreakdown],
 ) -> Decimal | None:
     """Return the spending drift amount, or None if totals are consistent."""
-    mapped_ids: set[UUID | None] = {s.group_id for s in statuses}
+    # None (unmapped/Uncategorized) always counts as "accounted for" here —
+    # whether or not a synthetic Uncategorized status exists, its spend must
+    # not be silently dropped from the drift comparison.
+    mapped_ids: set[UUID | None] = {s.group_id for s in statuses} | {None}
     drift = _totals_drift(
         sum((s.monthly_spent for s in statuses), Decimal(0)),
         month_by_group,
@@ -137,7 +143,7 @@ def _index_month_budgets(
 
 
 def _build_group_status(  # noqa: PLR0913, PLR0917
-    gid: UUID,
+    gid: UUID | None,
     name: str,
     month_budget_index: dict[UUID, CategoryGroupBudget],
     year_budgets: list[CategoryGroupBudget],
@@ -146,7 +152,9 @@ def _build_group_status(  # noqa: PLR0913, PLR0917
     avg_spending: dict[UUID, Decimal],
     month: int,
 ) -> CategoryGroupBudgetStatus:
-    effective = month_budget_index.get(gid)
+    # gid is None only for the synthetic Uncategorized row — it has no
+    # CategoryGroup entity, so it can never carry a budget or an average.
+    effective = month_budget_index.get(gid) if gid is not None else None
 
     monthly_bd = month_by_group.get(gid)
     ytd_bd = ytd_by_group.get(gid)
@@ -177,9 +185,37 @@ def _build_group_status(  # noqa: PLR0913, PLR0917
         ytd_health=determine_health(ytd_spent, ytd_budget_val)
         if ytd_budget_val is not None
         else None,
-        average_monthly_spending=avg_spending.get(gid, Decimal(0)),
+        average_monthly_spending=(
+            avg_spending.get(gid, Decimal(0)) if gid is not None else Decimal(0)
+        ),
         categories=monthly_bd.categories if monthly_bd else [],
         budgeted_months=len(budgets_through_month),
+    )
+
+
+def _uncategorized_status_if_present(
+    month_budget_index: dict[UUID, CategoryGroupBudget],
+    year_budgets: list[CategoryGroupBudget],
+    month_by_group: dict[UUID | None, CategoryGroupBreakdown],
+    ytd_by_group: dict[UUID | None, CategoryGroupBreakdown],
+    avg_spending: dict[UUID, Decimal],
+    month: int,
+) -> CategoryGroupBudgetStatus | None:
+    """Synthesize the Uncategorized row when spending exists in categories
+    with no group mapping — otherwise that spend vanishes from every status
+    and grand total (v1.7.2). Never budgetable: group_id=None has no
+    CategoryGroup entity behind it."""
+    if None not in month_by_group and None not in ytd_by_group:
+        return None
+    return _build_group_status(
+        None,
+        UNCATEGORIZED_GROUP_NAME,
+        month_budget_index,
+        year_budgets,
+        month_by_group,
+        ytd_by_group,
+        avg_spending,
+        month,
     )
 
 
@@ -277,6 +313,16 @@ def compute_budget_overview(  # noqa: PLR0913, PLR0917
         )
         for gid, name in group_names.items()
     ]
+    uncategorized = _uncategorized_status_if_present(
+        month_budget_index,
+        year_budgets,
+        month_by_group,
+        ytd_by_group,
+        avg_spending,
+        month,
+    )
+    if uncategorized is not None:
+        statuses.append(uncategorized)
 
     drift = _check_spending_integrity(statuses, month_by_group, ytd_by_group)
     return _assemble_overview(statuses, year, month, spending_drift=drift)
@@ -449,6 +495,24 @@ def compute_personal_budget_overview(  # noqa: PLR0913, PLR0914, PLR0917
         statuses.append(
             evolve(
                 status, household_spending=household_spend, personal_spending=personal
+            )
+        )
+
+    uncategorized = _uncategorized_status_if_present(
+        month_budget_index,
+        year_budgets,
+        month_by_group,
+        ytd_by_group,
+        avg_spending,
+        month,
+    )
+    if uncategorized is not None:
+        household_spend, personal = month_split.get(None, (Decimal(0), Decimal(0)))
+        statuses.append(
+            evolve(
+                uncategorized,
+                household_spending=household_spend,
+                personal_spending=personal,
             )
         )
 

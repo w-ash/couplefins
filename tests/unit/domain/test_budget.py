@@ -13,6 +13,7 @@ from src.domain.budget import (
     determine_health,
 )
 from src.domain.categories import compute_category_breakdowns
+from src.domain.constants import UNCATEGORIZED_GROUP_NAME
 from src.domain.reconciliation import reconcile
 from tests.fixtures.factories import (
     make_category,
@@ -367,6 +368,90 @@ def test_ytd_totals_include_group_unbudgeted_in_viewed_month() -> None:
     # Visible rows must sum to the Total stat.
     assert overview.total_ytd_budget == Decimal(600)
     assert overview.total_ytd_spent == Decimal("150.00")
+
+
+def test_uncategorized_row_surfaces_unmapped_spending() -> None:
+    """Spending in a category with no group mapping gets its own
+    Uncategorized status instead of vanishing from every status and total."""
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    payer = UUID("bbbbbbbb-0000-0000-0000-000000000001")
+
+    groups = [make_category_group(id=food_gid, name="Food & Dining")]
+    # "Mystery Category" is intentionally absent from the lookup.
+    lookup = {"Groceries": (food_gid, "Food & Dining")}
+    txs = [
+        make_transaction(
+            category="Groceries",
+            amount=Decimal("-100.00"),
+            household=True,
+            date=date(2026, 1, 10),
+            payer_person_id=payer,
+        ),
+        make_transaction(
+            category="Mystery Category",
+            amount=Decimal("-40.00"),
+            household=True,
+            date=date(2026, 1, 12),
+            payer_person_id=payer,
+        ),
+    ]
+
+    overview = compute_budget_overview([], [], txs, lookup, groups, 2026, 1)
+
+    uncategorized = next(
+        s for s in overview.group_statuses if s.group_name == UNCATEGORIZED_GROUP_NAME
+    )
+    assert uncategorized.group_id is None
+    assert uncategorized.monthly_budget is None
+    assert uncategorized.monthly_spent == Decimal("40.00")
+    # Item 3's "any group with YTD spend" rule now folds it into the total —
+    # dollars no longer vanish.
+    assert overview.total_ytd_spent == Decimal("140.00")
+    # Everything is accounted for: the drift check finds nothing amiss.
+    assert overview.spending_drift is None
+
+
+def test_no_uncategorized_row_when_everything_is_mapped() -> None:
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    groups = [make_category_group(id=food_gid, name="Food & Dining")]
+    lookup = {"Groceries": (food_gid, "Food & Dining")}
+    txs = [
+        make_transaction(category="Groceries", amount=Decimal("-100.00")),
+    ]
+
+    overview = compute_budget_overview([], [], txs, lookup, groups, 2026, 1)
+
+    assert all(
+        s.group_name != UNCATEGORIZED_GROUP_NAME for s in overview.group_statuses
+    )
+
+
+def test_personal_overview_uncategorized_row_surfaces() -> None:
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    groups = [make_category_group(id=food_gid, name="Food & Dining")]
+    lookup: dict[str, tuple[UUID, str]] = {}  # nothing mapped
+
+    txs = [
+        make_transaction(
+            category="Mystery Category",
+            amount=Decimal("-40.00"),
+            household=False,
+            payer_percentage=100,
+            payer_person_id=ALICE,
+            date=date(2026, 1, 12),
+        ),
+    ]
+
+    overview = compute_personal_budget_overview(
+        [], [], txs, lookup, groups, 2026, 1, ALICE
+    )
+
+    uncategorized = next(
+        s for s in overview.group_statuses if s.group_name == UNCATEGORIZED_GROUP_NAME
+    )
+    assert uncategorized.group_id is None
+    assert uncategorized.personal_spending == Decimal("40.00")
+    assert uncategorized.monthly_spent == Decimal("40.00")
 
 
 def test_excluded_transaction_not_budget_relevant() -> None:

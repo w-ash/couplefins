@@ -91,6 +91,36 @@ const overviewWithData: BudgetOverviewResponse = {
   ],
 };
 
+const overviewWithUncategorized: BudgetOverviewResponse = {
+  ...overviewWithData,
+  group_statuses: [
+    ...overviewWithData.group_statuses,
+    {
+      group_id: null,
+      group_name: "Uncategorized",
+      budget_id: null,
+      monthly_budget: null,
+      monthly_spent: 40,
+      ytd_budget: null,
+      ytd_spent: 40,
+      monthly_health: null,
+      ytd_health: null,
+      average_monthly_spending: 0,
+      budgeted_months: 0,
+      categories: [
+        {
+          category: "Totally New Category",
+          total_amount: 40,
+          transaction_count: 1,
+          include_personal: false,
+          household_amount: 40,
+          personal_amounts: [],
+        },
+      ],
+    },
+  ],
+};
+
 describe("BudgetPage", () => {
   beforeEach(() => {
     server.use(
@@ -145,6 +175,23 @@ describe("BudgetPage", () => {
       expect(screen.getAllByText("Auto & Transport").length).toBeGreaterThan(0);
     });
 
+    expect(screen.getByText("Spending without a budget")).toBeInTheDocument();
+  });
+
+  it("renders the Uncategorized row (group_id: null) without crashing", async () => {
+    server.use(
+      http.get("/api/v1/budgets/overview", () =>
+        HttpResponse.json(overviewWithUncategorized),
+      ),
+    );
+
+    renderWithProviders(<BudgetPage />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Uncategorized").length).toBeGreaterThan(0);
+    });
+
+    // It has no budget, so it lands in the unbudgeted section with everything else.
     expect(screen.getByText("Spending without a budget")).toBeInTheDocument();
   });
 

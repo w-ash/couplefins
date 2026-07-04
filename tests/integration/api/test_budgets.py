@@ -158,6 +158,33 @@ async def test_overview_with_budget_and_spending(client: AsyncClient) -> None:
     assert food_status["monthly_health"] == "on_track"
 
 
+async def test_overview_surfaces_uncategorized_row(client: AsyncClient) -> None:
+    """A brand-new category (auto-created with group_id=None on upload) gets
+    its own Uncategorized status instead of vanishing from every total."""
+    persons, cookies = await setup_and_login(client)
+    alice_id = persons[0]["id"]
+
+    csv = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        "2026-01-15,Mystery Shop,Totally New Category,Chase,,,-40.00,shared\n"
+    )
+    await upload_csv(client, alice_id, csv, cookies=cookies)
+
+    response = await client.get(
+        "/api/v1/budgets/overview?year=2026&month=1", cookies=cookies
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    uncategorized = next(
+        s for s in data["group_statuses"] if s["group_name"] == "Uncategorized"
+    )
+    assert uncategorized["group_id"] is None
+    assert uncategorized["monthly_budget"] is None
+    assert uncategorized["monthly_spent"] == pytest.approx(40.0)
+    assert data["spending_drift"] is None
+
+
 async def test_create_personal_budget(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
     group_id = await _get_group_id(client, "Food & Dining", cookies)

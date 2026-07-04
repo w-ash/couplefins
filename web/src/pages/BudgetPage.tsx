@@ -541,11 +541,15 @@ function BudgetGroupRow({
   );
 }
 
+// A group real enough to carry a budget — excludes the synthetic
+// Uncategorized row (group_id: null), which has no CategoryGroup entity.
+type BudgetableGroup = GroupBudgetStatusResponse & { group_id: string };
+
 function AddBudgetForm({
   unbudgetedGroups,
   onSave,
 }: {
-  unbudgetedGroups: GroupBudgetStatusResponse[];
+  unbudgetedGroups: BudgetableGroup[];
   onSave: (groupId: string, amount: number) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -794,10 +798,14 @@ export function BudgetPage() {
       (s) => s.monthly_budget == null,
     );
 
-    // For the add form: groups that don't have any budget at all
+    // For the add form: groups that don't have any budget at all. The
+    // synthetic Uncategorized row (group_id null) has no CategoryGroup
+    // entity behind it and can never be budgeted, so it's excluded here —
+    // it still renders in the unbudgeted section above via `unbudgeted`.
     const budgetedGroupIds = new Set(data.budgets.map((b) => b.group_id));
     const groupsForAdd = data.group_statuses.filter(
-      (s) => !budgetedGroupIds.has(s.group_id),
+      (s): s is typeof s & { group_id: string } =>
+        s.group_id != null && !budgetedGroupIds.has(s.group_id),
     );
 
     return {
@@ -806,6 +814,15 @@ export function BudgetPage() {
       allGroupsForAdd: groupsForAdd,
     };
   }, [data, sortMode, viewMode]);
+
+  // The synthetic Uncategorized row carries group_id: null — fall back to a
+  // stable key and skip the id-keyed lookups rather than querying with null.
+  const rowKey = (s: GroupBudgetStatusResponse) =>
+    s.group_id ?? "uncategorized";
+  const rowIcon = (s: GroupBudgetStatusResponse) =>
+    s.group_id ? (groupIconMap.get(s.group_id) ?? null) : null;
+  const rowSourceBudget = (s: GroupBudgetStatusResponse) =>
+    s.group_id ? (sourceBudgetMap.get(s.group_id) ?? null) : null;
 
   const toBreakdown = (
     s: GroupBudgetStatusResponse,
@@ -954,16 +971,14 @@ export function BudgetPage() {
                   <div className="space-y-3">
                     {unbudgetedGroups.map((status) => (
                       <BudgetGroupRow
-                        key={status.group_id}
+                        key={rowKey(status)}
                         status={status}
                         viewMode={viewMode}
                         breakdown={toBreakdown(status)}
-                        icon={groupIconMap.get(status.group_id) ?? null}
+                        icon={rowIcon(status)}
                         year={year}
                         month={month}
-                        sourceBudgetAmount={
-                          sourceBudgetMap.get(status.group_id) ?? null
-                        }
+                        sourceBudgetAmount={rowSourceBudget(status)}
                         onUpdate={handleUpdate}
                         onDelete={handleDelete}
                         budgetQueryKey={queryKey}
@@ -983,16 +998,14 @@ export function BudgetPage() {
                 <div className="space-y-3">
                   {budgetedGroups.map((status) => (
                     <BudgetGroupRow
-                      key={status.group_id}
+                      key={rowKey(status)}
                       status={status}
                       viewMode={viewMode}
                       breakdown={toBreakdown(status)}
-                      icon={groupIconMap.get(status.group_id) ?? null}
+                      icon={rowIcon(status)}
                       year={year}
                       month={month}
-                      sourceBudgetAmount={
-                        sourceBudgetMap.get(status.group_id) ?? null
-                      }
+                      sourceBudgetAmount={rowSourceBudget(status)}
                       onUpdate={handleUpdate}
                       onDelete={handleDelete}
                       budgetQueryKey={queryKey}
@@ -1012,16 +1025,14 @@ export function BudgetPage() {
                   <div className="space-y-3">
                     {unbudgetedGroups.map((status) => (
                       <BudgetGroupRow
-                        key={status.group_id}
+                        key={rowKey(status)}
                         status={status}
                         viewMode={viewMode}
                         breakdown={toBreakdown(status)}
-                        icon={groupIconMap.get(status.group_id) ?? null}
+                        icon={rowIcon(status)}
                         year={year}
                         month={month}
-                        sourceBudgetAmount={
-                          sourceBudgetMap.get(status.group_id) ?? null
-                        }
+                        sourceBudgetAmount={rowSourceBudget(status)}
                         onUpdate={handleUpdate}
                         onDelete={handleDelete}
                         budgetQueryKey={queryKey}

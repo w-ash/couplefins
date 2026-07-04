@@ -7,7 +7,7 @@
 import type { CategorySpendResponse } from './categorySpendResponse';
 
 export interface GroupBudgetStatusResponse {
-  group_id: string;
+  group_id: string | null;
   group_name: string;
   budget_id: string | null;
   monthly_budget: number | null;

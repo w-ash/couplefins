@@ -245,7 +245,9 @@ def _build_budget_alerts(  # noqa: PLR0913, PLR0917
             health=status.monthly_health,
         )
         for status in overview.group_statuses
-        if status.monthly_health in alert_statuses and status.monthly_budget is not None
+        if status.group_id is not None
+        and status.monthly_health in alert_statuses
+        and status.monthly_budget is not None
     ]
     # Sort: over_budget first, then by overage
     alerts.sort(
