@@ -631,9 +631,35 @@ def test_personal_relevant_own_personal_tx() -> None:
     assert _is_personal_budget_relevant(tx, ALICE) is True
 
 
-def test_personal_irrelevant_other_personal_tx() -> None:
-    tx = make_transaction(household=False, payer_person_id=ALICE)
+def test_personal_relevant_beneficiary_of_partner_split() -> None:
+    """A personal split (non-household, pct<100) is relevant to the
+    beneficiary too — their share of the cost is their personal spending
+    (decided 2026-07-02: "if Bob pays for Alice and it's not household,
+    then it's Alice's personal")."""
+    tx = make_transaction(household=False, payer_person_id=ALICE, payer_percentage=50)
+    assert _is_personal_budget_relevant(tx, BOB) is True
+
+
+def test_personal_irrelevant_when_beneficiary_share_is_zero() -> None:
+    """Alice's wholly personal spending (pct=100, no split) never touches Bob."""
+    tx = make_transaction(household=False, payer_person_id=ALICE, payer_percentage=100)
     assert _is_personal_budget_relevant(tx, BOB) is False
+
+
+def test_personal_irrelevant_payer_spotted_zero_share() -> None:
+    """A spotted front (pct=0) is $0 for the payer — not their spending."""
+    tx = make_transaction(
+        household=False, payer_person_id=ALICE, payer_percentage=0, tags=("bob",)
+    )
+    assert _is_personal_budget_relevant(tx, ALICE) is False
+
+
+def test_personal_relevant_beneficiary_of_spotted_front() -> None:
+    """The beneficiary of a spotted front owes 100% back — fully relevant."""
+    tx = make_transaction(
+        household=False, payer_person_id=ALICE, payer_percentage=0, tags=("bob",)
+    )
+    assert _is_personal_budget_relevant(tx, BOB) is True
 
 
 def test_personal_irrelevant_excluded() -> None:
@@ -789,6 +815,71 @@ def test_personal_overview_partner_household_creates_share() -> None:
     assert status.household_spending == Decimal("100.00")
     assert status.personal_spending == Decimal(0)
     assert status.monthly_spent == Decimal("100.00")
+
+
+def test_personal_overview_spotted_front_attributes_to_beneficiary() -> None:
+    """A spotted front ($200 tagged bob, pct=0, payer=Alice) is $0 for Alice,
+    $200 for Bob — the beneficiary's personal spending (decided 2026-07-02)."""
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    groups = [make_category_group(id=food_gid, name="Food & Dining")]
+    lookup = {"Groceries": (food_gid, "Food & Dining")}
+
+    txs = [
+        make_transaction(
+            category="Groceries",
+            amount=Decimal("-200.00"),
+            payer_percentage=0,
+            household=False,
+            payer_person_id=ALICE,
+            tags=("bob",),
+            date=date(2026, 1, 10),
+        ),
+    ]
+
+    alice_overview = compute_personal_budget_overview(
+        [], [], txs, lookup, groups, 2026, 1, ALICE
+    )
+    bob_overview = compute_personal_budget_overview(
+        [], [], txs, lookup, groups, 2026, 1, BOB
+    )
+
+    # Alice (payer, 0% share) sees nothing.
+    alice_status = alice_overview.group_statuses[0]
+    assert alice_status.personal_spending == Decimal(0)
+    assert alice_status.monthly_spent == Decimal(0)
+    # Bob (beneficiary, 100% share) sees the full $200.
+    bob_status = bob_overview.group_statuses[0]
+    assert bob_status.personal_spending == Decimal("200.00")
+    assert bob_status.monthly_spent == Decimal("200.00")
+
+
+def test_personal_overview_personal_split_divides_across_both() -> None:
+    """A non-household 70/30 split books 70% to the payer, 30% to the
+    beneficiary — both are relevant, each sees their own share."""
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    groups = [make_category_group(id=food_gid, name="Food & Dining")]
+    lookup = {"Groceries": (food_gid, "Food & Dining")}
+
+    txs = [
+        make_transaction(
+            category="Groceries",
+            amount=Decimal("-100.00"),
+            payer_percentage=70,
+            household=False,
+            payer_person_id=ALICE,
+            date=date(2026, 1, 10),
+        ),
+    ]
+
+    alice_overview = compute_personal_budget_overview(
+        [], [], txs, lookup, groups, 2026, 1, ALICE
+    )
+    bob_overview = compute_personal_budget_overview(
+        [], [], txs, lookup, groups, 2026, 1, BOB
+    )
+
+    assert alice_overview.group_statuses[0].personal_spending == Decimal("70.00")
+    assert bob_overview.group_statuses[0].personal_spending == Decimal("30.00")
 
 
 def test_personal_overview_household_refund_reduces_share() -> None:

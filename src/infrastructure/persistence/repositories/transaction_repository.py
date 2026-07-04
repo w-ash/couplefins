@@ -200,10 +200,23 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         *,
         tags: tuple[str, ...] | None = None,
     ) -> list[Transaction]:
+        """Rows relevant to this person's personal scope: everything they
+        paid, plus non-household rows someone else paid where this person
+        is the beneficiary (payer_percentage < 100, e.g. spotted) — their
+        share of those rows is their personal spending (v1.7.2)."""
+        pid = str(person_id)
         return await self._query(
-            TransactionModel.payer_person_id == str(person_id),
             TransactionModel.date >= start_date.isoformat(),
             TransactionModel.date <= end_date.isoformat(),
+            (TransactionModel.payer_person_id == pid)
+            | (
+                (TransactionModel.payer_person_id != pid)
+                & TransactionModel.household.is_(False)
+                & (
+                    TransactionModel.payer_percentage
+                    < SplitDefaults.MAX_PAYER_PERCENTAGE
+                )
+            ),
             *self._tag_filter(tags),
         )
 

@@ -12,6 +12,7 @@ from src.domain.categories import (
     compute_category_breakdowns,
     group_category_breakdowns,
 )
+from src.domain.constants import SplitDefaults
 from src.domain.entities.category_group import CategoryGroup
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.entities.transaction import Transaction
@@ -277,9 +278,18 @@ def compute_person_share(tx: Transaction, person_id: UUID) -> Decimal:
 
 
 def _is_personal_budget_relevant(tx: Transaction, person_id: UUID) -> bool:
+    """A non-household transaction is relevant to a person whenever their
+    share of it is nonzero — as payer (payer_percentage > 0) or as
+    beneficiary (payer_percentage < 100, i.e. someone else fronted it and
+    this person owes part or all of it back). Household rows are always
+    relevant (everyone has some share of shared life)."""
     if tx.is_excluded or tx.is_settlement:
         return False
-    return tx.household or tx.payer_person_id == person_id
+    if tx.household:
+        return True
+    if tx.payer_person_id == person_id:
+        return tx.payer_percentage > 0
+    return tx.payer_percentage < SplitDefaults.MAX_PAYER_PERCENTAGE
 
 
 def _compute_personal_breakdowns(
@@ -315,11 +325,16 @@ def _compute_personal_breakdowns(
             cat_household[tx.category] += share
             group_household[gid] += share
         else:
-            amount = abs(tx.amount)
-            cat_total[tx.category] += amount
+            # Personal spending for this person = their share of the cost —
+            # payer_percentage when they're the payer, 100 - payer_percentage
+            # when they're the beneficiary (e.g. a spotted front). Sign-aware
+            # like the household branch: a refund subtracts.
+            magnitude = compute_person_share(tx, person_id)
+            share = magnitude if tx.amount < 0 else -magnitude
+            cat_total[tx.category] += share
             cat_count[tx.category] += 1
-            cat_personal[tx.category][person_id] += amount
-            group_personal[gid] += amount
+            cat_personal[tx.category][person_id] += share
+            group_personal[gid] += share
 
     category_breakdowns: list[CategoryBreakdown] = []
     for cat, amount in cat_total.items():

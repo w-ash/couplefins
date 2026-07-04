@@ -182,18 +182,24 @@ def _resolve_active_month(
 def _compute_personal_spending(
     txs: list[Transaction], person_id: UUID
 ) -> tuple[Decimal, Decimal, Decimal]:
-    """Compute (total, household_portion, own_spending) for one person."""
+    """Compute (total, household_portion, own_spending) for one person.
+
+    Personal spending is this person's *share* of non-household rows — the
+    payer's percentage when they paid, or 100 - payer_percentage when their
+    partner fronted it and they owe some or all of it back (e.g. spotted).
+    """
     household_portion = Decimal(0)
     own_spending = Decimal(0)
     for tx in txs:
         if tx.is_excluded or tx.is_settlement:
             continue
+        # Sign-aware in both branches: a refund subtracts the share instead
+        # of inflating it.
+        share = compute_person_share(tx, person_id)
         if tx.household:
-            # Sign-aware: a refund subtracts the share instead of inflating it.
-            share = compute_person_share(tx, person_id)
             household_portion += share if tx.amount < 0 else -share
-        elif tx.payer_person_id == person_id and tx.amount < 0:
-            own_spending += abs(tx.amount)
+        else:
+            own_spending += share if tx.amount < 0 else -share
     return household_portion + own_spending, household_portion, own_spending
 
 

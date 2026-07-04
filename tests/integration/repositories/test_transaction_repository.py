@@ -175,6 +175,59 @@ async def test_get_by_person_and_original_date_range_coalesces_dates(
     assert ids == {in_window.id, edited_out.id}
 
 
+async def test_get_by_person_and_date_range_includes_beneficiary_rows(
+    db_session: AsyncSession,
+) -> None:
+    """A non-household row someone else paid reaches the beneficiary's
+    personal scope whenever payer_percentage < 100 (their share is nonzero)
+    — e.g. a spotted front. A wholly personal row (pct=100) stays payer-only
+    (v1.7.2)."""
+    repo = TransactionRepository(db_session)
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    upload = make_upload(person_id=alice.id)
+
+    persons = PersonRepository(db_session)
+    await persons.save(alice)
+    await persons.save(bob)
+    await UploadRepository(db_session).save(upload)
+
+    spotted = make_transaction(
+        upload_id=upload.id,
+        date=date(2026, 1, 10),
+        payer_person_id=alice.id,
+        payer_percentage=0,
+        household=False,
+        tags=("bob",),
+        original_statement="SPOTTED",
+    )
+    alice_own = make_transaction(
+        upload_id=upload.id,
+        date=date(2026, 1, 12),
+        payer_person_id=alice.id,
+        payer_percentage=100,
+        household=False,
+        tags=(),
+        original_statement="ALICE OWN",
+    )
+    await repo.save_batch([spotted, alice_own])
+    await db_session.commit()
+
+    bob_rows = await repo.get_by_person_and_date_range(
+        bob.id, date(2026, 1, 1), date(2026, 1, 31)
+    )
+    bob_ids = {tx.id for tx in bob_rows}
+    assert spotted.id in bob_ids
+    assert alice_own.id not in bob_ids
+
+    alice_rows = await repo.get_by_person_and_date_range(
+        alice.id, date(2026, 1, 1), date(2026, 1, 31)
+    )
+    alice_ids = {tx.id for tx in alice_rows}
+    assert spotted.id in alice_ids
+    assert alice_own.id in alice_ids
+
+
 async def _seed_flagged_transaction(repo: TransactionRepository, session: AsyncSession):
     """One saved transaction with both in-app flags set (linked + excluded)."""
     alice = make_person(name="Alice")
