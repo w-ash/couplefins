@@ -43,8 +43,11 @@ def test_amount_within_tolerance() -> None:
 
 
 def test_amount_outside_tolerance_no_amount_reason() -> None:
+    # A category signal keeps the tx qualifying so the test can isolate the
+    # amount-tolerance behavior — household=False alone is no longer enough.
     tx = make_transaction(
         merchant="Transfer",
+        category="Transfer",
         amount=Decimal("-101.00"),
         household=False,
     )
@@ -202,3 +205,59 @@ def test_credit_card_payment_category_matches() -> None:
     candidates = find_settlement_candidates([tx], Decimal("50.00"), [])
     assert len(candidates) == 1
     assert any("Category" in r for r in candidates[0].match_reasons)
+
+
+def test_personal_transaction_without_real_signal_not_a_candidate() -> None:
+    """A non-household transaction with no merchant, category, or amount
+    signal must not present as a settlement candidate — `household=False`
+    alone is no longer sufficient. Previously any personal expense scored
+    >=1 via the personal bonus and could present as a "matching transfer"
+    with zero actual evidence (e.g. two unrelated same-price purchases)."""
+    tx = make_transaction(
+        merchant="Coffee Shop",
+        category="Coffee",
+        amount=Decimal("-42.00"),
+        household=False,
+    )
+    candidates = find_settlement_candidates([tx], Decimal("100.00"), [])
+    assert candidates == []
+
+
+def test_real_signal_still_qualifies_regardless_of_household() -> None:
+    """A genuine transfer signal (merchant match here) qualifies whether or
+    not the transaction happens to be household — household only affects
+    the ranking bonus among already-qualifying candidates, not whether a
+    transaction qualifies at all."""
+    tx = make_transaction(
+        merchant="Venmo Payment",
+        amount=Decimal("-75.00"),
+        household=True,
+    )
+    merchants = [make_settlement_merchant(name="Venmo", merchant_pattern="venmo")]
+    candidates = find_settlement_candidates([tx], Decimal("999.00"), merchants)
+
+    assert len(candidates) == 1
+    assert not any("Personal" in r for r in candidates[0].match_reasons)
+
+
+def test_ranking_prefers_stronger_signal_over_personal_bonus() -> None:
+    """A weak-signal personal transaction must not outrank a strong-signal
+    household transaction just because of the personal bonus."""
+    strong_household = make_transaction(
+        merchant="Venmo Payment",
+        amount=Decimal("-100.00"),
+        household=True,
+    )
+    weak_personal = make_transaction(
+        merchant="Random Store",
+        category="Shopping",
+        amount=Decimal("-100.30"),  # within tolerance of the settlement amount
+        household=False,
+    )
+    merchants = [make_settlement_merchant(name="Venmo", merchant_pattern="venmo")]
+    candidates = find_settlement_candidates(
+        [weak_personal, strong_household], Decimal("100.00"), merchants
+    )
+
+    assert len(candidates) == 2
+    assert candidates[0].transaction is strong_household

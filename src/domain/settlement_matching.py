@@ -53,16 +53,22 @@ def find_settlement_candidates(
             score += _SCORE_AMOUNT_MATCH
             reasons.append("Amount matches settlement")
 
+        # A real signal (merchant, category, or amount match) is required to
+        # qualify — otherwise any non-household transaction would present as
+        # a "matching transfer" with no actual evidence. `household` is a
+        # ranking bonus among qualifying candidates, never a qualifier.
+        if score == 0:
+            continue
+
         if not tx.household:
             score += _SCORE_PERSONAL
             reasons.append("Personal transaction")
 
-        if score > 0:
-            candidates.append(
-                SettlementCandidate(
-                    transaction=tx, score=score, match_reasons=tuple(reasons)
-                )
+        candidates.append(
+            SettlementCandidate(
+                transaction=tx, score=score, match_reasons=tuple(reasons)
             )
+        )
 
     candidates.sort(key=lambda c: (-c.score, c.transaction.date.isoformat()))
     return candidates[:_MAX_CANDIDATES]
