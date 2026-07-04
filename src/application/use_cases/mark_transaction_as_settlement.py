@@ -46,7 +46,8 @@ class MarkTransactionAsSettlementUseCase:
                 settlement = await require_by_id(
                     uow.settlements.get_by_id, command.settlement_id, "Settlement"
                 )
-                periods.add((settlement.year, settlement.month))
+                if settlement.year is not None and settlement.month is not None:
+                    periods.add((settlement.year, settlement.month))
             await assert_periods_not_finalized(uow, periods)
 
             if command.is_settlement and command.settlement_id:

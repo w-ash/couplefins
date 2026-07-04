@@ -64,8 +64,9 @@ class LinkedTransactionResponse(BaseModel):
 
 class SettlementResponse(BaseModel):
     id: UUID
-    year: int
-    month: int
+    # Optional "recorded against" annotation — display metadata, never math.
+    year: int | None
+    month: int | None
     amount: MoneyField
     from_person_id: UUID
     to_person_id: UUID

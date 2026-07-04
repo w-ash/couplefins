@@ -449,7 +449,7 @@ def test_settlement_year_month_annotation_never_enters_math() -> None:
     settled = datetime(2026, 3, 1, tzinfo=UTC)
     settlement_id = uuid.uuid4()
 
-    def annotated(year: int, month: int) -> Settlement:
+    def annotated(year: int | None, month: int | None) -> Settlement:
         return make_settlement(
             id=settlement_id,
             amount=Decimal(60),
@@ -463,8 +463,10 @@ def test_settlement_year_month_annotation_never_enters_math() -> None:
 
     correct = compute_ledger(txs, [annotated(2026, 3)], PERSONS)
     wrong = compute_ledger(txs, [annotated(2025, 7)], PERSONS)
+    unannotated = compute_ledger(txs, [annotated(None, None)], PERSONS)
 
     assert correct == wrong
+    assert correct == unannotated
 
 
 class _Lcg:

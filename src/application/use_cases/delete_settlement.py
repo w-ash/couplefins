@@ -42,11 +42,10 @@ class DeleteSettlementUseCase:
 
             # Unlinking flips is_settlement in each linked tx's own month
             # (cross-month links exist via the 7-day candidate window).
-            await assert_periods_not_finalized(
-                uow,
-                {(settlement.year, settlement.month)}
-                | {(tx.date.year, tx.date.month) for tx in linked_txs},
-            )
+            periods = {(tx.date.year, tx.date.month) for tx in linked_txs}
+            if settlement.year is not None and settlement.month is not None:
+                periods.add((settlement.year, settlement.month))
+            await assert_periods_not_finalized(uow, periods)
 
             for tx in linked_txs:
                 if tx.is_settlement:

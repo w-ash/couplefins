@@ -183,8 +183,8 @@ def make_transaction_edit(
 def make_settlement(
     *,
     id: uuid.UUID | None = None,
-    year: int = 2026,
-    month: int = 1,
+    year: int | None = 2026,
+    month: int | None = 1,
     amount: Decimal = Decimal("50.00"),
     from_person_id: uuid.UUID | None = None,
     to_person_id: uuid.UUID | None = None,

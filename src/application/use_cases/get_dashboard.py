@@ -508,7 +508,9 @@ class GetDashboardUseCase:
                 s for s in all_year_settlements if s.month == active_month
             ]
             ytd_settlements = [
-                s for s in all_year_settlements if s.month <= active_month
+                s
+                for s in all_year_settlements
+                if s.month is not None and s.month <= active_month
             ]
 
             return GetDashboardResult(
@@ -535,7 +537,10 @@ class GetDashboardUseCase:
                         year=command.year,
                         finalized_months=finalized_months,
                         settlements_by_month=partition_by_month(
-                            all_year_settlements, lambda s: s.month
+                            # get_by_year only returns annotated rows; `or 0`
+                            # is typing-only narrowing (month is never 0).
+                            all_year_settlements,
+                            lambda s: s.month or 0,
                         ),
                         gross_by_month=gross_by_month,
                         by_month_household=by_month_household,

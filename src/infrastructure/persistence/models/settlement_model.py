@@ -12,9 +12,9 @@ class SettlementModel(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     # Optional "recorded against" annotations since v1.7.5 — display metadata,
-    # never ledger math. Entity typing flips to `int | None` in handoff 2.
-    year: Mapped[int] = mapped_column(Integer, nullable=True)
-    month: Mapped[int] = mapped_column(Integer, nullable=True)
+    # never ledger math.
+    year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    month: Mapped[int | None] = mapped_column(Integer, nullable=True)
     amount: Mapped[str] = mapped_column(String, nullable=False)
     from_person_id: Mapped[str] = mapped_column(
         String, ForeignKey("persons.id"), nullable=False

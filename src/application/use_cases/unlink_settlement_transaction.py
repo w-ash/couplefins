@@ -36,13 +36,10 @@ class UnlinkSettlementTransactionUseCase:
                 uow.transactions.get_by_id, command.transaction_id, "Transaction"
             )
 
-            await assert_periods_not_finalized(
-                uow,
-                {
-                    (settlement.year, settlement.month),
-                    (tx.date.year, tx.date.month),
-                },
-            )
+            periods = {(tx.date.year, tx.date.month)}
+            if settlement.year is not None and settlement.month is not None:
+                periods.add((settlement.year, settlement.month))
+            await assert_periods_not_finalized(uow, periods)
 
             deleted = await uow.settlement_transaction_links.delete_by_settlement_and_transaction(
                 command.settlement_id, command.transaction_id

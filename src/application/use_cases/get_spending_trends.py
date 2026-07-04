@@ -82,7 +82,9 @@ async def _build_settlement_trend(
         date(year, 1, 1), date(year, 12, 31)
     )
     by_month = partition_by_month(settlement_txs, lambda tx: tx.date.month)
-    settlements_by_month = partition_by_month(settlements, lambda s: s.month)
+    # get_by_year only returns annotated rows; `or 0` is typing-only
+    # narrowing (month is never 0).
+    settlements_by_month = partition_by_month(settlements, lambda s: s.month or 0)
 
     trend: list[MonthlySettlement] = []
     for month_num in sorted(by_month):

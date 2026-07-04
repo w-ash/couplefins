@@ -14,8 +14,8 @@ from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 def build_settlement(  # noqa: PLR0913
     *,
-    year: int,
-    month: int,
+    year: int | None,
+    month: int | None,
     from_person_id: UUID,
     to_person_id: UUID,
     amount: Decimal,

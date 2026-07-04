@@ -38,6 +38,19 @@ class TestSettlementEntity:
         s12 = make_settlement(month=12)
         assert s12.month == 12
 
+    def test_annotation_can_be_absent(self) -> None:
+        s = make_settlement(year=None, month=None)
+        assert s.year is None
+        assert s.month is None
+
+    def test_year_without_month_raises(self) -> None:
+        with pytest.raises(ValueError, match="set together"):
+            make_settlement(year=2026, month=None)
+
+    def test_month_without_year_raises(self) -> None:
+        with pytest.raises(ValueError, match="set together"):
+            make_settlement(year=None, month=1)
+
     def test_waived_settlement(self) -> None:
         s = make_settlement(amount=Decimal(0), is_waived=True, method=None)
         assert s.is_waived is True
