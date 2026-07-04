@@ -29,7 +29,7 @@ from src.domain.insights import (
     compute_person_paid_by_month,
     compute_spending_trends,
 )
-from src.domain.reconciliation import reconcile_all_months
+from src.domain.reconciliation import compute_net_position, reconcile_all_months
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -80,7 +80,7 @@ def _build_settlement_trend(
         if summary.settlement is None:
             continue
         month_settlements = settlements_by_month.get(month_num, [])
-        total_settled = sum((s.amount for s in month_settlements), Decimal(0))
+        net = compute_net_position(summary.settlement, month_settlements)
         trend.append(
             MonthlySettlement(
                 year=year,
@@ -88,7 +88,7 @@ def _build_settlement_trend(
                 amount=summary.settlement.amount,
                 from_person_id=summary.settlement.from_person_id,
                 to_person_id=summary.settlement.to_person_id,
-                is_settled=total_settled >= summary.settlement.amount,
+                is_settled=net is None or net.amount == 0,
             )
         )
     return trend

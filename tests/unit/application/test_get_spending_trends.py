@@ -283,6 +283,36 @@ async def test_settlement_trend_marks_settled() -> None:
     assert result.settlement_trend[0].is_settled is True
 
 
+async def test_settlement_trend_reverse_direction_not_settled() -> None:
+    uow, alice, bob, _food_group = _setup_uow()
+    uow.transactions.get_household_by_year.return_value = [
+        make_transaction(
+            date=date(2026, 1, 10),
+            category="Dining Out",
+            amount=Decimal("-100.00"),
+            payer_person_id=alice.id,
+        ),
+    ]
+    # Gross: bob owes alice $50. A same-magnitude payment in the *wrong*
+    # direction (alice paying bob) doubles the imbalance instead of
+    # clearing it — must not be marked settled.
+    uow.settlements.get_by_year.return_value = [
+        make_settlement(
+            year=2026,
+            month=1,
+            amount=Decimal("50.00"),
+            from_person_id=alice.id,
+            to_person_id=bob.id,
+        ),
+    ]
+
+    command = GetSpendingTrendsCommand(year=2026, month=1)
+    result = await GetSpendingTrendsUseCase().execute(command, uow)
+
+    assert len(result.settlement_trend) == 1
+    assert result.settlement_trend[0].is_settled is False
+
+
 async def test_persons_included() -> None:
     uow, _alice, _bob, _ = _setup_uow()
     uow.transactions.get_household_by_year.return_value = []
