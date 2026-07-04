@@ -141,11 +141,16 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         return [TransactionModel.tags.op("@>")(cast([t.lower() for t in tags], JSONB))]
 
     async def get_by_date_range(
-        self, start_date: date, end_date: date
+        self,
+        start_date: date,
+        end_date: date,
+        *,
+        tags: tuple[str, ...] | None = None,
     ) -> list[Transaction]:
         return await self._query(
             TransactionModel.date >= start_date.isoformat(),
             TransactionModel.date <= end_date.isoformat(),
+            *self._tag_filter(tags),
         )
 
     async def get_household_by_year(self, year: int) -> list[Transaction]:
@@ -248,7 +253,12 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         "original_amount",
     })
     # Flags owned by in-app actions (settlement linking, exclusion toggle) —
-    # never overwritten by the re-upload batch path.
+    # never overwritten by the re-upload batch path. Consequence: once a row
+    # exists, in-app is the source of truth for these flags. A `settlement`
+    # tag added to or removed from a row in Monarch and re-uploaded is NOT
+    # re-applied here (only brand-new rows via save_batch honor the CSV flag);
+    # this is deliberate, to protect settlement links from being clobbered by
+    # a freshly parsed row's defaults.
     _IN_APP_KEYS = frozenset({"is_settlement", "is_excluded"})
 
     async def _update(

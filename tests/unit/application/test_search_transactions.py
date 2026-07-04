@@ -48,7 +48,9 @@ async def test_household_scope_uses_household_fetch() -> None:
 async def test_personal_scope_uses_person_fetch() -> None:
     uow = make_mock_uow()
     uow.transactions.get_by_person_and_date_range.return_value = [
-        make_transaction(merchant="Whole Foods", payer_person_id=ALICE_ID),
+        make_transaction(
+            merchant="Whole Foods", payer_person_id=ALICE_ID, household=False
+        ),
     ]
 
     command = SearchTransactionsCommand(
@@ -62,6 +64,25 @@ async def test_personal_scope_uses_person_fetch() -> None:
     assert call_args.args[0] == ALICE_ID
     uow.transactions.get_by_date_range.assert_not_called()
     uow.transactions.get_household_by_date_range.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_personal_scope_excludes_household_rows() -> None:
+    """Personal = the user's own non-household spending; household rows they
+    paid are household spending, not personal (matches the tool contract)."""
+    uow = make_mock_uow()
+    uow.transactions.get_by_person_and_date_range.return_value = [
+        make_transaction(merchant="Rent", payer_person_id=ALICE_ID, household=True),
+        make_transaction(merchant="Hobby", payer_person_id=ALICE_ID, household=False),
+    ]
+
+    command = SearchTransactionsCommand(
+        year=2026, month=3, scope="personal", person_id=ALICE_ID
+    )
+    result = await SearchTransactionsUseCase().execute(command, uow)
+
+    assert result.total_count == 1
+    assert result.transactions[0].merchant == "Hobby"
 
 
 def test_personal_scope_requires_person_id() -> None:
@@ -134,30 +155,27 @@ async def test_empty_results() -> None:
 @pytest.mark.asyncio
 async def test_filters_by_tag() -> None:
     uow = make_mock_uow()
+    # Tag filtering is delegated to the repository's server-side (JSONB) filter;
+    # the mock returns the already-filtered rows.
     uow.transactions.get_by_date_range.return_value = [
         make_transaction(merchant="Coffee Shop", tags=("discuss",)),
-        make_transaction(merchant="Grocery Store", tags=("shared",)),
-        # Case-insensitive exact match — same semantics as the repo's
-        # server-side tag filter.
-        make_transaction(merchant="Bakery", tags=("Discuss",)),
+        make_transaction(merchant="Bakery", tags=("discuss",)),
     ]
 
     command = SearchTransactionsCommand(year=2026, month=3, tag="discuss")
     result = await SearchTransactionsUseCase().execute(command, uow)
 
     assert result.total_count == 2
-    merchants = {t.merchant for t in result.transactions}
-    assert merchants == {"Coffee Shop", "Bakery"}
+    # The tag is pushed down to the repo query, not filtered in memory.
+    assert uow.transactions.get_by_date_range.call_args.kwargs["tags"] == ("discuss",)
 
 
 @pytest.mark.asyncio
-async def test_tag_filter_applies_across_scopes() -> None:
-    """Tag filtering happens in-memory so it works uniformly for every
-    scope, including 'all', whose repo fetch has no tags kwarg."""
+async def test_tag_filter_pushed_to_repo_per_scope() -> None:
+    """The tag is threaded into each scope's repo query via its tags= kwarg."""
     uow = make_mock_uow()
     uow.transactions.get_household_by_date_range.return_value = [
         make_transaction(merchant="Coffee Shop", tags=("discuss",)),
-        make_transaction(merchant="Grocery Store", tags=("shared",)),
     ]
 
     command = SearchTransactionsCommand(
@@ -167,3 +185,5 @@ async def test_tag_filter_applies_across_scopes() -> None:
 
     assert result.total_count == 1
     assert result.transactions[0].merchant == "Coffee Shop"
+    call = uow.transactions.get_household_by_date_range.call_args
+    assert call.kwargs["tags"] == ("discuss",)

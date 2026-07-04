@@ -268,7 +268,7 @@ async def test_budget_lines_sparse_months() -> None:
 
 async def test_settlement_trend_populated() -> None:
     uow, alice, _bob, _food_group = _setup_uow()
-    uow.transactions.get_household_by_year.return_value = [
+    txs = [
         make_transaction(
             date=date(2026, 1, 10),
             category="Dining Out",
@@ -282,6 +282,9 @@ async def test_settlement_trend_populated() -> None:
             payer_person_id=alice.id,
         ),
     ]
+    uow.transactions.get_household_by_year.return_value = txs
+    # The settlement trend is computed over settlement-relevant rows.
+    uow.transactions.get_settlement_relevant_by_date_range.return_value = txs
 
     command = GetSpendingTrendsCommand(year=2026, month=2)
     result = await GetSpendingTrendsUseCase().execute(command, uow)
@@ -295,7 +298,7 @@ async def test_settlement_trend_populated() -> None:
 
 async def test_settlement_trend_marks_settled() -> None:
     uow, alice, bob, _food_group = _setup_uow()
-    uow.transactions.get_household_by_year.return_value = [
+    txs = [
         make_transaction(
             date=date(2026, 1, 10),
             category="Dining Out",
@@ -303,6 +306,8 @@ async def test_settlement_trend_marks_settled() -> None:
             payer_person_id=alice.id,
         ),
     ]
+    uow.transactions.get_household_by_year.return_value = txs
+    uow.transactions.get_settlement_relevant_by_date_range.return_value = txs
     # Settlement that covers the owed amount
     uow.settlements.get_by_year.return_value = [
         make_settlement(
@@ -323,7 +328,7 @@ async def test_settlement_trend_marks_settled() -> None:
 
 async def test_settlement_trend_reverse_direction_not_settled() -> None:
     uow, alice, bob, _food_group = _setup_uow()
-    uow.transactions.get_household_by_year.return_value = [
+    txs = [
         make_transaction(
             date=date(2026, 1, 10),
             category="Dining Out",
@@ -331,6 +336,8 @@ async def test_settlement_trend_reverse_direction_not_settled() -> None:
             payer_person_id=alice.id,
         ),
     ]
+    uow.transactions.get_household_by_year.return_value = txs
+    uow.transactions.get_settlement_relevant_by_date_range.return_value = txs
     # Gross: bob owes alice $50. A same-magnitude payment in the *wrong*
     # direction (alice paying bob) doubles the imbalance instead of
     # clearing it — must not be marked settled.
@@ -349,6 +356,56 @@ async def test_settlement_trend_reverse_direction_not_settled() -> None:
 
     assert len(result.settlement_trend) == 1
     assert result.settlement_trend[0].is_settled is False
+
+
+async def test_settlement_trend_includes_non_household_month() -> None:
+    uow, alice, _bob, _food_group = _setup_uow()
+    # A month whose only settlement signal is a spotted (non-household) row must
+    # still appear — gross runs over settlement-relevant rows, not household-only.
+    spotted = make_transaction(
+        date=date(2026, 3, 10),
+        category="Dining Out",
+        amount=Decimal("-30.00"),
+        payer_person_id=alice.id,
+        household=False,
+        payer_percentage=0,
+    )
+    uow.transactions.get_household_by_year.return_value = []
+    uow.transactions.get_settlement_relevant_by_date_range.return_value = [spotted]
+
+    command = GetSpendingTrendsCommand(year=2026, month=3)
+    result = await GetSpendingTrendsUseCase().execute(command, uow)
+
+    assert len(result.settlement_trend) == 1
+    assert result.settlement_trend[0].month == 3
+    assert result.settlement_trend[0].amount == Decimal("30.00")
+
+
+async def test_past_year_ytd_spans_full_year() -> None:
+    uow, alice, _bob, _food_group = _setup_uow()
+    # A completed past year with no month specified includes spend from every
+    # month in the YTD summaries — not just up to the current calendar month.
+    txs = [
+        make_transaction(
+            date=date(2000, 1, 10),
+            category="Dining Out",
+            amount=Decimal("-40.00"),
+            payer_person_id=alice.id,
+        ),
+        make_transaction(
+            date=date(2000, 11, 10),
+            category="Dining Out",
+            amount=Decimal("-60.00"),
+            payer_person_id=alice.id,
+        ),
+    ]
+    uow.transactions.get_household_by_year.return_value = txs
+    uow.transactions.get_settlement_relevant_by_date_range.return_value = txs
+
+    command = GetSpendingTrendsCommand(year=2000)
+    result = await GetSpendingTrendsUseCase().execute(command, uow)
+
+    assert result.trends.group_summaries[0].ytd_total == Decimal("100.00")
 
 
 async def test_persons_included() -> None:

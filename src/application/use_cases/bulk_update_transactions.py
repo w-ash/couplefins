@@ -171,7 +171,7 @@ async def apply_bulk_transaction_updates(
             continue
 
         all_edits.extend(edits)
-        updated_tx: Transaction = evolve(tx, **tx_updates)  # type: ignore[arg-type]
+        updated_tx: Transaction = evolve(tx, **tx_updates)
         updated_transactions.append(updated_tx)
 
         if uses_immutable_fields:

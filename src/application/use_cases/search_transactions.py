@@ -4,6 +4,7 @@ Thin use case wrapping the repository's date-range query with in-memory
 filtering for the chat assistant's search_transactions tool.
 """
 
+from typing import cast
 from uuid import UUID
 
 from attrs import define, field
@@ -43,11 +44,6 @@ class SearchTransactionsResult:
     total_count: int
 
 
-def _matches_tag(tx: Transaction, tag: str) -> bool:
-    needle = tag.lower()
-    return needle in {t.lower() for t in tx.tags}
-
-
 @define(slots=True)
 class SearchTransactionsUseCase:
     async def execute(
@@ -57,21 +53,24 @@ class SearchTransactionsUseCase:
     ) -> SearchTransactionsResult:
         async with uow:
             start, end = month_bounds(command.year, command.month)
+            tags = (command.tag,) if command.tag else None
 
             if command.scope == "household":
-                txns = await uow.transactions.get_household_by_date_range(start, end)
-            elif command.scope == "personal":
-                person_id = command.person_id
-                if person_id is None:
-                    raise ValidationError("person_id is required for personal scope")
-                txns = await uow.transactions.get_by_person_and_date_range(
-                    person_id, start, end
+                txns = await uow.transactions.get_household_by_date_range(
+                    start, end, tags=tags
                 )
+            elif command.scope == "personal":
+                # person_id presence is guaranteed by __attrs_post_init__.
+                txns = await uow.transactions.get_by_person_and_date_range(
+                    cast(UUID, command.person_id), start, end, tags=tags
+                )
+                # Personal = the user's own non-household spending; household
+                # rows they paid are household spending, not personal — exclude
+                # them, matching get_reconciliation's personal scope and the
+                # search tool's documented contract.
+                txns = [t for t in txns if not t.household]
             else:
-                txns = await uow.transactions.get_by_date_range(start, end)
-
-            if command.tag:
-                txns = [t for t in txns if _matches_tag(t, command.tag)]
+                txns = await uow.transactions.get_by_date_range(start, end, tags=tags)
 
             if command.merchant:
                 needle = command.merchant.lower()

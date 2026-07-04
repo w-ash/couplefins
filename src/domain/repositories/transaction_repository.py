@@ -14,6 +14,8 @@ class TransactionRepositoryProtocol(Protocol):
         self,
         start_date: date,
         end_date: date,
+        *,
+        tags: tuple[str, ...] | None = None,
     ) -> list[Transaction]: ...
     async def get_household_by_date_range(
         self,
