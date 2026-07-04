@@ -152,6 +152,52 @@ describe("ToolResultCard", () => {
         screen.getByText("No settlement needed this month"),
       ).toBeInTheDocument();
     });
+
+    it("renders the all-months total outstanding with its span", () => {
+      renderWithProviders(
+        <ToolResultCard
+          toolCall={{
+            id: "1",
+            name: "get_settlement_balance",
+            result: {
+              scope: "all_months",
+              outstanding: { amount: 642, from: "Bob", to: "Alice" },
+              outstanding_span: { start: "2026-03", end: "2026-05" },
+              remaining_balance: 642,
+              net_from: "Bob",
+              net_to: "Alice",
+              month: "2026-03 to 2026-05",
+            },
+          }}
+        />,
+      );
+      expect(
+        screen.getByText("Total outstanding · 2026-03 to 2026-05"),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/Bob owes Alice/)).toBeInTheDocument();
+      expect(screen.getByText("$642.00")).toBeInTheDocument();
+    });
+
+    it("renders the all-months settled status", () => {
+      renderWithProviders(
+        <ToolResultCard
+          toolCall={{
+            id: "1",
+            name: "get_settlement_balance",
+            result: {
+              scope: "all_months",
+              outstanding: null,
+              outstanding_span: null,
+              remaining_balance: 0,
+              status: "Nothing outstanding — all months are settled",
+            },
+          }}
+        />,
+      );
+      expect(
+        screen.getByText("Nothing outstanding — all months are settled"),
+      ).toBeInTheDocument();
+    });
   });
 
   describe("BudgetCard", () => {

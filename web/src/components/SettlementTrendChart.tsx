@@ -22,8 +22,14 @@ interface ChartPoint {
   amount: number;
   fromName: string;
   toName: string;
-  isSettled: boolean;
+  status: string;
 }
+
+const STATUS_LABELS: Record<string, string> = {
+  settled: "settled",
+  partially_settled: "partially settled",
+  carried_forward: "carried forward",
+};
 
 function SettlementTooltip({
   active,
@@ -34,7 +40,7 @@ function SettlementTooltip({
 }) {
   if (!active || !payload?.[0]) return null;
   const pt = payload[0].payload;
-  const status = pt.isSettled ? "settled" : "unsettled";
+  const status = STATUS_LABELS[pt.status] ?? pt.status;
   return (
     <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
       <div className="text-muted-foreground">{MONTHS[pt.month - 1]}</div>
@@ -54,7 +60,9 @@ function SettlementDot(props: {
   const { cx, cy, payload } = props;
   if (cx == null || cy == null || !payload) return null;
   const color = getChartColor(0);
-  if (payload.isSettled) {
+  // Filled dot only for fully settled months — partial coverage and
+  // carried-forward months both render hollow; the tooltip says which.
+  if (payload.status === "settled") {
     return <circle cx={cx} cy={cy} r={4} fill={color} stroke="none" />;
   }
   return (
@@ -86,7 +94,7 @@ export function SettlementTrendChart({
       amount: directedAmount,
       fromName: personNames.get(d.from_person_id) ?? "Unknown",
       toName: personNames.get(d.to_person_id) ?? "Unknown",
-      isSettled: d.is_settled,
+      status: d.status,
     };
   });
 

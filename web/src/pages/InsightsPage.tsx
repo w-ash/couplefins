@@ -213,7 +213,7 @@ function buildSettledCount(
 ): { settled: number; total: number } | null {
   if (data.length === 0) return null;
   return {
-    settled: data.filter((d) => d.is_settled).length,
+    settled: data.filter((d) => d.status === "settled").length,
     total: data.length,
   };
 }

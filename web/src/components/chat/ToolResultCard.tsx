@@ -10,16 +10,19 @@ import { heroCardClass, tableHeaderRowClass } from "@/lib/layout";
 // --- Result type interfaces (mirror Python tool executor output) ---
 
 interface SettlementResult {
-  month: string;
-  is_finalized: boolean;
+  // "all_months" for the total-outstanding answer; absent for a month query.
+  scope?: string;
+  // Month label ("2026-03") or the outstanding span ("2026-03 to 2026-05").
+  month?: string;
+  is_finalized?: boolean;
   remaining_balance: number;
   from?: string;
   to?: string;
-  gross_amount: number;
+  gross_amount?: number;
   net_from?: string;
   net_to?: string;
   status?: string;
-  uploads: { person: string; uploaded: boolean }[];
+  uploads?: { person: string; uploaded: boolean }[];
 }
 
 interface BudgetGroup {
@@ -82,23 +85,29 @@ function SettlementCard({ result }: { result: SettlementResult }) {
   const grossDiffers =
     result.remaining_balance !== result.gross_amount ||
     result.net_from !== result.from;
-  const grossContext = result.from && result.to && grossDiffers && (
-    <p className="text-xs text-muted-foreground">
-      {result.from} owed {result.to}{" "}
-      <span className="tabular-nums">
-        {formatCurrency(result.gross_amount)}
-      </span>{" "}
-      before payments
-    </p>
-  );
+  const grossContext = result.from &&
+    result.to &&
+    result.gross_amount != null &&
+    grossDiffers && (
+      <p className="text-xs text-muted-foreground">
+        {result.from} owed {result.to}{" "}
+        <span className="tabular-nums">
+          {formatCurrency(result.gross_amount)}
+        </span>{" "}
+        before payments
+      </p>
+    );
+  // The all-months answer carries the outstanding span as its month label.
+  const heading =
+    result.scope === "all_months"
+      ? `Total outstanding${result.month ? ` · ${result.month}` : ""}`
+      : `${result.month} settlement`;
 
   return (
     <div className={cn(heroCardClass, "px-4 py-3")}>
       {result.net_from && result.net_to ? (
         <>
-          <p className="text-xs text-muted-foreground">
-            {result.month} settlement
-          </p>
+          <p className="text-xs text-muted-foreground">{heading}</p>
           <p className="text-base font-medium">
             {result.net_from} owes {result.net_to}{" "}
             <span className="tabular-nums">
@@ -109,9 +118,7 @@ function SettlementCard({ result }: { result: SettlementResult }) {
         </>
       ) : settled ? (
         <>
-          <p className="text-xs text-muted-foreground">
-            {result.month} settlement
-          </p>
+          <p className="text-xs text-muted-foreground">{heading}</p>
           <p className="text-base font-medium">All settled</p>
           {grossContext}
         </>

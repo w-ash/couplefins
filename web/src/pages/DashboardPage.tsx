@@ -37,6 +37,7 @@ import {
   buildSettlementLabel,
   currentYear,
   formatCurrency,
+  formatMonthSpan,
   MONTHS,
   SHORT_MONTHS,
 } from "@/lib/format";
@@ -240,22 +241,22 @@ function BudgetAlerts({ alerts }: { alerts: BudgetAlertResponse[] }) {
 
 function SettlementHero({
   data,
-  monthLabel,
   getPersonName,
   getPersonColor,
 }: {
   data: DashboardResponse;
-  monthLabel: string;
   getPersonName: (id: string) => string;
   getPersonColor: (id: string) => string;
 }) {
-  const settlement = data.current_month_net_settlement;
+  // The running ledger's total outstanding — the "now" answer across all
+  // months, not just the active one.
+  const settlement = data.outstanding_balance;
 
   if (!settlement) {
     return (
       <div className={cn(heroCardClass, "p-4 sm:p-6")}>
         <p className="mb-1 text-center text-xs font-medium tracking-wider text-muted-foreground uppercase">
-          {monthLabel}
+          Settlement
         </p>
         <p className="text-center text-base font-semibold text-primary sm:text-lg">
           <span className="inline-flex items-center gap-2">
@@ -281,7 +282,7 @@ function SettlementHero({
       )}
     >
       <p className="mb-1 text-center text-xs font-medium tracking-wider text-muted-foreground uppercase">
-        {monthLabel}
+        Outstanding balance
       </p>
       <p className="text-center text-base font-semibold text-foreground sm:text-lg">
         {iOwe ? (
@@ -312,6 +313,11 @@ function SettlementHero({
           </>
         )}
       </p>
+      {data.outstanding_span && (
+        <p className="mt-1 text-center text-xs text-muted-foreground">
+          covers {formatMonthSpan(data.outstanding_span)}
+        </p>
+      )}
       <p className="mt-1 text-center text-sm text-primary">
         Settle Up <ArrowRight className="ml-1 inline size-3.5" />
       </p>
@@ -355,17 +361,24 @@ function HouseholdMonthHistory({
         <tbody>
           {entries.map((entry) => {
             const monthName = MONTHS[entry.month - 1] ?? "";
-            const label = buildSettlementLabel(
-              entry.settlement_from_person_id
-                ? {
-                    amount: entry.settlement_amount,
-                    from_person_id: entry.settlement_from_person_id,
-                    to_person_id: entry.settlement_to_person_id ?? undefined,
-                  }
-                : null,
-              personNames,
-              { settledLabel: "All settled", includeToName: true },
-            );
+            // settlement_amount is the month's gross; the derived ledger
+            // status says how much of it has been covered.
+            const status = entry.settlement_status;
+            const label =
+              status === "settled"
+                ? "All settled"
+                : buildSettlementLabel(
+                    entry.settlement_from_person_id
+                      ? {
+                          amount: entry.settlement_amount,
+                          from_person_id: entry.settlement_from_person_id,
+                          to_person_id:
+                            entry.settlement_to_person_id ?? undefined,
+                        }
+                      : null,
+                    personNames,
+                    { settledLabel: "All settled", includeToName: true },
+                  );
             const spending =
               spendingKey === "total_all_spending" &&
               entry.total_all_spending != null
@@ -392,12 +405,24 @@ function HouseholdMonthHistory({
                 </td>
                 <td className="py-2.5 pr-4 text-muted-foreground">
                   <span className="inline-flex items-center gap-1.5">
-                    {entry.is_settled ? (
+                    {status === "settled" ? (
                       <CheckCircle2 className="size-3 text-positive" />
-                    ) : entry.settlement_amount > 0 ? (
+                    ) : status === "partially_settled" ? (
                       <Clock className="size-3 text-warning-muted-foreground" />
-                    ) : null}
+                    ) : (
+                      <ArrowRight className="size-3 text-muted-foreground/70" />
+                    )}
                     {label}
+                    {status === "partially_settled" && (
+                      <span className="text-xs text-warning-muted-foreground">
+                        · partial
+                      </span>
+                    )}
+                    {status === "carried_forward" && (
+                      <span className="text-xs text-muted-foreground/70">
+                        · carried forward
+                      </span>
+                    )}
                   </span>
                 </td>
                 <td className="hidden py-2.5 text-right tabular-nums text-foreground sm:table-cell">
@@ -577,7 +602,6 @@ export function DashboardPage() {
         <div className="space-y-6">
           <SettlementHero
             data={data}
-            monthLabel={monthLabel}
             getPersonName={getPersonName}
             getPersonColor={getPersonColor}
           />

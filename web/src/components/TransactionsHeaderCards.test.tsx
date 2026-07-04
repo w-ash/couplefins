@@ -12,52 +12,75 @@ const gross: OwedAmountResponse = {
 };
 
 describe("settlementDescription", () => {
-  it("reports a waived balance as waived, not as a linked payment", () => {
-    // A waiver forgives the debt — it must not read as "$X linked".
+  it("reports what covered a settled month", () => {
     expect(
       settlementDescription({
-        isSettled: true,
-        grossDirection: gross,
-        linkedCount: 0,
-        linkedTotal: 0,
-        waivedCount: 1,
+        status: "settled",
+        gross,
+        applied: 50,
+        coveringCount: 1,
+        isOffset: false,
       }),
-    ).toBe("Balance waived");
+    ).toBe("Covered by 1 settlement · $50.00 applied");
   });
 
-  it("pluralizes multiple waivers", () => {
+  it("pluralizes multiple covering settlements", () => {
     expect(
       settlementDescription({
-        isSettled: true,
-        grossDirection: gross,
-        linkedCount: 0,
-        linkedTotal: 0,
-        waivedCount: 2,
+        status: "settled",
+        gross,
+        applied: 50,
+        coveringCount: 2,
+        isOffset: false,
       }),
-    ).toBe("2 balances waived");
+    ).toBe("Covered by 2 settlements · $50.00 applied");
   });
 
-  it("reports linked transfers with their real total", () => {
+  it("labels a month offset by opposing balances", () => {
     expect(
       settlementDescription({
-        isSettled: true,
-        grossDirection: gross,
-        linkedCount: 1,
-        linkedTotal: 50,
-        waivedCount: 0,
+        status: "settled",
+        gross,
+        applied: 50,
+        coveringCount: 0,
+        isOffset: true,
       }),
-    ).toBe("1 settlement linked · $50.00");
+    ).toBe("Offset against other months' balances");
   });
 
-  it("prefers the linked line when both transfers and waivers exist", () => {
+  it("reports no activity when a settled month has no gross", () => {
     expect(
       settlementDescription({
-        isSettled: true,
-        grossDirection: gross,
-        linkedCount: 1,
-        linkedTotal: 50,
-        waivedCount: 1,
+        status: "settled",
+        gross: null,
+        applied: 0,
+        coveringCount: 0,
+        isOffset: false,
       }),
-    ).toBe("1 settlement linked · $50.00");
+    ).toBe("No transactions to settle this period");
+  });
+
+  it("shows gross and applied for a partially settled month", () => {
+    expect(
+      settlementDescription({
+        status: "partially_settled",
+        gross,
+        applied: 20,
+        coveringCount: 1,
+        isOffset: false,
+      }),
+    ).toBe("Gross $50.00 · $20.00 applied (1 settlement)");
+  });
+
+  it("marks an untouched month as carried forward", () => {
+    expect(
+      settlementDescription({
+        status: "carried_forward",
+        gross,
+        applied: 0,
+        coveringCount: 0,
+        isOffset: false,
+      }),
+    ).toBe("Gross $50.00 · carried forward on the ledger");
   });
 });

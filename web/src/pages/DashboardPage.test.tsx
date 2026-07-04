@@ -66,7 +66,23 @@ const dashboardResponse = {
     from_person_id: "p2",
     to_person_id: "p1",
   },
-  ytd_total_settled: 20.0,
+  // No payments yet: January's gross is carried forward in full, so the
+  // outstanding balance equals it and YTD-settled is zero.
+  ytd_net_settlement: {
+    amount: 20.0,
+    from_person_id: "p2",
+    to_person_id: "p1",
+  },
+  ytd_total_settled: 0.0,
+  outstanding_balance: {
+    amount: 20.0,
+    from_person_id: "p2",
+    to_person_id: "p1",
+  },
+  outstanding_span: {
+    start: { year: 2026, month: 1 },
+    end: { year: 2026, month: 1 },
+  },
   month_history: [
     {
       year: 2026,
@@ -76,8 +92,9 @@ const dashboardResponse = {
       settlement_from_person_id: "p2",
       settlement_to_person_id: "p1",
       is_finalized: false,
-      is_settled: true,
-      settled_at: "2026-02-01T12:00:00Z",
+      is_settled: false,
+      settlement_status: "carried_forward",
+      settled_at: null,
     },
   ],
   persons: [
@@ -123,7 +140,10 @@ const emptyResponse = {
   household_spending_month: 0.0,
   household_spending_ytd: 0.0,
   ytd_settlement: null,
+  ytd_net_settlement: null,
   ytd_total_settled: 0,
+  outstanding_balance: null,
+  outstanding_span: null,
   month_history: [],
   persons: [
     { id: "p1", name: "Alice" },
@@ -251,6 +271,7 @@ describe("DashboardPage", () => {
         {
           ...dashboardResponse.month_history[0],
           is_settled: false,
+          settlement_status: "carried_forward",
           settled_at: null,
         },
       ],
@@ -265,6 +286,77 @@ describe("DashboardPage", () => {
       const table = screen.getByText("Month History").closest("div");
       if (!table) throw new Error("Expected history container");
       expect(within(table).getByText(/owes/)).toBeInTheDocument();
+      expect(within(table).getByText("· carried forward")).toBeInTheDocument();
+    });
+  });
+
+  it("shows the outstanding balance with its covered span in the hero", async () => {
+    renderWithProviders(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Outstanding balance")).toBeInTheDocument();
+      expect(screen.getByText("covers January")).toBeInTheDocument();
+    });
+  });
+
+  it("shows a settled month as all settled, with partial coverage flagged", async () => {
+    // One payment of $30 covered January in full ($20) and part of
+    // February ($10 of $50) — statuses derive FIFO oldest-first.
+    const ledgerResponse = {
+      ...dashboardResponse,
+      ytd_total_settled: 30.0,
+      ytd_net_settlement: {
+        amount: 40.0,
+        from_person_id: "p2",
+        to_person_id: "p1",
+      },
+      outstanding_balance: {
+        amount: 40.0,
+        from_person_id: "p2",
+        to_person_id: "p1",
+      },
+      outstanding_span: {
+        start: { year: 2026, month: 2 },
+        end: { year: 2026, month: 2 },
+      },
+      month_history: [
+        {
+          year: 2026,
+          month: 2,
+          total_household_spending: 200.0,
+          settlement_amount: 50.0,
+          settlement_from_person_id: "p2",
+          settlement_to_person_id: "p1",
+          is_finalized: false,
+          is_settled: false,
+          settlement_status: "partially_settled",
+          settled_at: "2026-03-01T12:00:00Z",
+        },
+        {
+          year: 2026,
+          month: 1,
+          total_household_spending: 160.0,
+          settlement_amount: 20.0,
+          settlement_from_person_id: "p2",
+          settlement_to_person_id: "p1",
+          is_finalized: true,
+          is_settled: true,
+          settlement_status: "settled",
+          settled_at: "2026-03-01T12:00:00Z",
+        },
+      ],
+    };
+    server.use(
+      http.get("/api/v1/dashboard", () => HttpResponse.json(ledgerResponse)),
+    );
+
+    renderWithProviders(<DashboardPage />);
+
+    await waitFor(() => {
+      const table = screen.getByText("Month History").closest("div");
+      if (!table) throw new Error("Expected history container");
+      expect(within(table).getByText("All settled")).toBeInTheDocument();
+      expect(within(table).getByText("· partial")).toBeInTheDocument();
     });
   });
 

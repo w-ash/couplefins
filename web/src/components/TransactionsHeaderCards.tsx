@@ -94,6 +94,9 @@ function SettlementCard({
   onShowSettlements,
 }: SettlementCardProps) {
   const settleUp = useSettleUpForMonth(singleMonth);
+  // The chip filter reveals is_settlement rows in the table below — gate on
+  // whether the period actually contains any.
+  const hasSettlementRows = data.transactions.some((tx) => tx.is_settlement);
 
   return (
     <CardShell
@@ -108,10 +111,10 @@ function SettlementCard({
       {settleUp.kind === "ready" ? (
         <SettlementBalance
           settleUp={settleUp.data}
-          grossFallback={data.settlement ?? null}
           personNames={personNames}
           settlementChipActive={settlementChipActive}
           onShowSettlements={onShowSettlements}
+          hasSettlementRows={hasSettlementRows}
         />
       ) : (
         <SettlementPlaceholder
@@ -138,35 +141,44 @@ function SettlementCard({
 
 function SettlementBalance({
   settleUp,
-  grossFallback,
   personNames,
   settlementChipActive,
   onShowSettlements,
+  hasSettlementRows,
 }: {
   settleUp: SettleUpDataResponse;
-  grossFallback: OwedAmountResponse | null;
   personNames: Map<string, string>;
   settlementChipActive: boolean;
   onShowSettlements: () => void;
+  hasSettlementRows: boolean;
 }) {
-  const netDirection = settleUp.net_position ?? null;
-  const grossDirection = settleUp.owed ?? grossFallback;
-  const linked = settleUp.recorded_settlements ?? [];
-  // Waivers forgive a balance — they carry no linked transfers, so they must
-  // not inflate the linked count/total or gate the "show linked" filter.
-  const transfers = linked.filter((s) => !s.is_waived);
-  const linkedTotal = transfers.reduce((s, x) => s + x.amount, 0);
-  const linkedCount = transfers.length;
-  const waivedCount = linked.length - transfers.length;
-  const isSettled = !netDirection || isZeroCurrency(netDirection.amount);
-  const canFilter = linkedCount > 0;
+  // The viewed month's ledger row: gross position, what FIFO applied to it,
+  // and the derived status. No row means no settlement-relevant activity.
+  const row =
+    settleUp.ledger_months.find(
+      (m) => m.year === settleUp.year && m.month === settleUp.month,
+    ) ?? null;
+  const gross = row?.gross ?? null;
+  const remaining = row?.remaining ?? 0;
+  const status = row?.status ?? "settled";
+  const isSettled = status === "settled" || isZeroCurrency(remaining);
+  // What remains keeps the gross direction — FIFO never over-applies.
+  const remainingDirection =
+    !isSettled && gross
+      ? {
+          amount: remaining,
+          from_person_id: gross.from_person_id,
+          to_person_id: gross.to_person_id,
+        }
+      : null;
+  const canFilter = hasSettlementRows;
 
   const description = settlementDescription({
-    isSettled,
-    grossDirection,
-    linkedCount,
-    linkedTotal,
-    waivedCount,
+    status,
+    gross,
+    applied: row?.applied ?? 0,
+    coveringCount: row?.covering_settlement_ids.length ?? 0,
+    isOffset: row?.is_offset ?? false,
   });
 
   return (
@@ -186,13 +198,9 @@ function SettlementBalance({
             canFilter &&
             "text-primary underline decoration-solid",
         )}
-        title={
-          canFilter
-            ? `Show the ${plural("linked settlement", linkedCount)} below`
-            : undefined
-        }
+        title={canFilter ? "Show the linked settlement rows below" : undefined}
       >
-        {buildSettlementLabel(netDirection, personNames, {
+        {buildSettlementLabel(remainingDirection, personNames, {
           includeToName: true,
           settledLabel: "Settled",
         })}
@@ -248,35 +256,28 @@ function SettlementPlaceholder({
 }
 
 export function settlementDescription(args: {
-  isSettled: boolean;
-  grossDirection: OwedAmountResponse | null;
-  linkedCount: number;
-  linkedTotal: number;
-  waivedCount: number;
+  status: string;
+  gross: OwedAmountResponse | null;
+  applied: number;
+  coveringCount: number;
+  isOffset: boolean;
 }): string | null {
-  const { isSettled, grossDirection, linkedCount, linkedTotal, waivedCount } =
-    args;
-  if (isSettled) {
-    if (linkedCount > 0) {
-      return `${plural("settlement", linkedCount)} linked · ${formatCurrency(linkedTotal)}`;
+  const { status, gross, applied, coveringCount, isOffset } = args;
+  if (status === "settled") {
+    if (isOffset) return "Offset against other months' balances";
+    if (coveringCount > 0) {
+      return `Covered by ${plural("settlement", coveringCount)} · ${formatCurrency(applied)} applied`;
     }
-    if (waivedCount > 0) {
-      return waivedCount === 1
-        ? "Balance waived"
-        : `${waivedCount} balances waived`;
-    }
-    if (!grossDirection || isZeroCurrency(grossDirection.amount)) {
+    if (!gross || isZeroCurrency(gross.amount)) {
       return "No transactions to settle this period";
     }
-    return "Fully paid";
+    return "Fully covered";
   }
-  if (grossDirection) {
-    if (linkedCount > 0) {
-      return `Gross ${formatCurrency(grossDirection.amount)} · ${plural("payment", linkedCount)} linked (${formatCurrency(linkedTotal)})`;
-    }
-    return "Gross from this period · no settlements linked yet";
+  if (!gross) return null;
+  if (status === "partially_settled") {
+    return `Gross ${formatCurrency(gross.amount)} · ${formatCurrency(applied)} applied (${plural("settlement", coveringCount)})`;
   }
-  return null;
+  return `Gross ${formatCurrency(gross.amount)} · carried forward on the ledger`;
 }
 
 type SettleUpForMonth =
@@ -448,8 +449,9 @@ function SettlementInfo({
     <>
       <p>
         <strong>Formula:</strong> gross balance from this period's split
-        transactions — any split under 100%, household or personal — minus any
-        linked settlement payments. Matches the Settle Up page exactly.
+        transactions — any split under 100%, household or personal — minus what
+        the settlement ledger applied to this month (payments cover the oldest
+        months first). Matches this month's row on Settle Up.
       </p>
       {!singleMonth && (
         <p>

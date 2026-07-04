@@ -165,6 +165,8 @@ const emptyResponse = {
   latest_transaction_month: null,
 };
 
+// January's $20 gross has no payments against it — carried forward in
+// full, so the outstanding balance equals the month's remainder.
 const settleUpEmptyResponse = {
   year: 2026,
   month: 1,
@@ -172,6 +174,24 @@ const settleUpEmptyResponse = {
   net_position: { amount: 20.0, from_person_id: "p2", to_person_id: "p1" },
   recorded_settlements: [],
   remaining_balance: 20.0,
+  outstanding: { amount: 20.0, from_person_id: "p2", to_person_id: "p1" },
+  outstanding_span: {
+    start: { year: 2026, month: 1 },
+    end: { year: 2026, month: 1 },
+  },
+  ledger_months: [
+    {
+      year: 2026,
+      month: 1,
+      gross: { amount: 20.0, from_person_id: "p2", to_person_id: "p1" },
+      applied: 0.0,
+      remaining: 20.0,
+      status: "carried_forward",
+      covering_settlement_ids: [],
+      is_offset: false,
+    },
+  ],
+  all_settlements: [],
   upload_statuses: reconciliationResponse.upload_statuses,
   persons: persons.map((p) => ({ id: p.id, name: p.name })),
   is_finalized: false,
@@ -179,6 +199,8 @@ const settleUpEmptyResponse = {
   transaction_count: 2,
   latest_transaction_month: { year: 2026, month: 1 },
   finalization_warnings: [],
+  payer_splits: [],
+  payer_group_splits: [],
 };
 
 describe("TransactionsPage", () => {
@@ -217,7 +239,8 @@ describe("TransactionsPage", () => {
     });
   });
 
-  it("Settlement card shows net_position from Settle Up, not gross", async () => {
+  it("Settlement card shows the month's ledger remainder, not gross", async () => {
+    // A $1,000 payment against January's $1,805.10 gross leaves $805.10.
     server.use(
       http.get("/api/v1/settle-up", () =>
         HttpResponse.json({
@@ -228,7 +251,29 @@ describe("TransactionsPage", () => {
             from_person_id: "p1",
             to_person_id: "p2",
           },
-          recorded_settlements: [
+          remaining_balance: 805.1,
+          outstanding: {
+            amount: 805.1,
+            from_person_id: "p1",
+            to_person_id: "p2",
+          },
+          ledger_months: [
+            {
+              year: 2026,
+              month: 1,
+              gross: {
+                amount: 1805.1,
+                from_person_id: "p1",
+                to_person_id: "p2",
+              },
+              applied: 1000.0,
+              remaining: 805.1,
+              status: "partially_settled",
+              covering_settlement_ids: ["s1"],
+              is_offset: false,
+            },
+          ],
+          all_settlements: [
             {
               id: "s1",
               year: 2026,
@@ -237,14 +282,16 @@ describe("TransactionsPage", () => {
               from_person_id: "p1",
               to_person_id: "p2",
               method: "Venmo",
-              note: "",
-              recorded_at: "2026-01-25T00:00:00Z",
-              waived: false,
+              is_waived: false,
+              notes: "",
+              settled_at: "2026-01-25T00:00:00Z",
+              created_at: "2026-01-25T00:00:00Z",
               linked_transaction_ids: [],
               linked_transactions: [],
+              covered: [{ year: 2026, month: 1, amount: 1000.0 }],
+              unapplied: 0.0,
             },
           ],
-          remaining_balance: 805.1,
         }),
       ),
     );
@@ -257,7 +304,7 @@ describe("TransactionsPage", () => {
       screen.queryByText(/Alice owes Bob \$1,805\.10/),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByText(/Gross \$1,805\.10 · 1 payment linked/),
+      screen.getByText(/Gross \$1,805\.10 · \$1,000\.00 applied/),
     ).toBeInTheDocument();
   });
 
