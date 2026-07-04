@@ -1,4 +1,5 @@
-from datetime import UTC, date, datetime
+from collections.abc import Collection
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -13,6 +14,7 @@ from src.application.use_cases._shared.date_math import month_bounds, partition_
 from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
+from src.application.use_cases._shared.settlement_math import load_settlement_ledger
 from src.application.use_cases._shared.transactions import find_all_unmapped_categories
 from src.application.use_cases._shared.upload_status import (
     UploadStatus,
@@ -32,11 +34,17 @@ from src.domain.entities.settlement import Settlement
 from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import ValidationError
 from src.domain.filters import is_reconciliation_relevant
+from src.domain.ledger import (
+    LedgerMonth,
+    MonthKey,
+    MonthSettlementStatus,
+    month_remaining_result,
+    sum_settlement_results,
+)
 from src.domain.reconciliation import (
     ReconciliationSummary,
     SettlementResult,
     compute_gross_settlement,
-    compute_net_position,
     reconcile,
     reconcile_all_months,
 )
@@ -60,11 +68,14 @@ class MonthHistoryEntry:
     year: int
     month: int
     total_household_spending: Decimal
+    # The month's gross settlement position (direction omitted when zero).
     settlement_amount: Decimal
     settlement_from_person_id: UUID | None
     settlement_to_person_id: UUID | None
     is_finalized: bool
     is_settled: bool
+    # Ledger-derived: settled | partially_settled | carried_forward
+    settlement_status: str
     settled_at: datetime | None
     total_all_spending: Decimal | None = None
 
@@ -99,6 +110,8 @@ class GetDashboardResult:
     ytd_settlement: SettlementResult | None
     ytd_net_settlement: SettlementResult | None
     ytd_total_settled: Decimal
+    outstanding_balance: SettlementResult | None
+    outstanding_span: tuple[MonthKey, MonthKey] | None
     month_history: list[MonthHistoryEntry]
     persons: list[Person]
     unmapped_categories: list[str]
@@ -124,28 +137,37 @@ class _MonthHistoryInputs:
     summaries: dict[int, ReconciliationSummary]
     year: int
     finalized_months: set[int]
-    settlements_by_month: dict[int, list[Settlement]]
-    gross_by_month: dict[int, SettlementResult | None]
+    ledger_rows: dict[int, LedgerMonth]
+    settlements_by_id: dict[UUID, Settlement]
     by_month_household: dict[int, list[Transaction]]
     all_spending_by_month: dict[int, Decimal] | None = None
+
+
+def _month_settled_at(
+    row: LedgerMonth, settlements_by_id: dict[UUID, Settlement]
+) -> datetime | None:
+    """When the month's covering payments landed — the newest one wins."""
+    return max(
+        (
+            settlements_by_id[sid].settled_at
+            for sid in row.covering_settlement_ids
+            if sid in settlements_by_id
+        ),
+        default=None,
+    )
 
 
 def _build_month_history(inputs: _MonthHistoryInputs) -> list[MonthHistoryEntry]:
     entries: list[MonthHistoryEntry] = []
     # Union: a month can have settlement-relevant rows (e.g. spotted) without
     # any household spending, and vice versa.
-    for month in sorted(
-        set(inputs.summaries) | set(inputs.gross_by_month), reverse=True
-    ):
-        gross = inputs.gross_by_month.get(month)
-        month_settlements = inputs.settlements_by_month.get(month, [])
-        net = compute_net_position(gross, month_settlements)
-        no_balance = net is None or net.amount == Decimal(0)
-        settled_at = (
-            max(s.settled_at for s in month_settlements)
-            if no_balance and month_settlements
-            else None
-        )
+    for month in sorted(set(inputs.summaries) | set(inputs.ledger_rows), reverse=True):
+        row = inputs.ledger_rows.get(month)
+        # Display direction only for a real debt — a zero-amount gross
+        # carries an arbitrary direction.
+        gross = row.gross if row and row.gross and row.gross.amount > 0 else None
+        # No ledger row → no settlement-relevant activity → trivially settled.
+        status = row.status if row else MonthSettlementStatus.SETTLED
         entries.append(
             MonthHistoryEntry(
                 year=inputs.year,
@@ -156,12 +178,15 @@ def _build_month_history(inputs: _MonthHistoryInputs) -> list[MonthHistoryEntry]
                 total_household_spending=_compute_all_spending(
                     inputs.by_month_household.get(month, [])
                 ),
-                settlement_amount=net.amount if net else Decimal(0),
-                settlement_from_person_id=net.from_person_id if net else None,
-                settlement_to_person_id=net.to_person_id if net else None,
+                settlement_amount=gross.amount if gross else Decimal(0),
+                settlement_from_person_id=gross.from_person_id if gross else None,
+                settlement_to_person_id=gross.to_person_id if gross else None,
                 is_finalized=month in inputs.finalized_months,
-                is_settled=no_balance,
-                settled_at=settled_at,
+                is_settled=status is MonthSettlementStatus.SETTLED,
+                settlement_status=status,
+                settled_at=(
+                    _month_settled_at(row, inputs.settlements_by_id) if row else None
+                ),
                 total_all_spending=(
                     inputs.all_spending_by_month[month]
                     if inputs.all_spending_by_month
@@ -174,7 +199,7 @@ def _build_month_history(inputs: _MonthHistoryInputs) -> list[MonthHistoryEntry]
 
 
 def _resolve_active_month(
-    by_month: dict[int, list[Transaction]],
+    months_with_data: Collection[int],
     finalized_months: set[int],
     fallback_month: int,
 ) -> int:
@@ -183,14 +208,14 @@ def _resolve_active_month(
     Fallback chain: latest unfinalized month with transactions →
     latest month with transactions → current calendar month.
     """
-    if not by_month:
+    if not months_with_data:
         return fallback_month
     unfinalized = sorted(
-        (m for m in by_month if m not in finalized_months), reverse=True
+        (m for m in months_with_data if m not in finalized_months), reverse=True
     )
     if unfinalized:
         return unfinalized[0]
-    return max(by_month)
+    return max(months_with_data)
 
 
 def _compute_personal_spending(
@@ -389,32 +414,22 @@ class GetDashboardUseCase:
                 household_txs, lambda tx: tx.date.month
             )
 
-            # Settlement math runs over payer_percentage < 100 rows regardless
-            # of the household flag — a different universe than the spending
-            # aggregations above.
-            settlement_year_txs = (
-                await uow.transactions.get_settlement_relevant_by_date_range(
-                    date(command.year, 1, 1), date(command.year, 12, 31)
-                )
-            )
-            by_month_settlement = partition_by_month(
-                settlement_year_txs, lambda tx: tx.date.month
-            )
-            gross_by_month = {
-                m: compute_gross_settlement(txs, ctx.person_ids)
-                for m, txs in by_month_settlement.items()
-            }
+            # Settlement math runs on the all-time ledger over
+            # payer_percentage < 100 rows regardless of the household flag —
+            # a different universe than the spending aggregations above.
+            bundle = await load_settlement_ledger(uow, ctx)
+            ledger = bundle.ledger
+            year_rows = {m.month: m for m in ledger.months if m.year == command.year}
 
             year_periods = await uow.reconciliation_periods.get_by_year(command.year)
             finalized_months = {p.month for p in year_periods if p.is_finalized}
-            all_year_settlements = await uow.settlements.get_by_year(command.year)
 
             now = datetime.now(tz=UTC)
             active_month = (
                 command.month
                 if command.month is not None
                 else _resolve_active_month(
-                    by_month_settlement | by_month_household,
+                    set(year_rows) | set(by_month_household),
                     finalized_months,
                     now.month,
                 )
@@ -442,19 +457,24 @@ class GetDashboardUseCase:
             )
             # The summary's spending figures describe household rows; its
             # settlement figure must cover all settlement-relevant rows.
+            active_row = year_rows.get(active_month)
             current_month = evolve(
                 current_month,
-                settlement=gross_by_month.get(
-                    active_month, compute_gross_settlement([], ctx.person_ids)
+                settlement=(
+                    active_row.gross
+                    if active_row is not None
+                    else compute_gross_settlement([], ctx.person_ids)
                 ),
             )
 
             ytd_household_txs = [
                 tx for tx in household_txs if tx.date.month <= active_month
             ]
-            ytd_gross_settlement = compute_gross_settlement(
-                [tx for tx in settlement_year_txs if tx.date.month <= active_month],
-                ctx.person_ids,
+            ytd_rows = [
+                row for month, row in year_rows.items() if month <= active_month
+            ]
+            ytd_gross_settlement = sum_settlement_results(
+                (row.gross for row in ytd_rows), ctx.person_ids
             )
 
             # True household spending (all household=true, including no-split)
@@ -503,46 +523,45 @@ class GetDashboardUseCase:
                     us for us in upload_statuses if us.person_id == command.person_id
                 ]
 
-            # Net settlement positions (gross adjusted for recorded payments)
-            active_month_settlements = [
-                s for s in all_year_settlements if s.month == active_month
-            ]
-            ytd_settlements = [
-                s
-                for s in all_year_settlements
-                if s.month is not None and s.month <= active_month
-            ]
-
             return GetDashboardResult(
                 scope=command.scope,
                 current_person_id=command.person_id,
                 current_month=current_month,
-                current_month_net_settlement=compute_net_position(
-                    current_month.settlement, active_month_settlements
+                # The active month's ledger position: its gross minus what
+                # FIFO applied to it — None when settled or absent.
+                current_month_net_settlement=(
+                    month_remaining_result(active_row)
+                    if active_row is not None
+                    else None
                 ),
                 upload_statuses=upload_statuses,
                 household_spending_month=household_spending_month,
                 household_spending_ytd=household_spending_ytd,
                 ytd_settlement=ytd_gross_settlement,
-                ytd_net_settlement=compute_net_position(
-                    ytd_gross_settlement, ytd_settlements
+                # What's still unpaid across the year's months through the
+                # active month (payments already netted by the ledger).
+                ytd_net_settlement=sum_settlement_results(
+                    (month_remaining_result(row) for row in ytd_rows),
+                    ctx.person_ids,
                 ),
+                # Annotation-independent: everything paid during this year.
                 ytd_total_settled=sum(
-                    (s.amount for s in ytd_settlements),
+                    (
+                        s.amount
+                        for s in bundle.settlements
+                        if s.settled_at.year == command.year
+                    ),
                     Decimal(0),
                 ),
+                outstanding_balance=ledger.outstanding,
+                outstanding_span=ledger.span,
                 month_history=_build_month_history(
                     _MonthHistoryInputs(
                         summaries=month_summaries,
                         year=command.year,
                         finalized_months=finalized_months,
-                        settlements_by_month=partition_by_month(
-                            # get_by_year only returns annotated rows; `or 0`
-                            # is typing-only narrowing (month is never 0).
-                            all_year_settlements,
-                            lambda s: s.month or 0,
-                        ),
-                        gross_by_month=gross_by_month,
+                        ledger_rows=year_rows,
+                        settlements_by_id={s.id: s for s in bundle.settlements},
                         by_month_household=by_month_household,
                         all_spending_by_month=(
                             all_data.spending_by_month if all_data else None

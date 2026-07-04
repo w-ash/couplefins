@@ -13,27 +13,33 @@ TOOLS: list[dict[str, object]] = [
     {
         "name": "get_settlement_balance",
         "description": (
-            "Look up settlement status for a given month. Returns the gross "
-            "settlement amount (who owes whom before any payments), remaining "
-            "balance after recorded settlements with its net direction "
-            "(net_from/net_to — authoritative, since an overpayment can "
-            "reverse who owes whom), upload status for each person, "
-            "and whether the month is finalized. Also returns warning flags if "
-            "uploads are missing or the balance is unsettled."
+            "Look up the settlement balance on the couple's running ledger. "
+            "Omit year and month to get the total outstanding balance across "
+            "all months (outstanding: who owes whom in total, plus the span "
+            "of months it covers) — this answers 'what do we owe each other?'. "
+            "Provide year and month to inspect one month: its gross amount "
+            "(who owed whom before payments), the month's ledger row "
+            "(applied, remaining, status: settled / partially_settled / "
+            "carried_forward), the remaining balance with its direction "
+            "(net_from/net_to), upload status for each person, and whether "
+            "the month is finalized."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "year": {
                     "type": "integer",
-                    "description": "The year (e.g. 2026).",
+                    "description": (
+                        "The year (e.g. 2026). Omit together with month "
+                        "for the total outstanding across all months."
+                    ),
                 },
                 "month": {
                     "type": "integer",
-                    "description": "The month (1-12).",
+                    "description": "The month (1-12). Omit together with year.",
                 },
             },
-            "required": ["year", "month"],
+            "required": [],
         },
     },
     {

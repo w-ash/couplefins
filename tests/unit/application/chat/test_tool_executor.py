@@ -138,6 +138,98 @@ async def test_settlement_balance_overpayment_names_reversed_debtor() -> None:
 
 
 @pytest.mark.asyncio
+async def test_settlement_balance_month_includes_ledger_row() -> None:
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        return_value=_settle_result(),
+    ):
+        result = await execute_tool(
+            "get_settlement_balance",
+            {"year": 2026, "month": 3},
+            ALICE,
+            PERSONS,
+        )
+
+    assert result["month_ledger"] == {
+        "gross": pytest.approx(147.50),
+        "applied": 0.0,
+        "remaining": pytest.approx(147.50),
+        "status": "carried_forward",
+    }
+    assert result["outstanding"] == {
+        "amount": pytest.approx(147.50),
+        "from": "Alice",
+        "to": "Bob",
+    }
+    assert result["outstanding_span"] == {"start": "2026-03", "end": "2026-03"}
+
+
+@pytest.mark.asyncio
+async def test_settlement_balance_without_month_returns_outstanding() -> None:
+    from src.application.use_cases._shared.settlement_math import LedgerBundle
+    from src.domain.ledger import SettlementLedger
+
+    ledger = SettlementLedger(
+        outstanding=SettlementResult(
+            amount=Decimal("842.00"),
+            from_person_id=ALICE.id,
+            to_person_id=BOB.id,
+        ),
+        months=(),
+        payments=(),
+        unapplied_payment_total=Decimal(0),
+        span=((2026, 3), (2026, 5)),
+    )
+    bundle = LedgerBundle(ledger=ledger, settlements=[], records=[])
+
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        return_value=bundle,
+    ):
+        result = await execute_tool("get_settlement_balance", {}, ALICE, PERSONS)
+
+    assert result["scope"] == "all_months"
+    assert result["outstanding"] == {
+        "amount": pytest.approx(842.0),
+        "from": "Alice",
+        "to": "Bob",
+    }
+    assert result["outstanding_span"] == {"start": "2026-03", "end": "2026-05"}
+    assert result["remaining_balance"] == pytest.approx(842.0)
+    assert result["net_from"] == "Alice"
+    assert result["net_to"] == "Bob"
+
+
+@pytest.mark.asyncio
+async def test_settlement_balance_without_month_all_settled() -> None:
+    from src.application.use_cases._shared.settlement_math import LedgerBundle
+    from src.domain.ledger import SettlementLedger
+
+    ledger = SettlementLedger(
+        outstanding=None,
+        months=(),
+        payments=(),
+        unapplied_payment_total=Decimal(0),
+        span=None,
+    )
+    bundle = LedgerBundle(ledger=ledger, settlements=[], records=[])
+
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        return_value=bundle,
+    ):
+        result = await execute_tool("get_settlement_balance", {}, ALICE, PERSONS)
+
+    assert result["outstanding"] is None
+    assert result["outstanding_span"] is None
+    assert result["remaining_balance"] == pytest.approx(0.0)
+    assert "settled" in str(result["status"])
+
+
+@pytest.mark.asyncio
 async def test_settlement_balance_no_owed() -> None:
     no_owed = _settle_result()
     # Create a new result with owed=None

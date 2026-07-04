@@ -51,6 +51,8 @@ class MonthlySettlement:
     from_person_id: UUID
     to_person_id: UUID
     is_settled: bool
+    # Ledger-derived: settled | partially_settled | carried_forward
+    status: str
 
 
 @define(frozen=True, slots=True)

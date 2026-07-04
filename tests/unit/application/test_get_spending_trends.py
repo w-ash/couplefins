@@ -283,8 +283,8 @@ async def test_settlement_trend_populated() -> None:
         ),
     ]
     uow.transactions.get_household_by_year.return_value = txs
-    # The settlement trend is computed over settlement-relevant rows.
-    uow.transactions.get_settlement_relevant_by_date_range.return_value = txs
+    # The settlement trend is computed over settlement-relevant rows (ledger).
+    uow.transactions.get_all_settlement_relevant.return_value = txs
 
     command = GetSpendingTrendsCommand(year=2026, month=2)
     result = await GetSpendingTrendsUseCase().execute(command, uow)
@@ -294,6 +294,7 @@ async def test_settlement_trend_populated() -> None:
     assert jan.month == 1
     assert jan.amount > 0
     assert jan.is_settled is False
+    assert jan.status == "carried_forward"
 
 
 async def test_settlement_trend_marks_settled() -> None:
@@ -307,9 +308,9 @@ async def test_settlement_trend_marks_settled() -> None:
         ),
     ]
     uow.transactions.get_household_by_year.return_value = txs
-    uow.transactions.get_settlement_relevant_by_date_range.return_value = txs
+    uow.transactions.get_all_settlement_relevant.return_value = txs
     # Settlement that covers the owed amount
-    uow.settlements.get_by_year.return_value = [
+    uow.settlements.get_all.return_value = [
         make_settlement(
             year=2026,
             month=1,
@@ -324,6 +325,7 @@ async def test_settlement_trend_marks_settled() -> None:
 
     assert len(result.settlement_trend) == 1
     assert result.settlement_trend[0].is_settled is True
+    assert result.settlement_trend[0].status == "settled"
 
 
 async def test_settlement_trend_reverse_direction_not_settled() -> None:
@@ -337,11 +339,11 @@ async def test_settlement_trend_reverse_direction_not_settled() -> None:
         ),
     ]
     uow.transactions.get_household_by_year.return_value = txs
-    uow.transactions.get_settlement_relevant_by_date_range.return_value = txs
+    uow.transactions.get_all_settlement_relevant.return_value = txs
     # Gross: bob owes alice $50. A same-magnitude payment in the *wrong*
     # direction (alice paying bob) doubles the imbalance instead of
     # clearing it — must not be marked settled.
-    uow.settlements.get_by_year.return_value = [
+    uow.settlements.get_all.return_value = [
         make_settlement(
             year=2026,
             month=1,
@@ -371,7 +373,7 @@ async def test_settlement_trend_includes_non_household_month() -> None:
         payer_percentage=0,
     )
     uow.transactions.get_household_by_year.return_value = []
-    uow.transactions.get_settlement_relevant_by_date_range.return_value = [spotted]
+    uow.transactions.get_all_settlement_relevant.return_value = [spotted]
 
     command = GetSpendingTrendsCommand(year=2026, month=3)
     result = await GetSpendingTrendsUseCase().execute(command, uow)

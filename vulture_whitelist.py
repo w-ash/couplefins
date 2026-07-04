@@ -76,9 +76,11 @@ ImportEventResponse.imported_at  # serialized to JSON in GET /transactions/{id}/
 
 from src.domain.export.adjustments import assert_adjustments_zero_sum
 from src.domain.insights import compute_trailing_average
+from src.domain.reconciliation import compute_net_position
 
 assert_adjustments_zero_sum  # zero-sum invariant, tested in test_adjustments.py
 compute_trailing_average  # tested in test_insights.py, planned for future Insights enhancements
+compute_net_position  # independent cross-check for the ledger invariants in test_ledger.py
 # --- Pydantic model validators: invoked by Pydantic framework ---
 
 from src.interface.api.schemas.chat import ChatRequest

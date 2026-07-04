@@ -20,6 +20,13 @@ from uuid import UUID
 from src.application.chat.pending_actions import pending_action_store
 from src.application.runner import execute_use_case
 from src.application.use_cases._shared.finalization import load_period_status
+from src.application.use_cases._shared.reconciliation_context import (
+    load_reconciliation_context,
+)
+from src.application.use_cases._shared.settlement_math import (
+    LedgerBundle,
+    load_settlement_ledger,
+)
 from src.application.use_cases.get_budget_overview import (
     GetBudgetOverviewCommand,
     GetBudgetOverviewResult,
@@ -46,6 +53,8 @@ from src.application.use_cases.search_transactions import (
 )
 from src.domain.entities.person import Person
 from src.domain.exceptions import ToolExecutionError
+from src.domain.ledger import MonthKey
+from src.domain.reconciliation import SettlementResult
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 type _ToolHandler = Callable[
@@ -96,15 +105,75 @@ def _fmt(amount: Decimal) -> float:
 # --- Tool handlers ---
 
 
+def _owed_dict(
+    owed: SettlementResult | None, persons: list[Person]
+) -> dict[str, object] | None:
+    if owed is None:
+        return None
+    return {
+        "amount": _fmt(owed.amount),
+        "from": _person_name(owed.from_person_id, persons),
+        "to": _person_name(owed.to_person_id, persons),
+    }
+
+
+def _span_dict(
+    span: tuple[MonthKey, MonthKey] | None,
+) -> dict[str, str] | None:
+    if span is None:
+        return None
+    return {
+        "start": f"{span[0][0]}-{span[0][1]:02d}",
+        "end": f"{span[1][0]}-{span[1][1]:02d}",
+    }
+
+
 async def _handle_settlement_balance(
     tool_input: dict[str, object],
     _current_user: Person,
     persons: list[Person],
 ) -> dict[str, object]:
-    command = GetSettleUpDataCommand(
-        year=cast(int, tool_input["year"]),
-        month=cast(int, tool_input["month"]),
-    )
+    year = cast(int | None, tool_input.get("year"))
+    month = cast(int | None, tool_input.get("month"))
+    if year is None or month is None:
+        return await _outstanding_balance_summary(persons)
+    return await _month_settlement_summary(year, month, persons)
+
+
+async def _outstanding_balance_summary(persons: list[Person]) -> dict[str, object]:
+    """The couple's total outstanding balance across all months."""
+
+    async def _load(uow: UnitOfWorkProtocol) -> LedgerBundle:
+        async with uow:
+            ctx = await load_reconciliation_context(uow)
+            return await load_settlement_ledger(uow, ctx)
+
+    ledger = (await execute_use_case(_load)).ledger
+    summary: dict[str, object] = {
+        "scope": "all_months",
+        "outstanding": _owed_dict(ledger.outstanding, persons),
+        "outstanding_span": _span_dict(ledger.span),
+        "remaining_balance": _fmt(
+            ledger.outstanding.amount if ledger.outstanding else Decimal(0)
+        ),
+    }
+    if ledger.outstanding:
+        summary["net_from"] = _person_name(ledger.outstanding.from_person_id, persons)
+        summary["net_to"] = _person_name(ledger.outstanding.to_person_id, persons)
+        if ledger.span:
+            summary["month"] = (
+                f"{ledger.span[0][0]}-{ledger.span[0][1]:02d} to "
+                f"{ledger.span[1][0]}-{ledger.span[1][1]:02d}"
+            )
+    else:
+        summary["status"] = "Nothing outstanding — all months are settled"
+    return summary
+
+
+async def _month_settlement_summary(
+    year: int, month: int, persons: list[Person]
+) -> dict[str, object]:
+    command = GetSettleUpDataCommand(year=year, month=month)
     result: GetSettleUpDataResult = await execute_use_case(
         lambda uow: GetSettleUpDataUseCase().execute(command, uow)
     )
@@ -121,11 +190,24 @@ async def _handle_settlement_balance(
     else:
         summary["gross_amount"] = 0.0
         summary["status"] = "No settlement needed this month"
-    # Payments can reverse the direction (overpayment) — the net debtor is
-    # authoritative, not the gross one.
+    # What remains against this month on the ledger, in its gross direction.
     if result.net_position:
         summary["net_from"] = _person_name(result.net_position.from_person_id, persons)
         summary["net_to"] = _person_name(result.net_position.to_person_id, persons)
+
+    row = next(
+        (m for m in result.ledger_months if (m.year, m.month) == (year, month)),
+        None,
+    )
+    if row is not None:
+        summary["month_ledger"] = {
+            "gross": _fmt(row.gross.amount) if row.gross else 0.0,
+            "applied": _fmt(row.applied),
+            "remaining": _fmt(row.remaining),
+            "status": str(row.status),
+        }
+    summary["outstanding"] = _owed_dict(result.outstanding, persons)
+    summary["outstanding_span"] = _span_dict(result.outstanding_span)
 
     summary["uploads"] = [
         {"person": us.person_name, "uploaded": us.has_uploaded}

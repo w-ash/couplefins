@@ -51,8 +51,3 @@ class SettlementRepository(BaseRepository[Settlement, SettlementModel]):
         )
         result = await self._session.execute(stmt)
         return [self._to_domain(row) for row in result.scalars().all()]
-
-    async def get_by_year(self, year: int) -> list[Settlement]:
-        stmt = select(SettlementModel).where(SettlementModel.year == year)
-        result = await self._session.execute(stmt)
-        return [self._to_domain(row) for row in result.scalars().all()]

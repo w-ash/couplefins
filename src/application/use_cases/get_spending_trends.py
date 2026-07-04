@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -9,14 +9,13 @@ from src.application.use_cases._shared.command_validators import (
     optional_positive_int,
     positive_int,
 )
-from src.application.use_cases._shared.date_math import partition_by_month
 from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
+from src.application.use_cases._shared.settlement_math import load_settlement_ledger
 from src.domain.categories import build_category_lookup
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.entities.person import Person
-from src.domain.entities.settlement import Settlement
 from src.domain.insights import (
     GroupComparison,
     MonthlyGroupSpending,
@@ -27,7 +26,7 @@ from src.domain.insights import (
     compute_person_paid_by_month,
     compute_spending_trends,
 )
-from src.domain.reconciliation import compute_gross_settlement, compute_net_position
+from src.domain.ledger import MonthSettlementStatus, SettlementLedger
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -69,44 +68,27 @@ def _resolve_months(command: GetSpendingTrendsCommand) -> tuple[int, int]:
     return target_month, through_month
 
 
-async def _build_settlement_trend(
-    uow: UnitOfWorkProtocol,
-    person_ids: list[UUID],
-    year: int,
-    settlements: list[Settlement],
+def _build_settlement_trend(
+    ledger: SettlementLedger, year: int
 ) -> list[MonthlySettlement]:
-    # Gross is computed over settlement-relevant rows (payer_percentage < 100,
+    # Ledger months cover settlement-relevant rows (payer_percentage < 100,
     # household or not) — matching Dashboard/Settle Up — so a month whose only
     # settlement signal is a spotted / personal-split row is not dropped.
-    settlement_txs = await uow.transactions.get_settlement_relevant_by_date_range(
-        date(year, 1, 1), date(year, 12, 31)
-    )
-    by_month = partition_by_month(settlement_txs, lambda tx: tx.date.month)
-    # get_by_year only returns annotated rows; `or 0` is typing-only
-    # narrowing (month is never 0).
-    settlements_by_month = partition_by_month(settlements, lambda s: s.month or 0)
-
-    trend: list[MonthlySettlement] = []
-    for month_num in sorted(by_month):
-        gross = compute_gross_settlement(by_month[month_num], person_ids)
-        if gross is None:
-            continue
-        month_settlements = settlements_by_month.get(month_num, [])
-        net = compute_net_position(gross, month_settlements)
-        # An overpayment leaves a non-zero net whose direction is *reversed*
-        # from the gross — the debt was still covered, so the month is settled.
-        overpaid = net is not None and net.from_person_id != gross.from_person_id
-        trend.append(
-            MonthlySettlement(
-                year=year,
-                month=month_num,
-                amount=gross.amount,
-                from_person_id=gross.from_person_id,
-                to_person_id=gross.to_person_id,
-                is_settled=net is None or net.amount == Decimal(0) or overpaid,
-            )
+    return [
+        MonthlySettlement(
+            year=year,
+            month=row.month,
+            amount=row.gross.amount,
+            from_person_id=row.gross.from_person_id,
+            to_person_id=row.gross.to_person_id,
+            # Ledger-derived — subsumes the old overpaid special case: an
+            # overpaid month has zero remaining, so it reads as settled.
+            is_settled=row.status is MonthSettlementStatus.SETTLED,
+            status=row.status,
         )
-    return trend
+        for row in ledger.months
+        if row.year == year and row.gross is not None
+    ]
 
 
 @define(slots=True)
@@ -134,10 +116,8 @@ class GetSpendingTrendsUseCase:
             )
             budget_lines = _build_budget_lines(year_budgets)
 
-            all_year_settlements = await uow.settlements.get_by_year(command.year)
-            settlement_trend = await _build_settlement_trend(
-                uow, ctx.person_ids, command.year, all_year_settlements
-            )
+            bundle = await load_settlement_ledger(uow, ctx)
+            settlement_trend = _build_settlement_trend(bundle.ledger, command.year)
 
             monthly_person_paid = compute_person_paid_by_month(
                 year_txs, category_lookup

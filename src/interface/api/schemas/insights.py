@@ -65,6 +65,7 @@ class MonthlySettlementItem(BaseModel):
     from_person_id: UUID
     to_person_id: UUID
     is_settled: bool
+    status: str  # settled | partially_settled | carried_forward
 
 
 class SpendingTrendsResponse(BaseModel):
@@ -159,6 +160,7 @@ class SpendingTrendsResponse(BaseModel):
                     from_person_id=ms.from_person_id,
                     to_person_id=ms.to_person_id,
                     is_settled=ms.is_settled,
+                    status=ms.status,
                 )
                 for ms in result.settlement_trend
             ],

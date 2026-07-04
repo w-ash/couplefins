@@ -458,7 +458,7 @@ async def test_month_with_full_settlement_is_settled() -> None:
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
     settled_at = datetime(2026, 2, 1, 12, 0, tzinfo=UTC)
-    uow.settlements.get_by_year.return_value = [
+    uow.settlements.get_all.return_value = [
         make_settlement(
             year=2026,
             month=1,
@@ -473,6 +473,7 @@ async def test_month_with_full_settlement_is_settled() -> None:
 
     jan = result.month_history[-1]
     assert jan.is_settled is True
+    assert jan.settlement_status == "settled"
     assert jan.settled_at == settled_at
 
 
@@ -493,13 +494,15 @@ async def test_month_with_partial_settlement_is_not_settled() -> None:
     _set_transactions(uow, txs)
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
-    uow.settlements.get_by_year.return_value = [
+    partial_at = datetime(2026, 2, 1, 12, 0, tzinfo=UTC)
+    uow.settlements.get_all.return_value = [
         make_settlement(
             year=2026,
             month=1,
             amount=Decimal("30.00"),
             from_person_id=bob.id,
             to_person_id=alice.id,
+            settled_at=partial_at,
         ),
     ]
 
@@ -507,7 +510,12 @@ async def test_month_with_partial_settlement_is_not_settled() -> None:
 
     jan = result.month_history[-1]
     assert jan.is_settled is False
-    assert jan.settled_at is None
+    assert jan.settlement_status == "partially_settled"
+    # Gross amount, not the net remainder — status carries the nuance.
+    assert jan.settlement_amount == Decimal("50.00")
+    # The partial payment covered part of the month — it shows as the
+    # month's latest payment activity.
+    assert jan.settled_at == partial_at
 
 
 async def test_multiple_settlements_summing_to_full() -> None:
@@ -529,7 +537,7 @@ async def test_multiple_settlements_summing_to_full() -> None:
 
     earlier = datetime(2026, 2, 1, 10, 0, tzinfo=UTC)
     later = datetime(2026, 2, 5, 14, 0, tzinfo=UTC)
-    uow.settlements.get_by_year.return_value = [
+    uow.settlements.get_all.return_value = [
         make_settlement(
             year=2026,
             month=1,
@@ -589,7 +597,7 @@ async def test_waived_settlement_counts_as_settled() -> None:
     # transactions the dashboard reads, so it can't drift from a real write.
     assert waive_result.settlement.amount == Decimal("5.00")
 
-    uow.settlements.get_by_year.return_value = [waive_result.settlement]
+    uow.settlements.get_all.return_value = [waive_result.settlement]
 
     result = await GetDashboardUseCase().execute(_make_command(), uow)
 
@@ -620,7 +628,7 @@ async def test_ytd_total_settled_accumulates_across_months() -> None:
     _set_transactions(uow, txs)
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
-    uow.settlements.get_by_year.return_value = [
+    uow.settlements.get_all.return_value = [
         make_settlement(
             year=2026,
             month=1,
@@ -642,7 +650,9 @@ async def test_ytd_total_settled_accumulates_across_months() -> None:
     assert result.ytd_total_settled == Decimal("90.00")
 
 
-async def test_ytd_total_settled_excludes_future_months() -> None:
+async def test_ytd_total_settled_scoped_by_settled_at_year() -> None:
+    """Annotation-independent: everything paid during the viewed year counts,
+    including un-annotated payments; other years' payments do not."""
     uow = make_mock_uow()
     alice = make_person(name="Alice")
     bob = make_person(name="Bob")
@@ -659,27 +669,80 @@ async def test_ytd_total_settled_excludes_future_months() -> None:
     _set_transactions(uow, txs)
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
-    uow.settlements.get_by_year.return_value = [
+    uow.settlements.get_all.return_value = [
         make_settlement(
             year=2026,
             month=1,
             amount=Decimal("50.00"),
             from_person_id=bob.id,
             to_person_id=alice.id,
+            settled_at=datetime(2026, 2, 1, tzinfo=UTC),
         ),
+        # No annotation — still paid during 2026, still counts.
         make_settlement(
-            year=2026,
-            month=4,
+            year=None,
+            month=None,
             amount=Decimal("80.00"),
             from_person_id=bob.id,
             to_person_id=alice.id,
+            settled_at=datetime(2026, 4, 12, tzinfo=UTC),
+        ),
+        # Paid in a different year — excluded.
+        make_settlement(
+            year=None,
+            month=None,
+            amount=Decimal("999.00"),
+            from_person_id=bob.id,
+            to_person_id=alice.id,
+            settled_at=datetime(2025, 12, 31, tzinfo=UTC),
         ),
     ]
 
     result = await GetDashboardUseCase().execute(_make_command(), uow)
 
-    # Only January included (active month=3, April excluded)
-    assert result.ytd_total_settled == Decimal("50.00")
+    assert result.ytd_total_settled == Decimal("130.00")
+
+
+async def test_null_annotation_settlement_enters_month_math() -> None:
+    """Regression pin: a settlement without year/month must still settle the
+    month it covers — the old get_by_year fetch silently dropped it."""
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    _setup_uow_base(uow, alice, bob)
+
+    txs = [
+        make_transaction(
+            date=date(2026, 1, 15),
+            amount=Decimal("-100.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+    ]
+    _set_transactions(uow, txs)
+    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+
+    settled_at = datetime(2026, 3, 1, 9, 0, tzinfo=UTC)
+    uow.settlements.get_all.return_value = [
+        make_settlement(
+            year=None,
+            month=None,
+            amount=Decimal("50.00"),
+            from_person_id=bob.id,
+            to_person_id=alice.id,
+            settled_at=settled_at,
+        ),
+    ]
+
+    result = await GetDashboardUseCase().execute(_make_command(), uow)
+
+    jan = result.month_history[-1]
+    assert jan.is_settled is True
+    assert jan.settlement_status == "settled"
+    assert jan.settled_at == settled_at
+    assert result.ytd_net_settlement is None
+    assert result.outstanding_balance is None
+    assert result.outstanding_span is None
 
 
 async def test_zero_balance_month_is_trivially_settled() -> None:
@@ -714,8 +777,9 @@ async def test_zero_balance_month_is_trivially_settled() -> None:
     assert jan.settled_at is None
 
 
-async def test_net_settlement_reflects_overpayment() -> None:
-    """Dashboard should show net position after settlements, not gross."""
+async def test_overpayment_settles_month_and_reverses_outstanding() -> None:
+    """An overpayment fully covers the month (settled); the excess rides on
+    the ledger as a reversed outstanding balance."""
     uow = make_mock_uow()
     alice = make_person(name="Alice")
     bob = make_person(name="Bob")
@@ -733,7 +797,7 @@ async def test_net_settlement_reflects_overpayment() -> None:
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
     # Bob owes Alice $50, but pays $200 (overpayment)
-    uow.settlements.get_by_year.return_value = [
+    uow.settlements.get_all.return_value = [
         make_settlement(
             year=2026,
             month=1,
@@ -745,22 +809,24 @@ async def test_net_settlement_reflects_overpayment() -> None:
 
     result = await GetDashboardUseCase().execute(_make_command(), uow)
 
-    # Month history: net reverses direction
+    # Month history: gross amount, ledger-derived status — covered is covered.
     jan = result.month_history[-1]
-    assert jan.is_settled is False
-    assert jan.settlement_amount == Decimal("150.00")
-    assert jan.settlement_from_person_id == alice.id  # Direction reversed
-    assert jan.settlement_to_person_id == bob.id
+    assert jan.is_settled is True
+    assert jan.settlement_status == "settled"
+    assert jan.settlement_amount == Decimal("50.00")
+    assert jan.settlement_from_person_id == bob.id
+    assert jan.settlement_to_person_id == alice.id
 
-    # Active month net settlement (January has no transactions in March context)
-    # But YTD net should reflect the overpayment
-    assert result.ytd_net_settlement is not None
-    assert result.ytd_net_settlement.amount == Decimal("150.00")
-    assert result.ytd_net_settlement.from_person_id == alice.id
+    # No month remainder → YTD net is clear...
+    assert result.ytd_net_settlement is None
+    # ...but the outstanding balance shows the reversed $150 credit.
+    assert result.outstanding_balance is not None
+    assert result.outstanding_balance.amount == Decimal("150.00")
+    assert result.outstanding_balance.from_person_id == alice.id
+    assert result.outstanding_balance.to_person_id == bob.id
 
-    # Current month net (March has no transactions, no settlements)
-    assert result.current_month_net_settlement is not None
-    assert result.current_month_net_settlement.amount == Decimal(0)
+    # Current month net (March has no settlement-relevant rows) → None
+    assert result.current_month_net_settlement is None
 
 
 async def test_net_settlement_partial_payment() -> None:
@@ -780,7 +846,7 @@ async def test_net_settlement_partial_payment() -> None:
     _set_transactions(uow, txs)
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
-    uow.settlements.get_by_year.return_value = [
+    uow.settlements.get_all.return_value = [
         make_settlement(
             year=2026,
             month=3,

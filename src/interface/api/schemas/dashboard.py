@@ -7,6 +7,7 @@ from src.application.use_cases._shared.command_validators import Scope
 from src.application.use_cases.get_dashboard import GetDashboardResult
 from src.domain.budget import HealthStatus
 from src.interface.api.schemas.reconciliation import (
+    MonthSpanResponse,
     OwedAmountResponse,
     PersonSummaryResponse,
     UploadStatusResponse,
@@ -23,6 +24,7 @@ class MonthHistoryEntryResponse(BaseModel):
     settlement_to_person_id: UUID | None
     is_finalized: bool
     is_settled: bool
+    settlement_status: str  # settled | partially_settled | carried_forward
     settled_at: datetime | None
     total_all_spending: MoneyField | None = None
 
@@ -65,6 +67,8 @@ class DashboardResponse(BaseModel):
     ytd_settlement: OwedAmountResponse | None
     ytd_net_settlement: OwedAmountResponse | None
     ytd_total_settled: MoneyField
+    outstanding_balance: OwedAmountResponse | None
+    outstanding_span: MonthSpanResponse | None
     month_history: list[MonthHistoryEntryResponse]
     persons: list[DashboardPersonResponse]
     unmapped_categories: list[str]
@@ -119,6 +123,14 @@ class DashboardResponse(BaseModel):
                 else None
             ),
             ytd_total_settled=result.ytd_total_settled,
+            outstanding_balance=(
+                OwedAmountResponse.from_domain(result.outstanding_balance)
+                if result.outstanding_balance
+                else None
+            ),
+            outstanding_span=MonthSpanResponse.from_optional_span(
+                result.outstanding_span
+            ),
             month_history=[
                 MonthHistoryEntryResponse(
                     year=mh.year,
@@ -129,6 +141,7 @@ class DashboardResponse(BaseModel):
                     settlement_to_person_id=mh.settlement_to_person_id,
                     is_finalized=mh.is_finalized,
                     is_settled=mh.is_settled,
+                    settlement_status=mh.settlement_status,
                     settled_at=mh.settled_at,
                     total_all_spending=mh.total_all_spending,
                 )

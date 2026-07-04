@@ -11,7 +11,7 @@ pair: positive means "person A (lower UUID) owes person B".
 """
 
 from collections import deque
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from datetime import date
 from decimal import Decimal
 from enum import StrEnum
@@ -111,6 +111,21 @@ class _Allocation:
 def empty_payment_coverage(settlement_id: UUID) -> PaymentCoverage:
     """A coverage that matched nothing — for payments outside any ledger."""
     return PaymentCoverage(settlement_id=settlement_id, covered=(), unapplied=_ZERO)
+
+
+def sum_settlement_results(
+    results: Iterable[SettlementResult | None],
+    person_ids: list[UUID],
+) -> SettlementResult | None:
+    """Direction-aware sum of positions over the UUID-anchored person pair.
+
+    None when the signed total nets to zero (or the couple is incomplete).
+    """
+    if len(person_ids) != CoupleDefaults.EXPECTED_PERSON_COUNT:
+        return None
+    person_a, person_b = sorted(person_ids)
+    signed = sum((_signed_gross(result, person_a) for result in results), _ZERO)
+    return _result_from_signed(signed, person_a, person_b)
 
 
 def month_remaining_result(month: LedgerMonth) -> SettlementResult | None:
