@@ -25,7 +25,7 @@ async def test_setup_couple_creates_two_persons(client: AsyncClient) -> None:
 async def test_setup_couple_then_list(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
 
-    response = await client.get("/api/v1/persons/", cookies=cookies)
+    response = await client.get("/api/v1/persons/", auth=cookies)
     assert response.status_code == 200
     persons = response.json()
     assert len(persons) == 2
@@ -90,7 +90,7 @@ async def test_list_persons_empty(client: AsyncClient) -> None:
 
 async def test_list_persons_authenticated(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
-    response = await client.get("/api/v1/persons/", cookies=cookies)
+    response = await client.get("/api/v1/persons/", auth=cookies)
     assert response.status_code == 200
     assert len(response.json()) == 2
 
@@ -104,13 +104,13 @@ async def test_patch_person_updates_adjustment_account(
     response = await client.patch(
         f"/api/v1/persons/{person_id}",
         json={"adjustment_account": "Shared Adjustments"},
-        cookies=cookies,
+        auth=cookies,
     )
     assert response.status_code == 200
     assert response.json()["adjustment_account"] == "Shared Adjustments"
     assert response.json()["name"] == "Alice"
 
-    get_resp = await client.get("/api/v1/persons/", cookies=cookies)
+    get_resp = await client.get("/api/v1/persons/", auth=cookies)
     alice = next(p for p in get_resp.json() if p["id"] == person_id)
     assert alice["adjustment_account"] == "Shared Adjustments"
 
@@ -120,7 +120,7 @@ async def test_patch_person_wrong_id_rejected(client: AsyncClient) -> None:
     response = await client.patch(
         "/api/v1/persons/00000000-0000-0000-0000-000000000000",
         json={"adjustment_account": "Test"},
-        cookies=cookies,
+        auth=cookies,
     )
     assert response.status_code == 422
 
@@ -134,6 +134,6 @@ async def test_patch_person_rejects_blank_account(
     response = await client.patch(
         f"/api/v1/persons/{person_id}",
         json={"adjustment_account": "   "},
-        cookies=cookies,
+        auth=cookies,
     )
     assert response.status_code == 422

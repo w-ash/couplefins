@@ -14,9 +14,9 @@ async def _setup_transaction(
     """Upload CSV and return (person_id, transaction dict, cookies)."""
     persons, cookies = await setup_and_login(client)
     alice_id = persons[0]["id"]
-    await upload_csv(client, alice_id, SHARED_CSV, cookies=cookies)
+    await upload_csv(client, alice_id, SHARED_CSV, auth=cookies)
 
-    resp = await client.get("/api/v1/reconciliation?year=2026&month=1", cookies=cookies)
+    resp = await client.get("/api/v1/reconciliation?year=2026&month=1", auth=cookies)
     assert resp.status_code == 200
     txs = resp.json()["transactions"]
     assert len(txs) == 1
@@ -30,7 +30,7 @@ async def test_patch_updates_category(client: AsyncClient) -> None:
     resp = await client.patch(
         f"/api/v1/transactions/{tx_id}",
         json={"category": "Fast Food"},
-        cookies=cookies,
+        auth=cookies,
     )
     assert resp.status_code == 200
     body = resp.json()
@@ -48,14 +48,12 @@ async def test_patch_date_sets_original_date(client: AsyncClient) -> None:
     resp = await client.patch(
         f"/api/v1/transactions/{tx_id}",
         json={"date": "2026-01-20"},
-        cookies=cookies,
+        auth=cookies,
     )
     assert resp.status_code == 200
 
     # Verify original_date is set on the transaction
-    recon = await client.get(
-        "/api/v1/reconciliation?year=2026&month=1", cookies=cookies
-    )
+    recon = await client.get("/api/v1/reconciliation?year=2026&month=1", auth=cookies)
     updated_tx = next(
         (t for t in recon.json()["transactions"] if t["id"] == tx_id), None
     )
@@ -70,13 +68,13 @@ async def test_patch_finalized_month_returns_409(client: AsyncClient) -> None:
     await client.post(
         "/api/v1/reconciliation/finalize",
         json={"year": 2026, "month": 1},
-        cookies=cookies,
+        auth=cookies,
     )
 
     resp = await client.patch(
         f"/api/v1/transactions/{tx['id']}",
         json={"category": "Fast Food"},
-        cookies=cookies,
+        auth=cookies,
     )
     assert resp.status_code == 409
 
@@ -86,7 +84,7 @@ async def test_patch_missing_transaction_returns_404(client: AsyncClient) -> Non
     resp = await client.patch(
         "/api/v1/transactions/00000000-0000-0000-0000-000000000000",
         json={"category": "Fast Food"},
-        cookies=cookies,
+        auth=cookies,
     )
     assert resp.status_code == 404
 
@@ -99,10 +97,10 @@ async def test_get_edits_returns_history(client: AsyncClient) -> None:
     await client.patch(
         f"/api/v1/transactions/{tx_id}",
         json={"category": "Fast Food"},
-        cookies=cookies,
+        auth=cookies,
     )
 
-    resp = await client.get(f"/api/v1/transactions/{tx_id}/edits", cookies=cookies)
+    resp = await client.get(f"/api/v1/transactions/{tx_id}/edits", auth=cookies)
     assert resp.status_code == 200
     body = resp.json()
     assert body["import_event"] is not None
@@ -118,15 +116,15 @@ async def test_multiple_edits_accumulate(client: AsyncClient) -> None:
     await client.patch(
         f"/api/v1/transactions/{tx_id}",
         json={"category": "Fast Food"},
-        cookies=cookies,
+        auth=cookies,
     )
     await client.patch(
         f"/api/v1/transactions/{tx_id}",
         json={"amount": -99.00},
-        cookies=cookies,
+        auth=cookies,
     )
 
-    resp = await client.get(f"/api/v1/transactions/{tx_id}/edits", cookies=cookies)
+    resp = await client.get(f"/api/v1/transactions/{tx_id}/edits", auth=cookies)
     assert resp.status_code == 200
     edits = resp.json()["edits"]
     assert len(edits) == 2
@@ -141,12 +139,12 @@ async def test_edit_carries_person_attribution(client: AsyncClient) -> None:
     resp = await client.patch(
         f"/api/v1/transactions/{tx_id}",
         json={"category": "Fast Food"},
-        cookies=cookies,
+        auth=cookies,
     )
     assert resp.status_code == 200
     assert resp.json()["edits"][0]["edited_by_person_id"] == alice_id
 
-    resp = await client.get(f"/api/v1/transactions/{tx_id}/edits", cookies=cookies)
+    resp = await client.get(f"/api/v1/transactions/{tx_id}/edits", auth=cookies)
     assert resp.status_code == 200
     assert resp.json()["edits"][0]["edited_by_person_id"] == alice_id
 
@@ -155,7 +153,7 @@ async def test_get_edits_returns_import_event(client: AsyncClient) -> None:
     alice_id, tx, cookies = await _setup_transaction(client)
     tx_id = tx["id"]
 
-    resp = await client.get(f"/api/v1/transactions/{tx_id}/edits", cookies=cookies)
+    resp = await client.get(f"/api/v1/transactions/{tx_id}/edits", auth=cookies)
     assert resp.status_code == 200
     body = resp.json()
     assert body["import_event"] is not None
@@ -170,10 +168,10 @@ async def test_full_lifecycle_import_and_edits(client: AsyncClient) -> None:
     await client.patch(
         f"/api/v1/transactions/{tx_id}",
         json={"category": "Fast Food"},
-        cookies=cookies,
+        auth=cookies,
     )
 
-    resp = await client.get(f"/api/v1/transactions/{tx_id}/edits", cookies=cookies)
+    resp = await client.get(f"/api/v1/transactions/{tx_id}/edits", auth=cookies)
     assert resp.status_code == 200
     body = resp.json()
     assert body["import_event"]["person_id"] == alice_id

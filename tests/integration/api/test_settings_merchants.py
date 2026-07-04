@@ -5,9 +5,7 @@ from tests.integration.conftest import setup_and_login
 
 async def test_list_returns_seeded_merchants(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
-    response = await client.get(
-        "/api/v1/settings/settlement-merchants", cookies=cookies
-    )
+    response = await client.get("/api/v1/settings/settlement-merchants", auth=cookies)
     assert response.status_code == 200
     merchants = response.json()
     assert isinstance(merchants, list)
@@ -22,7 +20,7 @@ async def test_create_merchant(client: AsyncClient) -> None:
     response = await client.post(
         "/api/v1/settings/settlement-merchants",
         json={"name": "PayPal", "merchant_pattern": "paypal"},
-        cookies=cookies,
+        auth=cookies,
     )
     assert response.status_code == 201
     data = response.json()
@@ -36,12 +34,12 @@ async def test_delete_merchant(client: AsyncClient) -> None:
     create = await client.post(
         "/api/v1/settings/settlement-merchants",
         json={"name": "Wise", "merchant_pattern": "wise"},
-        cookies=cookies,
+        auth=cookies,
     )
     merchant_id = create.json()["id"]
 
     response = await client.delete(
-        f"/api/v1/settings/settlement-merchants/{merchant_id}", cookies=cookies
+        f"/api/v1/settings/settlement-merchants/{merchant_id}", auth=cookies
     )
     assert response.status_code == 200
     assert response.json()["deleted"] is True

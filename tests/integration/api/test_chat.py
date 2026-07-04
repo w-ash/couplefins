@@ -88,7 +88,7 @@ async def _post_chat(
         resp = await client.post(
             "/api/v1/chat",
             json={"messages": messages},
-            cookies=cookies,
+            auth=cookies,
         )
         assert resp.status_code == 200
         return _parse_sse_events(resp.text)
@@ -119,7 +119,7 @@ async def test_text_only_response(client: AsyncClient) -> None:
 async def test_single_tool_use(client: AsyncClient) -> None:
     persons, cookies = await setup_and_login(client)
     alice_id = persons[0]["id"]
-    await upload_csv(client, alice_id, _SIMPLE_CSV, cookies=cookies)
+    await upload_csv(client, alice_id, _SIMPLE_CSV, auth=cookies)
 
     fake = FakeLLMClient([
         _tool_use_script("get_settlement_balance", {"year": 2026, "month": 3}),
@@ -147,7 +147,7 @@ async def test_single_tool_use(client: AsyncClient) -> None:
 async def test_parallel_tool_use(client: AsyncClient) -> None:
     persons, cookies = await setup_and_login(client)
     alice_id = persons[0]["id"]
-    await upload_csv(client, alice_id, _SIMPLE_CSV, cookies=cookies)
+    await upload_csv(client, alice_id, _SIMPLE_CSV, auth=cookies)
 
     tu1 = ToolUseBlock(
         id="tu_a",
@@ -203,7 +203,7 @@ async def test_client_date_used_in_system_prompt(client: AsyncClient) -> None:
                 "messages": [{"role": "user", "content": "What's today's date?"}],
                 "client_date": "2026-12-31",
             },
-            cookies=cookies,
+            auth=cookies,
         )
         assert resp.status_code == 200
     finally:
@@ -227,7 +227,7 @@ async def test_missing_client_date_falls_back_to_server_date(
         resp = await client.post(
             "/api/v1/chat",
             json={"messages": [{"role": "user", "content": "Hello"}]},
-            cookies=cookies,
+            auth=cookies,
         )
         assert resp.status_code == 200
     finally:
@@ -271,7 +271,7 @@ async def test_missing_api_key(client: AsyncClient) -> None:
         resp = await client.post(
             "/api/v1/chat",
             json={"messages": [{"role": "user", "content": "Hello"}]},
-            cookies=cookies,
+            auth=cookies,
         )
         assert resp.status_code == 503
     finally:
@@ -305,7 +305,7 @@ async def test_tool_execution_error(client: AsyncClient) -> None:
 async def test_max_rounds_exceeded(client: AsyncClient) -> None:
     persons, cookies = await setup_and_login(client)
     alice_id = persons[0]["id"]
-    await upload_csv(client, alice_id, _SIMPLE_CSV, cookies=cookies)
+    await upload_csv(client, alice_id, _SIMPLE_CSV, auth=cookies)
 
     infinite_tool = _tool_use_script(
         "get_settlement_balance", {"year": 2026, "month": 3}
@@ -340,7 +340,7 @@ async def test_client_disconnect(client: AsyncClient) -> None:
             "POST",
             "/api/v1/chat",
             json={"messages": [{"role": "user", "content": "Hello"}]},
-            cookies=cookies,
+            auth=cookies,
         ) as resp:
             assert resp.status_code == 200
             async for line in resp.aiter_lines():
@@ -363,7 +363,7 @@ async def test_message_too_large(client: AsyncClient) -> None:
         resp = await client.post(
             "/api/v1/chat",
             json={"messages": [{"role": "user", "content": "x" * 25_000}]},
-            cookies=cookies,
+            auth=cookies,
         )
         assert resp.status_code == 422
     finally:
@@ -378,7 +378,7 @@ async def test_total_content_too_large(client: AsyncClient) -> None:
         resp = await client.post(
             "/api/v1/chat",
             json={"messages": messages},
-            cookies=cookies,
+            auth=cookies,
         )
         assert resp.status_code == 422
     finally:
@@ -402,14 +402,14 @@ async def test_rate_limit(client: AsyncClient) -> None:
             resp = await client.post(
                 "/api/v1/chat",
                 json={"messages": [{"role": "user", "content": f"msg {i}"}]},
-                cookies=cookies,
+                auth=cookies,
             )
             assert resp.status_code == 200, f"Request {i} failed: {resp.status_code}"
 
         resp = await client.post(
             "/api/v1/chat",
             json={"messages": [{"role": "user", "content": "one too many"}]},
-            cookies=cookies,
+            auth=cookies,
         )
         assert resp.status_code == 429
     finally:

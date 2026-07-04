@@ -1,8 +1,8 @@
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
 import os
 
 from dotenv import load_dotenv
-from httpx import ASGITransport, AsyncClient
+from httpx import ASGITransport, AsyncClient, Auth, Request
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import (
@@ -20,6 +20,23 @@ load_dotenv()
 
 ALICE_PASSWORD = "password123"
 BOB_PASSWORD = "password456"
+
+
+class CookieAuth(Auth):
+    """Attach a fixed session cookie via the Cookie header.
+
+    Per-request ``auth=`` is supported (only per-request ``cookies=`` is
+    deprecated in httpx 0.28 and removed in 1.0), so one AsyncClient can
+    authenticate as different users request-by-request — no DeprecationWarning,
+    and no mutation of the shared cookie jar.
+    """
+
+    def __init__(self, token: str, *, name: str = "couplefins_session") -> None:
+        self._header = f"{name}={token}"
+
+    def auth_flow(self, request: Request) -> Generator[Request]:
+        request.headers["Cookie"] = self._header
+        yield request
 
 
 def _get_test_db_url() -> str:
@@ -125,18 +142,18 @@ async def login_as(
     client: AsyncClient,
     name: str = "Alice",
     password: str = ALICE_PASSWORD,
-) -> dict[str, str]:
-    """Log in and return cookies dict for subsequent requests."""
+) -> CookieAuth:
+    """Log in and return a CookieAuth for authenticating subsequent requests."""
     resp = await client.post(
         "/api/v1/auth/login",
         json={"name": name, "password": password},
     )
     assert resp.status_code == 200, f"Login failed: {resp.text}"
-    return dict(resp.cookies)
+    return CookieAuth(resp.cookies["couplefins_session"])
 
 
-async def login_as_bob(client: AsyncClient) -> dict[str, str]:
-    """Log in as Bob and return cookies."""
+async def login_as_bob(client: AsyncClient) -> CookieAuth:
+    """Log in as Bob and return a CookieAuth."""
     return await login_as(client, "Bob", BOB_PASSWORD)
 
 
@@ -144,18 +161,18 @@ async def setup_and_login(
     client: AsyncClient,
     password1: str = ALICE_PASSWORD,
     password2: str = BOB_PASSWORD,
-) -> tuple[list[dict], dict[str, str]]:
-    """Create couple, log in as Alice, return (persons, cookies)."""
+) -> tuple[list[dict], CookieAuth]:
+    """Create couple, log in as Alice, return (persons, auth)."""
     persons = await setup_couple(client, password1=password1, password2=password2)
-    cookies = await login_as(client, "Alice", password1)
-    return persons, cookies
+    auth = await login_as(client, "Alice", password1)
+    return persons, auth
 
 
 async def upload_csv(
     client: AsyncClient,
     person_id: str,
     csv_text: str,
-    cookies: dict[str, str] | None = None,
+    auth: CookieAuth | None = None,
 ) -> dict:
     """Upload a CSV string for a person and return the response JSON."""
     import io
@@ -164,6 +181,6 @@ async def upload_csv(
         "/api/v1/uploads/",
         data={"person_id": person_id},
         files={"file": ("test.csv", io.BytesIO(csv_text.encode()), "text/csv")},
-        cookies=cookies,
+        auth=auth,
     )
     return resp.json()

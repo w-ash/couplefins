@@ -4,7 +4,7 @@ import json
 from httpx import AsyncClient
 import pytest
 
-from tests.integration.conftest import setup_and_login
+from tests.integration.conftest import CookieAuth, setup_and_login
 
 VALID_CSV = (
     "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
@@ -21,7 +21,7 @@ async def test_upload_csv_full_flow(client: AsyncClient) -> None:
         "/api/v1/uploads/",
         data={"person_id": person_id},
         files={"file": ("test.csv", io.BytesIO(VALID_CSV.encode()), "text/csv")},
-        cookies=cookies,
+        auth=cookies,
     )
     assert response.status_code == 201
     data = response.json()
@@ -42,7 +42,7 @@ async def test_upload_csv_idempotent_reupload(client: AsyncClient) -> None:
         "/api/v1/uploads/",
         data={"person_id": person_id},
         files={"file": ("test.csv", io.BytesIO(VALID_CSV.encode()), "text/csv")},
-        cookies=cookies,
+        auth=cookies,
     )
 
     # Second upload of same CSV → all unchanged
@@ -50,7 +50,7 @@ async def test_upload_csv_idempotent_reupload(client: AsyncClient) -> None:
         "/api/v1/uploads/",
         data={"person_id": person_id},
         files={"file": ("test.csv", io.BytesIO(VALID_CSV.encode()), "text/csv")},
-        cookies=cookies,
+        auth=cookies,
     )
     assert response.status_code == 201
     data = response.json()
@@ -69,7 +69,7 @@ async def test_upload_csv_with_accepted_changes(client: AsyncClient) -> None:
         "/api/v1/uploads/",
         data={"person_id": person_id},
         files={"file": ("test.csv", io.BytesIO(VALID_CSV.encode()), "text/csv")},
-        cookies=cookies,
+        auth=cookies,
     )
 
     # Preview with changed merchant
@@ -78,7 +78,7 @@ async def test_upload_csv_with_accepted_changes(client: AsyncClient) -> None:
         "/api/v1/uploads/preview",
         data={"person_id": person_id},
         files={"file": ("test.csv", io.BytesIO(changed_csv.encode()), "text/csv")},
-        cookies=cookies,
+        auth=cookies,
     )
     preview_data = preview_resp.json()
     assert len(preview_data["changed_transactions"]) == 1
@@ -92,7 +92,7 @@ async def test_upload_csv_with_accepted_changes(client: AsyncClient) -> None:
             "accepted_change_ids": json.dumps([change_id]),
         },
         files={"file": ("test.csv", io.BytesIO(changed_csv.encode()), "text/csv")},
-        cookies=cookies,
+        auth=cookies,
     )
     assert response.status_code == 201
     data = response.json()
@@ -111,7 +111,7 @@ async def test_upload_csv_non_list_accepted_change_ids_returns_422(
         "/api/v1/uploads/",
         data={"accepted_change_ids": "5"},
         files={"file": ("test.csv", io.BytesIO(VALID_CSV.encode()), "text/csv")},
-        cookies=cookies,
+        auth=cookies,
     )
     assert response.status_code == 422
 
@@ -126,7 +126,7 @@ async def test_upload_csv_unknown_person_returns_404(client: AsyncClient) -> Non
         "/api/v1/uploads/",
         data={"person_id": fake_id},
         files={"file": ("test.csv", io.BytesIO(VALID_CSV.encode()), "text/csv")},
-        cookies=cookies,
+        auth=cookies,
     )
     assert response.status_code == 404
 
@@ -145,11 +145,11 @@ TWO_ROW_SHARED_CSV = (
 )
 
 
-async def _upload(client: AsyncClient, csv: str, cookies: dict[str, str]) -> dict:
+async def _upload(client: AsyncClient, csv: str, auth: CookieAuth) -> dict:
     response = await client.post(
         "/api/v1/uploads/",
         files={"file": ("test.csv", io.BytesIO(csv.encode()), "text/csv")},
-        cookies=cookies,
+        auth=auth,
     )
     assert response.status_code == 201
     return response.json()
@@ -166,7 +166,7 @@ async def test_reupload_removes_rows_missing_from_csv(client: AsyncClient) -> No
         files={
             "file": ("test.csv", io.BytesIO(TWO_ROW_SHARED_CSV.encode()), "text/csv")
         },
-        cookies=cookies,
+        auth=cookies,
     )
     assert preview.status_code == 200
     removed_preview = preview.json()["removed_transactions"]
@@ -178,9 +178,7 @@ async def test_reupload_removes_rows_missing_from_csv(client: AsyncClient) -> No
     assert data["skipped_count"] == 2
     assert data["warnings"] == []
 
-    recon = await client.get(
-        "/api/v1/reconciliation?year=2026&month=1", cookies=cookies
-    )
+    recon = await client.get("/api/v1/reconciliation?year=2026&month=1", auth=cookies)
     merchants = {tx["merchant"] for tx in recon.json()["transactions"]}
     assert merchants == {"Grocery Store", "Restaurant"}
 
@@ -193,9 +191,7 @@ async def test_reupload_unlinks_settlement_on_removed_row(
     bob_id = persons[1]["id"]
     await _upload(client, THREE_ROW_SHARED_CSV, cookies)
 
-    recon = await client.get(
-        "/api/v1/reconciliation?year=2026&month=1", cookies=cookies
-    )
+    recon = await client.get("/api/v1/reconciliation?year=2026&month=1", auth=cookies)
     gas_tx_id = next(
         tx["id"]
         for tx in recon.json()["transactions"]
@@ -212,7 +208,7 @@ async def test_reupload_unlinks_settlement_on_removed_row(
             "to_person_id": alice_id,
             "method": "Venmo",
         },
-        cookies=cookies,
+        auth=cookies,
     )
     settlement_id = settlement.json()["settlement"]["id"]
     mark = await client.post(
@@ -222,7 +218,7 @@ async def test_reupload_unlinks_settlement_on_removed_row(
             "settlement_id": settlement_id,
             "is_settlement": True,
         },
-        cookies=cookies,
+        auth=cookies,
     )
     assert mark.status_code == 200
 
@@ -235,7 +231,7 @@ async def test_reupload_unlinks_settlement_on_removed_row(
     settle_up = await client.get(
         "/api/v1/settle-up",
         params={"year": 2026, "month": 1},
-        cookies=cookies,
+        auth=cookies,
     )
     recorded = settle_up.json()["recorded_settlements"]
     assert len(recorded) == 1
@@ -250,7 +246,7 @@ async def test_preview_csv_full_flow(client: AsyncClient) -> None:
         "/api/v1/uploads/preview",
         data={"person_id": person_id},
         files={"file": ("test.csv", io.BytesIO(VALID_CSV.encode()), "text/csv")},
-        cookies=cookies,
+        auth=cookies,
     )
     assert response.status_code == 200
     data = response.json()
@@ -273,7 +269,7 @@ async def test_preview_skips_adjustment_rows(client: AsyncClient) -> None:
         files={
             "file": ("test.csv", io.BytesIO(csv_with_adjustment.encode()), "text/csv")
         },
-        cookies=cookies,
+        auth=cookies,
     )
     assert response.status_code == 200
     data = response.json()
@@ -291,7 +287,7 @@ async def test_preview_csv_unknown_person_returns_404(client: AsyncClient) -> No
         "/api/v1/uploads/preview",
         data={"person_id": fake_id},
         files={"file": ("test.csv", io.BytesIO(VALID_CSV.encode()), "text/csv")},
-        cookies=cookies,
+        auth=cookies,
     )
     assert response.status_code == 404
 
@@ -305,11 +301,11 @@ async def test_upload_history(client: AsyncClient) -> None:
         "/api/v1/uploads/",
         data={"person_id": person_id},
         files={"file": ("march.csv", io.BytesIO(VALID_CSV.encode()), "text/csv")},
-        cookies=cookies,
+        auth=cookies,
     )
 
     # Fetch history
-    response = await client.get("/api/v1/uploads/history", cookies=cookies)
+    response = await client.get("/api/v1/uploads/history", auth=cookies)
     assert response.status_code == 200
     data = response.json()
     assert len(data["entries"]) == 1
@@ -324,7 +320,7 @@ async def test_upload_history(client: AsyncClient) -> None:
 
 async def test_upload_history_empty(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
-    response = await client.get("/api/v1/uploads/history", cookies=cookies)
+    response = await client.get("/api/v1/uploads/history", auth=cookies)
     assert response.status_code == 200
     assert response.json()["entries"] == []
 
@@ -338,7 +334,7 @@ async def test_upload_nan_amount_returns_422(client: AsyncClient) -> None:
     response = await client.post(
         "/api/v1/uploads/",
         files={"file": ("test.csv", io.BytesIO(nan_csv.encode()), "text/csv")},
-        cookies=cookies,
+        auth=cookies,
     )
     assert response.status_code == 422
     assert "non-finite amount" in response.json()["error"]["message"]
@@ -351,7 +347,7 @@ async def test_preview_binary_file_returns_422(client: AsyncClient) -> None:
         "/api/v1/uploads/preview",
         data={"person_id": person_id},
         files={"file": ("bad.csv", io.BytesIO(b"\x80\x81\x82"), "text/csv")},
-        cookies=cookies,
+        auth=cookies,
     )
     assert response.status_code == 422
     assert "UTF-8" in response.json()["error"]["message"]
@@ -364,7 +360,7 @@ async def test_upload_binary_file_returns_422(client: AsyncClient) -> None:
         "/api/v1/uploads/",
         data={"person_id": person_id},
         files={"file": ("bad.csv", io.BytesIO(b"\x80\x81\x82"), "text/csv")},
-        cookies=cookies,
+        auth=cookies,
     )
     assert response.status_code == 422
     assert "UTF-8" in response.json()["error"]["message"]

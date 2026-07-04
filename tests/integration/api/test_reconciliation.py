@@ -20,12 +20,12 @@ async def test_full_reconciliation_both_uploaded(client: AsyncClient) -> None:
     alice_id = persons[0]["id"]
     bob_id = persons[1]["id"]
 
-    await upload_csv(client, alice_id, SHARED_CSV, cookies=cookies)
+    await upload_csv(client, alice_id, SHARED_CSV, auth=cookies)
     bob_cookies = await login_as_bob(client)
-    await upload_csv(client, bob_id, SHARED_CSV_BOB, cookies=bob_cookies)
+    await upload_csv(client, bob_id, SHARED_CSV_BOB, auth=bob_cookies)
 
     response = await client.get(
-        "/api/v1/reconciliation?year=2026&month=1", cookies=cookies
+        "/api/v1/reconciliation?year=2026&month=1", auth=cookies
     )
     assert response.status_code == 200
 
@@ -48,10 +48,10 @@ async def test_partial_upload_one_person(client: AsyncClient) -> None:
     persons, cookies = await setup_and_login(client)
     alice_id = persons[0]["id"]
 
-    await upload_csv(client, alice_id, SHARED_CSV, cookies=cookies)
+    await upload_csv(client, alice_id, SHARED_CSV, auth=cookies)
 
     response = await client.get(
-        "/api/v1/reconciliation?year=2026&month=1", cookies=cookies
+        "/api/v1/reconciliation?year=2026&month=1", auth=cookies
     )
     assert response.status_code == 200
 
@@ -67,7 +67,7 @@ async def test_empty_month_no_data(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
 
     response = await client.get(
-        "/api/v1/reconciliation?year=2026&month=3", cookies=cookies
+        "/api/v1/reconciliation?year=2026&month=3", auth=cookies
     )
     assert response.status_code == 200
 
@@ -87,10 +87,10 @@ async def test_settlement_math(client: AsyncClient) -> None:
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
         '2026-02-15,Test,Dining Out,Chase,TEST,,"-100.00",shared\n'
     )
-    await upload_csv(client, alice_id, csv, cookies=cookies)
+    await upload_csv(client, alice_id, csv, auth=cookies)
 
     response = await client.get(
-        "/api/v1/reconciliation?year=2026&month=2", cookies=cookies
+        "/api/v1/reconciliation?year=2026&month=2", auth=cookies
     )
     data = response.json()
 
@@ -112,12 +112,12 @@ async def test_date_range_query(client: AsyncClient) -> None:
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
         '2026-02-10,Test2,Dining Out,Chase,TEST2,,"-60.00",shared\n'
     )
-    await upload_csv(client, alice_id, csv_jan, cookies=cookies)
-    await upload_csv(client, alice_id, csv_feb, cookies=cookies)
+    await upload_csv(client, alice_id, csv_jan, auth=cookies)
+    await upload_csv(client, alice_id, csv_feb, auth=cookies)
 
     response = await client.get(
         "/api/v1/reconciliation?start_date=2026-01-01&end_date=2026-02-28",
-        cookies=cookies,
+        auth=cookies,
     )
     assert response.status_code == 200
 
@@ -137,7 +137,7 @@ async def test_mixed_params_returns_422(client: AsyncClient) -> None:
 
     response = await client.get(
         "/api/v1/reconciliation?year=2026&month=1&start_date=2026-01-01&end_date=2026-01-31",
-        cookies=cookies,
+        auth=cookies,
     )
     assert response.status_code == 422
 
@@ -146,7 +146,7 @@ async def test_partial_range_returns_422(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
 
     response = await client.get(
-        "/api/v1/reconciliation?start_date=2026-01-01", cookies=cookies
+        "/api/v1/reconciliation?start_date=2026-01-01", auth=cookies
     )
     assert response.status_code == 422
 
@@ -167,12 +167,12 @@ async def test_reconciliation_personal_scope(client: AsyncClient) -> None:
         '2026-01-15,Restaurant,Dining Out,Chase,REST,,"-100.00",shared\n'
         '2026-01-16,Coffee,Dining Out,Chase,COFFEE,,"-5.00",\n'
     )
-    await upload_csv(client, alice_id, csv, cookies=cookies)
+    await upload_csv(client, alice_id, csv, auth=cookies)
 
     # Personal scope: only Alice's non-household txs
     response = await client.get(
         f"/api/v1/reconciliation?year=2026&month=1&scope=personal&person_id={alice_id}",
-        cookies=cookies,
+        auth=cookies,
     )
     assert response.status_code == 200
     data = response.json()
@@ -189,11 +189,11 @@ async def test_reconciliation_all_scope(client: AsyncClient) -> None:
         '2026-01-15,Restaurant,Dining Out,Chase,REST,,"-100.00",shared\n'
         '2026-01-16,Coffee,Dining Out,Chase,COFFEE,,"-5.00",\n'
     )
-    await upload_csv(client, alice_id, csv, cookies=cookies)
+    await upload_csv(client, alice_id, csv, auth=cookies)
 
     response = await client.get(
         f"/api/v1/reconciliation?year=2026&month=1&scope=all&person_id={alice_id}",
-        cookies=cookies,
+        auth=cookies,
     )
     assert response.status_code == 200
     data = response.json()
@@ -210,10 +210,10 @@ async def test_reconciliation_default_scope_unchanged(client: AsyncClient) -> No
         '2026-01-15,Restaurant,Dining Out,Chase,REST,,"-100.00",shared\n'
         '2026-01-16,Coffee,Dining Out,Chase,COFFEE,,"-5.00",\n'
     )
-    await upload_csv(client, alice_id, csv, cookies=cookies)
+    await upload_csv(client, alice_id, csv, auth=cookies)
 
     response = await client.get(
-        "/api/v1/reconciliation?year=2026&month=1", cookies=cookies
+        "/api/v1/reconciliation?year=2026&month=1", auth=cookies
     )
     assert response.status_code == 200
     data = response.json()
@@ -227,14 +227,14 @@ async def _make_bike_row_a_personal_split(
     """Turn the untagged bike row into a personal split (household stays false)."""
     recon = await client.get(
         f"/api/v1/reconciliation?year=2026&month=1&scope=all&person_id={alice_id}",
-        cookies=cookies,
+        auth=cookies,
     )
     bike = next(t for t in recon.json()["transactions"] if t["merchant"] == "Bike Shop")
     assert bike["household"] is False
     resp = await client.patch(
         "/api/v1/transactions/splits",
         json={"splits": [{"transaction_id": bike["id"], "payer_percentage": 50}]},
-        cookies=cookies,
+        auth=cookies,
     )
     assert resp.status_code == 200
 
@@ -250,7 +250,7 @@ async def _assert_scope_all_settlement(
 ) -> None:
     response = await client.get(
         f"/api/v1/reconciliation?year=2026&month=1&scope=all&person_id={person_id}",
-        cookies=cookies,
+        auth=cookies,
     )
     settlement = response.json()["settlement"]
     assert settlement["amount"] == pytest.approx(amount), person_id
@@ -274,16 +274,16 @@ async def test_settlement_relevant_rows_agree_across_surfaces(
         '2026-01-16,Parking Garage,Parking,Chase,PARKING,,"-40.00",bob\n'
         '2026-01-17,Bike Shop,Shopping,Chase,BIKE,,"-60.00",\n'
     )
-    await upload_csv(client, alice_id, alice_csv, cookies=cookies)
+    await upload_csv(client, alice_id, alice_csv, auth=cookies)
     bob_cookies = await login_as_bob(client)
-    await upload_csv(client, bob_id, SHARED_CSV_BOB, cookies=bob_cookies)
+    await upload_csv(client, bob_id, SHARED_CSV_BOB, auth=bob_cookies)
 
     await _make_bike_row_a_personal_split(client, alice_id, cookies)
 
     # Bob owes Alice: 50 (shared) + 40 (spotted) + 30 (personal split)
     # minus 20 (Bob's shared upload) = 100
     settle_up = await client.get(
-        "/api/v1/settle-up", params={"year": 2026, "month": 1}, cookies=cookies
+        "/api/v1/settle-up", params={"year": 2026, "month": 1}, auth=cookies
     )
     data = settle_up.json()
     assert data["owed"]["amount"] == pytest.approx(100.0)
@@ -308,10 +308,10 @@ async def test_settlement_relevant_rows_agree_across_surfaces(
     await client.patch(
         f"/api/v1/persons/{alice_id}",
         json={"adjustment_account": "Alice Adjustments"},
-        cookies=cookies,
+        auth=cookies,
     )
     preview = await client.get(
-        f"/api/v1/persons/{alice_id}/adjustments/2026/1", cookies=cookies
+        f"/api/v1/persons/{alice_id}/adjustments/2026/1", auth=cookies
     )
     assert preview.status_code == 200
     merchants = {a["merchant"] for a in preview.json()["adjustments"]}

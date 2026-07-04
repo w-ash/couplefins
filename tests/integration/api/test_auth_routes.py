@@ -1,6 +1,6 @@
 from httpx import AsyncClient
 
-from tests.integration.conftest import setup_couple
+from tests.integration.conftest import CookieAuth, setup_couple
 
 _PW_ALICE = "password123"
 _PW_BOB = "password456"
@@ -56,9 +56,9 @@ async def test_me_returns_current_user(client: AsyncClient) -> None:
         "/api/v1/auth/login",
         json={"name": "Alice", "password": _PW_ALICE},
     )
-    cookies = login_resp.cookies
+    auth = CookieAuth(login_resp.cookies["couplefins_session"])
 
-    me_resp = await client.get("/api/v1/auth/me", cookies=cookies)
+    me_resp = await client.get("/api/v1/auth/me", auth=auth)
     assert me_resp.status_code == 200
     assert me_resp.json()["name"] == "Alice"
 
@@ -74,9 +74,9 @@ async def test_logout_clears_cookie(client: AsyncClient) -> None:
         "/api/v1/auth/login",
         json={"name": "Alice", "password": _PW_ALICE},
     )
-    cookies = login_resp.cookies
+    auth = CookieAuth(login_resp.cookies["couplefins_session"])
 
-    logout_resp = await client.post("/api/v1/auth/logout", cookies=cookies)
+    logout_resp = await client.post("/api/v1/auth/logout", auth=auth)
     assert logout_resp.status_code == 200
 
     me_resp = await client.get("/api/v1/auth/me")
@@ -89,12 +89,12 @@ async def test_change_password(client: AsyncClient) -> None:
         "/api/v1/auth/login",
         json={"name": "Alice", "password": _PW_ALICE},
     )
-    cookies = login_resp.cookies
+    auth = CookieAuth(login_resp.cookies["couplefins_session"])
 
     change_resp = await client.post(
         "/api/v1/auth/change-password",
         json={"current_password": _PW_ALICE, "new_password": "newpass12345"},
-        cookies=cookies,
+        auth=auth,
     )
     assert change_resp.status_code == 200
 
@@ -119,12 +119,12 @@ async def test_change_password_wrong_current(client: AsyncClient) -> None:
         "/api/v1/auth/login",
         json={"name": "Alice", "password": _PW_ALICE},
     )
-    cookies = login_resp.cookies
+    auth = CookieAuth(login_resp.cookies["couplefins_session"])
 
     resp = await client.post(
         "/api/v1/auth/change-password",
         json={"current_password": "wrongpassword", "new_password": "newpass12345"},
-        cookies=cookies,
+        auth=auth,
     )
     assert resp.status_code == 401
 
@@ -135,12 +135,12 @@ async def test_reset_partner_password(client: AsyncClient) -> None:
         "/api/v1/auth/login",
         json={"name": "Alice", "password": _PW_ALICE},
     )
-    cookies = login_resp.cookies
+    auth = CookieAuth(login_resp.cookies["couplefins_session"])
 
     reset_resp = await client.post(
         "/api/v1/auth/reset-partner-password",
         json={"new_password": "bobsnewpass123"},
-        cookies=cookies,
+        auth=auth,
     )
     assert reset_resp.status_code == 200
 
