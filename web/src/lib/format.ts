@@ -182,6 +182,25 @@ export function formatDateRange(
   return `${sMonth} ${s.getDate()}\u2009\u2013\u2009${eMonth} ${e.getDate()}`;
 }
 
+interface MonthSpanShape {
+  start: { year: number; month: number };
+  end: { year: number; month: number };
+}
+
+// Month-level span label for the settlement ledger: "Mar–May" within a year,
+// "Mar 2025 – May 2026" across years, "March" for a single month.
+// Day-level ranges are formatDateRange's job — don't conflate them.
+export function formatMonthSpan(span: MonthSpanShape): string {
+  const { start, end } = span;
+  if (start.year === end.year && start.month === end.month) {
+    return MONTHS[start.month - 1];
+  }
+  if (start.year === end.year) {
+    return `${SHORT_MONTHS[start.month - 1]}–${SHORT_MONTHS[end.month - 1]}`;
+  }
+  return `${SHORT_MONTHS[start.month - 1]} ${start.year} – ${SHORT_MONTHS[end.month - 1]} ${end.year}`;
+}
+
 export function useMonthYear(): { year: number; month: number } {
   const [searchParams] = useSearchParams();
   return {

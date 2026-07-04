@@ -1,4 +1,4 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
   Download,
@@ -8,12 +8,14 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
 import { getGetBudgetOverviewQueryKey } from "@/api/generated/budgets/budgets";
 import { getGetDashboardQueryKey } from "@/api/generated/dashboard/dashboard";
 import type {
+  LedgerMonthResponse,
+  LedgerSettlementResponse,
   MonthReference,
-  SettlementResponse,
   SettleUpDataResponse,
 } from "@/api/generated/model";
 import {
@@ -40,8 +42,8 @@ import { Card } from "@/components/Card";
 import { FinalizationBanner } from "@/components/FinalizationBanner";
 import { InlineError } from "@/components/InlineError";
 import { InlineSuccess } from "@/components/InlineSuccess";
+import { LedgerMonthList, ledgerMonthKey } from "@/components/LedgerMonthList";
 import { LinkedTransactionSubrows } from "@/components/LinkedTransactionSubrows";
-import { MonthPicker } from "@/components/MonthPicker";
 import { PageHeader } from "@/components/PageHeader";
 import {
   EmptyStateActions,
@@ -58,8 +60,11 @@ import { useTemporary } from "@/hooks/useTemporary";
 import { cn } from "@/lib/cn";
 import {
   formatCurrency,
+  formatMonthSpan,
   formatShortDate,
+  isZeroCurrency,
   MONTHS,
+  SHORT_MONTHS,
   useMonthYear,
 } from "@/lib/format";
 import { heroCardClass, PAGE_PADDING } from "@/lib/layout";
@@ -74,9 +79,9 @@ function HeroCard({
   getPersonName: (id: string) => string;
   getPersonColor: (id: string) => string;
 }) {
-  const net = data.net_position;
+  const outstanding = data.outstanding;
 
-  if (!net) {
+  if (!outstanding) {
     return (
       <div className={cn(heroCardClass, "p-5 sm:p-8")}>
         <p className="text-center text-xl font-semibold text-primary sm:text-2xl">
@@ -89,33 +94,48 @@ function HeroCard({
     );
   }
 
-  // An overpayment can mirror the gross amount while reversing who owes
-  // whom — compare direction too.
-  const gross = data.owed;
+  // Total gross across all ledger months, signed relative to the outstanding
+  // direction — payments (and offsets) explain any difference.
+  const signedGross = data.ledger_months.reduce(
+    (sum, m) =>
+      m.gross
+        ? sum +
+          (m.gross.from_person_id === outstanding.from_person_id
+            ? m.gross.amount
+            : -m.gross.amount)
+        : sum,
+    0,
+  );
   const hasPayments =
-    gross &&
-    (gross.amount !== net.amount ||
-      gross.from_person_id !== net.from_person_id);
+    data.all_settlements.length > 0 &&
+    !isZeroCurrency(Math.abs(signedGross) - outstanding.amount);
 
   return (
     <div className={cn(heroCardClass, "p-5 sm:p-8")}>
       <p className="text-center text-xl font-semibold text-foreground sm:text-2xl">
         <PersonBadge
-          name={getPersonName(net.from_person_id)}
-          accentColor={getPersonColor(net.from_person_id)}
+          name={getPersonName(outstanding.from_person_id)}
+          accentColor={getPersonColor(outstanding.from_person_id)}
           size="lg"
         />{" "}
         owes{" "}
         <PersonBadge
-          name={getPersonName(net.to_person_id)}
-          accentColor={getPersonColor(net.to_person_id)}
+          name={getPersonName(outstanding.to_person_id)}
+          accentColor={getPersonColor(outstanding.to_person_id)}
           size="lg"
         />{" "}
-        <span className="tabular-nums">{formatCurrency(net.amount)}</span>
+        <span className="tabular-nums">
+          {formatCurrency(outstanding.amount)}
+        </span>
       </p>
-      {hasPayments && (
+      {data.outstanding_span && (
         <p className="mt-2 text-center text-sm text-muted-foreground">
-          {formatCurrency(gross.amount)} gross, after payments
+          covers {formatMonthSpan(data.outstanding_span)}
+        </p>
+      )}
+      {hasPayments && (
+        <p className="mt-1 text-center text-sm text-muted-foreground">
+          {formatCurrency(Math.abs(signedGross))} gross, after payments
         </p>
       )}
     </div>
@@ -131,7 +151,7 @@ function LinkSettlementSection({
   getPersonName: (id: string) => string;
   onSuccess: () => void;
 }) {
-  const direction = data.net_position ?? data.owed;
+  const direction = data.outstanding;
 
   const [selected, setSelected] = useState<SelectedCandidate[]>([]);
   const [successMessage, setSuccessMessage] = useTemporary<string | null>(
@@ -156,7 +176,8 @@ function LinkSettlementSection({
     },
   });
 
-  // Hide only when no settlement context exists for the month
+  // Payments are recorded against the running ledger — nothing to record
+  // when nothing is outstanding.
   if (!direction) return null;
 
   const searchAmount = direction.amount.toFixed(2);
@@ -168,8 +189,8 @@ function LinkSettlementSection({
     <Card>
       <CandidateChecklist
         amount={searchAmount}
-        month={data.month}
-        year={data.year}
+        initialSearchMonth={null}
+        searchFloor={data.outstanding_span?.start ?? null}
         persons={data.persons}
         selectedIds={selectedIds}
         onSelectionChange={(_ids, candidates) => setSelected(candidates)}
@@ -182,8 +203,9 @@ function LinkSettlementSection({
             onClick={() => {
               mutation.mutate({
                 data: {
-                  year: data.year,
-                  month: data.month,
+                  // Ledger-level payments carry no "recorded against" month.
+                  year: null,
+                  month: null,
                   amount,
                   from_person_id: direction.from_person_id,
                   to_person_id: direction.to_person_id,
@@ -226,7 +248,7 @@ function WaiveAction({
   getPersonName: (id: string) => string;
   onSuccess: (warnings: string[]) => void;
 }) {
-  const net = data.net_position;
+  const outstanding = data.outstanding;
 
   const mutation = useWaiveSettlement({
     mutation: {
@@ -236,18 +258,19 @@ function WaiveAction({
     },
   });
 
-  if (!net) return null;
+  if (!outstanding) return null;
 
   return (
     <div className="rounded-lg border border-border-muted px-4 py-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">
-            Waive {getPersonName(net.from_person_id)}'s balance for this month
+            Waive {getPersonName(outstanding.from_person_id)}'s outstanding
+            balance
           </p>
           <p className="text-xs text-muted-foreground/70">
-            The full balance will be forgiven. This can be undone by deleting
-            the waiver.
+            The full balance across all months will be forgiven. This can be
+            undone by deleting the waiver.
           </p>
         </div>
         <Button
@@ -256,10 +279,8 @@ function WaiveAction({
           onClick={() => {
             mutation.mutate({
               data: {
-                year: data.year,
-                month: data.month,
-                from_person_id: net.from_person_id,
-                to_person_id: net.to_person_id,
+                from_person_id: outstanding.from_person_id,
+                to_person_id: outstanding.to_person_id,
                 notes: "Balance waived",
               },
             });
@@ -282,6 +303,136 @@ function WaiveAction({
   );
 }
 
+// "Mar" within the payment's own year, "Mar 2025" across years — compact
+// coverage labels for one history row.
+function coveredMonthLabel(
+  covered: { year: number; month: number },
+  settledYear: number,
+): string {
+  const name = SHORT_MONTHS[covered.month - 1];
+  return covered.year === settledYear ? name : `${name} ${covered.year}`;
+}
+
+function PaymentHistoryRow({
+  settlement,
+  getPersonName,
+  getPersonColor,
+  onDelete,
+  isDeleting,
+  onOpenLinkDialog,
+}: {
+  settlement: LedgerSettlementResponse;
+  getPersonName: (id: string) => string;
+  getPersonColor: (id: string) => string;
+  onDelete: () => void;
+  isDeleting: boolean;
+  onOpenLinkDialog: () => void;
+}) {
+  const s = settlement;
+  const fromName = getPersonName(s.from_person_id);
+  const toName = getPersonName(s.to_person_id);
+  const settledDate = formatShortDate(s.settled_at);
+  const settledYear = Number(s.settled_at.slice(0, 4));
+  const hasLinks = (s.linked_transactions?.length ?? 0) > 0;
+
+  const coverage =
+    s.covered.length > 0
+      ? `Covered ${s.covered
+          .map((c) => coveredMonthLabel(c, settledYear))
+          .join(" + ")}`
+      : null;
+
+  return (
+    <div>
+      <div className="flex items-start justify-between gap-2 rounded-lg border border-border-muted px-4 py-3">
+        <div className="flex items-center gap-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">
+              {s.is_waived ? (
+                <>
+                  Balance waived{" "}
+                  <span className="tabular-nums">
+                    {formatCurrency(s.amount)}
+                  </span>
+                </>
+              ) : (
+                <>
+                  {fromName} paid {toName}{" "}
+                  <span className="tabular-nums">
+                    {formatCurrency(s.amount)}
+                  </span>
+                </>
+              )}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {settledDate}
+              {s.method && (
+                <span className="ml-1.5 capitalize">via {s.method}</span>
+              )}
+              {s.year !== null && s.month !== null && (
+                <span className="ml-1.5 text-muted-foreground/70">
+                  · recorded against {MONTHS[s.month - 1]}
+                  {s.year !== settledYear ? ` ${s.year}` : ""}
+                </span>
+              )}
+              {s.notes && (
+                <span className="ml-1.5 text-muted-foreground/70">
+                  — {s.notes}
+                </span>
+              )}
+            </p>
+            {coverage && (
+              <p className="text-xs text-muted-foreground">{coverage}</p>
+            )}
+            {s.unapplied > 0 && (
+              <p className="text-xs text-warning-muted-foreground">
+                {formatCurrency(s.unapplied)} not applied — increases the
+                balance
+              </p>
+            )}
+            {!s.is_waived && !hasLinks && (
+              <button
+                type="button"
+                onClick={onOpenLinkDialog}
+                className="mt-1 inline-flex items-center gap-1 text-xs text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Link2 className="size-3" />
+                Link bank transaction
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={isDeleting}
+            className="rounded-md p-2.5 sm:p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={
+              s.is_waived
+                ? "Delete waiver"
+                : `Delete ${fromName} payment of ${formatCurrency(s.amount)}`
+            }
+          >
+            {isDeleting ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Trash2 className="size-4" />
+            )}
+          </button>
+        </div>
+      </div>
+      {hasLinks && s.linked_transactions && (
+        <LinkedTransactionSubrows
+          linkedTransactions={s.linked_transactions}
+          getPersonName={getPersonName}
+          getPersonColor={getPersonColor}
+        />
+      )}
+    </div>
+  );
+}
+
 function PaymentHistory({
   settlements,
   persons,
@@ -290,23 +441,21 @@ function PaymentHistory({
   onDelete,
   deletingId,
   isDeletionPending,
-  isFinalized,
   invalidateAll,
   latestTransactionMonth,
 }: {
-  settlements: SettlementResponse[];
+  settlements: LedgerSettlementResponse[];
   persons: Array<{ id: string; name: string }>;
   getPersonName: (id: string) => string;
   getPersonColor: (id: string) => string;
   onDelete: (id: string) => void;
   deletingId: string | null;
   isDeletionPending: boolean;
-  isFinalized: boolean;
   invalidateAll: () => void;
   latestTransactionMonth: MonthReference | null;
 }) {
   const [linkDialogSettlement, setLinkDialogSettlement] =
-    useState<SettlementResponse | null>(null);
+    useState<LedgerSettlementResponse | null>(null);
 
   if (settlements.length === 0) return null;
 
@@ -314,89 +463,20 @@ function PaymentHistory({
     <Card>
       <SectionHeader
         title="Payment History"
-        description="Payments and waivers recorded for this month"
+        description="Every payment and waiver, oldest first, with the months it covered"
       />
       <div className="space-y-3">
-        {settlements.map((s) => {
-          const fromName = getPersonName(s.from_person_id);
-          const toName = getPersonName(s.to_person_id);
-          const settledDate = formatShortDate(s.settled_at);
-          const hasLinks = (s.linked_transactions?.length ?? 0) > 0;
-
-          return (
-            <div key={s.id}>
-              <div className="flex items-start justify-between gap-2 rounded-lg border border-border-muted px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {s.is_waived ? (
-                        <>Balance waived</>
-                      ) : (
-                        <>
-                          {fromName} paid {toName}{" "}
-                          <span className="tabular-nums">
-                            {formatCurrency(s.amount)}
-                          </span>
-                        </>
-                      )}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {settledDate}
-                      {s.method && (
-                        <span className="ml-1.5 capitalize">
-                          via {s.method}
-                        </span>
-                      )}
-                      {s.notes && (
-                        <span className="ml-1.5 text-muted-foreground/70">
-                          — {s.notes}
-                        </span>
-                      )}
-                    </p>
-                    {!isFinalized && !s.is_waived && !hasLinks && (
-                      <button
-                        type="button"
-                        onClick={() => setLinkDialogSettlement(s)}
-                        className="mt-1 inline-flex items-center gap-1 text-xs text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        <Link2 className="size-3" />
-                        Link bank transaction
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  {!isFinalized && (
-                    <button
-                      type="button"
-                      onClick={() => onDelete(s.id)}
-                      disabled={deletingId === s.id && isDeletionPending}
-                      className="rounded-md p-2.5 sm:p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      aria-label={
-                        s.is_waived
-                          ? "Delete waiver"
-                          : `Delete ${fromName} payment of ${formatCurrency(s.amount)}`
-                      }
-                    >
-                      {deletingId === s.id && isDeletionPending ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="size-4" />
-                      )}
-                    </button>
-                  )}
-                </div>
-              </div>
-              {hasLinks && s.linked_transactions && (
-                <LinkedTransactionSubrows
-                  linkedTransactions={s.linked_transactions}
-                  getPersonName={getPersonName}
-                  getPersonColor={getPersonColor}
-                />
-              )}
-            </div>
-          );
-        })}
+        {settlements.map((s) => (
+          <PaymentHistoryRow
+            key={s.id}
+            settlement={s}
+            getPersonName={getPersonName}
+            getPersonColor={getPersonColor}
+            onDelete={() => onDelete(s.id)}
+            isDeleting={deletingId === s.id && isDeletionPending}
+            onOpenLinkDialog={() => setLinkDialogSettlement(s)}
+          />
+        ))}
       </div>
 
       {linkDialogSettlement && (
@@ -415,8 +495,77 @@ function PaymentHistory({
   );
 }
 
+function MonthDrilldown({
+  monthRow,
+  data,
+  personNames,
+  getPersonColor,
+  onFinalize,
+  onUnfinalize,
+  isFinalizePending,
+}: {
+  monthRow: LedgerMonthResponse;
+  data: SettleUpDataResponse;
+  personNames: Map<string, string>;
+  getPersonColor: (id: string) => string;
+  onFinalize: () => void;
+  onUnfinalize: () => void;
+  isFinalizePending: boolean;
+}) {
+  const [exportOpen, setExportOpen] = useState(false);
+
+  // Month-scoped fields lag one fetch behind while the drill-down month
+  // loads (keepPreviousData) — don't render another month's numbers here.
+  const isReady = data.year === monthRow.year && data.month === monthRow.month;
+  if (!isReady) {
+    return (
+      <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" />
+        Loading {MONTHS[monthRow.month - 1]}...
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <UploadStatusRow
+        statuses={data.upload_statuses}
+        getPersonColor={getPersonColor}
+      />
+
+      <SettleUpAuditTable data={data} personNames={personNames} />
+
+      <FinalizationBanner
+        isFinalized={data.is_finalized}
+        finalizedAt={data.finalized_at}
+        onFinalize={onFinalize}
+        onUnfinalize={onUnfinalize}
+        isPending={isFinalizePending}
+        warnings={data.finalization_warnings}
+      />
+
+      <button
+        type="button"
+        onClick={() => setExportOpen(true)}
+        className="inline-flex items-center gap-1.5 rounded text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <Download className="size-3.5" />
+        Export adjustments to Monarch
+      </button>
+
+      <AdjustmentExportDialog
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        year={monthRow.year}
+        month={monthRow.month}
+      />
+    </>
+  );
+}
+
 export function SettleUpPage() {
   const { year, month } = useMonthYear();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
 
   const {
@@ -426,7 +575,9 @@ export function SettleUpPage() {
     refetch,
   } = useGetSettleUpData(
     { year, month },
-    { query: { refetchInterval: 5_000 } },
+    // keepPreviousData: drilling into a month refetches with new params —
+    // the ledger-level sections must not flash back to a loading state.
+    { query: { refetchInterval: 5_000, placeholderData: keepPreviousData } },
   );
   const data =
     settleUpResponse?.status === 200 ? settleUpResponse.data : undefined;
@@ -459,7 +610,7 @@ export function SettleUpPage() {
     string | null
   >(null);
 
-  // Waiving hides WaiveAction on refetch (net position goes to zero), so
+  // Waiving hides WaiveAction on refetch (outstanding goes to zero), so
   // its warnings must outlive the component.
   const [waiveWarnings, setWaiveWarnings] = useTemporary<string[] | null>(
     null,
@@ -479,96 +630,114 @@ export function SettleUpPage() {
     data?.persons,
   );
 
+  const ledgerMonths = data?.ledger_months;
+  const hasExplicitMonth =
+    searchParams.has("year") || searchParams.has("month");
+
+  // Deep links open with their month expanded; the bare page defaults to
+  // the current month's row — or jumps to the newest row when the current
+  // month has no ledger activity.
+  useEffect(() => {
+    if (!ledgerMonths || hasExplicitMonth || ledgerMonths.length === 0) return;
+    if (ledgerMonths.some((m) => m.year === year && m.month === month)) return;
+    const newest = ledgerMonths[ledgerMonths.length - 1];
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("year", String(newest.year));
+        next.set("month", String(newest.month));
+        return next;
+      },
+      { replace: true },
+    );
+  }, [ledgerMonths, hasExplicitMonth, year, month, setSearchParams]);
+
+  const rowForUrl =
+    ledgerMonths?.find((m) => m.year === year && m.month === month) ?? null;
+  const derivedKey = rowForUrl ? ledgerMonthKey(rowForUrl) : null;
+  const [collapsedKey, setCollapsedKey] = useState<string | null>(null);
+  const expandedKey =
+    derivedKey !== null && collapsedKey !== derivedKey ? derivedKey : null;
+
+  const handleToggle = useCallback(
+    (m: LedgerMonthResponse) => {
+      const key = ledgerMonthKey(m);
+      if (expandedKey === key) {
+        setCollapsedKey(key);
+        return;
+      }
+      setCollapsedKey(null);
+      if (key !== derivedKey) {
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("year", String(m.year));
+          next.set("month", String(m.month));
+          return next;
+        });
+      }
+    },
+    [expandedKey, derivedKey, setSearchParams],
+  );
+
   const isEmpty =
     data &&
     data.transaction_count === 0 &&
-    data.recorded_settlements.length === 0;
-
-  const [exportOpen, setExportOpen] = useState(false);
+    data.all_settlements.length === 0 &&
+    data.ledger_months.length === 0;
 
   return (
     <div className={`mx-auto max-w-5xl ${PAGE_PADDING}`}>
-      <PageHeader icon={<HandCoins className="size-6" />} title="Settle Up">
-        <MonthPicker />
-      </PageHeader>
+      <PageHeader icon={<HandCoins className="size-6" />} title="Settle Up" />
 
       {isLoading && <PageLoading label="Loading settle up data..." />}
 
       {error && <PageError error={error} onRetry={() => refetch()} />}
 
-      {data && (
-        <UploadStatusRow
-          statuses={data.upload_statuses}
-          getPersonColor={getPersonColor}
-        />
-      )}
-
-      {data && !isEmpty && <div className="h-2" />}
-
-      {isEmpty && (
-        <PageEmpty
-          icon={<Upload />}
-          heading={`No transactions to settle for ${MONTHS[month - 1]} ${year}`}
-          description="Upload a CSV to get started with settlement."
-          action={
-            <EmptyStateActions
-              latestMonth={data.latest_transaction_month}
-              currentYear={year}
-              currentMonth={month}
-              viewPath="settle"
-            />
-          }
-        />
+      {isEmpty && data && (
+        <>
+          <UploadStatusRow
+            statuses={data.upload_statuses}
+            getPersonColor={getPersonColor}
+          />
+          <PageEmpty
+            icon={<Upload />}
+            heading={`No transactions to settle for ${MONTHS[month - 1]} ${year}`}
+            description="Upload a CSV to get started with settlement."
+            action={
+              <EmptyStateActions
+                latestMonth={data.latest_transaction_month}
+                currentYear={year}
+                currentMonth={month}
+                viewPath="settle"
+              />
+            }
+          />
+        </>
       )}
 
       {data && !isEmpty && (
         <div className="space-y-6">
-          <FinalizationBanner
-            isFinalized={data.is_finalized}
-            finalizedAt={data.finalized_at}
-            onFinalize={() =>
-              finalizeMutation.mutate({
-                data: { year, month, notes: "" },
-              })
-            }
-            onUnfinalize={() =>
-              unfinalizeMutation.mutate({
-                data: { year, month },
-              })
-            }
-            isPending={
-              finalizeMutation.isPending || unfinalizeMutation.isPending
-            }
-            warnings={data.finalization_warnings}
-          />
-
           <HeroCard
             data={data}
             getPersonName={getPersonName}
             getPersonColor={getPersonColor}
           />
 
-          <SettleUpAuditTable data={data} personNames={personNames} />
+          <LinkSettlementSection
+            key={`${data.outstanding?.amount ?? 0}-${data.all_settlements.length}`}
+            data={data}
+            getPersonName={getPersonName}
+            onSuccess={invalidateAll}
+          />
 
-          {!data.is_finalized && (
-            <LinkSettlementSection
-              key={`${data.net_position?.amount ?? 0}-${data.recorded_settlements.length}`}
-              data={data}
-              getPersonName={getPersonName}
-              onSuccess={invalidateAll}
-            />
-          )}
-
-          {!data.is_finalized && (
-            <WaiveAction
-              data={data}
-              getPersonName={getPersonName}
-              onSuccess={(warnings) => {
-                setWaiveWarnings(warnings.length > 0 ? warnings : null);
-                invalidateAll();
-              }}
-            />
-          )}
+          <WaiveAction
+            data={data}
+            getPersonName={getPersonName}
+            onSuccess={(warnings) => {
+              setWaiveWarnings(warnings.length > 0 ? warnings : null);
+              invalidateAll();
+            }}
+          />
 
           {waiveWarnings && (
             <ul className="space-y-0.5 rounded-lg border border-border-muted px-4 py-3">
@@ -580,8 +749,44 @@ export function SettleUpPage() {
             </ul>
           )}
 
+          {hasExplicitMonth && !rowForUrl && data.ledger_months.length > 0 && (
+            <p className="text-sm text-muted-foreground">
+              No settlement activity for {MONTHS[month - 1]} {year}.
+            </p>
+          )}
+
+          <LedgerMonthList
+            months={data.ledger_months}
+            settlements={data.all_settlements}
+            expandedKey={expandedKey}
+            onToggle={handleToggle}
+            getPersonName={getPersonName}
+            getPersonColor={getPersonColor}
+            renderExpanded={(m) => (
+              <MonthDrilldown
+                monthRow={m}
+                data={data}
+                personNames={personNames}
+                getPersonColor={getPersonColor}
+                onFinalize={() =>
+                  finalizeMutation.mutate({
+                    data: { year: m.year, month: m.month, notes: "" },
+                  })
+                }
+                onUnfinalize={() =>
+                  unfinalizeMutation.mutate({
+                    data: { year: m.year, month: m.month },
+                  })
+                }
+                isFinalizePending={
+                  finalizeMutation.isPending || unfinalizeMutation.isPending
+                }
+              />
+            )}
+          />
+
           <PaymentHistory
-            settlements={data.recorded_settlements}
+            settlements={data.all_settlements}
             persons={data.persons}
             getPersonName={getPersonName}
             getPersonColor={getPersonColor}
@@ -591,25 +796,8 @@ export function SettleUpPage() {
             }}
             deletingId={deletingSettlementId}
             isDeletionPending={deleteMutation.isPending}
-            isFinalized={data.is_finalized}
             invalidateAll={invalidateAll}
             latestTransactionMonth={data.latest_transaction_month}
-          />
-
-          <button
-            type="button"
-            onClick={() => setExportOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <Download className="size-3.5" />
-            Export adjustments to Monarch
-          </button>
-
-          <AdjustmentExportDialog
-            open={exportOpen}
-            onClose={() => setExportOpen(false)}
-            year={year}
-            month={month}
           />
         </div>
       )}

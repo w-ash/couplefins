@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CURRENCY_EPSILON,
   computeShares,
+  formatMonthSpan,
   formatSignedCurrency,
   isZeroCurrency,
 } from "./format";
@@ -43,6 +44,35 @@ describe("formatSignedCurrency", () => {
   it("prefixes negative amounts with a true minus sign (U+2212)", () => {
     expect(formatSignedCurrency(-50)).toBe("−$50.00");
     expect(formatSignedCurrency(-73.4)).toBe("−$73.40");
+  });
+});
+
+describe("formatMonthSpan", () => {
+  it("names a single month in full", () => {
+    expect(
+      formatMonthSpan({
+        start: { year: 2026, month: 3 },
+        end: { year: 2026, month: 3 },
+      }),
+    ).toBe("March");
+  });
+
+  it("abbreviates a same-year span with an en dash", () => {
+    expect(
+      formatMonthSpan({
+        start: { year: 2026, month: 3 },
+        end: { year: 2026, month: 5 },
+      }),
+    ).toBe("Mar–May");
+  });
+
+  it("includes years when the span crosses a year boundary", () => {
+    expect(
+      formatMonthSpan({
+        start: { year: 2025, month: 11 },
+        end: { year: 2026, month: 2 },
+      }),
+    ).toBe("Nov 2025 – Feb 2026");
   });
 });
 

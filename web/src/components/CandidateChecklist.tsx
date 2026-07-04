@@ -86,16 +86,20 @@ export function computeSettlementAmount(
 
 export function CandidateChecklist({
   amount,
-  month,
-  year,
+  initialSearchMonth,
+  searchFloor,
   persons,
   selectedIds,
   onSelectionChange,
   latestTransactionMonth,
 }: {
   amount: string;
-  month: number;
-  year: number;
+  // Concrete → the stepper starts on that month (post-hoc linking).
+  // null → search the whole outstanding span; the stepper narrows on demand.
+  initialSearchMonth: MonthReference | null;
+  // Lowest month the stepper can reach — the outstanding span's start at
+  // ledger level, the settlement's own month when linking post-hoc.
+  searchFloor: MonthReference | null;
   persons: Array<{ id: string; name: string }>;
   selectedIds: string[];
   onSelectionChange: (ids: string[], selected: SelectedCandidate[]) => void;
@@ -104,8 +108,9 @@ export function CandidateChecklist({
   const parsedAmount = Number.parseFloat(amount);
   const isValidAmount = !Number.isNaN(parsedAmount) && parsedAmount > 0;
 
-  const [searchYear, setSearchYear] = useState(year);
-  const [searchMonth, setSearchMonth] = useState(month);
+  const [search, setSearch] = useState<MonthReference | null>(
+    initialSearchMonth,
+  );
 
   const {
     data: candidatesResponse,
@@ -113,11 +118,12 @@ export function CandidateChecklist({
     isError,
   } = useGetSettlementCandidates(
     {
-      year,
-      month,
       amount: parsedAmount,
-      search_year: searchYear,
-      search_month: searchMonth,
+      // Omitting the search month lets the backend search the whole
+      // outstanding span.
+      ...(search
+        ? { search_year: search.year, search_month: search.month }
+        : {}),
     },
     { query: { enabled: isValidAmount, staleTime: 30_000 } },
   );
@@ -126,10 +132,19 @@ export function CandidateChecklist({
 
   const { getPersonName } = usePersonMaps(persons);
 
-  const isAtFloor = searchYear === year && searchMonth === month;
-  const ceiling = latestTransactionMonth ?? { year, month };
+  const floor = searchFloor ?? initialSearchMonth;
+  const ceiling = latestTransactionMonth ?? null;
+  const isAtFloor =
+    search !== null &&
+    (floor === null ||
+      (search.year === floor.year && search.month === floor.month));
   const isAtCeiling =
-    searchYear === ceiling.year && searchMonth === ceiling.month;
+    search !== null &&
+    ceiling !== null &&
+    search.year === ceiling.year &&
+    search.month === ceiling.month;
+  // Stepping down from "all months" lands on the newest month in range.
+  const narrowTarget = ceiling ?? floor;
 
   const prevAmountRef = useRef(amount);
   useEffect(() => {
@@ -137,10 +152,9 @@ export function CandidateChecklist({
       prevAmountRef.current = amount;
       onSelectionChange([], []);
       setShowAll(false);
-      setSearchYear(year);
-      setSearchMonth(month);
+      setSearch(initialSearchMonth);
     }
-  }, [amount, onSelectionChange, year, month]);
+  }, [amount, onSelectionChange, initialSearchMonth]);
 
   const [showAll, setShowAll] = useState(false);
 
@@ -176,17 +190,26 @@ export function CandidateChecklist({
         transaction. Link it here so it's counted as a settlement, not spending.
       </p>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-muted-foreground">Searching:</span>
         <div className="flex items-center gap-1">
           <button
             type="button"
-            disabled={isAtFloor}
+            disabled={isAtFloor || (search === null && narrowTarget === null)}
             onClick={() => {
-              const [ny, nm] = stepMonth(searchYear, searchMonth, -1);
-              if (monthAtOrAfter(ny, nm, year, month)) {
-                setSearchYear(ny);
-                setSearchMonth(nm);
+              if (search === null) {
+                if (narrowTarget) {
+                  setSearch(narrowTarget);
+                  setShowAll(false);
+                }
+                return;
+              }
+              const [ny, nm] = stepMonth(search.year, search.month, -1);
+              if (
+                floor === null ||
+                monthAtOrAfter(ny, nm, floor.year, floor.month)
+              ) {
+                setSearch({ year: ny, month: nm });
                 setShowAll(false);
               }
             }}
@@ -196,16 +219,21 @@ export function CandidateChecklist({
             <ChevronLeft className="size-3.5" />
           </button>
           <span className="min-w-24 text-center text-xs font-medium text-foreground">
-            {MONTHS[searchMonth - 1]} {searchYear}
+            {search
+              ? `${MONTHS[search.month - 1]} ${search.year}`
+              : "All months"}
           </span>
           <button
             type="button"
-            disabled={isAtCeiling}
+            disabled={search === null || isAtCeiling}
             onClick={() => {
-              const [ny, nm] = stepMonth(searchYear, searchMonth, 1);
-              if (monthAtOrAfter(ceiling.year, ceiling.month, ny, nm)) {
-                setSearchYear(ny);
-                setSearchMonth(nm);
+              if (search === null) return;
+              const [ny, nm] = stepMonth(search.year, search.month, 1);
+              if (
+                ceiling === null ||
+                monthAtOrAfter(ceiling.year, ceiling.month, ny, nm)
+              ) {
+                setSearch({ year: ny, month: nm });
                 setShowAll(false);
               }
             }}
@@ -215,6 +243,18 @@ export function CandidateChecklist({
             <ChevronRight className="size-3.5" />
           </button>
         </div>
+        {initialSearchMonth === null && search !== null && (
+          <button
+            type="button"
+            onClick={() => {
+              setSearch(null);
+              setShowAll(false);
+            }}
+            className="rounded text-xs text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            All months
+          </button>
+        )}
       </div>
 
       {isLoading && (

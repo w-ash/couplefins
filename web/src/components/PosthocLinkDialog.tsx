@@ -170,8 +170,12 @@ export function PosthocLinkDialog({
           amount={settlement.amount.toFixed(2)}
           // Annotation is optional since v1.7.5 — fall back to the
           // recording date (ISO string slicing avoids TZ shifts).
-          month={settlement.month ?? Number(settlement.settled_at.slice(5, 7))}
-          year={settlement.year ?? Number(settlement.settled_at.slice(0, 4))}
+          initialSearchMonth={{
+            year: settlement.year ?? Number(settlement.settled_at.slice(0, 4)),
+            month:
+              settlement.month ?? Number(settlement.settled_at.slice(5, 7)),
+          }}
+          searchFloor={null}
           persons={persons}
           selectedIds={selectedIds}
           onSelectionChange={(ids) => setSelectedIds(ids)}
