@@ -189,7 +189,9 @@ def _compute_personal_spending(
         if tx.is_excluded or tx.is_settlement:
             continue
         if tx.household:
-            household_portion += compute_person_share(tx, person_id)
+            # Sign-aware: a refund subtracts the share instead of inflating it.
+            share = compute_person_share(tx, person_id)
+            household_portion += share if tx.amount < 0 else -share
         elif tx.payer_person_id == person_id and tx.amount < 0:
             own_spending += abs(tx.amount)
     return household_portion + own_spending, household_portion, own_spending

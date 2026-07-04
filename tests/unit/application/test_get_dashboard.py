@@ -266,6 +266,46 @@ async def test_settlement_history_entries() -> None:
     assert jan_entry.settlement_to_person_id == alice.id
 
 
+async def test_personal_household_share_nets_refund() -> None:
+    """A refund on a household split must reduce the personal share, not
+    inflate it — mirrors the sign-aware fix in _compute_personal_spending."""
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    _setup_uow_base(uow, alice, bob)
+
+    txs = [
+        make_transaction(
+            date=date(2026, 3, 10),
+            amount=Decimal("-200.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+            household=True,
+        ),
+        make_transaction(
+            date=date(2026, 3, 12),
+            amount=Decimal("60.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+            household=True,
+        ),
+    ]
+    uow.transactions.get_by_year.return_value = txs
+    uow.transactions.get_settlement_relevant_by_date_range.return_value = (
+        filter_split_transactions(txs)
+    )
+    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+    uow.category_group_budgets.get_by_year.return_value = []
+
+    command = GetDashboardCommand(
+        year=2026, month=3, scope="personal", person_id=alice.id
+    )
+    result = await GetDashboardUseCase().execute(command, uow)
+
+    # Alice's share: $100 expense share - $30 refund share = $70
+    assert result.my_household_share_month == Decimal("70.00")
+
+
 # ─── Active month resolution ───
 
 

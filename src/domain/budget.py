@@ -306,7 +306,10 @@ def _compute_personal_breakdowns(
     for tx in txs:
         gid, _ = category_lookup.get(tx.category, (None, uncategorized))
         if tx.household:
-            share = compute_person_share(tx, person_id)
+            # Sign-aware: an expense adds the share, a refund subtracts it —
+            # mirrors compute_category_breakdowns / _compute_person_summaries.
+            magnitude = compute_person_share(tx, person_id)
+            share = magnitude if tx.amount < 0 else -magnitude
             cat_total[tx.category] += share
             cat_count[tx.category] += 1
             cat_household[tx.category] += share

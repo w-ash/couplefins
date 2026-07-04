@@ -13,9 +13,12 @@ from src.domain.budget import (
     determine_health,
 )
 from src.domain.categories import compute_category_breakdowns
+from src.domain.reconciliation import reconcile
 from tests.fixtures.factories import (
+    make_category,
     make_category_group,
     make_category_group_budget,
+    make_person,
     make_transaction,
 )
 
@@ -427,6 +430,132 @@ def test_breakdown_personal_not_in_set_excluded_from_personal_amounts() -> None:
     assert cat.personal_amounts == {}
 
 
+def test_breakdown_refund_nets_instead_of_inflating() -> None:
+    """-$200 expense + $60 refund must net to $140 spent, not $260."""
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    alice = UUID("bbbbbbbb-0000-0000-0000-000000000001")
+
+    lookup = {"Groceries": (food_gid, "Food & Dining")}
+    txs = [
+        make_transaction(
+            category="Groceries",
+            amount=Decimal("-200.00"),
+            household=True,
+            payer_person_id=alice,
+        ),
+        make_transaction(
+            category="Groceries",
+            amount=Decimal("60.00"),
+            household=True,
+            payer_person_id=alice,
+        ),
+    ]
+
+    groups = compute_category_breakdowns(txs, lookup)
+    cat = groups[0].categories[0]
+
+    assert cat.total_amount == Decimal("140.00")
+    assert cat.household_amount == Decimal("140.00")
+
+
+def test_overview_refund_flips_health_off_over_budget() -> None:
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    payer = UUID("bbbbbbbb-0000-0000-0000-000000000001")
+
+    groups = [make_category_group(id=food_gid, name="Food & Dining")]
+    month_budgets = [
+        make_category_group_budget(
+            group_id=food_gid, year=2026, month=1, monthly_amount=Decimal(200)
+        ),
+    ]
+    year_budgets = list(month_budgets)
+    lookup = {"Groceries": (food_gid, "Food & Dining")}
+    txs = [
+        make_transaction(
+            category="Groceries",
+            amount=Decimal("-250.00"),
+            household=True,
+            payer_person_id=payer,
+            date=date(2026, 1, 5),
+        ),
+        make_transaction(
+            category="Groceries",
+            amount=Decimal("100.00"),
+            household=True,
+            payer_person_id=payer,
+            date=date(2026, 1, 10),
+        ),
+    ]
+
+    overview = compute_budget_overview(
+        month_budgets, year_budgets, txs, lookup, groups, 2026, 1
+    )
+    status = overview.group_statuses[0]
+
+    # Without the refund, $250 spent against a $200 budget would be over_budget.
+    assert status.monthly_spent == Decimal("150.00")
+    assert status.monthly_health == "on_track"
+
+
+def test_household_split_spending_matches_reconcile_net() -> None:
+    """Property: for household split-only inputs, the budget's household
+    group total must equal reconcile()'s net_household_spending — the same
+    underlying money, aggregated two different ways."""
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    group = make_category_group(id=food_gid, name="Food & Dining")
+    category = make_category(name="Groceries", group_id=food_gid)
+    lookup = {"Groceries": (food_gid, "Food & Dining")}
+
+    txs = [
+        make_transaction(
+            category="Groceries",
+            amount=Decimal("-200.00"),
+            payer_percentage=50,
+            household=True,
+            payer_person_id=alice.id,
+            date=date(2026, 1, 5),
+        ),
+        make_transaction(
+            category="Groceries",
+            amount=Decimal("60.00"),
+            payer_percentage=50,
+            household=True,
+            payer_person_id=alice.id,
+            date=date(2026, 1, 10),
+        ),
+        make_transaction(
+            category="Groceries",
+            amount=Decimal("-150.00"),
+            payer_percentage=70,
+            household=True,
+            payer_person_id=bob.id,
+            date=date(2026, 1, 12),
+        ),
+        make_transaction(
+            category="Groceries",
+            amount=Decimal("-40.00"),
+            payer_percentage=30,
+            household=True,
+            payer_person_id=alice.id,
+            date=date(2026, 1, 20),
+        ),
+    ]
+
+    overview = compute_budget_overview([], [], txs, lookup, [group], 2026, 1)
+    summary = reconcile(
+        txs,
+        [alice, bob],
+        [category],
+        [group],
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+    )
+
+    assert overview.group_statuses[0].monthly_spent == summary.net_household_spending
+
+
 # --- compute_person_share ---
 
 ALICE = UUID("bbbbbbbb-0000-0000-0000-000000000001")
@@ -660,6 +789,41 @@ def test_personal_overview_partner_household_creates_share() -> None:
     assert status.household_spending == Decimal("100.00")
     assert status.personal_spending == Decimal(0)
     assert status.monthly_spent == Decimal("100.00")
+
+
+def test_personal_overview_household_refund_reduces_share() -> None:
+    """A refund on a household split must reduce Alice's share, not inflate it."""
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    groups = [make_category_group(id=food_gid, name="Food & Dining")]
+    lookup = {"Groceries": (food_gid, "Food & Dining")}
+
+    txs = [
+        make_transaction(
+            category="Groceries",
+            amount=Decimal("-200.00"),
+            payer_percentage=50,
+            household=True,
+            payer_person_id=ALICE,
+            date=date(2026, 1, 5),
+        ),
+        make_transaction(
+            category="Groceries",
+            amount=Decimal("60.00"),
+            payer_percentage=50,
+            household=True,
+            payer_person_id=ALICE,
+            date=date(2026, 1, 10),
+        ),
+    ]
+
+    overview = compute_personal_budget_overview(
+        [], [], txs, lookup, groups, 2026, 1, ALICE
+    )
+    status = overview.group_statuses[0]
+
+    # Alice's share: $100 expense share - $30 refund share = $70
+    assert status.household_spending == Decimal("70.00")
+    assert status.monthly_spent == Decimal("70.00")
 
 
 def test_personal_overview_ytd_across_months() -> None:

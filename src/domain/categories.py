@@ -61,14 +61,17 @@ def compute_category_breakdowns(
     )
 
     for tx in transactions:
-        abs_amount = abs(tx.amount)
-        cat_amounts[tx.category] += abs_amount
+        # Signed contribution: an expense (amount < 0) adds to spend, a
+        # refund (amount > 0) subtracts — mirrors reconcile()'s
+        # total_spending - total_refunds. Never inflate spend with abs().
+        spend = -tx.amount
+        cat_amounts[tx.category] += spend
         cat_counts[tx.category] += 1
 
         if tx.household:
-            cat_household[tx.category] += abs_amount
+            cat_household[tx.category] += spend
         elif tx.category in personal_categories:
-            cat_personal[tx.category][tx.payer_person_id] += abs_amount
+            cat_personal[tx.category][tx.payer_person_id] += spend
 
     # Build CategoryBreakdown per category
     category_breakdowns: list[CategoryBreakdown] = []
