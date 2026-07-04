@@ -4,6 +4,7 @@ from attrs import define
 
 from src.domain.entities.settlement_merchant import SettlementMerchant
 from src.domain.entities.transaction import Transaction
+from src.domain.filters import is_reconciliation_relevant
 
 _SCORE_MERCHANT_MATCH = 3
 _SCORE_AMOUNT_MATCH = 3
@@ -30,7 +31,7 @@ def find_settlement_candidates(
     candidates: list[SettlementCandidate] = []
 
     for tx in transactions:
-        if tx.is_settlement or tx.is_excluded:
+        if not is_reconciliation_relevant(tx):
             continue
 
         score = 0

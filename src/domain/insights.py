@@ -6,10 +6,15 @@ from attrs import define
 
 from src.domain.categories import compute_category_breakdowns
 from src.domain.entities.transaction import Transaction
+from src.domain.filters import is_reconciliation_relevant
 
 
 def _household_expenses(txs: list[Transaction]) -> list[Transaction]:
-    return [tx for tx in txs if tx.household and tx.amount < 0 and not tx.is_excluded]
+    return [
+        tx
+        for tx in txs
+        if tx.household and tx.amount < 0 and is_reconciliation_relevant(tx)
+    ]
 
 
 def _group_by_month(txs: list[Transaction]) -> dict[int, list[Transaction]]:

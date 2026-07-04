@@ -22,6 +22,7 @@ from src.domain.entities.person import Person
 from src.domain.entities.settlement import Settlement
 from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import InvariantViolationError
+from src.domain.filters import is_reconciliation_relevant
 from src.domain.splits import compute_shares
 
 
@@ -102,8 +103,7 @@ def filter_split_transactions(
     return [
         tx
         for tx in transactions
-        if not tx.is_excluded
-        and not tx.is_settlement
+        if is_reconciliation_relevant(tx)
         and tx.payer_percentage < SplitDefaults.MAX_PAYER_PERCENTAGE
     ]
 

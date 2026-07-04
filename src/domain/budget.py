@@ -16,6 +16,7 @@ from src.domain.constants import UNCATEGORIZED_GROUP_NAME, SplitDefaults
 from src.domain.entities.category_group import CategoryGroup
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.entities.transaction import Transaction
+from src.domain.filters import is_reconciliation_relevant
 from src.domain.splits import compute_shares
 
 HealthStatus = Literal["on_track", "near_limit", "over_budget"]
@@ -72,7 +73,7 @@ def determine_health(spent: Decimal, budget: Decimal) -> HealthStatus:
 
 
 def _is_budget_relevant(tx: Transaction, personal_categories: Set[str]) -> bool:
-    if tx.is_excluded or tx.is_settlement:
+    if not is_reconciliation_relevant(tx):
         return False
     return tx.household or tx.category in personal_categories
 
@@ -345,7 +346,7 @@ def _is_personal_budget_relevant(tx: Transaction, person_id: UUID) -> bool:
     beneficiary (payer_percentage < 100, i.e. someone else fronted it and
     this person owes part or all of it back). Household rows are always
     relevant (everyone has some share of shared life)."""
-    if tx.is_excluded or tx.is_settlement:
+    if not is_reconciliation_relevant(tx):
         return False
     if tx.household:
         return True

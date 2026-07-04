@@ -30,6 +30,7 @@ from src.domain.entities.person import Person
 from src.domain.entities.settlement import Settlement
 from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import ValidationError
+from src.domain.filters import is_reconciliation_relevant
 from src.domain.reconciliation import (
     ReconciliationSummary,
     SettlementResult,
@@ -194,7 +195,7 @@ def _compute_personal_spending(
     household_portion = Decimal(0)
     own_spending = Decimal(0)
     for tx in txs:
-        if tx.is_excluded or tx.is_settlement:
+        if not is_reconciliation_relevant(tx):
             continue
         # Sign-aware in both branches: a refund subtracts the share instead
         # of inflating it.
@@ -210,7 +211,7 @@ def _compute_all_spending(txs: list[Transaction]) -> Decimal:
     """Total absolute spending across all transaction types."""
     total = Decimal(0)
     for tx in txs:
-        if tx.is_excluded or tx.is_settlement:
+        if not is_reconciliation_relevant(tx):
             continue
         if tx.amount < 0:
             total += abs(tx.amount)
