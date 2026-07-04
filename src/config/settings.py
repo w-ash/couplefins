@@ -1,7 +1,7 @@
 from typing import Literal
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _cache: dict[str, Settings] = {}
@@ -45,12 +45,28 @@ class DatabaseConfig(BaseModel):
         return args
 
 
+# HS256 signing keys must be >=32 bytes (RFC 7518 §3.2 / PyJWT InsecureKeyLength).
+_MIN_JWT_SECRET_BYTES = 32
+
+
 class AuthConfig(BaseModel):
     jwt_secret: str = "couplefins-dev-secret-change-in-prod"  # noqa: S105
     token_expiry_minutes: int = 60 * 24 * 7  # 7 days
     cookie_name: str = "couplefins_session"
     cookie_secure: bool = False  # True in prod (HTTPS)
     cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+
+    @field_validator("jwt_secret")
+    @classmethod
+    def _min_secret_bytes(cls, v: str) -> str:
+        # Reject a short secret at startup instead of leaking a runtime
+        # InsecureKeyLengthWarning on every token sign. Count bytes, not code
+        # points.
+        if len(v.encode("utf-8")) < _MIN_JWT_SECRET_BYTES:
+            raise ValueError(
+                f"jwt_secret must be at least {_MIN_JWT_SECRET_BYTES} bytes for HS256"
+            )
+        return v
 
 
 class ChatConfig(BaseModel):
