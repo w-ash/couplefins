@@ -38,6 +38,33 @@ async def test_dashboard_with_data(client: AsyncClient) -> None:
     assert all(s["has_uploaded"] for s in data["upload_statuses"])
 
 
+async def test_now_card_and_month_history_household_spending_agree(
+    client: AsyncClient,
+) -> None:
+    """A household no-split row (household tag, no sXX) plus a shared split
+    row in the same month: the now-card's household_spending_month and the
+    Month History entry for that month must report the same figure."""
+    persons, cookies = await setup_and_login(client)
+    alice_id = persons[0]["id"]
+
+    csv = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        '2026-01-15,Grocery Store,Groceries,Chase,GROCERY STORE,,"-60.00",shared\n'
+        '2026-01-16,Concert,Lifestyle,Amex,CONCERT,,"-40.00",household\n'
+    )
+    await upload_csv(client, alice_id, csv, cookies=cookies)
+
+    response = await client.get("/api/v1/dashboard?year=2026&month=1", cookies=cookies)
+    assert response.status_code == 200
+    data = response.json()
+
+    jan = next(m for m in data["month_history"] if m["month"] == 1)
+    assert data["household_spending_month"] == pytest.approx(100.0)
+    assert jan["total_household_spending"] == pytest.approx(
+        data["household_spending_month"]
+    )
+
+
 async def test_dashboard_month_history(client: AsyncClient) -> None:
     persons, cookies = await setup_and_login(client)
     alice_id = persons[0]["id"]

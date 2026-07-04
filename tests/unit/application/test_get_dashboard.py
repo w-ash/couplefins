@@ -134,6 +134,45 @@ async def test_multi_month_history() -> None:
     assert result.month_history[2].total_household_spending == Decimal("60.00")
 
 
+async def test_now_card_and_month_history_household_spending_agree() -> None:
+    """A household no-split row (pct=100, e.g. concert tickets bought
+    separately) plus a split row: the now-card's household_spending_month
+    and the Month History figure for that same month must be one number,
+    not two different 'household spending' metrics on the same page."""
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    _setup_uow_base(uow, alice, bob)
+
+    txs = [
+        make_transaction(
+            date=date(2026, 3, 5),
+            amount=Decimal("-60.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+            household=True,
+        ),
+        # Household, no split — e.g. concert tickets bought separately for a
+        # show attended together. Dropped by reconcile()'s split-only total,
+        # but it's still household spending.
+        make_transaction(
+            date=date(2026, 3, 12),
+            amount=Decimal("-40.00"),
+            payer_person_id=alice.id,
+            payer_percentage=100,
+            household=True,
+        ),
+    ]
+    _set_transactions(uow, txs)
+    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+
+    result = await GetDashboardUseCase().execute(_make_command(), uow)
+
+    march_history = next(m for m in result.month_history if m.month == 3)
+    assert result.household_spending_month == Decimal("100.00")
+    assert march_history.total_household_spending == result.household_spending_month
+
+
 async def test_month_with_only_spotted_rows_appears_in_history() -> None:
     """A month whose only activity is non-household split rows still shows
     in month history with its settlement balance."""

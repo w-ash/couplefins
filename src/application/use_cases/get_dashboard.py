@@ -114,12 +114,13 @@ class GetDashboardResult:
     total_all_spending_ytd: Decimal | None = None
 
 
-def _build_month_history(
+def _build_month_history(  # noqa: PLR0913, PLR0917
     summaries: dict[int, ReconciliationSummary],
     year: int,
     finalized_months: set[int],
     settlements_by_month: dict[int, list[Settlement]],
     gross_by_month: dict[int, SettlementResult | None],
+    by_month_household: dict[int, list[Transaction]],
     all_spending_by_month: dict[int, Decimal] | None = None,
 ) -> list[MonthHistoryEntry]:
     entries: list[MonthHistoryEntry] = []
@@ -127,7 +128,6 @@ def _build_month_history(
     # any household spending, and vice versa.
     for month in sorted(set(summaries) | set(gross_by_month), reverse=True):
         gross = gross_by_month.get(month)
-        summary = summaries.get(month)
         month_settlements = settlements_by_month.get(month, [])
         net = compute_net_position(gross, month_settlements)
         no_balance = net is None or net.amount == Decimal(0)
@@ -140,8 +140,11 @@ def _build_month_history(
             MonthHistoryEntry(
                 year=year,
                 month=month,
-                total_household_spending=(
-                    summary.total_household_spending if summary else Decimal(0)
+                # True household metric (all household=true, including
+                # no-split rows) — the same figure the now-card uses, not
+                # reconcile()'s split-only total_household_spending.
+                total_household_spending=_compute_all_spending(
+                    by_month_household.get(month, [])
                 ),
                 settlement_amount=net.amount if net else Decimal(0),
                 settlement_from_person_id=net.from_person_id if net else None,
@@ -519,6 +522,7 @@ class GetDashboardUseCase:
                     finalized_months,
                     partition_by_month(all_year_settlements, lambda s: s.month),
                     gross_by_month,
+                    by_month_household,
                     all_spending_by_month=(
                         all_data.spending_by_month if all_data else None
                     ),
