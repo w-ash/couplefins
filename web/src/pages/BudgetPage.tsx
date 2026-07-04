@@ -906,7 +906,7 @@ export function BudgetPage() {
             }
           />
 
-          {data.group_statuses.length === 0 && data.budgets.length === 0 ? (
+          {data.budgets.length === 0 ? (
             <div className="space-y-6">
               {data.copyable_source ? (
                 (() => {

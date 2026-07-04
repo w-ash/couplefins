@@ -6,15 +6,52 @@ import { server } from "@/test/server";
 import { renderWithProviders, screen, waitFor } from "@/test/test-utils";
 import { BudgetPage } from "./BudgetPage";
 
+// The backend always returns a status for every seeded category group,
+// budgeted or not — group_statuses is never actually empty. The gate for
+// "no budgets set yet" is data.budgets.length === 0.
 const emptyOverview: BudgetOverviewResponse = {
   year: 2026,
   month: 3,
-  group_statuses: [],
+  group_statuses: [
+    {
+      group_id: "g1",
+      group_name: "Food & Dining",
+      budget_id: null,
+      monthly_budget: null,
+      monthly_spent: 0,
+      ytd_budget: null,
+      ytd_spent: 0,
+      monthly_health: null,
+      ytd_health: null,
+      average_monthly_spending: 0,
+      budgeted_months: 0,
+      categories: [],
+    },
+    {
+      group_id: "g2",
+      group_name: "Auto & Transport",
+      budget_id: null,
+      monthly_budget: null,
+      monthly_spent: 0,
+      ytd_budget: null,
+      ytd_spent: 0,
+      monthly_health: null,
+      ytd_health: null,
+      average_monthly_spending: 0,
+      budgeted_months: 0,
+      categories: [],
+    },
+  ],
   total_monthly_budget: 0,
   total_monthly_spent: 0,
   total_ytd_budget: 0,
   total_ytd_spent: 0,
   budgets: [],
+};
+
+const emptyOverviewWithCopySource: BudgetOverviewResponse = {
+  ...emptyOverview,
+  copyable_source: { year: 2026, month: 2 },
 };
 
 const overviewWithData: BudgetOverviewResponse = {
@@ -143,6 +180,28 @@ describe("BudgetPage", () => {
         screen.getByRole("heading", { name: "Add your first budget" }),
       ).toBeInTheDocument();
     });
+  });
+
+  it("shows the copy-budgets card when a previous month has budgets", async () => {
+    server.use(
+      http.get("/api/v1/budgets/overview", () =>
+        HttpResponse.json(emptyOverviewWithCopySource),
+      ),
+    );
+
+    renderWithProviders(<BudgetPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", {
+          name: "Copy budgets from February 2026",
+        }),
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByRole("heading", { name: "Add your first budget" }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders budgeted groups with health indicator", async () => {
