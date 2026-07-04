@@ -323,6 +323,52 @@ def test_overview_ytd_computation() -> None:
     assert overview.total_ytd_spent == Decimal(650)
 
 
+def test_ytd_totals_include_group_unbudgeted_in_viewed_month() -> None:
+    """A group budgeted Jan-Feb but not the viewed March still contributes
+    its YTD budget/spend to the grand totals — otherwise its own row would
+    outrun the Total (US-BUDGET-3)."""
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    payer = UUID("bbbbbbbb-0000-0000-0000-000000000001")
+
+    groups = [make_category_group(id=food_gid, name="Food & Dining")]
+    year_budgets = [
+        make_category_group_budget(
+            group_id=food_gid, year=2026, month=1, monthly_amount=Decimal(300)
+        ),
+        make_category_group_budget(
+            group_id=food_gid, year=2026, month=2, monthly_amount=Decimal(300)
+        ),
+    ]
+    month_budgets: list = []  # No budget for March, the viewed month.
+    lookup = {"Groceries": (food_gid, "Food & Dining")}
+    txs = [
+        make_transaction(
+            category="Groceries",
+            amount=Decimal("-100.00"),
+            date=date(2026, 1, 15),
+            payer_person_id=payer,
+        ),
+        make_transaction(
+            category="Groceries",
+            amount=Decimal("-50.00"),
+            date=date(2026, 2, 10),
+            payer_person_id=payer,
+        ),
+    ]
+
+    overview = compute_budget_overview(
+        month_budgets, year_budgets, txs, lookup, groups, 2026, 3
+    )
+
+    status = overview.group_statuses[0]
+    assert status.monthly_budget is None
+    assert status.ytd_budget == Decimal(600)
+    assert status.ytd_spent == Decimal("150.00")
+    # Visible rows must sum to the Total stat.
+    assert overview.total_ytd_budget == Decimal(600)
+    assert overview.total_ytd_spent == Decimal("150.00")
+
+
 def test_excluded_transaction_not_budget_relevant() -> None:
     tx = make_transaction(household=True, is_excluded=True)
     assert _is_budget_relevant(tx, frozenset()) is False

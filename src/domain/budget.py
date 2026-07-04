@@ -207,10 +207,21 @@ def _assemble_overview(
             Decimal(0),
         ),
         total_monthly_spent=sum((s.monthly_spent for s in budgeted), Decimal(0)),
+        # YTD totals span every group with a YTD budget OR YTD spend — not
+        # just groups budgeted in the *viewed* month. A group budgeted
+        # Jan-Feb but not the viewed March still contributes its YTD spend
+        # and budget; otherwise its own row would outrun the Total (US-BUDGET-3).
         total_ytd_budget=sum(
-            (s.ytd_budget for s in budgeted if s.ytd_budget), Decimal(0)
+            (s.ytd_budget for s in statuses if s.ytd_budget is not None), Decimal(0)
         ),
-        total_ytd_spent=sum((s.ytd_spent for s in budgeted), Decimal(0)),
+        total_ytd_spent=sum(
+            (
+                s.ytd_spent
+                for s in statuses
+                if s.ytd_budget is not None or s.ytd_spent != Decimal(0)
+            ),
+            Decimal(0),
+        ),
         spending_drift=spending_drift,
     )
 
