@@ -28,7 +28,7 @@ async def test_unfinalizes_finalized_period() -> None:
 
     assert result.period.is_finalized is False
     assert result.period.finalized_at is None
-    assert not result.period.notes
+    assert result.period.notes == "Reviewed"
     uow.commit.assert_called_once()
 
 

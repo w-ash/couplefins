@@ -36,11 +36,13 @@ class UnfinalizePeriodUseCase:
                     f"Period {command.year}-{command.month:02d} is not finalized"
                 )
 
+            # Notes record what the couple agreed at close — clearing them
+            # isn't necessary to unlock the period (is_finalized/finalized_at
+            # already mark that) and would destroy that record.
             period = attrs.evolve(
                 existing,
                 is_finalized=False,
                 finalized_at=None,
-                notes="",
             )
 
             saved = await uow.reconciliation_periods.save(period)
