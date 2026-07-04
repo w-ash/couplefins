@@ -260,9 +260,7 @@ class SettleUpDataResponse(BaseModel):
     year: int
     month: int
     owed: OwedAmountResponse | None
-    net_position: OwedAmountResponse | None
     recorded_settlements: list[SettlementResponse]
-    remaining_balance: MoneyField
     outstanding: OwedAmountResponse | None
     outstanding_span: MonthSpanResponse | None
     ledger_months: list[LedgerMonthResponse]
@@ -283,13 +281,9 @@ class SettleUpDataResponse(BaseModel):
             year=result.year,
             month=result.month,
             owed=OwedAmountResponse.from_domain(result.owed) if result.owed else None,
-            net_position=OwedAmountResponse.from_domain(result.net_position)
-            if result.net_position
-            else None,
             recorded_settlements=[
                 SettlementResponse.from_record(r) for r in result.recorded_settlements
             ],
-            remaining_balance=result.remaining_balance,
             outstanding=(
                 OwedAmountResponse.from_domain(result.outstanding)
                 if result.outstanding

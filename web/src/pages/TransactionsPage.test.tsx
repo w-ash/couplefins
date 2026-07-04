@@ -171,9 +171,7 @@ const settleUpEmptyResponse = {
   year: 2026,
   month: 1,
   owed: { amount: 20.0, from_person_id: "p2", to_person_id: "p1" },
-  net_position: { amount: 20.0, from_person_id: "p2", to_person_id: "p1" },
   recorded_settlements: [],
-  remaining_balance: 20.0,
   outstanding: { amount: 20.0, from_person_id: "p2", to_person_id: "p1" },
   outstanding_span: {
     start: { year: 2026, month: 1 },
@@ -246,12 +244,6 @@ describe("TransactionsPage", () => {
         HttpResponse.json({
           ...settleUpEmptyResponse,
           owed: { amount: 1805.1, from_person_id: "p1", to_person_id: "p2" },
-          net_position: {
-            amount: 805.1,
-            from_person_id: "p1",
-            to_person_id: "p2",
-          },
-          remaining_balance: 805.1,
           outstanding: {
             amount: 805.1,
             from_person_id: "p1",

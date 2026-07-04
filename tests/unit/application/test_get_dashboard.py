@@ -825,9 +825,6 @@ async def test_overpayment_settles_month_and_reverses_outstanding() -> None:
     assert result.outstanding_balance.from_person_id == alice.id
     assert result.outstanding_balance.to_person_id == bob.id
 
-    # Current month net (March has no settlement-relevant rows) → None
-    assert result.current_month_net_settlement is None
-
 
 async def test_net_settlement_partial_payment() -> None:
     uow = make_mock_uow()
@@ -858,10 +855,12 @@ async def test_net_settlement_partial_payment() -> None:
 
     result = await GetDashboardUseCase().execute(_make_command(), uow)
 
-    # Current month net: $100 gross - $30 paid = $70 remaining
-    assert result.current_month_net_settlement is not None
-    assert result.current_month_net_settlement.amount == Decimal("70.00")
-    assert result.current_month_net_settlement.from_person_id == bob.id
+    # $100 gross - $30 paid = $70 outstanding; the month reads as partial.
+    assert result.outstanding_balance is not None
+    assert result.outstanding_balance.amount == Decimal("70.00")
+    assert result.outstanding_balance.from_person_id == bob.id
+    march = next(e for e in result.month_history if e.month == 3)
+    assert march.settlement_status == "partially_settled"
 
 
 async def test_no_settlements_yields_zero_ytd_total() -> None:

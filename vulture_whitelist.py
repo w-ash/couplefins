@@ -111,8 +111,10 @@ PayerGroupSplitSummaryResponse.partner_share
 
 from src.domain.ledger import SettlementLedger
 
-# consumed by v1.7.5 handoff 3 (frontend unapplied-credit display)
-SettlementLedger.unapplied_payment_total  # overpayment/reverse-payment credit
+# Aggregate overpayment/reverse-payment credit. The UI surfaces per-payment
+# `unapplied` instead; this total anchors the zero-sum invariants in
+# test_ledger.py.
+SettlementLedger.unapplied_payment_total
 
 # --- TypedDict fields: consumed by type checker + dict access ---
 

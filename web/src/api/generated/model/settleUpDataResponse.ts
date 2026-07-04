@@ -19,9 +19,7 @@ export interface SettleUpDataResponse {
   year: number;
   month: number;
   owed: OwedAmountResponse | null;
-  net_position: OwedAmountResponse | null;
   recorded_settlements: SettlementResponse[];
-  remaining_balance: number;
   outstanding: OwedAmountResponse | null;
   outstanding_span: MonthSpanResponse | null;
   ledger_months: LedgerMonthResponse[];

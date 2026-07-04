@@ -48,9 +48,7 @@ const settleUpResponse = {
   year: 2026,
   month: 3,
   owed: { amount: 50.0, from_person_id: "p2", to_person_id: "p1" },
-  net_position: { amount: 50.0, from_person_id: "p2", to_person_id: "p1" },
   recorded_settlements: [],
-  remaining_balance: 50.0,
   outstanding: { amount: 50.0, from_person_id: "p2", to_person_id: "p1" },
   outstanding_span: {
     start: { year: 2026, month: 3 },
@@ -110,8 +108,6 @@ const catchUpPayment = {
 const multiMonthResponse = {
   ...settleUpResponse,
   owed: { amount: 142.0, from_person_id: "p2", to_person_id: "p1" },
-  net_position: null,
-  remaining_balance: 0.0,
   outstanding: { amount: 642.0, from_person_id: "p2", to_person_id: "p1" },
   outstanding_span: {
     start: { year: 2026, month: 4 },
@@ -173,8 +169,6 @@ const multiMonthResponse = {
 // payment, so nothing is outstanding and the span is null.
 const allSettledResponse = {
   ...settleUpResponse,
-  net_position: null,
-  remaining_balance: 0.0,
   outstanding: null,
   outstanding_span: null,
   ledger_months: [
@@ -202,9 +196,7 @@ const allSettledResponse = {
 const emptyResponse = {
   ...settleUpResponse,
   owed: null,
-  net_position: null,
   recorded_settlements: [],
-  remaining_balance: 0.0,
   outstanding: null,
   outstanding_span: null,
   ledger_months: [],

@@ -40,8 +40,9 @@ async def test_waive_persists_remaining_balance(client: AsyncClient) -> None:
         auth=cookies,
     )
     data = settle_up.json()
-    assert data["net_position"] is None
-    assert data["remaining_balance"] == pytest.approx(0.0)
+    assert data["outstanding"] is None
+    assert data["ledger_months"][0]["status"] == "settled"
+    assert data["ledger_months"][0]["remaining"] == pytest.approx(0.0)
     waiver = data["recorded_settlements"][0]
     assert waiver["is_waived"] is True
     assert waiver["amount"] == pytest.approx(50.0)
@@ -112,8 +113,6 @@ async def test_multi_month_catch_up_settles_both_months(client: AsyncClient) -> 
     data = settle_up.json()
     assert data["outstanding"] is None
     assert data["outstanding_span"] is None
-    assert data["net_position"] is None
-    assert data["remaining_balance"] == pytest.approx(0.0)
     statuses = {(m["year"], m["month"]): m["status"] for m in data["ledger_months"]}
     assert statuses == {(2026, 1): "settled", (2026, 2): "settled"}
     payment = data["all_settlements"][0]
@@ -180,8 +179,8 @@ async def test_recording_the_gross_nets_month_to_exactly_zero(
         auth=cookies,
     )
     data = settle_up.json()
-    assert data["net_position"] is None
-    assert data["remaining_balance"] == pytest.approx(0.0)
+    assert data["outstanding"] is None
+    assert data["ledger_months"][0]["remaining"] == pytest.approx(0.0)
 
 
 async def test_mark_transaction_link_hygiene(client: AsyncClient) -> None:

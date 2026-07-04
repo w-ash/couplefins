@@ -60,7 +60,6 @@ class DashboardResponse(BaseModel):
     current_month_transaction_count: int
     current_month_person_summaries: list[PersonSummaryResponse]
     current_month_settlement: OwedAmountResponse | None
-    current_month_net_settlement: OwedAmountResponse | None
     upload_statuses: list[UploadStatusResponse]
     household_spending_month: MoneyField
     household_spending_ytd: MoneyField
@@ -101,11 +100,6 @@ class DashboardResponse(BaseModel):
             ],
             current_month_settlement=(
                 OwedAmountResponse.from_domain(cm.settlement) if cm.settlement else None
-            ),
-            current_month_net_settlement=(
-                OwedAmountResponse.from_domain(result.current_month_net_settlement)
-                if result.current_month_net_settlement
-                else None
             ),
             upload_statuses=[
                 UploadStatusResponse.from_domain(us) for us in result.upload_statuses

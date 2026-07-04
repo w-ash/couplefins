@@ -103,7 +103,6 @@ class GetDashboardResult:
     scope: Scope
     current_person_id: UUID | None
     current_month: ReconciliationSummary
-    current_month_net_settlement: SettlementResult | None
     upload_statuses: list[UploadStatus]
     household_spending_month: Decimal
     household_spending_ytd: Decimal
@@ -527,13 +526,6 @@ class GetDashboardUseCase:
                 scope=command.scope,
                 current_person_id=command.person_id,
                 current_month=current_month,
-                # The active month's ledger position: its gross minus what
-                # FIFO applied to it — None when settled or absent.
-                current_month_net_settlement=(
-                    month_remaining_result(active_row)
-                    if active_row is not None
-                    else None
-                ),
                 upload_statuses=upload_statuses,
                 household_spending_month=household_spending_month,
                 household_spending_ytd=household_spending_ytd,
