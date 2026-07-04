@@ -109,6 +109,86 @@ _EDIT_FIELDS = (
 )
 
 
+async def apply_bulk_transaction_updates(
+    command: BulkUpdateTransactionsCommand,
+    uow: UnitOfWorkProtocol,
+) -> BulkUpdateTransactionsResult:
+    """Apply the field mutation without committing.
+
+    Split out from `BulkUpdateTransactionsUseCase.execute` so callers
+    composing multiple mutations into one atomic operation (the chat
+    assistant's combined tag + field bulk update) can run this inside a
+    single `async with uow:` scope and commit once at the end — see
+    `src.application.chat.confirmed_actions._exec_bulk`.
+    """
+    updates = _collect_updates(command)
+    _validate_command(command, updates)
+
+    transactions = await fetch_and_validate(uow, command.transaction_ids)
+
+    if "date" in updates:
+        tx = transactions[command.transaction_ids[0]]
+        new_date = updates["date"]
+        if new_date != tx.date and isinstance(new_date, date):
+            await assert_period_not_finalized(uow, new_date.year, new_date.month)
+
+    all_edits: list[TransactionEdit] = []
+    updated_transactions: list[Transaction] = []
+    now = datetime.now(UTC)
+    uses_immutable_fields = "date" in updates or "amount" in updates
+
+    for tx_id in command.transaction_ids:
+        tx = transactions[tx_id]
+        tx_updates = dict(updates)
+        _preserve_originals(tx_updates, tx)
+
+        field_values: tuple[tuple[str, FieldValue], ...] = (
+            ("date", tx.date),
+            ("amount", tx.amount),
+            ("category", tx.category),
+            ("notes", tx.notes),
+            ("tags", tx.tags),
+            ("payer_percentage", tx.payer_percentage),
+            ("household", tx.household),
+            ("is_excluded", tx.is_excluded),
+        )
+        edits = [
+            e
+            for name, old in field_values
+            if name in tx_updates
+            and (
+                e := compute_edit(
+                    tx,
+                    name,
+                    old,
+                    tx_updates[name],
+                    now=now,
+                    edited_by_person_id=command.edited_by_person_id,
+                )
+            )
+        ]
+        if not edits:
+            continue
+
+        all_edits.extend(edits)
+        updated_tx: Transaction = evolve(tx, **tx_updates)  # type: ignore[arg-type]
+        updated_transactions.append(updated_tx)
+
+        if uses_immutable_fields:
+            await uow.transactions.update_all_fields(updated_tx)
+        else:
+            await uow.transactions.update_mutable_fields(updated_tx)
+
+    if all_edits:
+        await uow.transaction_edits.save_batch(all_edits)
+
+    return BulkUpdateTransactionsResult(
+        updated_transactions=updated_transactions,
+        edits=all_edits,
+        updated_count=len(updated_transactions),
+    )
+
+
 @define(slots=True)
 class BulkUpdateTransactionsUseCase:
     async def execute(
@@ -116,73 +196,7 @@ class BulkUpdateTransactionsUseCase:
         command: BulkUpdateTransactionsCommand,
         uow: UnitOfWorkProtocol,
     ) -> BulkUpdateTransactionsResult:
-        updates = _collect_updates(command)
-        _validate_command(command, updates)
-
         async with uow:
-            transactions = await fetch_and_validate(uow, command.transaction_ids)
-
-            if "date" in updates:
-                tx = transactions[command.transaction_ids[0]]
-                new_date = updates["date"]
-                if new_date != tx.date and isinstance(new_date, date):
-                    await assert_period_not_finalized(
-                        uow, new_date.year, new_date.month
-                    )
-
-            all_edits: list[TransactionEdit] = []
-            updated_transactions: list[Transaction] = []
-            now = datetime.now(UTC)
-            uses_immutable_fields = "date" in updates or "amount" in updates
-
-            for tx_id in command.transaction_ids:
-                tx = transactions[tx_id]
-                tx_updates = dict(updates)
-                _preserve_originals(tx_updates, tx)
-
-                field_values: tuple[tuple[str, FieldValue], ...] = (
-                    ("date", tx.date),
-                    ("amount", tx.amount),
-                    ("category", tx.category),
-                    ("notes", tx.notes),
-                    ("tags", tx.tags),
-                    ("payer_percentage", tx.payer_percentage),
-                    ("household", tx.household),
-                    ("is_excluded", tx.is_excluded),
-                )
-                edits = [
-                    e
-                    for name, old in field_values
-                    if name in tx_updates
-                    and (
-                        e := compute_edit(
-                            tx,
-                            name,
-                            old,
-                            tx_updates[name],
-                            now=now,
-                            edited_by_person_id=command.edited_by_person_id,
-                        )
-                    )
-                ]
-                if not edits:
-                    continue
-
-                all_edits.extend(edits)
-                updated_tx: Transaction = evolve(tx, **tx_updates)  # type: ignore[arg-type]
-                updated_transactions.append(updated_tx)
-
-                if uses_immutable_fields:
-                    await uow.transactions.update_all_fields(updated_tx)
-                else:
-                    await uow.transactions.update_mutable_fields(updated_tx)
-
-            if all_edits:
-                await uow.transaction_edits.save_batch(all_edits)
-
+            result = await apply_bulk_transaction_updates(command, uow)
             await uow.commit()
-            return BulkUpdateTransactionsResult(
-                updated_transactions=updated_transactions,
-                edits=all_edits,
-                updated_count=len(updated_transactions),
-            )
+            return result

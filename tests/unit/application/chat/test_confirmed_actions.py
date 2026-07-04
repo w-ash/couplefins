@@ -6,11 +6,12 @@ import pytest
 
 from src.application.chat.confirmed_actions import execute_confirmed_action
 from src.application.chat.pending_actions import PendingAction
-from src.domain.exceptions import PeriodFinalizedError
+from src.domain.exceptions import PeriodFinalizedError, ValidationError
 from tests.fixtures.factories import (
     make_category_group,
     make_person,
     make_reconciliation_period,
+    make_transaction,
 )
 from tests.fixtures.mocks import make_mock_uow
 
@@ -56,3 +57,87 @@ async def test_confirmed_budget_update_rejected_when_month_finalized() -> None:
         await execute_confirmed_action(action, user)
 
     uow.category_group_budgets.save.assert_not_called()
+
+
+async def test_exec_bulk_runs_tags_and_fields_in_one_uow() -> None:
+    """Both mutations share a single UoW and a single commit."""
+    user = make_person(name="Alice")
+    tx = make_transaction(tags=("shared",), category="Dining Out")
+
+    uow = make_mock_uow()
+    uow.transactions.get_by_ids.return_value = [tx]
+
+    action = PendingAction(
+        action_id=uuid4(),
+        person_id=user.id,
+        tool_name="bulk_update_transactions",
+        tool_input={},
+        description="Update 1 transaction: add tags: discuss, exclude",
+        details={
+            "transaction_ids": [str(tx.id)],
+            "count": 1,
+            "changes": {
+                "tags": {"action": "add", "values": ["discuss"]},
+                "is_excluded": True,
+            },
+        },
+        created_at=datetime.now(UTC),
+    )
+
+    async def run_with_mock_uow(factory):
+        return await factory(uow)
+
+    with patch(
+        "src.application.chat.confirmed_actions.execute_use_case",
+        run_with_mock_uow,
+    ):
+        result = await execute_confirmed_action(action, user)
+
+    assert result[0]["updated_count"] == 2
+    uow.commit.assert_called_once()
+
+
+async def test_exec_bulk_atomic_rollback_on_field_failure() -> None:
+    """A failing field update (unknown category) must not leave the tag
+    change durably committed — the two mutations run as one atomic
+    operation with a single commit at the very end."""
+    user = make_person(name="Alice")
+    tx = make_transaction(tags=("shared",), category="Dining Out")
+
+    uow = make_mock_uow()
+    uow.transactions.get_by_ids.return_value = [tx]
+    uow.categories.get_by_name.return_value = None  # unknown category
+
+    action = PendingAction(
+        action_id=uuid4(),
+        person_id=user.id,
+        tool_name="bulk_update_transactions",
+        tool_input={},
+        description="Update 1 transaction: add tags: discuss, category to Bogus",
+        details={
+            "transaction_ids": [str(tx.id)],
+            "count": 1,
+            "changes": {
+                "tags": {"action": "add", "values": ["discuss"]},
+                "category": "Bogus",
+            },
+        },
+        created_at=datetime.now(UTC),
+    )
+
+    async def run_with_mock_uow(factory):
+        return await factory(uow)
+
+    with (
+        patch(
+            "src.application.chat.confirmed_actions.execute_use_case",
+            run_with_mock_uow,
+        ),
+        pytest.raises(ValidationError, match="Unknown category"),
+    ):
+        await execute_confirmed_action(action, user)
+
+    # The tag mutation staged its edit, but since the field mutation failed
+    # before the single shared commit, nothing was ever durably persisted.
+    uow.transaction_edits.save_batch.assert_called_once()
+    uow.commit.assert_not_called()

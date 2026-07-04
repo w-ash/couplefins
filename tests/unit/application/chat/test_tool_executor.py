@@ -22,6 +22,7 @@ from src.domain.budget import BudgetOverview, CategoryGroupBudgetStatus
 from src.domain.exceptions import ToolExecutionError
 from src.domain.reconciliation import SettlementResult
 from tests.fixtures.factories import make_person, make_transaction
+from tests.fixtures.mocks import make_mock_uow
 
 ALICE = make_person(name="Alice", id=uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
 BOB = make_person(name="Bob", id=uuid.UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"))
@@ -375,3 +376,34 @@ async def test_search_transactions_personal_scope_uses_current_user() -> None:
     command = mock_execute.call_args.args[0]
     assert command.scope == "personal"
     assert command.person_id == ALICE.id
+
+
+@pytest.mark.asyncio
+async def test_bulk_update_transactions_rejects_unknown_category() -> None:
+    """Propose-time validation — a typo'd category is rejected before the
+    confirmation card is even shown, mirroring the confirm-time re-check
+    in confirmed_actions._exec_bulk."""
+    tx = make_transaction()
+    uow = make_mock_uow()
+    uow.transactions.get_by_id.return_value = tx
+    uow.categories.get_by_name.return_value = None
+
+    async def run_with_mock_uow(factory):
+        return await factory(uow)
+
+    with (
+        patch(
+            "src.application.chat.tool_executor.execute_use_case",
+            side_effect=run_with_mock_uow,
+        ),
+        pytest.raises(ToolExecutionError, match="Unknown category"),
+    ):
+        await execute_tool(
+            "bulk_update_transactions",
+            {
+                "transaction_ids": [str(tx.id)],
+                "changes": {"category": "Bogus"},
+            },
+            ALICE,
+            PERSONS,
+        )

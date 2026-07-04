@@ -8,13 +8,13 @@ from src.application.chat.pending_actions import PendingAction
 from src.application.runner import execute_use_case
 from src.application.use_cases.bulk_modify_tags import (
     BulkModifyTagsCommand,
-    BulkModifyTagsUseCase,
     TagAction,
+    apply_bulk_tag_changes,
 )
 from src.application.use_cases.bulk_update_transactions import (
     BulkUpdateTransactionsCommand,
-    BulkUpdateTransactionsUseCase,
     Unset,
+    apply_bulk_transaction_updates,
 )
 from src.application.use_cases.save_budget import (
     SaveBudgetCommand,
@@ -26,6 +26,8 @@ from src.application.use_cases.update_transaction_splits import (
     UpdateTransactionSplitsUseCase,
 )
 from src.domain.entities.person import Person
+from src.domain.exceptions import ValidationError
+from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 ACTION_ENTITY_MAP: dict[str, str] = {
     "update_budget": "budgets",
@@ -96,13 +98,19 @@ async def _exec_split(action: PendingAction, current_user: Person) -> dict[str, 
 
 
 async def _exec_bulk(action: PendingAction, current_user: Person) -> dict[str, object]:
+    """Run tag changes and field changes as one atomic operation.
+
+    Both mutations run inside a single `execute_use_case` call — one UoW,
+    one commit at the end — so a failing field update (e.g. an unknown
+    category) rolls back an already-applied tag change instead of
+    half-applying the confirmed action.
+    """
     details = action.details
     raw_ids = cast(list[str], details["transaction_ids"])
     transaction_ids = [UUID(tid) for tid in raw_ids]
     changes = cast(dict[str, object], details["changes"])
 
-    results: list[dict[str, object]] = []
-
+    tag_command: BulkModifyTagsCommand | None = None
     if "tags" in changes:
         tag_info = cast(dict[str, object], changes["tags"])
         tag_command = BulkModifyTagsCommand(
@@ -111,12 +119,9 @@ async def _exec_bulk(action: PendingAction, current_user: Person) -> dict[str, o
             tags=cast(list[str], tag_info["values"]),
             edited_by_person_id=current_user.id,
         )
-        tag_result = await execute_use_case(
-            lambda uow: BulkModifyTagsUseCase().execute(tag_command, uow)
-        )
-        results.append({"tags_updated": tag_result.updated_count})
 
     field_changes = {k: v for k, v in changes.items() if k != "tags"}
+    field_command: BulkUpdateTransactionsCommand | None = None
     if field_changes:
         field_command = BulkUpdateTransactionsCommand(
             transaction_ids=transaction_ids,
@@ -134,17 +139,35 @@ async def _exec_bulk(action: PendingAction, current_user: Person) -> dict[str, o
             if "category" in field_changes
             else None,
         )
-        field_result = await execute_use_case(
-            lambda uow: BulkUpdateTransactionsUseCase().execute(field_command, uow)
-        )
-        results.append({"fields_updated": field_result.updated_count})
 
-    total = sum(
-        cast(int, r.get("tags_updated", 0)) + cast(int, r.get("fields_updated", 0))
-        for r in results
-    )
+    async def _run(uow: UnitOfWorkProtocol) -> tuple[int, int]:
+        async with uow:
+            tags_updated = 0
+            fields_updated = 0
+            if tag_command is not None:
+                tag_result = await apply_bulk_tag_changes(tag_command, uow)
+                tags_updated = tag_result.updated_count
+            if field_command is not None:
+                # Re-check category existence at confirm time (TOCTOU guard
+                # mirroring the propose-time check in
+                # tool_executor._check_category_exists) — this runs before
+                # the shared commit, so an unknown category rolls back the
+                # tag change above instead of half-applying.
+                if field_command.category is not None:
+                    existing = await uow.categories.get_by_name(field_command.category)
+                    if existing is None:
+                        raise ValidationError(
+                            f"Unknown category: {field_command.category}"
+                        )
+                field_result = await apply_bulk_transaction_updates(field_command, uow)
+                fields_updated = field_result.updated_count
+            await uow.commit()
+            return tags_updated, fields_updated
+
+    tags_updated, fields_updated = await execute_use_case(_run)
+
     return {
         "status": "confirmed",
         "description": action.description,
-        "updated_count": total,
+        "updated_count": tags_updated + fields_updated,
     }

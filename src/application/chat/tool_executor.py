@@ -330,6 +330,24 @@ async def _check_finalization(year: int, month: int) -> None:
         )
 
 
+async def _check_category_exists(category: str) -> None:
+    """Raise ToolExecutionError if the category doesn't exist.
+
+    Mirrors the confirm-time check in `confirmed_actions._exec_bulk` so a
+    typo'd category is rejected at propose time — before the confirmation
+    card is even shown — rather than only at confirm time.
+    """
+
+    async def _query(uow: UnitOfWorkProtocol) -> bool:
+        async with uow:
+            existing = await uow.categories.get_by_name(category)
+            return existing is not None
+
+    exists = await execute_use_case(_query)
+    if not exists:
+        raise ToolExecutionError(f"Unknown category: {category}")
+
+
 def _propose_action(
     current_user: Person,
     tool_name: str,
@@ -485,6 +503,9 @@ async def _handle_bulk_update_transactions(
     changes = cast(dict[str, object], tool_input.get("changes", {}))
     if not changes:
         raise ToolExecutionError("No changes specified")
+
+    if "category" in changes:
+        await _check_category_exists(cast(str, changes["category"]))
 
     parts: list[str] = []
     if "household" in changes:

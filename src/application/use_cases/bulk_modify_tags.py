@@ -41,6 +41,62 @@ def _remove_tags(existing: tuple[str, ...], remove: set[str]) -> tuple[str, ...]
     return tuple(t for t in existing if t.lower() not in remove)
 
 
+async def apply_bulk_tag_changes(
+    command: BulkModifyTagsCommand,
+    uow: UnitOfWorkProtocol,
+) -> BulkModifyTagsResult:
+    """Apply the tag mutation without committing.
+
+    Split out from `BulkModifyTagsUseCase.execute` so callers composing
+    multiple mutations into one atomic operation (the chat assistant's
+    combined tag + field bulk update) can run this inside a single
+    `async with uow:` scope and commit once at the end — see
+    `src.application.chat.confirmed_actions._exec_bulk`.
+    """
+    if not command.transaction_ids:
+        raise ValidationError("At least one transaction ID is required")
+
+    if not command.tags:
+        raise ValidationError("At least one tag is required")
+
+    transactions = await fetch_and_validate(uow, command.transaction_ids)
+
+    edits: list[TransactionEdit] = []
+    now = datetime.now(UTC)
+    updated_count = 0
+    normalized_tags = [t.lower() for t in command.tags]
+    remove_set = set(normalized_tags)
+
+    for tx_id in command.transaction_ids:
+        tx = transactions[tx_id]
+
+        if command.action == TagAction.ADD:
+            new_tags = _add_tags(tx.tags, normalized_tags)
+        else:
+            new_tags = _remove_tags(tx.tags, remove_set)
+
+        edit = compute_edit(
+            tx,
+            "tags",
+            tx.tags,
+            new_tags,
+            now=now,
+            edited_by_person_id=command.edited_by_person_id,
+        )
+        if edit is None:
+            continue
+
+        edits.append(edit)
+        updated: Transaction = evolve(tx, tags=new_tags)
+        await uow.transactions.update_mutable_fields(updated)
+        updated_count += 1
+
+    if edits:
+        await uow.transaction_edits.save_batch(edits)
+
+    return BulkModifyTagsResult(updated_count=updated_count)
+
+
 @define(slots=True)
 class BulkModifyTagsUseCase:
     async def execute(
@@ -48,47 +104,7 @@ class BulkModifyTagsUseCase:
         command: BulkModifyTagsCommand,
         uow: UnitOfWorkProtocol,
     ) -> BulkModifyTagsResult:
-        if not command.transaction_ids:
-            raise ValidationError("At least one transaction ID is required")
-
-        if not command.tags:
-            raise ValidationError("At least one tag is required")
-
         async with uow:
-            transactions = await fetch_and_validate(uow, command.transaction_ids)
-
-            edits: list[TransactionEdit] = []
-            now = datetime.now(UTC)
-            updated_count = 0
-            normalized_tags = [t.lower() for t in command.tags]
-            remove_set = set(normalized_tags)
-
-            for tx_id in command.transaction_ids:
-                tx = transactions[tx_id]
-
-                if command.action == TagAction.ADD:
-                    new_tags = _add_tags(tx.tags, normalized_tags)
-                else:
-                    new_tags = _remove_tags(tx.tags, remove_set)
-
-                edit = compute_edit(
-                    tx,
-                    "tags",
-                    tx.tags,
-                    new_tags,
-                    now=now,
-                    edited_by_person_id=command.edited_by_person_id,
-                )
-                if edit is None:
-                    continue
-
-                edits.append(edit)
-                updated: Transaction = evolve(tx, tags=new_tags)
-                await uow.transactions.update_mutable_fields(updated)
-                updated_count += 1
-
-            if edits:
-                await uow.transaction_edits.save_batch(edits)
-
+            result = await apply_bulk_tag_changes(command, uow)
             await uow.commit()
-            return BulkModifyTagsResult(updated_count=updated_count)
+            return result
