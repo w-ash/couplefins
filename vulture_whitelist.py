@@ -117,6 +117,13 @@ SettlementLedger.outstanding  # hero total for Settle Up / dashboard
 SettlementLedger.unapplied_payment_total  # overpayment/reverse-payment credit
 SettlementLedger.span  # covered-months span for the hero card
 
+from src.domain.repositories.transaction_repository import (
+    TransactionRepositoryProtocol,
+)
+
+# All-time ledger fetch (protocol + impl share the name); integration-tested.
+TransactionRepositoryProtocol.get_all_settlement_relevant
+
 # --- TypedDict fields: consumed by type checker + dict access ---
 
 from src.application.chat.voices import VoiceDict

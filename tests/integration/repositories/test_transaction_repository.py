@@ -283,3 +283,83 @@ async def test_update_mutable_fields_still_writes_in_app_flags(
     assert stored is not None
     assert stored.is_settlement is False
     assert stored.is_excluded is False
+
+
+async def test_get_all_settlement_relevant_spans_months_and_types(
+    db_session: AsyncSession,
+) -> None:
+    """The all-time ledger fetch returns every split row regardless of date
+    or household flag — shared, spotted, and personal splits — and excludes
+    settlement transfers, excluded rows, and unsplit (pct=100) rows."""
+    repo = TransactionRepository(db_session)
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    upload = make_upload(person_id=alice.id)
+
+    persons = PersonRepository(db_session)
+    await persons.save(alice)
+    await persons.save(bob)
+    await UploadRepository(db_session).save(upload)
+
+    shared_jan = make_transaction(
+        upload_id=upload.id,
+        date=date(2026, 1, 15),
+        payer_person_id=alice.id,
+        payer_percentage=50,
+    )
+    spotted_mar = make_transaction(
+        upload_id=upload.id,
+        date=date(2026, 3, 10),
+        payer_person_id=alice.id,
+        payer_percentage=0,
+        household=False,
+        tags=("bob",),
+    )
+    personal_split_prev_year = make_transaction(
+        upload_id=upload.id,
+        date=date(2025, 11, 2),
+        payer_person_id=bob.id,
+        payer_percentage=70,
+        household=False,
+        tags=("s70",),
+    )
+    unsplit = make_transaction(
+        upload_id=upload.id,
+        date=date(2026, 1, 20),
+        payer_person_id=alice.id,
+        payer_percentage=100,
+        household=True,
+    )
+    settlement_transfer = make_transaction(
+        upload_id=upload.id,
+        date=date(2026, 2, 1),
+        payer_person_id=alice.id,
+        payer_percentage=50,
+        is_settlement=True,
+    )
+    excluded = make_transaction(
+        upload_id=upload.id,
+        date=date(2026, 2, 12),
+        payer_person_id=alice.id,
+        payer_percentage=50,
+        is_excluded=True,
+    )
+    await repo.save_batch([
+        shared_jan,
+        spotted_mar,
+        personal_split_prev_year,
+        unsplit,
+        settlement_transfer,
+        excluded,
+    ])
+    await db_session.commit()
+
+    result = await repo.get_all_settlement_relevant()
+
+    ids = {tx.id for tx in result}
+    assert ids == {shared_jan.id, spotted_mar.id, personal_split_prev_year.id}
+
+
+async def test_get_all_settlement_relevant_empty_db(db_session: AsyncSession) -> None:
+    repo = TransactionRepository(db_session)
+    assert await repo.get_all_settlement_relevant() == []

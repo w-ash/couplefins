@@ -31,6 +31,7 @@ class TransactionRepositoryProtocol(Protocol):
         *,
         tags: tuple[str, ...] | None = None,
     ) -> list[Transaction]: ...
+    async def get_all_settlement_relevant(self) -> list[Transaction]: ...
     async def get_by_person_and_date_range(
         self,
         person_id: UUID,

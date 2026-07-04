@@ -181,6 +181,16 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             *self._tag_filter(tags),
         )
 
+    @staticmethod
+    def _settlement_relevant_filters() -> list[ColumnElement[bool]]:
+        """SQL twin of the domain's settlement-relevance predicate:
+        split rows that are neither settlement transfers nor excluded."""
+        return [
+            TransactionModel.payer_percentage < SplitDefaults.MAX_PAYER_PERCENTAGE,
+            TransactionModel.is_settlement.is_(False),
+            TransactionModel.is_excluded.is_(False),
+        ]
+
     async def get_settlement_relevant_by_date_range(
         self,
         start_date: date,
@@ -191,11 +201,13 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         return await self._query(
             TransactionModel.date >= start_date.isoformat(),
             TransactionModel.date <= end_date.isoformat(),
-            TransactionModel.payer_percentage < SplitDefaults.MAX_PAYER_PERCENTAGE,
-            TransactionModel.is_settlement.is_(False),
-            TransactionModel.is_excluded.is_(False),
+            *self._settlement_relevant_filters(),
             *self._tag_filter(tags),
         )
+
+    async def get_all_settlement_relevant(self) -> list[Transaction]:
+        """All-time fetch for the settlement ledger — no date bounds."""
+        return await self._query(*self._settlement_relevant_filters())
 
     async def get_by_person_and_date_range(
         self,
