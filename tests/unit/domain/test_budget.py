@@ -324,6 +324,45 @@ def test_overview_ytd_computation() -> None:
     assert overview.total_ytd_spent == Decimal(650)
 
 
+def test_ytd_categories_include_earlier_month_only_categories() -> None:
+    """YTD categories must show categories with earlier-month spend even
+    when the viewed month has none — the monthly `categories` list doesn't."""
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    payer = UUID("bbbbbbbb-0000-0000-0000-000000000001")
+
+    groups = [make_category_group(id=food_gid, name="Food & Dining")]
+    lookup = {
+        "Groceries": (food_gid, "Food & Dining"),
+        "Coffee": (food_gid, "Food & Dining"),
+    }
+    txs = [
+        make_transaction(
+            category="Groceries",
+            amount=Decimal("-100.00"),
+            date=date(2026, 3, 10),
+            payer_person_id=payer,
+        ),
+        # Coffee was only spent in January — absent from March entirely.
+        make_transaction(
+            category="Coffee",
+            amount=Decimal("-20.00"),
+            date=date(2026, 1, 5),
+            payer_person_id=payer,
+        ),
+    ]
+
+    overview = compute_budget_overview([], [], txs, lookup, groups, 2026, 3)
+    status = overview.group_statuses[0]
+
+    monthly_cats = {c.category for c in status.categories}
+    ytd_cats = {c.category for c in status.ytd_categories}
+    assert monthly_cats == {"Groceries"}
+    assert ytd_cats == {"Groceries", "Coffee"}
+
+    coffee_ytd = next(c for c in status.ytd_categories if c.category == "Coffee")
+    assert coffee_ytd.total_amount == Decimal("20.00")
+
+
 def test_ytd_totals_include_group_unbudgeted_in_viewed_month() -> None:
     """A group budgeted Jan-Feb but not the viewed March still contributes
     its YTD budget/spend to the grand totals — otherwise its own row would

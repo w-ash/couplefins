@@ -158,6 +158,37 @@ async def test_overview_with_budget_and_spending(client: AsyncClient) -> None:
     assert food_status["monthly_health"] == "on_track"
 
 
+async def test_ytd_categories_include_earlier_month_only_category(
+    client: AsyncClient,
+) -> None:
+    """A category spent in an earlier month but not the viewed month must
+    still appear in ytd_categories, even though it's absent from the
+    (current-month) categories list."""
+    persons, cookies = await setup_and_login(client)
+    alice_id = persons[0]["id"]
+
+    csv = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        "2026-01-10,Coffee Shop,Coffee Shops & Treats,Chase,,,-20.00,shared\n"
+        "2026-02-15,Restaurant,Dining Out,Chase,,,-50.00,shared\n"
+    )
+    await upload_csv(client, alice_id, csv, cookies=cookies)
+
+    response = await client.get(
+        "/api/v1/budgets/overview?year=2026&month=2", cookies=cookies
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    food_status = next(
+        s for s in data["group_statuses"] if s["group_name"] == "Food & Dining"
+    )
+    monthly_cats = {c["category"] for c in food_status["categories"]}
+    ytd_cats = {c["category"] for c in food_status["ytd_categories"]}
+    assert monthly_cats == {"Dining Out"}
+    assert ytd_cats == {"Dining Out", "Coffee Shops & Treats"}
+
+
 async def test_overview_surfaces_uncategorized_row(client: AsyncClient) -> None:
     """A brand-new category (auto-created with group_id=None on upload) gets
     its own Uncategorized status instead of vanishing from every total."""

@@ -207,6 +207,11 @@ function BudgetGroupRow({
     viewMode === "monthly" ? status.monthly_spent : status.ytd_spent;
   const health =
     viewMode === "monthly" ? status.monthly_health : status.ytd_health;
+  // YTD view expands the YTD breakdown (which can include categories with
+  // earlier-month-only spend) instead of dividing this month's amounts by
+  // the YTD total.
+  const expandedCategories =
+    viewMode === "ytd" ? (status.ytd_categories ?? []) : status.categories;
   const healthStyle = getHealthStyle(health);
   const hasBudget = status.monthly_budget != null;
   const pct =
@@ -318,9 +323,9 @@ function BudgetGroupRow({
           <div className="overflow-hidden">
             <div className="border-t border-border-muted px-4 py-4">
               {/* Per-category breakdown */}
-              {status.categories.length > 0 && (
+              {expandedCategories.length > 0 && (
                 <div className="mb-4 space-y-2">
-                  {status.categories.map((cat) => {
+                  {expandedCategories.map((cat) => {
                     const catPct =
                       spent !== 0
                         ? Math.round((cat.total_amount / spent) * 100)
@@ -391,7 +396,7 @@ function BudgetGroupRow({
                     );
                   })}
                   {/* Legend for stacked bars */}
-                  {status.categories.some(
+                  {expandedCategories.some(
                     (c) => c.include_personal && c.personal_amounts.length > 0,
                   ) && (
                     <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
@@ -399,7 +404,7 @@ function BudgetGroupRow({
                         <span className="inline-block size-2 rounded-full bg-household" />
                         Household
                       </span>
-                      {status.categories
+                      {expandedCategories
                         .flatMap((c) => c.personal_amounts)
                         .filter(
                           (pa, i, arr) =>

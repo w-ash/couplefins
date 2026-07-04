@@ -21,4 +21,5 @@ export interface GroupBudgetStatusResponse {
   budgeted_months: number;
   household_spending?: number | null;
   personal_spending?: number | null;
+  ytd_categories?: CategorySpendResponse[];
 }

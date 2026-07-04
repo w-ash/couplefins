@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 from src.application.use_cases._shared.command_validators import assert_positive_decimal
 from src.application.use_cases.get_budget_overview import GetBudgetOverviewResult
 from src.domain.budget import HealthStatus
+from src.domain.categories import CategoryBreakdown
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.interface.api.schemas.reconciliation import MonthReference
 from src.interface.api.schemas.types import MoneyField
@@ -79,6 +80,32 @@ class CategorySpendResponse(BaseModel):
     household_amount: MoneyField
     personal_amounts: list[PersonCategorySpend]
 
+    @classmethod
+    def from_domain_list(
+        cls,
+        breakdowns: list[CategoryBreakdown],
+        personal_lookup: dict[str, bool],
+        person_names: dict[UUID, str],
+    ) -> list[CategorySpendResponse]:
+        return [
+            cls(
+                category=c.category,
+                total_amount=c.total_amount,
+                transaction_count=c.transaction_count,
+                include_personal=personal_lookup.get(c.category, False),
+                household_amount=c.household_amount,
+                personal_amounts=[
+                    PersonCategorySpend(
+                        person_id=pid,
+                        person_name=person_names.get(pid, "Unknown"),
+                        amount=amt,
+                    )
+                    for pid, amt in c.personal_amounts.items()
+                ],
+            )
+            for c in breakdowns
+        ]
+
 
 class GroupBudgetStatusResponse(BaseModel):
     # None for the synthetic "Uncategorized" row — spending in categories
@@ -97,6 +124,10 @@ class GroupBudgetStatusResponse(BaseModel):
     budgeted_months: int
     household_spending: MoneyField | None = None
     personal_spending: MoneyField | None = None
+    # Same breakdown as `categories`, computed over the YTD window — the
+    # Budget page's YTD-view expansion reads this instead of dividing
+    # current-month amounts by a YTD total.
+    ytd_categories: list[CategorySpendResponse] = []
 
 
 class BudgetOverviewResponse(BaseModel):
@@ -134,24 +165,12 @@ class BudgetOverviewResponse(BaseModel):
                     ytd_health=s.ytd_health,
                     average_monthly_spending=s.average_monthly_spending,
                     budgeted_months=s.budgeted_months,
-                    categories=[
-                        CategorySpendResponse(
-                            category=c.category,
-                            total_amount=c.total_amount,
-                            transaction_count=c.transaction_count,
-                            include_personal=personal_lookup.get(c.category, False),
-                            household_amount=c.household_amount,
-                            personal_amounts=[
-                                PersonCategorySpend(
-                                    person_id=pid,
-                                    person_name=person_names.get(pid, "Unknown"),
-                                    amount=amt,
-                                )
-                                for pid, amt in c.personal_amounts.items()
-                            ],
-                        )
-                        for c in s.categories
-                    ],
+                    categories=CategorySpendResponse.from_domain_list(
+                        s.categories, personal_lookup, person_names
+                    ),
+                    ytd_categories=CategorySpendResponse.from_domain_list(
+                        s.ytd_categories, personal_lookup, person_names
+                    ),
                     household_spending=s.household_spending,
                     personal_spending=s.personal_spending,
                 )

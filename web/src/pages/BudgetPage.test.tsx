@@ -158,6 +158,30 @@ const overviewWithUncategorized: BudgetOverviewResponse = {
   ],
 };
 
+// Fast Food only had spend in an earlier month — present in ytd_categories,
+// absent from the (current-month) categories list.
+const overviewWithYtdOnlyCategory: BudgetOverviewResponse = {
+  ...overviewWithData,
+  group_statuses: overviewWithData.group_statuses.map((s) =>
+    s.group_id === "g1"
+      ? {
+          ...s,
+          ytd_categories: [
+            ...s.categories,
+            {
+              category: "Fast Food",
+              total_amount: 90,
+              transaction_count: 2,
+              include_personal: false,
+              household_amount: 0,
+              personal_amounts: [],
+            },
+          ],
+        }
+      : s,
+  ),
+};
+
 describe("BudgetPage", () => {
   beforeEach(() => {
     server.use(
@@ -333,6 +357,28 @@ describe("BudgetPage", () => {
 
     expect(screen.getByText("Groceries")).toBeInTheDocument();
     expect(screen.getByText("Dining Out")).toBeInTheDocument();
+  });
+
+  it("YTD expand shows YTD categories, including earlier-month-only ones", async () => {
+    server.use(
+      http.get("/api/v1/budgets/overview", () =>
+        HttpResponse.json(overviewWithYtdOnlyCategory),
+      ),
+    );
+
+    renderWithProviders(<BudgetPage />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Food & Dining").length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByText("Year to date"));
+    fireEvent.click(screen.getByLabelText("Expand Food & Dining"));
+
+    // Fast Food only appears in ytd_categories — proves the YTD view reads
+    // it instead of the (unchanged) monthly categories list.
+    expect(screen.getByText("Fast Food")).toBeInTheDocument();
+    expect(screen.getByText("Groceries")).toBeInTheDocument();
   });
 
   it("shows delete dialog when clicking remove budget", async () => {

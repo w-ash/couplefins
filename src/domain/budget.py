@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
-from attrs import define, evolve
+from attrs import Factory, define, evolve
 
 from src.domain.categories import (
     CategoryBreakdown,
@@ -42,6 +42,10 @@ class CategoryGroupBudgetStatus:
     budgeted_months: int
     household_spending: Decimal | None = None
     personal_spending: Decimal | None = None
+    # Same per-category breakdown as `categories`, but computed over the YTD
+    # window — includes categories with spend in earlier months that have
+    # none in the currently viewed month (v1.7.2).
+    ytd_categories: list[CategoryBreakdown] = Factory(list[CategoryBreakdown])
 
 
 @define(frozen=True, slots=True)
@@ -189,6 +193,7 @@ def _build_group_status(  # noqa: PLR0913, PLR0917
             avg_spending.get(gid, Decimal(0)) if gid is not None else Decimal(0)
         ),
         categories=monthly_bd.categories if monthly_bd else [],
+        ytd_categories=ytd_bd.categories if ytd_bd else [],
         budgeted_months=len(budgets_through_month),
     )
 
