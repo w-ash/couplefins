@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Couplefins is a household finance tool for couples. Each person uses their own Monarch Money account, tags household expenses, and exports monthly CSVs. The app handles two core use cases:
 
-1. **Settlement** — "Who owes whom?" Each transaction has a `payer_percentage` (0-100). When < 100, the difference is owed to the payer. Monthly settlement sums these across all transactions.
+1. **Settlement** — "Who owes whom?" Each transaction has a `payer_percentage` (0-100). When < 100, the difference is owed to the payer. These sum into a running outstanding balance across all months (v1.7.5); payments apply to the oldest open months first (FIFO) and are never bound to a month.
 2. **Budgeting** — "Are we on track?" Each transaction has a `household` flag (bool). When true, it counts toward the household budget. Categories can also opt in personal spending via `include_personal`.
 
 These two fields are orthogonal — a transaction can be household without being split (concert tickets each person bought), or split without being household (unusual, but the fields are independent). There is no `TransactionType` enum; "shared", "spotted", and "household-no-split" are human descriptions of field combinations, not stored types.

@@ -167,7 +167,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.7.2 | Budget & dashboard math — sign-aware spending, YTD totals, unmapped visibility, copy-budgets gate | Completed (2026-07-03) | M |
 | v1.7.3 | Insights & chat accuracy — comparison cards, settled trend, YTD cutoff, chat scope & local dates | Completed (2026-07-03) | M |
 | v1.7.4 | Guardrails & DRY — shared exclusion predicate, suppression removal, fixture realism | Completed (2026-07-03) | S |
-| v1.7.5 | Settlement ledger — running outstanding balance, multi-month catch-ups, derived month status | Planned | L |
+| v1.7.5 | Settlement ledger — running outstanding balance, multi-month catch-ups, derived month status | Completed (2026-07-04) | L |
 
 ## Infrastructure Readiness
 

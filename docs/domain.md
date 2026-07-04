@@ -57,6 +57,13 @@ For each transaction where `payer_percentage < 100`:
 
 Sum across all settlement-relevant transactions for a period (a single month or an arbitrary date range) → net result: "Person A owes Person B $X"
 
+That per-period sum is a month's **gross position**. Actual settlement runs on a **running ledger** (v1.7.5, balance-forward accounting):
+
+- **Outstanding balance** = all-time gross positions − all-time payments, direction-aware. This is the number the Settle Up hero and Dashboard show, together with the span of months it covers.
+- **Per-month status** is derived by applying payments to the oldest open month first (FIFO): each month with settlement-relevant activity reads as `settled`, `partially settled`, or `carried forward`, along with which payment(s) covered it.
+- Settlements carry an optional `year`/`month` **annotation** ("recorded against April") — display only, never math. A payment relieves whatever the ledger owed, oldest first, regardless of its annotation.
+- Payments are not month-bound: a partial rent payment on the 1st, a skipped month, and one catch-up transfer covering three months are all just entries against the same balance. Multiple payments per month are first-class (the former per-period settlement unique constraint was dropped with the ledger).
+
 **Examples**:
 - Alice pays $100 dinner, tagged `shared` (no sXX → 50/50): Alice's share $50, Bob's share $50. Bob owes Alice $50.
 - Bob pays $200 rent, tagged `shared, s70`: Bob's share $140, Alice's share $60. Alice owes Bob $60.
@@ -134,15 +141,15 @@ Couplefins vocabulary mapped to standard accounting terms:
 | Transaction | Source Document / Bank Statement Line | Imported from Monarch CSV |
 | Person | Account Holder | Implicit account — each person accumulates a running balance |
 | Upload | Batch Import / Document Provenance | Audit trail for data ingestion |
-| ReconciliationPeriod | Accounting Period | Open/closed, monthly granularity |
+| ReconciliationPeriod | Transaction Lock | Freezes a month's data (uploads/edits rejected) — not a balance scope; the month's contribution to the ledger rides forward |
 | CategoryGroup | Chart of Accounts (level 1) | Reporting hierarchy |
 | CategoryMapping | Posting Rule | Routes categories to groups |
 | Adjustment (v0.3.x) | Correcting Entry (Reversal pattern) | Offsetting entries for accurate per-person spend |
-| Settlement | Payment Record | Records that Person A paid Person B (amount, method, notes). Linked transactions excluded from reconciliation. |
+| Settlement | Payment against the running ledger (balance-forward accounting) | Records that Person A paid Person B (amount, method, notes). Applied FIFO to the oldest open months; optional year/month "recorded against" annotation is display-only. Linked transactions excluded from reconciliation. |
 | `payer_percentage` | Allocation Rule / Split Ratio | Determines each person's share (0-100, always set). Settlement: any transaction where `payer_percentage < 100` |
 | `household` | Expense Classification | Per-transaction flag — "relevant to the couple's shared life." Set by `shared`, `split`, or `household` tags (person-name tags do NOT set it — spotted is the beneficiary's personal spending) |
 | `include_personal` | Budget Scope Flag | Per-category toggle to also include personal (non-household) transactions in budget totals |
-| `is_finalized` | Period Close | Prevents modification after agreement |
+| `is_finalized` | Period Close | Prevents modification of a month's transactions after agreement; payments against the ledger stay possible |
 | TransactionEdit | Audit Log Entry | Records post-upload changes to a transaction (field, old value, new value, timestamp) |
 
 ### Signed-amount convention
