@@ -6,6 +6,7 @@ from src.application.use_cases.search_transactions import (
     SearchTransactionsCommand,
     SearchTransactionsUseCase,
 )
+from src.domain.exceptions import ValidationError
 from tests.fixtures.factories import make_category, make_transaction
 from tests.fixtures.mocks import make_mock_uow
 
@@ -14,9 +15,64 @@ GROUP_ID = uuid.UUID("11111111-1111-1111-1111-111111111111")
 
 
 @pytest.mark.asyncio
-async def test_filters_by_merchant_substring() -> None:
+async def test_default_scope_is_all() -> None:
+    uow = make_mock_uow()
+    uow.transactions.get_by_date_range.return_value = [
+        make_transaction(merchant="Whole Foods", payer_person_id=ALICE_ID),
+    ]
+
+    command = SearchTransactionsCommand(year=2026, month=3)
+    result = await SearchTransactionsUseCase().execute(command, uow)
+
+    assert result.total_count == 1
+    uow.transactions.get_by_date_range.assert_called_once()
+    uow.transactions.get_household_by_date_range.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_household_scope_uses_household_fetch() -> None:
     uow = make_mock_uow()
     uow.transactions.get_household_by_date_range.return_value = [
+        make_transaction(merchant="Whole Foods", payer_person_id=ALICE_ID),
+    ]
+
+    command = SearchTransactionsCommand(year=2026, month=3, scope="household")
+    result = await SearchTransactionsUseCase().execute(command, uow)
+
+    assert result.total_count == 1
+    uow.transactions.get_household_by_date_range.assert_called_once()
+    uow.transactions.get_by_date_range.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_personal_scope_uses_person_fetch() -> None:
+    uow = make_mock_uow()
+    uow.transactions.get_by_person_and_date_range.return_value = [
+        make_transaction(merchant="Whole Foods", payer_person_id=ALICE_ID),
+    ]
+
+    command = SearchTransactionsCommand(
+        year=2026, month=3, scope="personal", person_id=ALICE_ID
+    )
+    result = await SearchTransactionsUseCase().execute(command, uow)
+
+    assert result.total_count == 1
+    uow.transactions.get_by_person_and_date_range.assert_called_once()
+    call_args = uow.transactions.get_by_person_and_date_range.call_args
+    assert call_args.args[0] == ALICE_ID
+    uow.transactions.get_by_date_range.assert_not_called()
+    uow.transactions.get_household_by_date_range.assert_not_called()
+
+
+def test_personal_scope_requires_person_id() -> None:
+    with pytest.raises(ValidationError, match="person_id is required"):
+        SearchTransactionsCommand(year=2026, month=3, scope="personal")
+
+
+@pytest.mark.asyncio
+async def test_filters_by_merchant_substring() -> None:
+    uow = make_mock_uow()
+    uow.transactions.get_by_date_range.return_value = [
         make_transaction(merchant="Whole Foods", payer_person_id=ALICE_ID),
         make_transaction(merchant="Trader Joe's", payer_person_id=ALICE_ID),
         make_transaction(merchant="Whole Foods Market", payer_person_id=ALICE_ID),
@@ -32,7 +88,7 @@ async def test_filters_by_merchant_substring() -> None:
 @pytest.mark.asyncio
 async def test_filters_by_category_group() -> None:
     uow = make_mock_uow()
-    uow.transactions.get_household_by_date_range.return_value = [
+    uow.transactions.get_by_date_range.return_value = [
         make_transaction(category="Groceries", payer_person_id=ALICE_ID),
         make_transaction(category="Dining Out", payer_person_id=ALICE_ID),
     ]
@@ -51,7 +107,7 @@ async def test_filters_by_category_group() -> None:
 @pytest.mark.asyncio
 async def test_limits_results() -> None:
     uow = make_mock_uow()
-    uow.transactions.get_household_by_date_range.return_value = [
+    uow.transactions.get_by_date_range.return_value = [
         make_transaction(merchant=f"Store {i}", payer_person_id=ALICE_ID)
         for i in range(30)
     ]
@@ -66,7 +122,7 @@ async def test_limits_results() -> None:
 @pytest.mark.asyncio
 async def test_empty_results() -> None:
     uow = make_mock_uow()
-    uow.transactions.get_household_by_date_range.return_value = []
+    uow.transactions.get_by_date_range.return_value = []
 
     command = SearchTransactionsCommand(year=2026, month=3, merchant="Nothing")
     result = await SearchTransactionsUseCase().execute(command, uow)
@@ -76,13 +132,38 @@ async def test_empty_results() -> None:
 
 
 @pytest.mark.asyncio
-async def test_passes_tag_to_repo() -> None:
+async def test_filters_by_tag() -> None:
     uow = make_mock_uow()
-    uow.transactions.get_household_by_date_range.return_value = []
+    uow.transactions.get_by_date_range.return_value = [
+        make_transaction(merchant="Coffee Shop", tags=("discuss",)),
+        make_transaction(merchant="Grocery Store", tags=("shared",)),
+        # Case-insensitive exact match — same semantics as the repo's
+        # server-side tag filter.
+        make_transaction(merchant="Bakery", tags=("Discuss",)),
+    ]
 
     command = SearchTransactionsCommand(year=2026, month=3, tag="discuss")
-    await SearchTransactionsUseCase().execute(command, uow)
+    result = await SearchTransactionsUseCase().execute(command, uow)
 
-    uow.transactions.get_household_by_date_range.assert_called_once()
-    call_kwargs = uow.transactions.get_household_by_date_range.call_args
-    assert call_kwargs.kwargs["tags"] == ("discuss",)
+    assert result.total_count == 2
+    merchants = {t.merchant for t in result.transactions}
+    assert merchants == {"Coffee Shop", "Bakery"}
+
+
+@pytest.mark.asyncio
+async def test_tag_filter_applies_across_scopes() -> None:
+    """Tag filtering happens in-memory so it works uniformly for every
+    scope, including 'all', whose repo fetch has no tags kwarg."""
+    uow = make_mock_uow()
+    uow.transactions.get_household_by_date_range.return_value = [
+        make_transaction(merchant="Coffee Shop", tags=("discuss",)),
+        make_transaction(merchant="Grocery Store", tags=("shared",)),
+    ]
+
+    command = SearchTransactionsCommand(
+        year=2026, month=3, scope="household", tag="discuss"
+    )
+    result = await SearchTransactionsUseCase().execute(command, uow)
+
+    assert result.total_count == 1
+    assert result.transactions[0].merchant == "Coffee Shop"

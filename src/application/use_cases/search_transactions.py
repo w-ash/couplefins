@@ -9,11 +9,13 @@ from uuid import UUID
 from attrs import define, field
 
 from src.application.use_cases._shared.command_validators import (
+    Scope,
     month_range,
     positive_int,
 )
 from src.domain.date_math import month_bounds
 from src.domain.entities.transaction import Transaction
+from src.domain.exceptions import ValidationError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 _DEFAULT_LIMIT = 20
@@ -26,13 +28,24 @@ class SearchTransactionsCommand:
     merchant: str | None = None
     category_group_id: UUID | None = None
     tag: str | None = None
+    scope: Scope = "all"
+    person_id: UUID | None = None
     limit: int = _DEFAULT_LIMIT
+
+    def __attrs_post_init__(self) -> None:
+        if self.scope == "personal" and self.person_id is None:
+            raise ValidationError("person_id is required for personal scope")
 
 
 @define(frozen=True, slots=True)
 class SearchTransactionsResult:
     transactions: list[Transaction]
     total_count: int
+
+
+def _matches_tag(tx: Transaction, tag: str) -> bool:
+    needle = tag.lower()
+    return needle in {t.lower() for t in tx.tags}
 
 
 @define(slots=True)
@@ -45,10 +58,20 @@ class SearchTransactionsUseCase:
         async with uow:
             start, end = month_bounds(command.year, command.month)
 
-            tags = (command.tag,) if command.tag else None
-            txns = await uow.transactions.get_household_by_date_range(
-                start, end, tags=tags
-            )
+            if command.scope == "household":
+                txns = await uow.transactions.get_household_by_date_range(start, end)
+            elif command.scope == "personal":
+                person_id = command.person_id
+                if person_id is None:
+                    raise ValidationError("person_id is required for personal scope")
+                txns = await uow.transactions.get_by_person_and_date_range(
+                    person_id, start, end
+                )
+            else:
+                txns = await uow.transactions.get_by_date_range(start, end)
+
+            if command.tag:
+                txns = [t for t in txns if _matches_tag(t, command.tag)]
 
             if command.merchant:
                 needle = command.merchant.lower()

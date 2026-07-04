@@ -68,11 +68,20 @@ TOOLS: list[dict[str, object]] = [
     {
         "name": "search_transactions",
         "description": (
-            "Search household transactions for a given month with optional "
-            "filters. Supports merchant name substring matching, category "
-            "group filtering, and tag filtering. Returns up to 20 matching "
-            "transactions with date, merchant, category, amount, payer, split "
-            "ratio, and household flag, plus the total count of matches."
+            "Search transactions for a given month with optional filters. "
+            "Supports merchant name substring matching, category group "
+            "filtering, and tag filtering. The scope parameter controls "
+            "which transactions are considered: 'all' (default) searches "
+            "every transaction regardless of household or personal status "
+            "— use this when finding transactions to tag, re-categorize, or "
+            "re-split, since those actions aren't limited to household rows. "
+            "'household' searches only household-flagged transactions. "
+            "'personal' searches the current user's personal spending "
+            "(their own non-household transactions, plus their share of "
+            "transactions where a partner fronted money on their behalf). "
+            "Returns up to 20 matching transactions with date, merchant, "
+            "category, amount, payer, split ratio, and household flag, plus "
+            "the total count of matches."
         ),
         "input_schema": {
             "type": "object",
@@ -97,6 +106,16 @@ TOOLS: list[dict[str, object]] = [
                     "type": "string",
                     "description": "Tag to filter by (e.g. 'discuss', 'shared').",
                 },
+                "scope": {
+                    "type": "string",
+                    "enum": ["all", "household", "personal"],
+                    "description": (
+                        "Which transactions to search. Default 'all'. Use "
+                        "'all' when the goal is finding transactions to "
+                        "mutate (tag, re-categorize, re-split) so household "
+                        "status never hides a match."
+                    ),
+                },
             },
             "required": ["year", "month"],
         },
@@ -104,6 +123,7 @@ TOOLS: list[dict[str, object]] = [
             {"year": 2026, "month": 3, "merchant": "Whole Foods"},
             {"year": 2026, "month": 3, "category_group": "Food & Dining"},
             {"year": 2026, "month": 3, "tag": "discuss"},
+            {"year": 2026, "month": 3, "merchant": "Uber Eats", "scope": "all"},
         ],
     },
     {

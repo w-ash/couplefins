@@ -178,7 +178,7 @@ async def _handle_budget_overview(
 
 async def _handle_search_transactions(
     tool_input: dict[str, object],
-    _current_user: Person,
+    current_user: Person,
     persons: list[Person],
 ) -> dict[str, object]:
     group_id: UUID | None = None
@@ -186,12 +186,17 @@ async def _handle_search_transactions(
     if group_name:
         group_id = await _resolve_category_group_id(group_name)
 
+    scope = cast(
+        Literal["all", "household", "personal"], tool_input.get("scope", "all")
+    )
     command = SearchTransactionsCommand(
         year=cast(int, tool_input["year"]),
         month=cast(int, tool_input["month"]),
         merchant=cast(str | None, tool_input.get("merchant")),
         category_group_id=group_id,
         tag=cast(str | None, tool_input.get("tag")),
+        scope=scope,
+        person_id=current_user.id if scope == "personal" else None,
     )
     result: SearchTransactionsResult = await execute_use_case(
         lambda uow: SearchTransactionsUseCase().execute(command, uow)
@@ -211,6 +216,7 @@ async def _handle_search_transactions(
             "household": t.household,
         })
     return {
+        "scope": scope,
         "total_count": result.total_count,
         "showing": len(txns),
         "transactions": txns,

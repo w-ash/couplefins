@@ -14,7 +14,10 @@ from src.application.chat.tool_executor import execute_tool
 from src.application.use_cases._shared.upload_status import UploadStatus
 from src.application.use_cases.get_budget_overview import GetBudgetOverviewResult
 from src.application.use_cases.get_settle_up_data import GetSettleUpDataResult
-from src.application.use_cases.search_transactions import SearchTransactionsResult
+from src.application.use_cases.search_transactions import (
+    SearchTransactionsResult,
+    SearchTransactionsUseCase,
+)
 from src.domain.budget import BudgetOverview, CategoryGroupBudgetStatus
 from src.domain.exceptions import ToolExecutionError
 from src.domain.reconciliation import SettlementResult
@@ -292,7 +295,83 @@ async def test_search_transactions_happy_path() -> None:
 
     assert result["total_count"] == 1
     assert result["showing"] == 1
+    assert result["scope"] == "all"
     tx = result["transactions"][0]
     assert tx["merchant"] == "<user_data>Whole Foods</user_data>"
     assert tx["payer"] == "Alice"
     assert "id" in tx
+
+
+async def _run_factory_with_stub_uow(factory):
+    """Runs the lambda `execute_use_case` normally receives, against a stub
+    uow — safe here because these tests patch `SearchTransactionsUseCase.execute`
+    directly, so the uow itself is never touched."""
+    return await factory(None)
+
+
+@pytest.mark.asyncio
+async def test_search_transactions_default_scope_is_all() -> None:
+    mock_execute = AsyncMock(
+        return_value=SearchTransactionsResult(transactions=[], total_count=0)
+    )
+    with (
+        patch(
+            "src.application.chat.tool_executor.execute_use_case",
+            side_effect=_run_factory_with_stub_uow,
+        ),
+        patch.object(SearchTransactionsUseCase, "execute", mock_execute),
+    ):
+        await execute_tool(
+            "search_transactions", {"year": 2026, "month": 3}, ALICE, PERSONS
+        )
+
+    command = mock_execute.call_args.args[0]
+    assert command.scope == "all"
+    assert command.person_id is None
+
+
+@pytest.mark.asyncio
+async def test_search_transactions_household_scope() -> None:
+    mock_execute = AsyncMock(
+        return_value=SearchTransactionsResult(transactions=[], total_count=0)
+    )
+    with (
+        patch(
+            "src.application.chat.tool_executor.execute_use_case",
+            side_effect=_run_factory_with_stub_uow,
+        ),
+        patch.object(SearchTransactionsUseCase, "execute", mock_execute),
+    ):
+        await execute_tool(
+            "search_transactions",
+            {"year": 2026, "month": 3, "scope": "household"},
+            ALICE,
+            PERSONS,
+        )
+
+    command = mock_execute.call_args.args[0]
+    assert command.scope == "household"
+
+
+@pytest.mark.asyncio
+async def test_search_transactions_personal_scope_uses_current_user() -> None:
+    mock_execute = AsyncMock(
+        return_value=SearchTransactionsResult(transactions=[], total_count=0)
+    )
+    with (
+        patch(
+            "src.application.chat.tool_executor.execute_use_case",
+            side_effect=_run_factory_with_stub_uow,
+        ),
+        patch.object(SearchTransactionsUseCase, "execute", mock_execute),
+    ):
+        await execute_tool(
+            "search_transactions",
+            {"year": 2026, "month": 3, "scope": "personal"},
+            ALICE,
+            PERSONS,
+        )
+
+    command = mock_execute.call_args.args[0]
+    assert command.scope == "personal"
+    assert command.person_id == ALICE.id
