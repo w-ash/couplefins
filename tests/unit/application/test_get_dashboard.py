@@ -6,6 +6,10 @@ from src.application.use_cases.get_dashboard import (
     GetDashboardUseCase,
     _resolve_active_month,
 )
+from src.application.use_cases.record_waived_settlement import (
+    RecordWaivedSettlementCommand,
+    RecordWaivedSettlementUseCase,
+)
 from src.domain.reconciliation import filter_split_transactions
 from tests.fixtures.factories import (
     make_category,
@@ -16,7 +20,7 @@ from tests.fixtures.factories import (
     make_transaction,
     make_upload,
 )
-from tests.fixtures.mocks import make_mock_uow
+from tests.fixtures.mocks import make_mock_uow, set_passthrough_save
 
 
 def _make_command(
@@ -549,12 +553,14 @@ async def test_multiple_settlements_summing_to_full() -> None:
 
 
 async def test_waived_settlement_counts_as_settled() -> None:
-    # Waivers persist the remaining balance as their amount (here $5 against
-    # a -$10 tx at 50%), exactly what RecordWaivedSettlementUseCase writes.
+    """The waiver must be built via RecordWaivedSettlementUseCase rather than
+    a hand-fabricated Settlement — a fabricated amount previously masked the
+    v1.7.0 waiver no-op (the use case computing $0 and writing nothing)."""
     uow = make_mock_uow()
     alice = make_person(name="Alice")
     bob = make_person(name="Bob")
     _setup_uow_base(uow, alice, bob)
+    set_passthrough_save(uow)
 
     txs = [
         make_transaction(
@@ -566,19 +572,21 @@ async def test_waived_settlement_counts_as_settled() -> None:
     ]
     _set_transactions(uow, txs)
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+    uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = []
+    uow.persons.get_by_ids.return_value = [alice, bob]
+    uow.settlements.get_by_period.return_value = []
 
-    settled_at = datetime(2026, 2, 1, 12, 0, tzinfo=UTC)
-    uow.settlements.get_by_year.return_value = [
-        make_settlement(
-            year=2026,
-            month=1,
-            amount=Decimal("5.00"),
-            from_person_id=bob.id,
-            to_person_id=alice.id,
-            is_waived=True,
-            settled_at=settled_at,
+    waive_result = await RecordWaivedSettlementUseCase().execute(
+        RecordWaivedSettlementCommand(
+            year=2026, month=1, from_person_id=bob.id, to_person_id=alice.id
         ),
-    ]
+        uow,
+    )
+    # Bob owes Alice 50% of $10 — the use case derives this from the same
+    # transactions the dashboard reads, so it can't drift from a real write.
+    assert waive_result.settlement.amount == Decimal("5.00")
+
+    uow.settlements.get_by_year.return_value = [waive_result.settlement]
 
     result = await GetDashboardUseCase().execute(_make_command(), uow)
 
