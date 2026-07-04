@@ -19,6 +19,7 @@ from src.application.use_cases._shared.upload_status import (
     build_upload_statuses,
 )
 from src.domain.budget import (
+    BudgetOverviewInputs,
     HealthStatus,
     compute_person_share,
     compute_personal_budget_overview,
@@ -115,21 +116,29 @@ class GetDashboardResult:
     total_all_spending_ytd: Decimal | None = None
 
 
-def _build_month_history(  # noqa: PLR0913, PLR0917
-    summaries: dict[int, ReconciliationSummary],
-    year: int,
-    finalized_months: set[int],
-    settlements_by_month: dict[int, list[Settlement]],
-    gross_by_month: dict[int, SettlementResult | None],
-    by_month_household: dict[int, list[Transaction]],
-    all_spending_by_month: dict[int, Decimal] | None = None,
-) -> list[MonthHistoryEntry]:
+@define(frozen=True, slots=True)
+class _MonthHistoryInputs:
+    """Bundled inputs to `_build_month_history` — keeps the function's
+    signature at one parameter regardless of how many sources feed it."""
+
+    summaries: dict[int, ReconciliationSummary]
+    year: int
+    finalized_months: set[int]
+    settlements_by_month: dict[int, list[Settlement]]
+    gross_by_month: dict[int, SettlementResult | None]
+    by_month_household: dict[int, list[Transaction]]
+    all_spending_by_month: dict[int, Decimal] | None = None
+
+
+def _build_month_history(inputs: _MonthHistoryInputs) -> list[MonthHistoryEntry]:
     entries: list[MonthHistoryEntry] = []
     # Union: a month can have settlement-relevant rows (e.g. spotted) without
     # any household spending, and vice versa.
-    for month in sorted(set(summaries) | set(gross_by_month), reverse=True):
-        gross = gross_by_month.get(month)
-        month_settlements = settlements_by_month.get(month, [])
+    for month in sorted(
+        set(inputs.summaries) | set(inputs.gross_by_month), reverse=True
+    ):
+        gross = inputs.gross_by_month.get(month)
+        month_settlements = inputs.settlements_by_month.get(month, [])
         net = compute_net_position(gross, month_settlements)
         no_balance = net is None or net.amount == Decimal(0)
         settled_at = (
@@ -139,23 +148,24 @@ def _build_month_history(  # noqa: PLR0913, PLR0917
         )
         entries.append(
             MonthHistoryEntry(
-                year=year,
+                year=inputs.year,
                 month=month,
                 # True household metric (all household=true, including
                 # no-split rows) — the same figure the now-card uses, not
                 # reconcile()'s split-only total_household_spending.
                 total_household_spending=_compute_all_spending(
-                    by_month_household.get(month, [])
+                    inputs.by_month_household.get(month, [])
                 ),
                 settlement_amount=net.amount if net else Decimal(0),
                 settlement_from_person_id=net.from_person_id if net else None,
                 settlement_to_person_id=net.to_person_id if net else None,
-                is_finalized=month in finalized_months,
+                is_finalized=month in inputs.finalized_months,
                 is_settled=no_balance,
                 settled_at=settled_at,
                 total_all_spending=(
-                    all_spending_by_month[month]
-                    if all_spending_by_month and month in all_spending_by_month
+                    inputs.all_spending_by_month[month]
+                    if inputs.all_spending_by_month
+                    and month in inputs.all_spending_by_month
                     else None
                 ),
             )
@@ -230,13 +240,15 @@ def _build_budget_alerts(  # noqa: PLR0913, PLR0917
 ) -> list[BudgetAlert]:
     """Compute personal budget overview and extract top alerts."""
     overview = compute_personal_budget_overview(
-        month_budgets,
-        year_budgets,
-        year_txs,
-        category_lookup,
-        category_groups,
-        year,
-        month,
+        BudgetOverviewInputs(
+            month_budgets,
+            year_budgets,
+            year_txs,
+            category_lookup,
+            category_groups,
+            year,
+            month,
+        ),
         person_id,
     )
     alert_statuses: set[HealthStatus] = {"near_limit", "over_budget"}
@@ -518,15 +530,19 @@ class GetDashboardUseCase:
                     Decimal(0),
                 ),
                 month_history=_build_month_history(
-                    month_summaries,
-                    command.year,
-                    finalized_months,
-                    partition_by_month(all_year_settlements, lambda s: s.month),
-                    gross_by_month,
-                    by_month_household,
-                    all_spending_by_month=(
-                        all_data.spending_by_month if all_data else None
-                    ),
+                    _MonthHistoryInputs(
+                        summaries=month_summaries,
+                        year=command.year,
+                        finalized_months=finalized_months,
+                        settlements_by_month=partition_by_month(
+                            all_year_settlements, lambda s: s.month
+                        ),
+                        gross_by_month=gross_by_month,
+                        by_month_household=by_month_household,
+                        all_spending_by_month=(
+                            all_data.spending_by_month if all_data else None
+                        ),
+                    )
                 ),
                 persons=ctx.persons,
                 unmapped_categories=find_all_unmapped_categories(

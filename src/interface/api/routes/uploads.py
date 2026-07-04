@@ -1,7 +1,7 @@
-import json
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, UploadFile
+from pydantic import TypeAdapter, ValidationError as PydanticValidationError
 
 from src.application.runner import execute_use_case
 from src.application.use_cases.get_upload_history import get_upload_history
@@ -22,6 +22,8 @@ router = APIRouter(
     tags=["uploads"],
     dependencies=[Depends(get_current_user)],
 )
+
+_change_ids_adapter = TypeAdapter(list[str])
 
 
 async def _decode_csv(file: UploadFile) -> str:
@@ -63,9 +65,9 @@ async def post_upload(
     csv_text = await _decode_csv(file)
 
     try:
-        raw_ids: list[str] = json.loads(accepted_change_ids)  # pyright: ignore[reportAny]
+        raw_ids = _change_ids_adapter.validate_json(accepted_change_ids)
         change_ids = frozenset(UUID(id_str) for id_str in raw_ids)
-    except (json.JSONDecodeError, ValueError) as exc:
+    except (PydanticValidationError, ValueError) as exc:
         raise ValidationError("Invalid accepted_change_ids") from exc
 
     command = UploadCsvCommand(

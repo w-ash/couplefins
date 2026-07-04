@@ -100,6 +100,22 @@ async def test_upload_csv_with_accepted_changes(client: AsyncClient) -> None:
     assert data["skipped_count"] == 1  # Gas Station unchanged
 
 
+async def test_upload_csv_non_list_accepted_change_ids_returns_422(
+    client: AsyncClient,
+) -> None:
+    """A JSON-number payload (e.g. `"5"`) must fail validation as 422, not
+    crash with an unhandled 500 from `UUID(int)` inside the route."""
+    _, cookies = await setup_and_login(client)
+
+    response = await client.post(
+        "/api/v1/uploads/",
+        data={"accepted_change_ids": "5"},
+        files={"file": ("test.csv", io.BytesIO(VALID_CSV.encode()), "text/csv")},
+        cookies=cookies,
+    )
+    assert response.status_code == 422
+
+
 @pytest.mark.skip(
     reason="Upload route does not validate person_id against auth user — needs route fix"
 )

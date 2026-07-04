@@ -10,6 +10,7 @@ from src.application.use_cases._shared.command_validators import (
 )
 from src.domain.budget import (
     BudgetOverview,
+    BudgetOverviewInputs,
     compute_budget_overview,
     compute_personal_budget_overview,
     find_copyable_source,
@@ -96,13 +97,15 @@ class GetBudgetOverviewUseCase:
                 month_budgets = [b for b in year_budgets if b.month == command.month]
                 year_txs = await uow.transactions.get_by_year(command.year)
                 overview = compute_personal_budget_overview(
-                    month_budgets,
-                    year_budgets,
-                    year_txs,
-                    category_lookup,
-                    category_groups,
-                    command.year,
-                    command.month,
+                    BudgetOverviewInputs(
+                        month_budgets,
+                        year_budgets,
+                        year_txs,
+                        category_lookup,
+                        category_groups,
+                        command.year,
+                        command.month,
+                    ),
                     command.person_id,
                 )
                 budgets = month_budgets
@@ -119,13 +122,15 @@ class GetBudgetOverviewUseCase:
                         command.year
                     )
                 overview = compute_budget_overview(
-                    month_budgets,
-                    year_budgets,
-                    year_txs,
-                    category_lookup,
-                    category_groups,
-                    command.year,
-                    command.month,
+                    BudgetOverviewInputs(
+                        month_budgets,
+                        year_budgets,
+                        year_txs,
+                        category_lookup,
+                        category_groups,
+                        command.year,
+                        command.month,
+                    ),
                     personal_categories=personal_cats,
                 )
                 budgets = month_budgets

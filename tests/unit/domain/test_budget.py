@@ -3,6 +3,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from src.domain.budget import (
+    BudgetOverviewInputs,
     _index_month_budgets,
     _is_budget_relevant,
     _is_personal_budget_relevant,
@@ -180,7 +181,7 @@ def test_overview_budgeted_groups_first() -> None:
     ]
 
     overview = compute_budget_overview(
-        month_budgets, year_budgets, txs, lookup, groups, 2026, 1
+        BudgetOverviewInputs(month_budgets, year_budgets, txs, lookup, groups, 2026, 1)
     )
 
     assert len(overview.group_statuses) == 2
@@ -232,7 +233,7 @@ def test_overview_grand_totals_exclude_unbudgeted() -> None:
     ]
 
     overview = compute_budget_overview(
-        month_budgets, year_budgets, txs, lookup, groups, 2026, 1
+        BudgetOverviewInputs(month_budgets, year_budgets, txs, lookup, groups, 2026, 1)
     )
 
     assert overview.total_monthly_budget == Decimal(500)
@@ -248,7 +249,9 @@ def test_overview_unbudgeted_groups_without_spending_included() -> None:
         make_category_group(id=auto_gid, name="Auto & Transport"),
     ]
 
-    overview = compute_budget_overview([], [], [], {}, groups, 2026, 1)
+    overview = compute_budget_overview(
+        BudgetOverviewInputs([], [], [], {}, groups, 2026, 1)
+    )
 
     assert len(overview.group_statuses) == 2
     assert all(s.monthly_budget is None for s in overview.group_statuses)
@@ -256,7 +259,9 @@ def test_overview_unbudgeted_groups_without_spending_included() -> None:
 
 
 def test_overview_empty() -> None:
-    overview = compute_budget_overview([], [], [], {}, [], 2026, 1)
+    overview = compute_budget_overview(
+        BudgetOverviewInputs([], [], [], {}, [], 2026, 1)
+    )
 
     assert overview.year == 2026
     assert overview.month == 1
@@ -312,7 +317,7 @@ def test_overview_ytd_computation() -> None:
     ]
 
     overview = compute_budget_overview(
-        month_budgets, year_budgets, txs, lookup, groups, 2026, 3
+        BudgetOverviewInputs(month_budgets, year_budgets, txs, lookup, groups, 2026, 3)
     )
 
     status = overview.group_statuses[0]
@@ -351,7 +356,9 @@ def test_ytd_categories_include_earlier_month_only_categories() -> None:
         ),
     ]
 
-    overview = compute_budget_overview([], [], txs, lookup, groups, 2026, 3)
+    overview = compute_budget_overview(
+        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 3)
+    )
     status = overview.group_statuses[0]
 
     monthly_cats = {c.category for c in status.categories}
@@ -397,7 +404,7 @@ def test_ytd_totals_include_group_unbudgeted_in_viewed_month() -> None:
     ]
 
     overview = compute_budget_overview(
-        month_budgets, year_budgets, txs, lookup, groups, 2026, 3
+        BudgetOverviewInputs(month_budgets, year_budgets, txs, lookup, groups, 2026, 3)
     )
 
     status = overview.group_statuses[0]
@@ -435,7 +442,9 @@ def test_uncategorized_row_surfaces_unmapped_spending() -> None:
         ),
     ]
 
-    overview = compute_budget_overview([], [], txs, lookup, groups, 2026, 1)
+    overview = compute_budget_overview(
+        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1)
+    )
 
     uncategorized = next(
         s for s in overview.group_statuses if s.group_name == UNCATEGORIZED_GROUP_NAME
@@ -458,7 +467,9 @@ def test_no_uncategorized_row_when_everything_is_mapped() -> None:
         make_transaction(category="Groceries", amount=Decimal("-100.00")),
     ]
 
-    overview = compute_budget_overview([], [], txs, lookup, groups, 2026, 1)
+    overview = compute_budget_overview(
+        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1)
+    )
 
     assert all(
         s.group_name != UNCATEGORIZED_GROUP_NAME for s in overview.group_statuses
@@ -482,7 +493,7 @@ def test_personal_overview_uncategorized_row_surfaces() -> None:
     ]
 
     overview = compute_personal_budget_overview(
-        [], [], txs, lookup, groups, 2026, 1, ALICE
+        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1), ALICE
     )
 
     uncategorized = next(
@@ -658,7 +669,7 @@ def test_overview_refund_flips_health_off_over_budget() -> None:
     ]
 
     overview = compute_budget_overview(
-        month_budgets, year_budgets, txs, lookup, groups, 2026, 1
+        BudgetOverviewInputs(month_budgets, year_budgets, txs, lookup, groups, 2026, 1)
     )
     status = overview.group_statuses[0]
 
@@ -713,7 +724,9 @@ def test_household_split_spending_matches_reconcile_net() -> None:
         ),
     ]
 
-    overview = compute_budget_overview([], [], txs, lookup, [group], 2026, 1)
+    overview = compute_budget_overview(
+        BudgetOverviewInputs([], [], txs, lookup, [group], 2026, 1)
+    )
     summary = reconcile(
         txs,
         [alice, bob],
@@ -900,7 +913,8 @@ def test_personal_overview_mixed_household_and_personal() -> None:
     ]
 
     overview = compute_personal_budget_overview(
-        month_budgets, year_budgets, txs, lookup, groups, 2026, 1, ALICE
+        BudgetOverviewInputs(month_budgets, year_budgets, txs, lookup, groups, 2026, 1),
+        ALICE,
     )
 
     assert len(overview.group_statuses) == 1
@@ -919,7 +933,9 @@ def test_personal_overview_empty_txs() -> None:
     food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
     groups = [make_category_group(id=food_gid, name="Food & Dining")]
 
-    overview = compute_personal_budget_overview([], [], [], {}, groups, 2026, 1, ALICE)
+    overview = compute_personal_budget_overview(
+        BudgetOverviewInputs([], [], [], {}, groups, 2026, 1), ALICE
+    )
 
     assert len(overview.group_statuses) == 1
     assert overview.group_statuses[0].monthly_spent == Decimal(0)
@@ -943,7 +959,7 @@ def test_personal_overview_excludes_excluded_txs() -> None:
     ]
 
     overview = compute_personal_budget_overview(
-        [], [], txs, lookup, groups, 2026, 1, ALICE
+        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1), ALICE
     )
     assert len(overview.group_statuses) == 1
     assert overview.group_statuses[0].monthly_spent == Decimal(0)
@@ -978,7 +994,8 @@ def test_personal_overview_partner_household_creates_share() -> None:
     ]
 
     overview = compute_personal_budget_overview(
-        month_budgets, year_budgets, txs, lookup, groups, 2026, 1, ALICE
+        BudgetOverviewInputs(month_budgets, year_budgets, txs, lookup, groups, 2026, 1),
+        ALICE,
     )
 
     status = overview.group_statuses[0]
@@ -1007,10 +1024,10 @@ def test_personal_overview_spotted_front_attributes_to_beneficiary() -> None:
     ]
 
     alice_overview = compute_personal_budget_overview(
-        [], [], txs, lookup, groups, 2026, 1, ALICE
+        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1), ALICE
     )
     bob_overview = compute_personal_budget_overview(
-        [], [], txs, lookup, groups, 2026, 1, BOB
+        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1), BOB
     )
 
     # Alice (payer, 0% share) sees nothing.
@@ -1042,10 +1059,10 @@ def test_personal_overview_personal_split_divides_across_both() -> None:
     ]
 
     alice_overview = compute_personal_budget_overview(
-        [], [], txs, lookup, groups, 2026, 1, ALICE
+        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1), ALICE
     )
     bob_overview = compute_personal_budget_overview(
-        [], [], txs, lookup, groups, 2026, 1, BOB
+        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1), BOB
     )
 
     assert alice_overview.group_statuses[0].personal_spending == Decimal("70.00")
@@ -1078,7 +1095,7 @@ def test_personal_overview_household_refund_reduces_share() -> None:
     ]
 
     overview = compute_personal_budget_overview(
-        [], [], txs, lookup, groups, 2026, 1, ALICE
+        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1), ALICE
     )
     status = overview.group_statuses[0]
 
@@ -1137,7 +1154,8 @@ def test_personal_overview_ytd_across_months() -> None:
     ]
 
     overview = compute_personal_budget_overview(
-        month_budgets, year_budgets, txs, lookup, groups, 2026, 2, ALICE
+        BudgetOverviewInputs(month_budgets, year_budgets, txs, lookup, groups, 2026, 2),
+        ALICE,
     )
 
     status = overview.group_statuses[0]

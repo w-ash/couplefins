@@ -147,28 +147,38 @@ def _index_month_budgets(
     return {b.group_id: b for b in month_budgets}
 
 
-def _build_group_status(  # noqa: PLR0913, PLR0917
+@define(frozen=True, slots=True)
+class _GroupStatusContext:
+    """Shared, per-overview-computation context for building one group's
+    status. Bundled so `_build_group_status` and
+    `_uncategorized_status_if_present` take a fixed small arg list instead
+    of forwarding the same six values individually."""
+
+    month_budget_index: dict[UUID, CategoryGroupBudget]
+    year_budgets: list[CategoryGroupBudget]
+    month_by_group: dict[UUID | None, CategoryGroupBreakdown]
+    ytd_by_group: dict[UUID | None, CategoryGroupBreakdown]
+    avg_spending: dict[UUID, Decimal]
+    month: int
+
+
+def _build_group_status(
     gid: UUID | None,
     name: str,
-    month_budget_index: dict[UUID, CategoryGroupBudget],
-    year_budgets: list[CategoryGroupBudget],
-    month_by_group: dict[UUID | None, CategoryGroupBreakdown],
-    ytd_by_group: dict[UUID | None, CategoryGroupBreakdown],
-    avg_spending: dict[UUID, Decimal],
-    month: int,
+    ctx: _GroupStatusContext,
 ) -> CategoryGroupBudgetStatus:
     # gid is None only for the synthetic Uncategorized row — it has no
     # CategoryGroup entity, so it can never carry a budget or an average.
-    effective = month_budget_index.get(gid) if gid is not None else None
+    effective = ctx.month_budget_index.get(gid) if gid is not None else None
 
-    monthly_bd = month_by_group.get(gid)
-    ytd_bd = ytd_by_group.get(gid)
+    monthly_bd = ctx.month_by_group.get(gid)
+    ytd_bd = ctx.ytd_by_group.get(gid)
     monthly_spent = monthly_bd.total_amount if monthly_bd else Decimal(0)
     ytd_spent = ytd_bd.total_amount if ytd_bd else Decimal(0)
 
     monthly_budget = effective.monthly_amount if effective else None
     budgets_through_month = [
-        b for b in year_budgets if b.group_id == gid and b.month <= month
+        b for b in ctx.year_budgets if b.group_id == gid and b.month <= ctx.month
     ]
     ytd_budget_val = (
         sum((b.monthly_amount for b in budgets_through_month), Decimal(0))
@@ -191,7 +201,7 @@ def _build_group_status(  # noqa: PLR0913, PLR0917
         if ytd_budget_val is not None
         else None,
         average_monthly_spending=(
-            avg_spending.get(gid, Decimal(0)) if gid is not None else Decimal(0)
+            ctx.avg_spending.get(gid, Decimal(0)) if gid is not None else Decimal(0)
         ),
         categories=monthly_bd.categories if monthly_bd else [],
         ytd_categories=ytd_bd.categories if ytd_bd else [],
@@ -200,29 +210,15 @@ def _build_group_status(  # noqa: PLR0913, PLR0917
 
 
 def _uncategorized_status_if_present(
-    month_budget_index: dict[UUID, CategoryGroupBudget],
-    year_budgets: list[CategoryGroupBudget],
-    month_by_group: dict[UUID | None, CategoryGroupBreakdown],
-    ytd_by_group: dict[UUID | None, CategoryGroupBreakdown],
-    avg_spending: dict[UUID, Decimal],
-    month: int,
+    ctx: _GroupStatusContext,
 ) -> CategoryGroupBudgetStatus | None:
     """Synthesize the Uncategorized row when spending exists in categories
     with no group mapping — otherwise that spend vanishes from every status
     and grand total (v1.7.2). Never budgetable: group_id=None has no
     CategoryGroup entity behind it."""
-    if None not in month_by_group and None not in ytd_by_group:
+    if None not in ctx.month_by_group and None not in ctx.ytd_by_group:
         return None
-    return _build_group_status(
-        None,
-        UNCATEGORIZED_GROUP_NAME,
-        month_budget_index,
-        year_budgets,
-        month_by_group,
-        ytd_by_group,
-        avg_spending,
-        month,
-    )
+    return _build_group_status(None, UNCATEGORIZED_GROUP_NAME, ctx)
 
 
 def _assemble_overview(
@@ -268,70 +264,70 @@ def _assemble_overview(
     )
 
 
-def compute_budget_overview(  # noqa: PLR0913, PLR0917
-    month_budgets: list[CategoryGroupBudget],
-    year_budgets: list[CategoryGroupBudget],
-    year_txs: list[Transaction],
-    category_lookup: dict[str, tuple[UUID, str]],
-    groups: list[CategoryGroup],
-    year: int,
-    month: int,
+@define(frozen=True, slots=True)
+class BudgetOverviewInputs:
+    """Shared inputs to `compute_budget_overview` and
+    `compute_personal_budget_overview` — bundled so neither function's
+    signature exceeds the project's max-args limit."""
+
+    month_budgets: list[CategoryGroupBudget]
+    year_budgets: list[CategoryGroupBudget]
+    year_txs: list[Transaction]
+    category_lookup: dict[str, tuple[UUID, str]]
+    groups: list[CategoryGroup]
+    year: int
+    month: int
+
+
+def compute_budget_overview(
+    inputs: BudgetOverviewInputs,
     personal_categories: Set[str] = frozenset(),
 ) -> BudgetOverview:
-    group_names = {g.id: g.name for g in groups}
+    group_names = {g.id: g.name for g in inputs.groups}
 
     ytd_txs = [
         tx
-        for tx in year_txs
-        if _is_budget_relevant(tx, personal_categories) and tx.date.month <= month
+        for tx in inputs.year_txs
+        if _is_budget_relevant(tx, personal_categories)
+        and tx.date.month <= inputs.month
     ]
-    month_txs = [tx for tx in ytd_txs if tx.date.month == month]
+    month_txs = [tx for tx in ytd_txs if tx.date.month == inputs.month]
 
     month_by_group: dict[UUID | None, CategoryGroupBreakdown] = {
         bd.group_id: bd
         for bd in compute_category_breakdowns(
-            month_txs, category_lookup, personal_categories
+            month_txs, inputs.category_lookup, personal_categories
         )
     }
     ytd_by_group: dict[UUID | None, CategoryGroupBreakdown] = {
         bd.group_id: bd
         for bd in compute_category_breakdowns(
-            ytd_txs, category_lookup, personal_categories
+            ytd_txs, inputs.category_lookup, personal_categories
         )
     }
 
     avg_spending = compute_average_monthly_spending(
-        year_txs, category_lookup, month, personal_categories
+        inputs.year_txs, inputs.category_lookup, inputs.month, personal_categories
     )
 
-    month_budget_index = _index_month_budgets(month_budgets)
+    ctx = _GroupStatusContext(
+        month_budget_index=_index_month_budgets(inputs.month_budgets),
+        year_budgets=inputs.year_budgets,
+        month_by_group=month_by_group,
+        ytd_by_group=ytd_by_group,
+        avg_spending=avg_spending,
+        month=inputs.month,
+    )
 
     statuses: list[CategoryGroupBudgetStatus] = [
-        _build_group_status(
-            gid,
-            name,
-            month_budget_index,
-            year_budgets,
-            month_by_group,
-            ytd_by_group,
-            avg_spending,
-            month,
-        )
-        for gid, name in group_names.items()
+        _build_group_status(gid, name, ctx) for gid, name in group_names.items()
     ]
-    uncategorized = _uncategorized_status_if_present(
-        month_budget_index,
-        year_budgets,
-        month_by_group,
-        ytd_by_group,
-        avg_spending,
-        month,
-    )
+    uncategorized = _uncategorized_status_if_present(ctx)
     if uncategorized is not None:
         statuses.append(uncategorized)
 
     drift = _check_spending_integrity(statuses, month_by_group, ytd_by_group)
-    return _assemble_overview(statuses, year, month, spending_drift=drift)
+    return _assemble_overview(statuses, inputs.year, inputs.month, spending_drift=drift)
 
 
 def compute_person_share(tx: Transaction, person_id: UUID) -> Decimal:
@@ -423,43 +419,12 @@ def _compute_personal_breakdowns(
     return group_category_breakdowns(category_breakdowns), spending_split
 
 
-def compute_personal_budget_overview(  # noqa: PLR0913, PLR0914, PLR0917
-    month_budgets: list[CategoryGroupBudget],
-    year_budgets: list[CategoryGroupBudget],
+def _personal_average_monthly_spending(
     year_txs: list[Transaction],
     category_lookup: dict[str, tuple[UUID, str]],
-    groups: list[CategoryGroup],
-    year: int,
-    month: int,
     person_id: UUID,
-) -> BudgetOverview:
-    """Compute budget overview from one person's perspective.
-
-    Spending = person's share of household txs + their personal txs.
-    """
-    group_names = {g.id: g.name for g in groups}
-
-    ytd_txs = [
-        tx
-        for tx in year_txs
-        if _is_personal_budget_relevant(tx, person_id) and tx.date.month <= month
-    ]
-    month_txs = [tx for tx in ytd_txs if tx.date.month == month]
-
-    month_breakdowns, month_split = _compute_personal_breakdowns(
-        month_txs, person_id, category_lookup
-    )
-    ytd_breakdowns, _ = _compute_personal_breakdowns(
-        ytd_txs, person_id, category_lookup
-    )
-
-    month_by_group: dict[UUID | None, CategoryGroupBreakdown] = {
-        bd.group_id: bd for bd in month_breakdowns
-    }
-    ytd_by_group: dict[UUID | None, CategoryGroupBreakdown] = {
-        bd.group_id: bd for bd in ytd_breakdowns
-    }
-
+    through_month: int,
+) -> dict[UUID, Decimal]:
     avg_txs = [
         tx
         for tx in year_txs
@@ -472,7 +437,7 @@ def compute_personal_budget_overview(  # noqa: PLR0913, PLR0914, PLR0917
     group_totals: dict[UUID, Decimal] = defaultdict(Decimal)
     months_with_data: set[int] = set()
     for m, txs in by_month.items():
-        if m > month:
+        if m > through_month:
             continue
         months_with_data.add(m)
         bds, _ = _compute_personal_breakdowns(txs, person_id, category_lookup)
@@ -481,22 +446,17 @@ def compute_personal_budget_overview(  # noqa: PLR0913, PLR0914, PLR0917
                 group_totals[bd.group_id] += bd.total_amount
 
     num_months = len(months_with_data) or 1
-    avg_spending = {gid: total / num_months for gid, total in group_totals.items()}
+    return {gid: total / num_months for gid, total in group_totals.items()}
 
-    month_budget_index = _index_month_budgets(month_budgets)
 
+def _personal_group_statuses(
+    group_names: dict[UUID, str],
+    ctx: _GroupStatusContext,
+    month_split: dict[UUID | None, tuple[Decimal, Decimal]],
+) -> list[CategoryGroupBudgetStatus]:
     statuses: list[CategoryGroupBudgetStatus] = []
     for gid, name in group_names.items():
-        status = _build_group_status(
-            gid,
-            name,
-            month_budget_index,
-            year_budgets,
-            month_by_group,
-            ytd_by_group,
-            avg_spending,
-            month,
-        )
+        status = _build_group_status(gid, name, ctx)
         household_spend, personal = month_split.get(gid, (Decimal(0), Decimal(0)))
         statuses.append(
             evolve(
@@ -504,14 +464,7 @@ def compute_personal_budget_overview(  # noqa: PLR0913, PLR0914, PLR0917
             )
         )
 
-    uncategorized = _uncategorized_status_if_present(
-        month_budget_index,
-        year_budgets,
-        month_by_group,
-        ytd_by_group,
-        avg_spending,
-        month,
-    )
+    uncategorized = _uncategorized_status_if_present(ctx)
     if uncategorized is not None:
         household_spend, personal = month_split.get(None, (Decimal(0), Decimal(0)))
         statuses.append(
@@ -521,9 +474,56 @@ def compute_personal_budget_overview(  # noqa: PLR0913, PLR0914, PLR0917
                 personal_spending=personal,
             )
         )
+    return statuses
+
+
+def compute_personal_budget_overview(
+    inputs: BudgetOverviewInputs,
+    person_id: UUID,
+) -> BudgetOverview:
+    """Compute budget overview from one person's perspective.
+
+    Spending = person's share of household txs + their personal txs.
+    """
+    group_names = {g.id: g.name for g in inputs.groups}
+
+    ytd_txs = [
+        tx
+        for tx in inputs.year_txs
+        if _is_personal_budget_relevant(tx, person_id) and tx.date.month <= inputs.month
+    ]
+    month_txs = [tx for tx in ytd_txs if tx.date.month == inputs.month]
+
+    month_breakdowns, month_split = _compute_personal_breakdowns(
+        month_txs, person_id, inputs.category_lookup
+    )
+    ytd_breakdowns, _ = _compute_personal_breakdowns(
+        ytd_txs, person_id, inputs.category_lookup
+    )
+
+    month_by_group: dict[UUID | None, CategoryGroupBreakdown] = {
+        bd.group_id: bd for bd in month_breakdowns
+    }
+    ytd_by_group: dict[UUID | None, CategoryGroupBreakdown] = {
+        bd.group_id: bd for bd in ytd_breakdowns
+    }
+
+    avg_spending = _personal_average_monthly_spending(
+        inputs.year_txs, inputs.category_lookup, person_id, inputs.month
+    )
+
+    ctx = _GroupStatusContext(
+        month_budget_index=_index_month_budgets(inputs.month_budgets),
+        year_budgets=inputs.year_budgets,
+        month_by_group=month_by_group,
+        ytd_by_group=ytd_by_group,
+        avg_spending=avg_spending,
+        month=inputs.month,
+    )
+    statuses = _personal_group_statuses(group_names, ctx, month_split)
 
     drift = _check_spending_integrity(statuses, month_by_group, ytd_by_group)
-    return _assemble_overview(statuses, year, month, spending_drift=drift)
+    return _assemble_overview(statuses, inputs.year, inputs.month, spending_drift=drift)
 
 
 def find_copyable_source(
