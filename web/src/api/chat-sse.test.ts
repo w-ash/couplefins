@@ -77,6 +77,28 @@ describe("sendChatMessage", () => {
     expect(cb.doneCount).toBe(1);
   });
 
+  it("sends the browser's local date as client_date", async () => {
+    const body = makeSSEBody([{ type: "done" }]);
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      body: makeReadableStream(body),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const cb = makeCallbacks();
+    await sendChatMessage(
+      [{ role: "user", content: "Hi" }],
+      cb,
+      new AbortController().signal,
+    );
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const sentBody = JSON.parse(init.body as string) as {
+      client_date?: string;
+    };
+    expect(sentBody.client_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
   it("handles tool_start and tool_result events", async () => {
     const body = makeSSEBody([
       { type: "tool_start", name: "get_settlement_balance", id: "tc-1" },

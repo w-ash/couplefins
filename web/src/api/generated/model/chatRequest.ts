@@ -11,4 +11,5 @@ export interface ChatRequest {
   /** @maxItems 50 */
   messages: ChatMessageInput[];
   confirmation?: ConfirmationInput | null;
+  client_date?: string | null;
 }

@@ -5,6 +5,8 @@
  * Uses fetch + ReadableStream (not EventSource) because the endpoint is POST.
  */
 
+import { localISODate } from "@/lib/format";
+
 const TERMINAL_TYPES = new Set(["done", "error"]);
 
 export interface ChatSSECallbacks {
@@ -116,7 +118,10 @@ export async function sendChatMessage(
   signal: AbortSignal,
   confirmation?: ConfirmationPayload,
 ): Promise<void> {
-  const body: Record<string, unknown> = { messages };
+  const body: Record<string, unknown> = {
+    messages,
+    client_date: localISODate(),
+  };
   if (confirmation) body.confirmation = confirmation;
 
   const response = await fetch("/api/v1/chat", {

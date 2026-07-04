@@ -189,6 +189,55 @@ async def test_parallel_tool_use(client: AsyncClient) -> None:
     assert result_names == {"get_settlement_balance", "get_dashboard_status"}
 
 
+# --- Test: client_date drives "today" in the system prompt ---
+
+
+async def test_client_date_used_in_system_prompt(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
+    fake = FakeLLMClient([_text_only_script("Hi there.")])
+    _override_llm(client, fake)
+    try:
+        resp = await client.post(
+            "/api/v1/chat",
+            json={
+                "messages": [{"role": "user", "content": "What's today's date?"}],
+                "client_date": "2026-12-31",
+            },
+            cookies=cookies,
+        )
+        assert resp.status_code == 200
+    finally:
+        _clear_llm_override(client)
+
+    assert fake.captured_system is not None
+    system_text = fake.captured_system[0]["text"]
+    assert "Today is 2026-12-31" in system_text
+
+
+async def test_missing_client_date_falls_back_to_server_date(
+    client: AsyncClient,
+) -> None:
+    """No client_date sent (headless caller) — the route must not error and
+    should fall back to a real calendar date rather than leaving "today"
+    unresolved."""
+    _, cookies = await setup_and_login(client)
+    fake = FakeLLMClient([_text_only_script("Hi there.")])
+    _override_llm(client, fake)
+    try:
+        resp = await client.post(
+            "/api/v1/chat",
+            json={"messages": [{"role": "user", "content": "Hello"}]},
+            cookies=cookies,
+        )
+        assert resp.status_code == 200
+    finally:
+        _clear_llm_override(client)
+
+    assert fake.captured_system is not None
+    system_text = fake.captured_system[0]["text"]
+    assert "Today is 20" in system_text  # any real 20xx calendar date
+
+
 # --- Test 4: Unauthenticated → 401 ---
 
 

@@ -35,6 +35,7 @@ import {
 } from "@/lib/dashboard-filters";
 import {
   buildSettlementLabel,
+  currentYear,
   formatCurrency,
   MONTHS,
   SHORT_MONTHS,
@@ -486,8 +487,14 @@ const SCOPE_OPTIONS: Array<{ value: DashboardScope; label: string }> = [
 
 export function DashboardPage() {
   const { scope, setScope } = useDashboardFilters();
+  // Always send the browser's local year — the dashboard has no date
+  // picker, so it defaults to "now," and a UTC default would show an
+  // empty next-year dashboard for the entire evening of Dec 31.
   const params = useMemo(
-    () => (scope === "household" ? undefined : { scope }),
+    () =>
+      scope === "household"
+        ? { year: currentYear() }
+        : { year: currentYear(), scope },
     [scope],
   );
 

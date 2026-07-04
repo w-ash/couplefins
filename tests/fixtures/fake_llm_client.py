@@ -44,6 +44,7 @@ class FakeLLMClient:
 
     def __init__(self, scripts: list[FakeScript] | None = None) -> None:
         self._scripts = list(scripts or [])
+        self.captured_system: list[dict[str, object]] | None = None
 
     @asynccontextmanager
     async def stream(
@@ -55,5 +56,6 @@ class FakeLLMClient:
         tools: list[dict[str, object]],
         messages: list[dict[str, object]],
     ) -> AsyncIterator[_FakeStream]:
+        self.captured_system = system
         script = self._scripts.pop(0) if self._scripts else FakeScript()
         yield _FakeStream(script)

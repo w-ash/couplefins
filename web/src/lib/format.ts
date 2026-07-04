@@ -25,6 +25,16 @@ export function currentMonth(): number {
   return new Date().getMonth() + 1;
 }
 
+// Local (browser) calendar date as YYYY-MM-DD — NOT `toISOString()`, which
+// converts to UTC and can land on the wrong day for the entire US evening.
+// Used to tell the backend what day it actually is for the user.
+export function localISODate(d: Date = new Date()): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 const dateFmt = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",

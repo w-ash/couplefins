@@ -77,9 +77,8 @@ async def _build_command(
         _fetch_persons(), _fetch_category_group_names()
     )
     partner = _find_partner(current_user, persons)
-    system = build_system_prompt(
-        current_user, partner, datetime.now(UTC).date(), category_groups
-    )
+    today = body.client_date or datetime.now(UTC).date()
+    system = build_system_prompt(current_user, partner, today, category_groups)
     messages: list[dict[str, object]] = [
         {"role": m.role, "content": m.content} for m in body.messages
     ]

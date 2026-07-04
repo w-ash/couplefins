@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
@@ -19,6 +20,11 @@ class ConfirmationInput(BaseModel):
 class ChatRequest(BaseModel):
     messages: list[ChatMessageInput] = Field(..., max_length=50)
     confirmation: ConfirmationInput | None = None
+    # The browser's local calendar date, so "today"/"this month" resolve to
+    # what the user actually sees on their clock — not UTC, which is
+    # tomorrow (or next month) for the entire US evening. Falls back to
+    # server UTC when absent (headless callers, tests).
+    client_date: date | None = None
 
     @model_validator(mode="after")
     def _check_total_content_size(self) -> Self:
