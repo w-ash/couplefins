@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 from unittest.mock import AsyncMock
 from uuid import UUID
@@ -9,11 +10,7 @@ from src.application.use_cases.record_waived_settlement import (
     RecordWaivedSettlementUseCase,
 )
 from src.domain.entities.person import Person
-from src.domain.exceptions import (
-    NotFoundError,
-    PeriodFinalizedError,
-    ValidationError,
-)
+from src.domain.exceptions import NotFoundError, ValidationError
 from tests.fixtures.factories import (
     make_category,
     make_category_group,
@@ -40,12 +37,10 @@ def _setup_uow(
     uow = make_mock_uow()
     uow.persons.get_by_ids.return_value = [alice, bob]
     uow.persons.get_all.return_value = [alice, bob]
-    uow.transactions.get_settlement_relevant_by_date_range.return_value = (
-        transactions or []
-    )
+    uow.transactions.get_all_settlement_relevant.return_value = transactions or []
     uow.categories.get_all.return_value = [category]
     uow.category_groups.get_all.return_value = [group]
-    uow.settlements.get_by_period.return_value = settlements or []
+    uow.settlements.get_all.return_value = settlements or []
     uow.settlement_transaction_links.get_by_settlement_ids.return_value = []
     uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = [
         make_upload(person_id=pid) for pid in (uploads_for or [alice.id, bob.id])
@@ -55,7 +50,7 @@ def _setup_uow(
 
 
 class TestRecordWaivedSettlement:
-    async def test_waiver_persists_remaining_balance(self) -> None:
+    async def test_waiver_persists_outstanding_balance(self) -> None:
         alice = make_person(name="Alice")
         bob = make_person(name="Bob")
         # Alice paid $100 at 50/50 → Bob owes Alice $50.
@@ -78,8 +73,61 @@ class TestRecordWaivedSettlement:
         assert result.settlement.amount == Decimal("50.00")
         assert result.settlement.is_waived is True
         assert result.settlement.method is None
+        assert result.settlement.year == 2026
+        assert result.settlement.month == 1
         assert result.warnings == []
         uow.settlements.save.assert_called_once()
+
+    async def test_waiver_without_annotation(self) -> None:
+        alice = make_person(name="Alice")
+        bob = make_person(name="Bob")
+        tx = make_transaction(
+            payer_person_id=alice.id,
+            amount=Decimal("-100.00"),
+            payer_percentage=50,
+        )
+        uow = _setup_uow(alice, bob, transactions=[tx])
+
+        command = RecordWaivedSettlementCommand(
+            from_person_id=bob.id,
+            to_person_id=alice.id,
+        )
+        result = await RecordWaivedSettlementUseCase().execute(command, uow)
+
+        assert result.settlement.amount == Decimal("50.00")
+        assert result.settlement.year is None
+        assert result.settlement.month is None
+
+    async def test_waive_covers_multiple_months(self) -> None:
+        """Waive applies to the total outstanding across all months —
+        generalizing v1.7.0's per-month waiver."""
+        alice = make_person(name="Alice")
+        bob = make_person(name="Bob")
+        txs = [
+            make_transaction(
+                date=date(2026, 1, 15),
+                payer_person_id=alice.id,
+                amount=Decimal("-100.00"),
+                payer_percentage=50,
+            ),
+            make_transaction(
+                date=date(2026, 2, 10),
+                payer_person_id=alice.id,
+                amount=Decimal("-60.00"),
+                payer_percentage=50,
+            ),
+        ]
+        uow = _setup_uow(alice, bob, transactions=txs)
+
+        command = RecordWaivedSettlementCommand(
+            from_person_id=bob.id,
+            to_person_id=alice.id,
+        )
+        result = await RecordWaivedSettlementUseCase().execute(command, uow)
+
+        # $50 (January) + $30 (February) outstanding, waived in one record.
+        assert result.settlement.amount == Decimal("80.00")
+        assert result.settlement.is_waived is True
 
     async def test_waive_after_partial_payment_persists_remainder(self) -> None:
         alice = make_person(name="Alice")
@@ -146,10 +194,11 @@ class TestRecordWaivedSettlement:
             await RecordWaivedSettlementUseCase().execute(command, uow)
         uow.settlements.save.assert_not_called()
 
-    async def test_missing_upload_adds_warning(self) -> None:
+    async def test_missing_upload_in_span_newest_month_adds_warning(self) -> None:
         alice = make_person(name="Alice")
         bob = make_person(name="Bob")
         tx = make_transaction(
+            date=date(2026, 2, 10),
             payer_person_id=alice.id,
             amount=Decimal("-100.00"),
             payer_percentage=50,
@@ -157,8 +206,6 @@ class TestRecordWaivedSettlement:
         uow = _setup_uow(alice, bob, transactions=[tx], uploads_for=[alice.id])
 
         command = RecordWaivedSettlementCommand(
-            year=2026,
-            month=1,
             from_person_id=bob.id,
             to_person_id=alice.id,
         )
@@ -166,6 +213,20 @@ class TestRecordWaivedSettlement:
 
         assert result.settlement.is_waived is True
         assert any("No upload from Bob" in w for w in result.warnings)
+        # Upload status was checked for the span's newest month (Feb 2026).
+        call = uow.uploads.get_by_person_ids_with_transactions_in_date_range.call_args
+        assert call.args[1] == date(2026, 2, 1)
+        assert call.args[2] == date(2026, 2, 28)
+
+    async def test_annotation_requires_both_year_and_month(self) -> None:
+        alice = make_person(name="Alice")
+        bob = make_person(name="Bob")
+        with pytest.raises(ValueError, match="together"):
+            RecordWaivedSettlementCommand(
+                year=2026,
+                from_person_id=bob.id,
+                to_person_id=alice.id,
+            )
 
     async def test_person_not_found_raises(self) -> None:
         alice = make_person(name="Alice")
@@ -183,11 +244,17 @@ class TestRecordWaivedSettlement:
             await RecordWaivedSettlementUseCase().execute(command, uow)
 
 
-async def test_finalized_period_raises() -> None:
+async def test_waive_allowed_on_finalized_month() -> None:
+    """Lock Month freezes transactions, not payments (v1.7.5): waiving the
+    outstanding balance succeeds even when the annotated month is locked."""
     alice = make_person(name="Alice")
     bob = make_person(name="Bob")
-    uow = make_mock_uow()
-    uow.persons.get_by_ids.return_value = [alice, bob]
+    tx = make_transaction(
+        payer_person_id=alice.id,
+        amount=Decimal("-100.00"),
+        payer_percentage=50,
+    )
+    uow = _setup_uow(alice, bob, transactions=[tx])
     uow.reconciliation_periods.get_by_period.return_value = make_reconciliation_period(
         year=2026, month=1, is_finalized=True
     )
@@ -198,6 +265,6 @@ async def test_finalized_period_raises() -> None:
         from_person_id=bob.id,
         to_person_id=alice.id,
     )
-    with pytest.raises(PeriodFinalizedError):
-        await RecordWaivedSettlementUseCase().execute(command, uow)
-    uow.settlements.save.assert_not_called()
+    result = await RecordWaivedSettlementUseCase().execute(command, uow)
+    assert result.settlement.is_waived is True
+    uow.settlements.save.assert_called_once()

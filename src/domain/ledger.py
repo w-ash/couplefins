@@ -108,6 +108,26 @@ class _Allocation:
     amount: Decimal
 
 
+def empty_payment_coverage(settlement_id: UUID) -> PaymentCoverage:
+    """A coverage that matched nothing — for payments outside any ledger."""
+    return PaymentCoverage(settlement_id=settlement_id, covered=(), unapplied=_ZERO)
+
+
+def month_remaining_result(month: LedgerMonth) -> SettlementResult | None:
+    """The month's remaining balance in its gross direction; None when settled.
+
+    ``remaining > 0`` implies a non-zero gross, so the direction is
+    meaningful (a zero-amount gross carries an arbitrary direction).
+    """
+    if month.gross is None or month.remaining == _ZERO:
+        return None
+    return SettlementResult(
+        amount=month.remaining,
+        from_person_id=month.gross.from_person_id,
+        to_person_id=month.gross.to_person_id,
+    )
+
+
 def compute_ledger(
     transactions: list[Transaction],
     settlements: Sequence[Settlement],

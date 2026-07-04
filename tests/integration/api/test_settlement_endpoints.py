@@ -60,6 +60,70 @@ async def test_waive_persists_remaining_balance(client: AsyncClient) -> None:
     assert second.status_code == 422
 
 
+async def test_waive_without_annotation(client: AsyncClient) -> None:
+    persons, cookies = await setup_and_login(client)
+    alice_id = persons[0]["id"]
+    bob_id = persons[1]["id"]
+    await upload_csv(client, alice_id, SPLIT_CSV, auth=cookies)
+
+    response = await client.post(
+        "/api/v1/settlements/waive",
+        json={"from_person_id": bob_id, "to_person_id": alice_id},
+        auth=cookies,
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["settlement"]["amount"] == pytest.approx(50.0)
+    assert body["settlement"]["year"] is None
+    assert body["settlement"]["month"] is None
+
+
+async def test_multi_month_catch_up_settles_both_months(client: AsyncClient) -> None:
+    """One payment without a month annotation clears two open months FIFO."""
+    persons, cookies = await setup_and_login(client)
+    alice_id = persons[0]["id"]
+    bob_id = persons[1]["id"]
+    csv = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        '2026-01-15,Grocery Store,Groceries,Chase,GROCERY STORE,,"-100.00",shared\n'
+        '2026-02-10,Restaurant,Dining Out,Chase,RESTAURANT,,"-60.00",shared\n'
+    )
+    await upload_csv(client, alice_id, csv, auth=cookies)
+
+    # Bob owes Alice $50 (Jan) + $30 (Feb) — one catch-up payment, no month.
+    record = await client.post(
+        "/api/v1/settlements",
+        json={
+            "amount": 80.0,
+            "from_person_id": bob_id,
+            "to_person_id": alice_id,
+            "method": "Venmo",
+        },
+        auth=cookies,
+    )
+    assert record.status_code == 201
+    assert record.json()["settlement"]["year"] is None
+
+    settle_up = await client.get(
+        "/api/v1/settle-up",
+        params={"year": 2026, "month": 2},
+        auth=cookies,
+    )
+    data = settle_up.json()
+    assert data["outstanding"] is None
+    assert data["outstanding_span"] is None
+    assert data["net_position"] is None
+    assert data["remaining_balance"] == pytest.approx(0.0)
+    statuses = {(m["year"], m["month"]): m["status"] for m in data["ledger_months"]}
+    assert statuses == {(2026, 1): "settled", (2026, 2): "settled"}
+    payment = data["all_settlements"][0]
+    assert payment["covered"] == [
+        {"year": 2026, "month": 1, "amount": 50.0},
+        {"year": 2026, "month": 2, "amount": 30.0},
+    ]
+    assert payment["unapplied"] == pytest.approx(0.0)
+
+
 async def test_candidates_returns_list(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
     response = await client.get(

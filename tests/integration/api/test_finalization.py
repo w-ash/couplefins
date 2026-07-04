@@ -148,11 +148,11 @@ async def test_dashboard_includes_finalization_status(client: AsyncClient) -> No
     assert data["finalized_at"] is not None
 
 
-async def test_finalized_month_rejects_balance_changing_mutations(
+async def test_finalized_month_locks_budgets_but_not_settlement_records(
     client: AsyncClient,
 ) -> None:
-    """Settlements, waivers, and budget writes are all rejected with 409
-    once the month is locked."""
+    """Lock Month freezes transactions and budgets. Settlement records post
+    against the running ledger and stay allowed on locked months (v1.7.5)."""
     persons, cookies = await setup_and_login(client)
     alice_id = persons[0]["id"]
     bob_id = persons[1]["id"]
@@ -179,19 +179,7 @@ async def test_finalized_month_rejects_balance_changing_mutations(
         },
         auth=cookies,
     )
-    assert record.status_code == 409
-
-    waive = await client.post(
-        "/api/v1/settlements/waive",
-        json={
-            "year": 2026,
-            "month": 1,
-            "from_person_id": bob_id,
-            "to_person_id": alice_id,
-        },
-        auth=cookies,
-    )
-    assert waive.status_code == 409
+    assert record.status_code == 201
 
     budget = await client.post(
         "/api/v1/budgets",

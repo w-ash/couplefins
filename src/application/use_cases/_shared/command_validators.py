@@ -57,3 +57,9 @@ def optional_positive_int(
 ) -> None:
     if value is not None:
         positive_int(_instance, attribute, value)  # type: ignore[arg-type]
+
+
+def assert_month_annotation_pair(year: int | None, month: int | None) -> None:
+    """Both-or-neither guard for an optional (year, month) annotation."""
+    if (year is None) != (month is None):
+        raise ValueError("year and month must be provided together")

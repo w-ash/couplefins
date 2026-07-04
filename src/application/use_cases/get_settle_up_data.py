@@ -12,7 +12,9 @@ from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
 from src.application.use_cases._shared.settlement_math import (
-    load_month_settlement_snapshot,
+    LedgerSettlementRecord,
+    load_month_audit_snapshot,
+    load_settlement_ledger,
 )
 from src.application.use_cases._shared.settlement_records import SettlementRecord
 from src.application.use_cases._shared.transactions import (
@@ -23,6 +25,7 @@ from src.application.use_cases._shared.upload_status import UploadStatus
 from src.domain.entities.category import Category
 from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
+from src.domain.ledger import LedgerMonth, MonthKey, month_remaining_result
 from src.domain.reconciliation import (
     PayerGroupSummary,
     PayerSplitSummary,
@@ -48,6 +51,10 @@ class GetSettleUpDataResult:
     net_position: SettlementResult | None
     recorded_settlements: list[SettlementRecord]
     remaining_balance: Decimal
+    outstanding: SettlementResult | None
+    outstanding_span: tuple[MonthKey, MonthKey] | None
+    ledger_months: list[LedgerMonth]
+    all_settlements: list[LedgerSettlementRecord]
     upload_statuses: list[UploadStatus]
     persons: list[Person]
     is_finalized: bool
@@ -75,7 +82,7 @@ def _compute_audit_splits(
 def _build_finalization_warnings(
     is_finalized: bool,
     upload_statuses: list[UploadStatus],
-    remaining: Decimal,
+    outstanding: SettlementResult | None,
     transactions: list[Transaction],
     categories: list[Category],
 ) -> list[str]:
@@ -87,8 +94,10 @@ def _build_finalization_warnings(
         for us in upload_statuses
         if not us.has_uploaded
     )
-    if remaining > 0:
-        warnings.append(f"Unsettled balance of ${remaining:.2f}")
+    if outstanding is not None:
+        warnings.append(
+            f"Outstanding balance of ${outstanding.amount:.2f} across all months"
+        )
     tx_categories = {tx.category for tx in transactions}
     unmapped = find_all_unmapped_categories(categories, tx_categories)
     if unmapped:
@@ -104,8 +113,23 @@ class GetSettleUpDataUseCase:
         async with uow:
             ctx = await load_reconciliation_context(uow)
 
-            snapshot = await load_month_settlement_snapshot(
+            bundle = await load_settlement_ledger(uow, ctx)
+            snapshot = await load_month_audit_snapshot(
                 uow, command.year, command.month, ctx
+            )
+
+            # The selected month's ledger position — its gross minus what
+            # FIFO applied to it — not month-annotation netting.
+            month_row = next(
+                (
+                    m
+                    for m in bundle.ledger.months
+                    if (m.year, m.month) == (command.year, command.month)
+                ),
+                None,
+            )
+            net_position = (
+                month_remaining_result(month_row) if month_row is not None else None
             )
 
             payer_splits, payer_group_splits = _compute_audit_splits(
@@ -119,7 +143,7 @@ class GetSettleUpDataUseCase:
             warnings = _build_finalization_warnings(
                 is_finalized,
                 snapshot.upload_statuses,
-                snapshot.remaining,
+                bundle.ledger.outstanding,
                 snapshot.transactions,
                 ctx.categories,
             )
@@ -128,9 +152,13 @@ class GetSettleUpDataUseCase:
                 year=command.year,
                 month=command.month,
                 owed=snapshot.summary.settlement,
-                net_position=snapshot.net_position,
+                net_position=net_position,
                 recorded_settlements=snapshot.records,
-                remaining_balance=snapshot.remaining,
+                remaining_balance=(net_position.amount if net_position else Decimal(0)),
+                outstanding=bundle.ledger.outstanding,
+                outstanding_span=bundle.ledger.span,
+                ledger_months=list(bundle.ledger.months),
+                all_settlements=bundle.records,
                 upload_statuses=snapshot.upload_statuses,
                 persons=ctx.persons,
                 is_finalized=is_finalized,

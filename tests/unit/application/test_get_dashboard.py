@@ -39,6 +39,9 @@ def _set_transactions(uow, txs):
     uow.transactions.get_settlement_relevant_by_date_range.return_value = (
         filter_split_transactions(txs)
     )
+    uow.transactions.get_all_settlement_relevant.return_value = (
+        filter_split_transactions(txs)
+    )
 
 
 def _setup_uow_base(uow, alice, bob, *, groups=None, categories=None):

@@ -40,18 +40,23 @@ class TestDeleteSettlement:
         with pytest.raises(NotFoundError):
             await DeleteSettlementUseCase().execute(command, uow)
 
-    async def test_finalized_period_raises(self) -> None:
+    async def test_delete_allowed_on_finalized_annotated_month(self) -> None:
+        """Lock Month freezes transactions, not payments (v1.7.5): deleting
+        a settlement with no linked transactions succeeds even when its
+        annotated month is locked."""
         settlement = make_settlement(year=2026, month=1)
         uow = make_mock_uow()
         uow.settlements.get_by_id.return_value = settlement
+        uow.settlements.delete.return_value = True
         uow.settlement_transaction_links.get_by_settlement_ids.return_value = []
         uow.reconciliation_periods.get_by_periods.return_value = [
             make_reconciliation_period(year=2026, month=1, is_finalized=True)
         ]
 
         command = DeleteSettlementCommand(settlement_id=settlement.id)
-        with pytest.raises(PeriodFinalizedError):
-            await DeleteSettlementUseCase().execute(command, uow)
+        result = await DeleteSettlementUseCase().execute(command, uow)
+        assert result.deleted is True
+        uow.settlements.delete.assert_called_once_with(settlement.id)
 
     async def test_finalized_linked_transaction_month_raises(self) -> None:
         # Feb settlement linked to a Jan transaction; Jan is locked.

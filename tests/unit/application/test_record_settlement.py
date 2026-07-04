@@ -188,7 +188,40 @@ class TestRecordSettlement:
         assert result.settlement.amount == Decimal("50.00")
 
 
-async def test_finalized_period_raises() -> None:
+async def test_record_without_annotation() -> None:
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    uow = make_mock_uow()
+    uow.persons.get_by_ids.return_value = [alice, bob]
+    set_passthrough_save(uow)
+
+    command = RecordSettlementCommand(
+        amount=Decimal("50.00"),
+        from_person_id=alice.id,
+        to_person_id=bob.id,
+        method="Venmo",
+    )
+    result = await RecordSettlementUseCase().execute(command, uow)
+    assert result.settlement.year is None
+    assert result.settlement.month is None
+
+
+def test_annotation_requires_both_year_and_month() -> None:
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    with pytest.raises(ValueError, match="together"):
+        RecordSettlementCommand(
+            month=1,
+            amount=Decimal("50.00"),
+            from_person_id=alice.id,
+            to_person_id=bob.id,
+            method="Venmo",
+        )
+
+
+async def test_record_allowed_on_finalized_annotated_month() -> None:
+    """Lock Month freezes transactions, not payments (v1.7.5): recording a
+    settlement annotated to a locked month succeeds when nothing is linked."""
     alice = make_person(name="Alice")
     bob = make_person(name="Bob")
     uow = make_mock_uow()
@@ -196,6 +229,7 @@ async def test_finalized_period_raises() -> None:
     uow.reconciliation_periods.get_by_periods.return_value = [
         make_reconciliation_period(year=2026, month=1, is_finalized=True)
     ]
+    set_passthrough_save(uow)
 
     command = RecordSettlementCommand(
         year=2026,
@@ -205,9 +239,9 @@ async def test_finalized_period_raises() -> None:
         to_person_id=bob.id,
         method="Venmo",
     )
-    with pytest.raises(PeriodFinalizedError):
-        await RecordSettlementUseCase().execute(command, uow)
-    uow.settlements.save.assert_not_called()
+    result = await RecordSettlementUseCase().execute(command, uow)
+    assert result.settlement.amount == Decimal("50.00")
+    uow.settlements.save.assert_called_once()
 
 
 async def test_finalized_linked_transaction_month_raises() -> None:

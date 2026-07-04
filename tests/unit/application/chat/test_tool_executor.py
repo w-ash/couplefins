@@ -20,6 +20,7 @@ from src.application.use_cases.search_transactions import (
 )
 from src.domain.budget import BudgetOverview, CategoryGroupBudgetStatus
 from src.domain.exceptions import ToolExecutionError
+from src.domain.ledger import LedgerMonth, MonthSettlementStatus
 from src.domain.reconciliation import SettlementResult
 from tests.fixtures.factories import make_person, make_transaction
 from tests.fixtures.mocks import make_mock_uow
@@ -32,17 +33,33 @@ PERSONS = [ALICE, BOB]
 def _settle_result(
     *, owed_amount: Decimal = Decimal("147.50"), finalized: bool = False
 ) -> GetSettleUpDataResult:
+    owed = SettlementResult(
+        amount=owed_amount,
+        from_person_id=ALICE.id,
+        to_person_id=BOB.id,
+    )
     return GetSettleUpDataResult(
         year=2026,
         month=3,
-        owed=SettlementResult(
-            amount=owed_amount,
-            from_person_id=ALICE.id,
-            to_person_id=BOB.id,
-        ),
-        net_position=None,
+        owed=owed,
+        net_position=owed,
         recorded_settlements=[],
         remaining_balance=owed_amount,
+        outstanding=owed,
+        outstanding_span=((2026, 3), (2026, 3)),
+        ledger_months=[
+            LedgerMonth(
+                year=2026,
+                month=3,
+                gross=owed,
+                applied=Decimal(0),
+                remaining=owed_amount,
+                status=MonthSettlementStatus.CARRIED_FORWARD,
+                covering_settlement_ids=(),
+                is_offset=False,
+            )
+        ],
+        all_settlements=[],
         upload_statuses=[
             UploadStatus(
                 person_id=ALICE.id,

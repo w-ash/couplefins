@@ -3,15 +3,18 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from src.application.use_cases._shared.settlement_math import LedgerSettlementRecord
 from src.application.use_cases._shared.settlement_records import SettlementRecord
 from src.application.use_cases.get_settle_up_data import GetSettleUpDataResult
 from src.domain.entities.settlement import Settlement
 from src.domain.entities.transaction import Transaction
+from src.domain.ledger import LedgerMonth
 from src.domain.reconciliation import PayerGroupSummary, PayerSplitSummary
 from src.domain.settlement_matching import SettlementCandidate
 from src.interface.api.schemas.dashboard import DashboardPersonResponse
 from src.interface.api.schemas.reconciliation import (
     MonthReference,
+    MonthSpanResponse,
     OwedAmountResponse,
     UploadStatusResponse,
 )
@@ -19,8 +22,9 @@ from src.interface.api.schemas.types import MoneyField
 
 
 class RecordSettlementRequest(BaseModel):
-    year: int
-    month: int
+    # Optional "recorded against" annotation — display only, never math.
+    year: int | None = None
+    month: int | None = None
     amount: MoneyField
     from_person_id: UUID
     to_person_id: UUID
@@ -31,8 +35,9 @@ class RecordSettlementRequest(BaseModel):
 
 
 class RecordWaivedSettlementRequest(BaseModel):
-    year: int
-    month: int
+    # Optional "recorded against" annotation — display only, never math.
+    year: int | None = None
+    month: int | None = None
     from_person_id: UUID
     to_person_id: UUID
     notes: str = ""
@@ -120,6 +125,66 @@ class SettlementResponse(BaseModel):
         )
 
 
+class CoveredMonthResponse(BaseModel):
+    """One (month, amount) slice a payment covered, per FIFO."""
+
+    year: int
+    month: int
+    amount: MoneyField
+
+
+class LedgerSettlementResponse(SettlementResponse):
+    """Payment history entry enriched with its FIFO coverage."""
+
+    covered: list[CoveredMonthResponse]
+    unapplied: MoneyField
+
+    @classmethod
+    def from_ledger_record(
+        cls, entry: LedgerSettlementRecord
+    ) -> LedgerSettlementResponse:
+        base = SettlementResponse.from_record(entry.record)
+        return cls.model_validate({
+            **base.model_dump(),
+            "covered": [
+                {"year": year, "month": month, "amount": amount}
+                for year, month, amount in entry.coverage.covered
+            ],
+            "unapplied": entry.coverage.unapplied,
+        })
+
+
+class LedgerMonthResponse(BaseModel):
+    """One month's ledger row: gross position, applied payments, status."""
+
+    year: int
+    month: int
+    gross: OwedAmountResponse | None
+    applied: MoneyField
+    remaining: MoneyField
+    status: str  # settled | partially_settled | carried_forward
+    covering_settlement_ids: list[UUID]
+    is_offset: bool
+
+    @classmethod
+    def from_domain(cls, month: LedgerMonth) -> LedgerMonthResponse:
+        return cls(
+            year=month.year,
+            month=month.month,
+            # A zero-amount gross carries an arbitrary direction — omit it.
+            gross=(
+                OwedAmountResponse.from_domain(month.gross)
+                if month.gross and month.gross.amount > 0
+                else None
+            ),
+            applied=month.applied,
+            remaining=month.remaining,
+            status=month.status,
+            covering_settlement_ids=list(month.covering_settlement_ids),
+            is_offset=month.is_offset,
+        )
+
+
 class SettlementCandidateResponse(BaseModel):
     id: UUID
     date: datetime.date
@@ -198,6 +263,10 @@ class SettleUpDataResponse(BaseModel):
     net_position: OwedAmountResponse | None
     recorded_settlements: list[SettlementResponse]
     remaining_balance: MoneyField
+    outstanding: OwedAmountResponse | None
+    outstanding_span: MonthSpanResponse | None
+    ledger_months: list[LedgerMonthResponse]
+    all_settlements: list[LedgerSettlementResponse]
     upload_statuses: list[UploadStatusResponse]
     persons: list[DashboardPersonResponse]
     is_finalized: bool
@@ -221,6 +290,21 @@ class SettleUpDataResponse(BaseModel):
                 SettlementResponse.from_record(r) for r in result.recorded_settlements
             ],
             remaining_balance=result.remaining_balance,
+            outstanding=(
+                OwedAmountResponse.from_domain(result.outstanding)
+                if result.outstanding
+                else None
+            ),
+            outstanding_span=MonthSpanResponse.from_optional_span(
+                result.outstanding_span
+            ),
+            ledger_months=[
+                LedgerMonthResponse.from_domain(m) for m in result.ledger_months
+            ],
+            all_settlements=[
+                LedgerSettlementResponse.from_ledger_record(entry)
+                for entry in result.all_settlements
+            ],
             upload_statuses=[
                 UploadStatusResponse.from_domain(us) for us in result.upload_statuses
             ],

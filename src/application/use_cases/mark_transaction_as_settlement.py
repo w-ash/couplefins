@@ -39,16 +39,13 @@ class MarkTransactionAsSettlementUseCase:
                 uow.transactions.get_by_id, command.transaction_id, "Transaction"
             )
 
-            # Flipping is_settlement changes the tx's month; a link also
-            # changes the settlement's month (payment history).
-            periods = {(tx.date.year, tx.date.month)}
+            # Lock Month freezes transactions, not payments: only the tx's
+            # own month is guarded (flipping is_settlement changes it).
             if command.is_settlement and command.settlement_id:
-                settlement = await require_by_id(
+                await require_by_id(
                     uow.settlements.get_by_id, command.settlement_id, "Settlement"
                 )
-                if settlement.year is not None and settlement.month is not None:
-                    periods.add((settlement.year, settlement.month))
-            await assert_periods_not_finalized(uow, periods)
+            await assert_periods_not_finalized(uow, {(tx.date.year, tx.date.month)})
 
             if command.is_settlement and command.settlement_id:
                 await assert_transactions_not_linked(uow, [command.transaction_id])

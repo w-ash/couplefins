@@ -106,23 +106,11 @@ PayerGroupSplitSummaryResponse.their_share
 PayerGroupSplitSummaryResponse.partner_share
 
 # --- Settlement ledger domain API: tested in test_ledger.py ---
-# consumed by v1.7.5 handoff 2 (use-case wiring) — remove there
 
-from src.domain.ledger import LedgerMonth, SettlementLedger, compute_ledger
+from src.domain.ledger import SettlementLedger
 
-compute_ledger  # entry point for the GetSettleUpData rewiring
-LedgerMonth.covering_settlement_ids  # payment attribution for the month rows
-LedgerMonth.is_offset  # month-acted-as-credit marker for the month rows
-SettlementLedger.outstanding  # hero total for Settle Up / dashboard
+# consumed by v1.7.5 handoff 3 (frontend unapplied-credit display)
 SettlementLedger.unapplied_payment_total  # overpayment/reverse-payment credit
-SettlementLedger.span  # covered-months span for the hero card
-
-from src.domain.repositories.transaction_repository import (
-    TransactionRepositoryProtocol,
-)
-
-# All-time ledger fetch (protocol + impl share the name); integration-tested.
-TransactionRepositoryProtocol.get_all_settlement_relevant
 
 # --- TypedDict fields: consumed by type checker + dict access ---
 

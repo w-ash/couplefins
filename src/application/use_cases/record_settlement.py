@@ -6,9 +6,10 @@ import attrs
 from attrs import Factory, define, field
 
 from src.application.use_cases._shared.command_validators import (
-    month_range,
+    assert_month_annotation_pair,
+    optional_month_range,
+    optional_positive_int,
     positive_decimal,
-    positive_int,
     quantize_cents,
 )
 from src.application.use_cases._shared.finalization import (
@@ -29,15 +30,19 @@ from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 @define(frozen=True, slots=True)
 class RecordSettlementCommand:
-    year: int = field(validator=positive_int)
-    month: int = field(validator=month_range)
     amount: Decimal = field(converter=quantize_cents, validator=positive_decimal)
     from_person_id: uuid.UUID
     to_person_id: uuid.UUID
     method: str
+    # Optional "recorded against" annotation — display only, never math.
+    year: int | None = field(default=None, validator=optional_positive_int)
+    month: int | None = field(default=None, validator=optional_month_range)
     notes: str = ""
     settled_at: datetime | None = None
     linked_transaction_ids: list[uuid.UUID] = field(factory=list)
+
+    def __attrs_post_init__(self) -> None:
+        assert_month_annotation_pair(self.year, self.month)
 
 
 _AMOUNT_MISMATCH_THRESHOLD = Decimal("0.20")
@@ -82,12 +87,12 @@ class RecordSettlementUseCase:
                         "All linked transactions are from the same person"
                     )
 
-            # Linked transactions may sit in a different month than the
-            # settlement (7-day candidate window crosses month boundaries).
+            # Lock Month freezes transactions, not payments: recording a
+            # settlement is always allowed, but linking flips is_settlement
+            # on each linked transaction in its own month.
             await assert_periods_not_finalized(
                 uow,
-                {(command.year, command.month)}
-                | {(tx.date.year, tx.date.month) for tx in linked_txs},
+                {(tx.date.year, tx.date.month) for tx in linked_txs},
             )
 
             warnings: list[str] = []

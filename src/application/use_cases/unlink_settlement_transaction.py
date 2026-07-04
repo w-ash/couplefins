@@ -29,17 +29,16 @@ class UnlinkSettlementTransactionUseCase:
         uow: UnitOfWorkProtocol,
     ) -> UnlinkSettlementTransactionResult:
         async with uow:
-            settlement = await require_by_id(
+            await require_by_id(
                 uow.settlements.get_by_id, command.settlement_id, "Settlement"
             )
             tx = await require_by_id(
                 uow.transactions.get_by_id, command.transaction_id, "Transaction"
             )
 
-            periods = {(tx.date.year, tx.date.month)}
-            if settlement.year is not None and settlement.month is not None:
-                periods.add((settlement.year, settlement.month))
-            await assert_periods_not_finalized(uow, periods)
+            # Lock Month freezes transactions, not payments: only the tx's
+            # own month is guarded (unlinking flips its is_settlement).
+            await assert_periods_not_finalized(uow, {(tx.date.year, tx.date.month)})
 
             deleted = await uow.settlement_transaction_links.delete_by_settlement_and_transaction(
                 command.settlement_id, command.transaction_id

@@ -19,6 +19,24 @@ class MonthReference(BaseModel):
         return cls(year=ym[0], month=ym[1]) if ym else None
 
 
+class MonthSpanResponse(BaseModel):
+    """Inclusive (start, end) month range, e.g. a ledger's outstanding span."""
+
+    start: MonthReference
+    end: MonthReference
+
+    @classmethod
+    def from_optional_span(
+        cls, span: tuple[tuple[int, int], tuple[int, int]] | None
+    ) -> MonthSpanResponse | None:
+        if span is None:
+            return None
+        return cls(
+            start=MonthReference(year=span[0][0], month=span[0][1]),
+            end=MonthReference(year=span[1][0], month=span[1][1]),
+        )
+
+
 class UploadStatusResponse(BaseModel):
     person_id: UUID
     person_name: str

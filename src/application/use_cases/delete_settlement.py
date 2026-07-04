@@ -40,12 +40,13 @@ class DeleteSettlementUseCase:
                 else []
             )
 
-            # Unlinking flips is_settlement in each linked tx's own month
-            # (cross-month links exist via the 7-day candidate window).
-            periods = {(tx.date.year, tx.date.month) for tx in linked_txs}
-            if settlement.year is not None and settlement.month is not None:
-                periods.add((settlement.year, settlement.month))
-            await assert_periods_not_finalized(uow, periods)
+            # Lock Month freezes transactions, not payments: deleting the
+            # settlement record is always allowed, but unlinking flips
+            # is_settlement in each linked tx's own month (cross-month links
+            # exist via the candidate window).
+            await assert_periods_not_finalized(
+                uow, {(tx.date.year, tx.date.month) for tx in linked_txs}
+            )
 
             for tx in linked_txs:
                 if tx.is_settlement:

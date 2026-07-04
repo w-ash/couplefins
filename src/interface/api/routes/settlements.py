@@ -150,16 +150,16 @@ async def mark_transaction_as_settlement(
 
 @router.get("/settlements/candidates")
 async def get_settlement_candidates(
-    year: int,
-    month: int,
     amount: Decimal,
+    year: int | None = None,
+    month: int | None = None,
     search_year: int | None = None,
     search_month: int | None = None,
 ) -> list[SettlementCandidateResponse]:
     command = FindSettlementCandidatesCommand(
+        amount=amount,
         year=year,
         month=month,
-        amount=amount,
         search_year=search_year,
         search_month=search_month,
     )
