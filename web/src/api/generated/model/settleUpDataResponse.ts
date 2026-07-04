@@ -5,7 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DashboardPersonResponse } from './dashboardPersonResponse';
+import type { LedgerMonthResponse } from './ledgerMonthResponse';
+import type { LedgerSettlementResponse } from './ledgerSettlementResponse';
 import type { MonthReference } from './monthReference';
+import type { MonthSpanResponse } from './monthSpanResponse';
 import type { OwedAmountResponse } from './owedAmountResponse';
 import type { PayerGroupSplitSummaryResponse } from './payerGroupSplitSummaryResponse';
 import type { PayerSplitSummaryResponse } from './payerSplitSummaryResponse';
@@ -19,6 +22,10 @@ export interface SettleUpDataResponse {
   net_position: OwedAmountResponse | null;
   recorded_settlements: SettlementResponse[];
   remaining_balance: number;
+  outstanding: OwedAmountResponse | null;
+  outstanding_span: MonthSpanResponse | null;
+  ledger_months: LedgerMonthResponse[];
+  all_settlements: LedgerSettlementResponse[];
   upload_statuses: UploadStatusResponse[];
   persons: DashboardPersonResponse[];
   is_finalized: boolean;

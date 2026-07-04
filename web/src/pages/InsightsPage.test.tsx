@@ -120,6 +120,7 @@ const populatedResponse: SpendingTrendsResponse = {
       from_person_id: "p1",
       to_person_id: "p2",
       is_settled: true,
+      status: "settled",
     },
     {
       year: 2026,
@@ -128,6 +129,7 @@ const populatedResponse: SpendingTrendsResponse = {
       from_person_id: "p1",
       to_person_id: "p2",
       is_settled: false,
+      status: "carried_forward",
     },
   ],
   monthly_person_paid: [

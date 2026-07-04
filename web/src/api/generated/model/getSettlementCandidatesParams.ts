@@ -6,9 +6,9 @@
  */
 
 export type GetSettlementCandidatesParams = {
-year: number;
-month: number;
 amount: number | string;
+year?: number | null;
+month?: number | null;
 search_year?: number | null;
 search_month?: number | null;
 };

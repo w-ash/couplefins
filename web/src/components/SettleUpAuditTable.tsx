@@ -524,6 +524,18 @@ function splitRow(
   };
 }
 
+// The year/month annotation is optional since v1.7.5 — fall back to the
+// recording date (ISO string slicing; no Date() means no TZ shifts).
+function settlementAnnotationMonth(s: SettlementResponse): {
+  year: number;
+  month: number;
+} {
+  return {
+    year: s.year ?? Number(s.settled_at.slice(0, 4)),
+    month: s.month ?? Number(s.settled_at.slice(5, 7)),
+  };
+}
+
 // Anchor the drill-through to the linked transfers' own dates — the month the
 // settlement actually settles — not settled_at, which is the recording moment
 // (a March settlement is often recorded during the April together session).
@@ -536,9 +548,10 @@ function settlementLinkMonth(s: SettlementResponse): {
   for (const t of s.linked_transactions ?? []) {
     if (earliest === null || t.date < earliest) earliest = t.date;
   }
-  if (earliest === null) return { year: s.year, month: s.month };
+  const fallback = settlementAnnotationMonth(s);
+  if (earliest === null) return fallback;
   const [y, m] = earliest.split("-").map(Number);
-  return { year: y ?? s.year, month: m ?? s.month };
+  return { year: y ?? fallback.year, month: m ?? fallback.month };
 }
 
 function settlementRow(

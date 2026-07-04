@@ -8,6 +8,7 @@ import type { BudgetAlertResponse } from './budgetAlertResponse';
 import type { DashboardPersonResponse } from './dashboardPersonResponse';
 import type { DashboardResponseScope } from './dashboardResponseScope';
 import type { MonthHistoryEntryResponse } from './monthHistoryEntryResponse';
+import type { MonthSpanResponse } from './monthSpanResponse';
 import type { OwedAmountResponse } from './owedAmountResponse';
 import type { PersonalMonthHistoryEntryResponse } from './personalMonthHistoryEntryResponse';
 import type { PersonSummaryResponse } from './personSummaryResponse';
@@ -30,6 +31,8 @@ export interface DashboardResponse {
   ytd_settlement: OwedAmountResponse | null;
   ytd_net_settlement: OwedAmountResponse | null;
   ytd_total_settled: number;
+  outstanding_balance: OwedAmountResponse | null;
+  outstanding_span: MonthSpanResponse | null;
   month_history: MonthHistoryEntryResponse[];
   persons: DashboardPersonResponse[];
   unmapped_categories: string[];

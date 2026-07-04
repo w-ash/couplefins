@@ -168,8 +168,10 @@ export function PosthocLinkDialog({
       <div className="mt-4">
         <CandidateChecklist
           amount={settlement.amount.toFixed(2)}
-          month={settlement.month}
-          year={settlement.year}
+          // Annotation is optional since v1.7.5 — fall back to the
+          // recording date (ISO string slicing avoids TZ shifts).
+          month={settlement.month ?? Number(settlement.settled_at.slice(5, 7))}
+          year={settlement.year ?? Number(settlement.settled_at.slice(0, 4))}
           persons={persons}
           selectedIds={selectedIds}
           onSelectionChange={(ids) => setSelectedIds(ids)}

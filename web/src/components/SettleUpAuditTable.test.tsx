@@ -80,6 +80,10 @@ function makeData(
     net_position: null,
     recorded_settlements: [],
     remaining_balance: 0,
+    outstanding: null,
+    outstanding_span: null,
+    ledger_months: [],
+    all_settlements: [],
     upload_statuses: [],
     persons: [
       { id: ALICE_ID, name: "Alice" },

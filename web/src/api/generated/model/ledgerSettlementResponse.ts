@@ -4,9 +4,13 @@
  * Couplefins
  * OpenAPI spec version: 0.1.0
  */
+import type { CoveredMonthResponse } from './coveredMonthResponse';
 import type { LinkedTransactionResponse } from './linkedTransactionResponse';
 
-export interface SettlementResponse {
+/**
+ * Payment history entry enriched with its FIFO coverage.
+ */
+export interface LedgerSettlementResponse {
   id: string;
   year: number | null;
   month: number | null;
@@ -20,4 +24,6 @@ export interface SettlementResponse {
   created_at: string;
   linked_transaction_ids: string[];
   linked_transactions?: LinkedTransactionResponse[];
+  covered: CoveredMonthResponse[];
+  unapplied: number;
 }

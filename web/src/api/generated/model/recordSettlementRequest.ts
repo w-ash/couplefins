@@ -6,8 +6,8 @@
  */
 
 export interface RecordSettlementRequest {
-  year: number;
-  month: number;
+  year?: number | null;
+  month?: number | null;
   amount: number;
   from_person_id: string;
   to_person_id: string;

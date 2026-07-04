@@ -5,12 +5,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface MonthlySettlementItem {
+/**
+ * One (month, amount) slice a payment covered, per FIFO.
+ */
+export interface CoveredMonthResponse {
   year: number;
   month: number;
   amount: number;
-  from_person_id: string;
-  to_person_id: string;
-  is_settled: boolean;
-  status: string;
 }
