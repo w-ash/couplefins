@@ -78,3 +78,9 @@ Index of shipped versions. When all stories in a version file are done, move the
 | v1.5.5 | 2026-04-12 | Chat UX affordances — new conversation, copy message, regenerate last reply, friendly limit error |
 | v1.6.0 | 2026-05-02 | Settle Up audit table + Transactions buckets — payer-split ledger, narrative, spotted scope, header cards |
 | v1.6.1 | 2026-07-02 | Audit table & header-card correctness — settled-state honesty, one sign convention, link anchors, drill-through fidelity |
+| v1.7.0 | 2026-07-03 | Settlement correctness — waiver fix, settlement scope, sXX precedence, finalization guards |
+| v1.7.1 | 2026-07-03 | Upload & re-upload integrity — true replace, flag preservation, dedup window, parser hardening |
+| v1.7.2 | 2026-07-03 | Budget & dashboard math — sign-aware spending, YTD totals, unmapped visibility, copy-budgets gate |
+| v1.7.3 | 2026-07-03 | Insights & chat accuracy — comparison cards, settled trend, YTD cutoff, chat scope & local dates |
+| v1.7.4 | 2026-07-03 | Guardrails & DRY — shared exclusion predicate, suppression removal, fixture realism |
+| v1.7.5 | 2026-07-04 | Settlement ledger — running outstanding balance, multi-month catch-ups, derived FIFO month status |
