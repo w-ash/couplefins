@@ -225,6 +225,9 @@ export function CandidateChecklist({
           </span>
           <button
             type="button"
+            // Bounded when the latest transaction month is known; unbounded
+            // otherwise — the ceiling only covers household rows, so it can
+            // be null while later-dated settlement candidates still exist.
             disabled={search === null || isAtCeiling}
             onClick={() => {
               if (search === null) return;

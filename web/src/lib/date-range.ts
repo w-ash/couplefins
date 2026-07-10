@@ -112,6 +112,22 @@ export function monthAtOrAfter(
   return y > floorY || (y === floorY && m >= floorM);
 }
 
+// The year/month annotation is optional since v1.7.5 — fall back to the
+// recording date (ISO string slicing; no Date() means no TZ shifts).
+export function settlementAnnotationMonth(s: {
+  year: number | null;
+  month: number | null;
+  settled_at: string;
+}): {
+  year: number;
+  month: number;
+} {
+  return {
+    year: s.year ?? Number(s.settled_at.slice(0, 4)),
+    month: s.month ?? Number(s.settled_at.slice(5, 7)),
+  };
+}
+
 export function isSingleMonth(
   startDate: string,
   endDate: string,

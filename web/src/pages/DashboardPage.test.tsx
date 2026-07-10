@@ -1,5 +1,6 @@
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it } from "vitest";
+import type { DashboardResponse } from "@/api/generated/model";
 import { useIdentityStore } from "@/lib/identity";
 import { server } from "@/test/server";
 import {
@@ -94,6 +95,7 @@ const dashboardResponse = {
       is_finalized: false,
       is_settled: false,
       settlement_status: "carried_forward",
+      settlement_remaining: 20.0,
       settled_at: null,
     },
   ],
@@ -104,7 +106,7 @@ const dashboardResponse = {
   unmapped_categories: [],
   is_finalized: false,
   finalized_at: null,
-};
+} satisfies DashboardResponse;
 
 const emptyResponse = {
   scope: "household",
@@ -152,7 +154,7 @@ const emptyResponse = {
   unmapped_categories: [],
   is_finalized: false,
   finalized_at: null,
-};
+} satisfies DashboardResponse;
 
 describe("DashboardPage", () => {
   beforeEach(() => {
@@ -285,7 +287,9 @@ describe("DashboardPage", () => {
     await waitFor(() => {
       const table = screen.getByText("Month History").closest("div");
       if (!table) throw new Error("Expected history container");
-      expect(within(table).getByText(/owes/)).toBeInTheDocument();
+      // Assert the formatted amount too — a missing settlement_remaining
+      // renders "$NaN", which /owes/ alone would still match.
+      expect(within(table).getByText(/owes .*\$20\.00/)).toBeInTheDocument();
       expect(within(table).getByText("· carried forward")).toBeInTheDocument();
     });
   });
@@ -325,6 +329,9 @@ describe("DashboardPage", () => {
           month: 2,
           total_household_spending: 200.0,
           settlement_amount: 50.0,
+          // $50 gross, $40 already applied — the row must show the $10
+          // remaining, not the gross.
+          settlement_remaining: 10.0,
           settlement_from_person_id: "p2",
           settlement_to_person_id: "p1",
           is_finalized: false,
@@ -337,6 +344,7 @@ describe("DashboardPage", () => {
           month: 1,
           total_household_spending: 160.0,
           settlement_amount: 20.0,
+          settlement_remaining: 0.0,
           settlement_from_person_id: "p2",
           settlement_to_person_id: "p1",
           is_finalized: true,
@@ -357,6 +365,9 @@ describe("DashboardPage", () => {
       if (!table) throw new Error("Expected history container");
       expect(within(table).getByText("All settled")).toBeInTheDocument();
       expect(within(table).getByText("· partial")).toBeInTheDocument();
+      // Remaining balance, not the $50 gross.
+      expect(within(table).getByText(/\$10\.00/)).toBeInTheDocument();
+      expect(within(table).queryByText(/\$50\.00/)).not.toBeInTheDocument();
     });
   });
 

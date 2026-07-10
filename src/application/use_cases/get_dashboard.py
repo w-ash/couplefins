@@ -14,7 +14,7 @@ from src.application.use_cases._shared.date_math import month_bounds, partition_
 from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
-from src.application.use_cases._shared.settlement_math import load_settlement_ledger
+from src.application.use_cases._shared.settlement_math import load_ledger
 from src.application.use_cases._shared.transactions import find_all_unmapped_categories
 from src.application.use_cases._shared.upload_status import (
     UploadStatus,
@@ -70,6 +70,9 @@ class MonthHistoryEntry:
     total_household_spending: Decimal
     # The month's gross settlement position (direction omitted when zero).
     settlement_amount: Decimal
+    # What's still owed on this month after FIFO payments — the honest figure
+    # for a partially_settled row (settlement_amount is the pre-payment gross).
+    settlement_remaining: Decimal
     settlement_from_person_id: UUID | None
     settlement_to_person_id: UUID | None
     is_finalized: bool
@@ -165,6 +168,10 @@ def _build_month_history(inputs: _MonthHistoryInputs) -> list[MonthHistoryEntry]
         # Display direction only for a real debt — a zero-amount gross
         # carries an arbitrary direction.
         gross = row.gross if row and row.gross and row.gross.amount > 0 else None
+        # The domain's one code path for "remaining, settled → None"; its
+        # direction is always the gross direction, so the from/to fields
+        # below stay coherent with it.
+        remaining = month_remaining_result(row) if row else None
         # No ledger row → no settlement-relevant activity → trivially settled.
         status = row.status if row else MonthSettlementStatus.SETTLED
         entries.append(
@@ -178,6 +185,7 @@ def _build_month_history(inputs: _MonthHistoryInputs) -> list[MonthHistoryEntry]
                     inputs.by_month_household.get(month, [])
                 ),
                 settlement_amount=gross.amount if gross else Decimal(0),
+                settlement_remaining=remaining.amount if remaining else Decimal(0),
                 settlement_from_person_id=gross.from_person_id if gross else None,
                 settlement_to_person_id=gross.to_person_id if gross else None,
                 is_finalized=month in inputs.finalized_months,
@@ -416,8 +424,8 @@ class GetDashboardUseCase:
             # Settlement math runs on the all-time ledger over
             # payer_percentage < 100 rows regardless of the household flag —
             # a different universe than the spending aggregations above.
-            bundle = await load_settlement_ledger(uow, ctx)
-            ledger = bundle.ledger
+            loaded = await load_ledger(uow, ctx)
+            ledger, settlements = loaded.ledger, loaded.settlements
             year_rows = {m.month: m for m in ledger.months if m.year == command.year}
 
             year_periods = await uow.reconciliation_periods.get_by_year(command.year)
@@ -540,7 +548,7 @@ class GetDashboardUseCase:
                 ytd_total_settled=sum(
                     (
                         s.amount
-                        for s in bundle.settlements
+                        for s in settlements
                         if s.settled_at.year == command.year
                     ),
                     Decimal(0),
@@ -553,7 +561,7 @@ class GetDashboardUseCase:
                         year=command.year,
                         finalized_months=finalized_months,
                         ledger_rows=year_rows,
-                        settlements_by_id={s.id: s for s in bundle.settlements},
+                        settlements_by_id={s.id: s for s in settlements},
                         by_month_household=by_month_household,
                         all_spending_by_month=(
                             all_data.spending_by_month if all_data else None

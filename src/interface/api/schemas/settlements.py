@@ -1,8 +1,12 @@
 import datetime
+from typing import Self
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
+from src.application.use_cases._shared.command_validators import (
+    assert_month_annotation_pair,
+)
 from src.application.use_cases._shared.settlement_math import LedgerSettlementRecord
 from src.application.use_cases._shared.settlement_records import SettlementRecord
 from src.application.use_cases.get_settle_up_data import GetSettleUpDataResult
@@ -21,10 +25,22 @@ from src.interface.api.schemas.reconciliation import (
 from src.interface.api.schemas.types import MoneyField
 
 
-class RecordSettlementRequest(BaseModel):
-    # Optional "recorded against" annotation — display only, never math.
+class _MonthAnnotatedRequest(BaseModel):
+    """Requests carrying the optional (year, month) "recorded against"
+    annotation — display only, never math. Rejects a half-set pair at the
+    boundary (→ 422) rather than letting a bare ValueError from the command
+    or entity surface as a 500."""
+
     year: int | None = None
     month: int | None = None
+
+    @model_validator(mode="after")
+    def _validate_month_annotation(self) -> Self:
+        assert_month_annotation_pair(self.year, self.month)
+        return self
+
+
+class RecordSettlementRequest(_MonthAnnotatedRequest):
     amount: MoneyField
     from_person_id: UUID
     to_person_id: UUID
@@ -34,10 +50,7 @@ class RecordSettlementRequest(BaseModel):
     linked_transaction_ids: list[UUID] = []
 
 
-class RecordWaivedSettlementRequest(BaseModel):
-    # Optional "recorded against" annotation — display only, never math.
-    year: int | None = None
-    month: int | None = None
+class RecordWaivedSettlementRequest(_MonthAnnotatedRequest):
     from_person_id: UUID
     to_person_id: UUID
     notes: str = ""

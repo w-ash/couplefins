@@ -1,8 +1,17 @@
+import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 import {
+  CandidateChecklist,
   computeSettlementAmount,
   type SelectedCandidate,
 } from "@/components/CandidateChecklist";
+import { server } from "@/test/server";
+import {
+  renderWithProviders,
+  screen,
+  userEvent,
+  waitFor,
+} from "../test/test-utils";
 
 function candidate(overrides: Partial<SelectedCandidate>): SelectedCandidate {
   return {
@@ -34,5 +43,38 @@ describe("computeSettlementAmount", () => {
       candidate({ id: "2", amount: 95.5, payer_person_id: "p2" }),
     ];
     expect(computeSettlementAmount(selected)).toBe(95.5);
+  });
+});
+
+describe("month stepper", () => {
+  it("steps forward without bound when the ceiling is unknown", async () => {
+    // latest_transaction_month only covers household rows, so it can be
+    // null while later-dated settlement candidates still exist — forward
+    // navigation must stay available.
+    server.use(
+      http.get("/api/v1/settlements/candidates", () => HttpResponse.json([])),
+    );
+
+    renderWithProviders(
+      <CandidateChecklist
+        amount="50"
+        initialSearchMonth={{ year: 2026, month: 3 }}
+        searchFloor={null}
+        persons={[{ id: "p1", name: "Alice" }]}
+        selectedIds={[]}
+        onSelectionChange={() => {}}
+        latestTransactionMonth={null}
+      />,
+    );
+
+    const nextButton = await screen.findByRole("button", {
+      name: "Next month",
+    });
+    expect(nextButton).toBeEnabled();
+
+    await userEvent.click(nextButton);
+    await waitFor(() => {
+      expect(screen.getByText("April 2026")).toBeInTheDocument();
+    });
   });
 });

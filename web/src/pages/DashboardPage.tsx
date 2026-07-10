@@ -361,8 +361,9 @@ function HouseholdMonthHistory({
         <tbody>
           {entries.map((entry) => {
             const monthName = MONTHS[entry.month - 1] ?? "";
-            // settlement_amount is the month's gross; the derived ledger
-            // status says how much of it has been covered.
+            // settlement_amount is the month's pre-payment gross; show the
+            // still-unpaid balance (settlement_remaining) so a partially
+            // settled row doesn't overstate what's owed.
             const status = entry.settlement_status;
             const label =
               status === "settled"
@@ -370,7 +371,7 @@ function HouseholdMonthHistory({
                 : buildSettlementLabel(
                     entry.settlement_from_person_id
                       ? {
-                          amount: entry.settlement_amount,
+                          amount: entry.settlement_remaining,
                           from_person_id: entry.settlement_from_person_id,
                           to_person_id:
                             entry.settlement_to_person_id ?? undefined,

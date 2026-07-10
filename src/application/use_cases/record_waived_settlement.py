@@ -12,7 +12,7 @@ from src.application.use_cases._shared.reconciliation_context import (
     ReconciliationContext,
     load_reconciliation_context,
 )
-from src.application.use_cases._shared.settlement_math import load_settlement_ledger
+from src.application.use_cases._shared.settlement_math import load_ledger
 from src.application.use_cases._shared.settlement_records import (
     build_settlement,
     validate_settlement_persons,
@@ -83,9 +83,9 @@ class RecordWaivedSettlementUseCase:
             )
 
             ctx = await load_reconciliation_context(uow)
-            bundle = await load_settlement_ledger(uow, ctx)
+            ledger = (await load_ledger(uow, ctx)).ledger
 
-            outstanding = bundle.ledger.outstanding
+            outstanding = ledger.outstanding
             if outstanding is None:
                 raise ValidationError("Balance is already settled — nothing to waive")
             # A waiver recorded against the wrong direction would double the
@@ -98,7 +98,7 @@ class RecordWaivedSettlementUseCase:
                     "Waive direction does not match the outstanding balance"
                 )
 
-            warnings = await _missing_upload_warnings(uow, ctx, bundle.ledger.span)
+            warnings = await _missing_upload_warnings(uow, ctx, ledger.span)
 
             settlement = build_settlement(
                 year=command.year,

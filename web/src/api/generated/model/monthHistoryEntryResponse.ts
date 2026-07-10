@@ -15,6 +15,7 @@ export interface MonthHistoryEntryResponse {
   is_finalized: boolean;
   is_settled: boolean;
   settlement_status: string;
+  settlement_remaining: number;
   settled_at: string | null;
   total_all_spending?: number | null;
 }

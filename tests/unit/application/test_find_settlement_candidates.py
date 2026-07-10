@@ -1,6 +1,9 @@
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
+from src.application.use_cases import find_settlement_candidates as fsc
 from src.application.use_cases.find_settlement_candidates import (
     FindSettlementCandidatesCommand,
     FindSettlementCandidatesUseCase,
@@ -13,8 +16,18 @@ from tests.fixtures.factories import (
 from tests.fixtures.mocks import make_mock_uow
 
 
+def _freeze_today(monkeypatch: pytest.MonkeyPatch, frozen: date) -> None:
+    """Pin the clock so window assertions are literal dates, not a mirror of
+    the production formula (and immune to UTC-midnight races)."""
+    monkeypatch.setattr(fsc, "_today", lambda: frozen)
+
+
 class TestFindSettlementCandidates:
-    async def test_returns_candidates_over_outstanding_span(self) -> None:
+    async def test_returns_candidates_over_outstanding_span(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Today is past the span's end → the window clamps to today.
+        _freeze_today(monkeypatch, date(2026, 4, 15))
         alice = make_person(name="Alice")
         bob = make_person(name="Bob")
         uow = make_mock_uow()
@@ -45,12 +58,17 @@ class TestFindSettlementCandidates:
         assert len(result.candidates) == 1
         assert result.candidates[0].transaction.id == tx.id
 
-        # Window: span start (month begin) → span end (month end) + 7 days.
+        # Window: span start (month begin) → today (+ 7-day padding), so a
+        # transfer dated after the outstanding span still surfaces.
         call_args = uow.transactions.get_by_date_range.call_args
         assert call_args.args[0] == date(2026, 3, 1)
-        assert call_args.args[1] == date(2026, 4, 7)
+        assert call_args.args[1] == date(2026, 4, 22)  # 2026-04-15 + 7 days
 
-    async def test_span_covers_multiple_outstanding_months(self) -> None:
+    async def test_span_covers_multiple_outstanding_months(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Today is inside the span → the span's own end wins the clamp.
+        _freeze_today(monkeypatch, date(2026, 2, 1))
         alice = make_person(name="Alice")
         bob = make_person(name="Bob")
         uow = make_mock_uow()
@@ -79,7 +97,43 @@ class TestFindSettlementCandidates:
 
         call_args = uow.transactions.get_by_date_range.call_args
         assert call_args.args[0] == date(2026, 1, 1)
-        assert call_args.args[1] == date(2026, 4, 7)
+        assert call_args.args[1] == date(2026, 4, 7)  # 2026-03-31 + 7 days
+
+    async def test_transfer_after_span_still_surfaces(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The couple owes an old March balance and settles it with a transfer
+        # dated today (after the span) — it must appear in the default search.
+        _freeze_today(monkeypatch, date(2026, 4, 15))
+        alice = make_person(name="Alice")
+        bob = make_person(name="Bob")
+        uow = make_mock_uow()
+        uow.persons.get_all.return_value = [alice, bob]
+        uow.categories.get_all.return_value = []
+        uow.category_groups.get_all.return_value = []
+        uow.transactions.get_all_settlement_relevant.return_value = [
+            make_transaction(
+                date=date(2026, 3, 10),
+                payer_person_id=alice.id,
+                amount=Decimal("-200.00"),
+                payer_percentage=50,
+            )
+        ]
+        transfer = make_transaction(
+            merchant="Venmo",
+            amount=Decimal("-100.00"),
+            household=False,
+            date=date(2026, 4, 15),
+        )
+        uow.transactions.get_by_date_range.return_value = [transfer]
+        uow.settlement_merchants.get_all.return_value = [
+            make_settlement_merchant(name="Venmo", merchant_pattern="venmo")
+        ]
+
+        command = FindSettlementCandidatesCommand(amount=Decimal("100.00"))
+        result = await FindSettlementCandidatesUseCase().execute(command, uow)
+
+        assert [c.transaction.id for c in result.candidates] == [transfer.id]
 
     async def test_explicit_search_month_narrows_window(self) -> None:
         uow = make_mock_uow()

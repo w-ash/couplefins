@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from attrs import define, field
@@ -11,7 +11,7 @@ from src.application.use_cases._shared.command_validators import (
 from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
-from src.application.use_cases._shared.settlement_math import load_settlement_ledger
+from src.application.use_cases._shared.settlement_math import load_ledger
 from src.domain.date_math import month_bounds
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 from src.domain.settlement_matching import (
@@ -20,6 +20,11 @@ from src.domain.settlement_matching import (
 )
 
 _DATE_PADDING = timedelta(days=7)
+
+
+def _today() -> date:
+    """Seam for tests — the default window clamp depends on the real clock."""
+    return datetime.now(UTC).date()
 
 
 @define(frozen=True, slots=True)
@@ -63,16 +68,22 @@ class FindSettlementCandidatesUseCase:
     async def _resolve_window(
         command: FindSettlementCandidatesCommand, uow: UnitOfWorkProtocol
     ) -> tuple[date, date] | None:
-        """Explicit search month → that month; otherwise the outstanding
-        span (month begin → month end); nothing outstanding → None."""
+        """Explicit search month → that month; otherwise the outstanding span's
+        start through today; nothing outstanding → None.
+
+        The settling transfer is almost always dated in the current month —
+        after the outstanding span it clears — so the default window must reach
+        today, not stop at the span's newest open month, or the primary
+        settle-up candidate never surfaces.
+        """
         if command.search_year is not None and command.search_month is not None:
             return month_bounds(command.search_year, command.search_month)
 
         ctx = await load_reconciliation_context(uow)
-        bundle = await load_settlement_ledger(uow, ctx)
-        span = bundle.ledger.span
+        ledger = (await load_ledger(uow, ctx)).ledger
+        span = ledger.span
         if span is None:
             return None
         start = date(span[0][0], span[0][1], 1)
-        _, end = month_bounds(*span[1])
-        return start, end
+        _, span_end = month_bounds(*span[1])
+        return start, max(span_end, _today())

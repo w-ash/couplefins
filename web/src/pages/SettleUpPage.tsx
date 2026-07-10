@@ -495,8 +495,13 @@ function PaymentHistory({
   );
 }
 
+// Month-scoped drill-down content (audit, upload status, lock, export). Keyed
+// on a plain {year, month} so it also serves a selected month that has no
+// ledger row (household/personal-only spending): those months still need to be
+// lockable and exportable (US-CLOSE-1/2), even without settlement activity.
 function MonthDrilldown({
-  monthRow,
+  year,
+  month,
   data,
   personNames,
   getPersonColor,
@@ -504,7 +509,8 @@ function MonthDrilldown({
   onUnfinalize,
   isFinalizePending,
 }: {
-  monthRow: LedgerMonthResponse;
+  year: number;
+  month: number;
   data: SettleUpDataResponse;
   personNames: Map<string, string>;
   getPersonColor: (id: string) => string;
@@ -516,12 +522,12 @@ function MonthDrilldown({
 
   // Month-scoped fields lag one fetch behind while the drill-down month
   // loads (keepPreviousData) — don't render another month's numbers here.
-  const isReady = data.year === monthRow.year && data.month === monthRow.month;
+  const isReady = data.year === year && data.month === month;
   if (!isReady) {
     return (
       <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
         <Loader2 className="size-4 animate-spin" />
-        Loading {MONTHS[monthRow.month - 1]}...
+        Loading {MONTHS[month - 1]}...
       </div>
     );
   }
@@ -556,8 +562,8 @@ function MonthDrilldown({
       <AdjustmentExportDialog
         open={exportOpen}
         onClose={() => setExportOpen(false)}
-        year={monthRow.year}
-        month={monthRow.month}
+        year={year}
+        month={month}
       />
     </>
   );
@@ -685,6 +691,32 @@ export function SettleUpPage() {
     data.all_settlements.length === 0 &&
     data.ledger_months.length === 0;
 
+  // Single wiring for both drill-down entry points (the empty-month card and
+  // the expanded ledger row) so finalize behavior can never diverge.
+  const renderDrilldown = (drillYear: number, drillMonth: number) =>
+    data && (
+      <MonthDrilldown
+        year={drillYear}
+        month={drillMonth}
+        data={data}
+        personNames={personNames}
+        getPersonColor={getPersonColor}
+        onFinalize={() =>
+          finalizeMutation.mutate({
+            data: { year: drillYear, month: drillMonth, notes: "" },
+          })
+        }
+        onUnfinalize={() =>
+          unfinalizeMutation.mutate({
+            data: { year: drillYear, month: drillMonth },
+          })
+        }
+        isFinalizePending={
+          finalizeMutation.isPending || unfinalizeMutation.isPending
+        }
+      />
+    );
+
   return (
     <div className={`mx-auto max-w-5xl ${PAGE_PADDING}`}>
       <PageHeader icon={<HandCoins className="size-6" />} title="Settle Up" />
@@ -749,11 +781,24 @@ export function SettleUpPage() {
             </ul>
           )}
 
-          {hasExplicitMonth && !rowForUrl && data.ledger_months.length > 0 && (
-            <p className="text-sm text-muted-foreground">
-              No settlement activity for {MONTHS[month - 1]} {year}.
-            </p>
-          )}
+          {/* A selected month with no ledger row still needs its audit,
+              lock, and export controls (US-CLOSE-1/2) — the LedgerMonthList
+              only covers months with settlement activity. Skip this during
+              the brief redirect to the newest row (ledger present, no explicit
+              month yet) to avoid a flash. */}
+          {!rowForUrl &&
+            (hasExplicitMonth || data.ledger_months.length === 0) && (
+              <Card>
+                {data.ledger_months.length > 0 && (
+                  <p className="mb-4 text-sm text-muted-foreground">
+                    No settlement activity for {MONTHS[month - 1]} {year} —
+                    nothing to settle, but you can still review and lock the
+                    month.
+                  </p>
+                )}
+                <div className="space-y-4">{renderDrilldown(year, month)}</div>
+              </Card>
+            )}
 
           <LedgerMonthList
             months={data.ledger_months}
@@ -762,27 +807,7 @@ export function SettleUpPage() {
             onToggle={handleToggle}
             getPersonName={getPersonName}
             getPersonColor={getPersonColor}
-            renderExpanded={(m) => (
-              <MonthDrilldown
-                monthRow={m}
-                data={data}
-                personNames={personNames}
-                getPersonColor={getPersonColor}
-                onFinalize={() =>
-                  finalizeMutation.mutate({
-                    data: { year: m.year, month: m.month, notes: "" },
-                  })
-                }
-                onUnfinalize={() =>
-                  unfinalizeMutation.mutate({
-                    data: { year: m.year, month: m.month },
-                  })
-                }
-                isFinalizePending={
-                  finalizeMutation.isPending || unfinalizeMutation.isPending
-                }
-              />
-            )}
+            renderExpanded={(m) => renderDrilldown(m.year, m.month)}
           />
 
           <PaymentHistory

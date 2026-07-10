@@ -12,7 +12,7 @@ from src.application.use_cases._shared.command_validators import (
 from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
-from src.application.use_cases._shared.settlement_math import load_settlement_ledger
+from src.application.use_cases._shared.settlement_math import load_ledger
 from src.domain.categories import build_category_lookup
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.entities.person import Person
@@ -116,8 +116,8 @@ class GetSpendingTrendsUseCase:
             )
             budget_lines = _build_budget_lines(year_budgets)
 
-            bundle = await load_settlement_ledger(uow, ctx)
-            settlement_trend = _build_settlement_trend(bundle.ledger, command.year)
+            ledger = (await load_ledger(uow, ctx)).ledger
+            settlement_trend = _build_settlement_trend(ledger, command.year)
 
             monthly_person_paid = compute_person_paid_by_month(
                 year_txs, category_lookup

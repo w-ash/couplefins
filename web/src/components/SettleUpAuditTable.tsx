@@ -12,6 +12,7 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { useCopyFeedback } from "@/hooks/useCopyFeedback";
 import { cn } from "@/lib/cn";
+import { settlementAnnotationMonth } from "@/lib/date-range";
 import {
   buildSettlementLabel,
   formatCurrency,
@@ -521,18 +522,6 @@ function splitRow(
     p0Share: isP0 ? r.their_share : r.partner_share,
     p1Share: isP0 ? r.partner_share : r.their_share,
     net: isP0 ? r.partner_share : -r.partner_share,
-  };
-}
-
-// The year/month annotation is optional since v1.7.5 — fall back to the
-// recording date (ISO string slicing; no Date() means no TZ shifts).
-function settlementAnnotationMonth(s: SettlementResponse): {
-  year: number;
-  month: number;
-} {
-  return {
-    year: s.year ?? Number(s.settled_at.slice(0, 4)),
-    month: s.month ?? Number(s.settled_at.slice(5, 7)),
   };
 }
 

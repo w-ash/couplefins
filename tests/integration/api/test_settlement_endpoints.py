@@ -123,6 +123,26 @@ async def test_multi_month_catch_up_settles_both_months(client: AsyncClient) -> 
     assert payment["unapplied"] == pytest.approx(0.0)
 
 
+async def test_record_half_set_annotation_is_422_not_500(
+    client: AsyncClient,
+) -> None:
+    """A year without its month is bad input — reject at the boundary (422),
+    not a bare ValueError surfacing as a 500."""
+    persons, cookies = await setup_and_login(client)
+    response = await client.post(
+        "/api/v1/settlements",
+        json={
+            "amount": 50.0,
+            "from_person_id": persons[1]["id"],
+            "to_person_id": persons[0]["id"],
+            "method": "Venmo",
+            "year": 2026,
+        },
+        auth=cookies,
+    )
+    assert response.status_code == 422
+
+
 async def test_candidates_returns_list(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
     response = await client.get(

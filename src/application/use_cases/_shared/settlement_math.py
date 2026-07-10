@@ -47,14 +47,43 @@ class LedgerBundle:
     records: list[LedgerSettlementRecord]
 
 
+@define(frozen=True, slots=True)
+class LoadedLedger:
+    """The running ledger plus the settlements it was computed from."""
+
+    ledger: SettlementLedger
+    settlements: list[Settlement]
+
+
+async def load_ledger(
+    uow: UnitOfWorkProtocol,
+    ctx: ReconciliationContext,
+) -> LoadedLedger:
+    """Compute the running settlement ledger without link enrichment.
+
+    Callers that only read ``ledger`` (and the raw settlement list) should use
+    this — it skips the two ``enrich_with_links`` queries that
+    ``load_settlement_ledger`` pays for its ``records``.
+    """
+    transactions = await uow.transactions.get_all_settlement_relevant()
+    settlements = await uow.settlements.get_all()
+    return LoadedLedger(
+        ledger=compute_ledger(transactions, settlements, ctx.person_ids),
+        settlements=settlements,
+    )
+
+
 async def load_settlement_ledger(
     uow: UnitOfWorkProtocol,
     ctx: ReconciliationContext,
 ) -> LedgerBundle:
-    """Compute the running settlement ledger over all-time data."""
-    transactions = await uow.transactions.get_all_settlement_relevant()
-    settlements = await uow.settlements.get_all()
-    ledger = compute_ledger(transactions, settlements, ctx.person_ids)
+    """Compute the running settlement ledger plus its enriched payment history.
+
+    Only ``get_settle_up_data`` needs ``records``; ledger-only callers should
+    use ``load_ledger`` to avoid the enrichment I/O.
+    """
+    loaded = await load_ledger(uow, ctx)
+    ledger, settlements = loaded.ledger, loaded.settlements
 
     ordered = sorted(settlements, key=lambda s: (s.settled_at, s.created_at, s.id))
     coverage_by_id: dict[UUID, PaymentCoverage] = {

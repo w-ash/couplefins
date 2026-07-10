@@ -14,6 +14,7 @@ import { CandidateChecklist } from "@/components/CandidateChecklist";
 import { Dialog, DialogFooter, DialogHeader } from "@/components/Dialog";
 import { InlineError } from "@/components/InlineError";
 import { PersonBadge } from "@/components/PersonBadge";
+import { settlementAnnotationMonth } from "@/lib/date-range";
 import { formatCurrency } from "@/lib/format";
 
 function LinkedRow({
@@ -168,13 +169,9 @@ export function PosthocLinkDialog({
       <div className="mt-4">
         <CandidateChecklist
           amount={settlement.amount.toFixed(2)}
-          // Annotation is optional since v1.7.5 — fall back to the
-          // recording date (ISO string slicing avoids TZ shifts).
-          initialSearchMonth={{
-            year: settlement.year ?? Number(settlement.settled_at.slice(0, 4)),
-            month:
-              settlement.month ?? Number(settlement.settled_at.slice(5, 7)),
-          }}
+          // Annotation is optional since v1.7.5 — fall back to the recording
+          // date (shared helper; ISO string slicing avoids TZ shifts).
+          initialSearchMonth={settlementAnnotationMonth(settlement)}
           searchFloor={null}
           persons={persons}
           selectedIds={selectedIds}

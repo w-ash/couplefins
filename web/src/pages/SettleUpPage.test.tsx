@@ -306,6 +306,26 @@ describe("SettleUpPage", () => {
     });
   });
 
+  it("still offers lock and export for a selected month with no ledger row", async () => {
+    // Months 3–5 have settlement activity; deep-link to June (no ledger row).
+    serveSettleUp(multiMonthResponse);
+
+    renderWithProviders(<SettleUpPage />, {
+      routerProps: { initialEntries: ["/settle?year=2026&month=6"] },
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/No settlement activity for June 2026/),
+      ).toBeInTheDocument();
+    });
+    // A settlement-free month is still lockable and exportable (US-CLOSE-1/2).
+    expect(screen.getByText("Lock Month")).toBeInTheDocument();
+    expect(
+      screen.getByText("Export adjustments to Monarch"),
+    ).toBeInTheDocument();
+  });
+
   it("collapses the expanded month on click", async () => {
     serveSettleUp(multiMonthResponse);
     const user = userEvent.setup();
