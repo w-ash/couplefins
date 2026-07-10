@@ -14,7 +14,11 @@ from structlog.stdlib import get_logger
 from src.application.chat.events import TextDelta
 from src.application.chat.pending_actions import pending_action_store
 from src.application.chat.protocols import LLMClientProtocol
-from src.application.chat.registry import TOOLS, execute_confirmed_action
+from src.application.chat.registry import (
+    TOOLS,
+    execute_confirmed_action,
+    execute_tool,
+)
 from src.application.chat.system_prompt import build_system_prompt
 from src.application.chat.use_case import ChatCommand, ChatUseCase
 from src.application.runner import execute_use_case
@@ -138,4 +142,4 @@ async def post_chat(
     _chat_limiter.check(current_user.id)
     confirmation_context = await _handle_confirmation(body, current_user)
     command = await _build_command(body, current_user, confirmation_context)
-    return stream_chat_response(_bridge(ChatUseCase(llm), command))
+    return stream_chat_response(_bridge(ChatUseCase(llm, execute_tool), command))

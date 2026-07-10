@@ -20,6 +20,7 @@ from typing import Literal, cast
 from uuid import UUID
 
 from src.application.chat.pending_actions import pending_action_store
+from src.application.chat.protocols import ToolContext
 from src.application.runner import execute_use_case
 from src.application.use_cases._shared.finalization import load_period_status
 from src.application.use_cases._shared.reconciliation_context import (
@@ -159,14 +160,13 @@ def _span_dict(
 
 async def handle_settlement_balance(
     tool_input: dict[str, object],
-    _current_user: Person,
-    persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     year = cast(int | None, tool_input.get("year"))
     month = cast(int | None, tool_input.get("month"))
     if year is None or month is None:
-        return await _outstanding_balance_summary(persons)
-    return await _month_settlement_summary(year, month, persons)
+        return await _outstanding_balance_summary(ctx.persons)
+    return await _month_settlement_summary(year, month, ctx.persons)
 
 
 async def _outstanding_balance_summary(persons: list[Person]) -> dict[str, object]:
@@ -246,15 +246,14 @@ async def _month_settlement_summary(
 
 async def handle_budget_overview(
     tool_input: dict[str, object],
-    current_user: Person,
-    _persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     scope = cast(Literal["household", "personal"], tool_input.get("scope", "household"))
     command = GetBudgetOverviewCommand(
         year=cast(int, tool_input["year"]),
         month=cast(int, tool_input["month"]),
         scope=scope,
-        person_id=current_user.id if scope == "personal" else None,
+        person_id=ctx.current_user.id if scope == "personal" else None,
     )
     result: GetBudgetOverviewResult = await execute_use_case(
         lambda uow: GetBudgetOverviewUseCase().execute(command, uow)
@@ -288,8 +287,7 @@ async def handle_budget_overview(
 
 async def handle_search_transactions(
     tool_input: dict[str, object],
-    current_user: Person,
-    persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     group_id: UUID | None = None
     group_name = cast(str | None, tool_input.get("category_group"))
@@ -306,7 +304,7 @@ async def handle_search_transactions(
         category_group_id=group_id,
         tag=cast(str | None, tool_input.get("tag")),
         scope=scope,
-        person_id=current_user.id if scope == "personal" else None,
+        person_id=ctx.current_user.id if scope == "personal" else None,
     )
     result: SearchTransactionsResult = await execute_use_case(
         lambda uow: SearchTransactionsUseCase().execute(command, uow)
@@ -321,7 +319,7 @@ async def handle_search_transactions(
             "merchant": _user_str(t.merchant),
             "amount": _fmt(t.amount),
             "category": _user_str(t.category),
-            "payer": _person_name(t.payer_person_id, persons),
+            "payer": _person_name(t.payer_person_id, ctx.persons),
             "split": split,
             "household": t.household,
         })
@@ -352,10 +350,9 @@ async def _resolve_category_group_id(name: str) -> UUID | None:
 
 async def handle_spending_by_group(
     tool_input: dict[str, object],
-    current_user: Person,
-    persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
-    result = await handle_budget_overview(tool_input, current_user, persons)
+    result = await handle_budget_overview(tool_input, ctx)
     groups_list = cast(list[dict[str, object]], result["groups"])
     groups: list[dict[str, object]] = [
         {"name": g["name"], "spent": g["spent"]} for g in groups_list
@@ -369,8 +366,7 @@ async def handle_spending_by_group(
 
 async def handle_spending_trends(
     tool_input: dict[str, object],
-    _current_user: Person,
-    _persons: list[Person],
+    _ctx: ToolContext,
 ) -> dict[str, object]:
     command = GetSpendingTrendsCommand(
         year=cast(int, tool_input["year"]),
@@ -395,8 +391,7 @@ async def handle_spending_trends(
 
 async def handle_dashboard_status(
     tool_input: dict[str, object],
-    _current_user: Person,
-    _persons: list[Person],
+    _ctx: ToolContext,
 ) -> dict[str, object]:
     command = GetSettleUpDataCommand(
         year=cast(int, tool_input["year"]),
@@ -424,8 +419,7 @@ async def handle_dashboard_status(
 
 async def handle_get_tags(
     _tool_input: dict[str, object],
-    _current_user: Person,
-    _persons: list[Person],
+    _ctx: ToolContext,
 ) -> dict[str, object]:
     result: GetTagsResult = await execute_use_case(
         lambda uow: GetTagsUseCase().execute(uow)
@@ -440,8 +434,7 @@ async def handle_get_tags(
 
 async def handle_get_transaction_history(
     tool_input: dict[str, object],
-    _current_user: Person,
-    persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     try:
         transaction_id = UUID(cast(str, tool_input["transaction_id"]))
@@ -463,7 +456,7 @@ async def handle_get_transaction_history(
             "new_value": _user_str(e.new_value),
             "edited_at": e.edited_at.isoformat(),
             "edited_by": (
-                _person_name(e.edited_by_person_id, persons)
+                _person_name(e.edited_by_person_id, ctx.persons)
                 if e.edited_by_person_id
                 else None
             ),
@@ -473,7 +466,7 @@ async def handle_get_transaction_history(
     imported: dict[str, object] | None = None
     if result.import_event is not None:
         imported = {
-            "by": _person_name(result.import_event.person_id, persons),
+            "by": _person_name(result.import_event.person_id, ctx.persons),
             "at": result.import_event.imported_at.isoformat(),
         }
     return {
@@ -487,15 +480,14 @@ async def handle_get_transaction_history(
 
 async def handle_get_budgets(
     tool_input: dict[str, object],
-    current_user: Person,
-    _persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     year = cast(int, tool_input["year"])
     month = cast(int | None, tool_input.get("month"))
     scope = cast(str, tool_input.get("scope", "all"))
 
     result: ListBudgetsResult = await execute_use_case(
-        lambda uow: list_budgets(uow, current_user.id)
+        lambda uow: list_budgets(uow, ctx.current_user.id)
     )
     groups = await _load_category_groups()
     group_names = {item.group.id: item.group.name for item in groups.items}
@@ -524,8 +516,7 @@ async def handle_get_budgets(
 
 async def handle_get_category_setup(
     _tool_input: dict[str, object],
-    _current_user: Person,
-    _persons: list[Person],
+    _ctx: ToolContext,
 ) -> dict[str, object]:
     groups = await _load_category_groups()
     unmapped: ListUnmappedCategoriesResult = await execute_use_case(
@@ -553,8 +544,7 @@ async def handle_get_category_setup(
 
 async def handle_get_upload_history(
     tool_input: dict[str, object],
-    _current_user: Person,
-    _persons: list[Person],
+    _ctx: ToolContext,
 ) -> dict[str, object]:
     limit = max(
         1,
@@ -591,8 +581,7 @@ async def handle_get_upload_history(
 
 async def handle_get_reconciliation_report(
     tool_input: dict[str, object],
-    _current_user: Person,
-    persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     year = cast(int, tool_input["year"])
     month = cast(int, tool_input["month"])
@@ -612,7 +601,7 @@ async def handle_get_reconciliation_report(
         "transaction_count": s.transaction_count,
         "persons": [
             {
-                "name": _person_name(ps.person_id, persons),
+                "name": _person_name(ps.person_id, ctx.persons),
                 "paid": _fmt(ps.total_paid),
                 "fair_share": _fmt(ps.total_share),
             }
@@ -620,7 +609,7 @@ async def handle_get_reconciliation_report(
         ],
         # The month's gross position before payments — the running balance
         # lives in get_settlement_balance.
-        "gross_settlement": _owed_dict(s.settlement, persons),
+        "gross_settlement": _owed_dict(s.settlement, ctx.persons),
         "uploads": [
             {"person": us.person_name, "uploaded": us.has_uploaded}
             for us in result.upload_statuses
@@ -649,7 +638,7 @@ async def handle_get_reconciliation_report(
                 "merchant": _user_str(t.merchant),
                 "amount": _fmt(t.amount),
                 "category": _user_str(t.category),
-                "payer": _person_name(t.payer_person_id, persons),
+                "payer": _person_name(t.payer_person_id, ctx.persons),
                 "split": f"{t.payer_percentage}/{100 - t.payer_percentage}",
             }
             for t in largest
@@ -659,8 +648,7 @@ async def handle_get_reconciliation_report(
 
 async def handle_get_settlement_activity(
     tool_input: dict[str, object],
-    _current_user: Person,
-    persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     year = cast(int, tool_input["year"])
     month = cast(int, tool_input["month"])
@@ -684,8 +672,8 @@ async def handle_get_settlement_activity(
         settlements.append({
             "id": str(s.id),
             "amount": _fmt(s.amount),
-            "from": _person_name(s.from_person_id, persons),
-            "to": _person_name(s.to_person_id, persons),
+            "from": _person_name(s.from_person_id, ctx.persons),
+            "to": _person_name(s.to_person_id, ctx.persons),
             "settled_at": s.settled_at.date().isoformat(),
             "method": _user_str(s.method) if s.method else None,
             "notes": _user_str(s.notes) if s.notes else None,
@@ -723,7 +711,7 @@ async def handle_get_settlement_activity(
 
     return {
         "month": f"{year}-{month:02d}",
-        "outstanding": _owed_dict(data.outstanding, persons),
+        "outstanding": _owed_dict(data.outstanding, ctx.persons),
         "outstanding_span": _span_dict(data.outstanding_span),
         "settlements_total": len(data.all_settlements),
         "settlements_showing": len(shown),
@@ -738,8 +726,7 @@ async def handle_get_settlement_activity(
 
 async def handle_get_dashboard_summary(
     tool_input: dict[str, object],
-    current_user: Person,
-    persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     year = cast(int, tool_input["year"])
     month = cast(int | None, tool_input.get("month"))
@@ -749,7 +736,7 @@ async def handle_get_dashboard_summary(
         year=year,
         month=month,
         scope=scope,
-        person_id=current_user.id if scope == "personal" else None,
+        person_id=ctx.current_user.id if scope == "personal" else None,
     )
     result: GetDashboardResult = await execute_use_case(
         lambda uow: GetDashboardUseCase().execute(command, uow)
@@ -761,7 +748,7 @@ async def handle_get_dashboard_summary(
         "household_spending_month": _fmt(result.household_spending_month),
         "household_spending_ytd": _fmt(result.household_spending_ytd),
         "ytd_total_settled": _fmt(result.ytd_total_settled),
-        "outstanding": _owed_dict(result.outstanding_balance, persons),
+        "outstanding": _owed_dict(result.outstanding_balance, ctx.persons),
         "outstanding_span": _span_dict(result.outstanding_span),
         "unmapped_category_count": len(result.unmapped_categories),
         "month_history": [
@@ -790,14 +777,13 @@ async def handle_get_dashboard_summary(
 
 async def handle_get_adjustments_preview(
     tool_input: dict[str, object],
-    current_user: Person,
-    _persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     year = cast(int, tool_input["year"])
     month = cast(int, tool_input["month"])
 
     command = ExportAdjustmentsCommand(
-        person_id=current_user.id, year=year, month=month
+        person_id=ctx.current_user.id, year=year, month=month
     )
     result: PreviewAdjustmentsResult = await execute_use_case(
         lambda uow: PreviewAdjustmentsUseCase().execute(command, uow)
@@ -886,8 +872,7 @@ def _propose_action(
 
 async def handle_update_budget(
     tool_input: dict[str, object],
-    current_user: Person,
-    _persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     group_name = cast(str, tool_input["group_name"])
     amount = cast(int | float, tool_input["amount"])
@@ -901,7 +886,7 @@ async def handle_update_budget(
     if group_id is None:
         raise ToolExecutionError(f"Unknown category group: {group_name}")
 
-    person_id = current_user.id if scope == "personal" else None
+    person_id = ctx.current_user.id if scope == "personal" else None
     description = (
         f"Set {group_name} budget to ${amount:,.2f} "
         f"for {_month_label(year, month)} ({scope})"
@@ -916,7 +901,7 @@ async def handle_update_budget(
         "person_id": str(person_id) if person_id else None,
     }
     return _propose_action(
-        current_user, "update_budget", tool_input, description, details
+        ctx.current_user, "update_budget", tool_input, description, details
     )
 
 
@@ -962,8 +947,7 @@ def _parse_split_entries(
 
 async def handle_update_transaction_split(
     tool_input: dict[str, object],
-    current_user: Person,
-    persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     entries = _parse_split_entries(tool_input)
 
@@ -990,7 +974,7 @@ async def handle_update_transaction_split(
                     "merchant": _user_str(tx.merchant),
                     "date": tx.date.isoformat(),
                     "amount": _fmt(tx.amount),
-                    "payer": _person_name(tx.payer_person_id, persons),
+                    "payer": _person_name(tx.payer_person_id, ctx.persons),
                     "current_split": (
                         f"{tx.payer_percentage}/{100 - tx.payer_percentage}"
                     ),
@@ -1018,14 +1002,13 @@ async def handle_update_transaction_split(
     if len(rows) == 1:
         details.update(rows[0])
     return _propose_action(
-        current_user, "update_transaction_split", tool_input, description, details
+        ctx.current_user, "update_transaction_split", tool_input, description, details
     )
 
 
 async def handle_bulk_update_transactions(
     tool_input: dict[str, object],
-    current_user: Person,
-    _persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     raw_ids = cast(list[str], tool_input["transaction_ids"])
     if len(raw_ids) > _MAX_BULK_TRANSACTIONS:
@@ -1089,7 +1072,7 @@ async def handle_bulk_update_transactions(
         "changes": changes,
     }
     return _propose_action(
-        current_user, "bulk_update_transactions", tool_input, description, details
+        ctx.current_user, "bulk_update_transactions", tool_input, description, details
     )
 
 
@@ -1122,8 +1105,7 @@ async def _require_group(name: str) -> tuple[UUID, list[str]]:
 
 async def handle_delete_budget(
     tool_input: dict[str, object],
-    current_user: Person,
-    _persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     group_name = cast(str, tool_input["group_name"])
     year = cast(int, tool_input["year"])
@@ -1133,8 +1115,8 @@ async def handle_delete_budget(
     await _check_finalization(year, month)
     group_id, _ = await _require_group(group_name)
 
-    budgets = await execute_use_case(lambda uow: list_budgets(uow, current_user.id))
-    target_person = current_user.id if scope == "personal" else None
+    budgets = await execute_use_case(lambda uow: list_budgets(uow, ctx.current_user.id))
+    target_person = ctx.current_user.id if scope == "personal" else None
     budget = next(
         (
             b
@@ -1163,14 +1145,13 @@ async def handle_delete_budget(
         "scope": scope,
     }
     return _propose_action(
-        current_user, "delete_budget", tool_input, description, details
+        ctx.current_user, "delete_budget", tool_input, description, details
     )
 
 
 async def handle_copy_budgets(
     tool_input: dict[str, object],
-    current_user: Person,
-    _persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     from_year = cast(int, tool_input["from_year"])
     from_month = cast(int, tool_input["from_month"])
@@ -1182,7 +1163,7 @@ async def handle_copy_budgets(
     await _check_finalization(to_year, to_month)
 
     budgets = (
-        await execute_use_case(lambda uow: list_budgets(uow, current_user.id))
+        await execute_use_case(lambda uow: list_budgets(uow, ctx.current_user.id))
     ).budgets
     source = [b for b in budgets if (b.year, b.month) == (from_year, from_month)]
     if not source:
@@ -1219,14 +1200,13 @@ async def handle_copy_budgets(
         "to_month": to_month,
     }
     return _propose_action(
-        current_user, "copy_budgets", tool_input, description, details
+        ctx.current_user, "copy_budgets", tool_input, description, details
     )
 
 
 async def handle_manage_category_group(
     tool_input: dict[str, object],
-    current_user: Person,
-    _persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     action = cast(str, tool_input["action"])
     name = cast(str, tool_input["name"])
@@ -1280,14 +1260,13 @@ async def handle_manage_category_group(
         raise ToolExecutionError(f"Unknown action: {action}")
 
     return _propose_action(
-        current_user, "manage_category_group", tool_input, description, details
+        ctx.current_user, "manage_category_group", tool_input, description, details
     )
 
 
 async def handle_map_categories(
     tool_input: dict[str, object],
-    current_user: Person,
-    _persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     raw_mappings = cast(list[dict[str, object]], tool_input.get("mappings") or [])
     if not raw_mappings:
@@ -1322,14 +1301,13 @@ async def handle_map_categories(
     )
     details: dict[str, object] = {"mappings": resolved, "count": count}
     return _propose_action(
-        current_user, "map_categories", tool_input, description, details
+        ctx.current_user, "map_categories", tool_input, description, details
     )
 
 
 async def handle_set_category_personal(
     tool_input: dict[str, object],
-    current_user: Person,
-    _persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     category = cast(str, tool_input["category"])
     include_personal = cast(bool, tool_input["include_personal"])
@@ -1358,14 +1336,13 @@ async def handle_set_category_personal(
         "new": include_personal,
     }
     return _propose_action(
-        current_user, "set_category_personal", tool_input, description, details
+        ctx.current_user, "set_category_personal", tool_input, description, details
     )
 
 
 async def handle_finalize_period(
     tool_input: dict[str, object],
-    current_user: Person,
-    _persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     year = cast(int, tool_input["year"])
     month = cast(int, tool_input["month"])
@@ -1390,14 +1367,13 @@ async def handle_finalize_period(
         "transaction_count": data.transaction_count,
     }
     return _propose_action(
-        current_user, "finalize_period", tool_input, description, details
+        ctx.current_user, "finalize_period", tool_input, description, details
     )
 
 
 async def handle_unfinalize_period(
     tool_input: dict[str, object],
-    current_user: Person,
-    _persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     year = cast(int, tool_input["year"])
     month = cast(int, tool_input["month"])
@@ -1413,17 +1389,16 @@ async def handle_unfinalize_period(
     description = f"Unlock {_month_label(year, month)} for editing"
     details: dict[str, object] = {"year": year, "month": month}
     return _propose_action(
-        current_user, "unfinalize_period", tool_input, description, details
+        ctx.current_user, "unfinalize_period", tool_input, description, details
     )
 
 
 async def handle_record_settlement(
     tool_input: dict[str, object],
-    current_user: Person,
-    persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
-    from_person = _resolve_person(cast(str, tool_input["from_person"]), persons)
-    to_person = _resolve_person(cast(str, tool_input["to_person"]), persons)
+    from_person = _resolve_person(cast(str, tool_input["from_person"]), ctx.persons)
+    to_person = _resolve_person(cast(str, tool_input["to_person"]), ctx.persons)
     if from_person.id == to_person.id:
         raise ToolExecutionError("from_person and to_person must differ")
 
@@ -1490,14 +1465,13 @@ async def handle_record_settlement(
         "linked_transaction_ids": linked_ids,
     }
     return _propose_action(
-        current_user, "record_settlement", tool_input, description, details
+        ctx.current_user, "record_settlement", tool_input, description, details
     )
 
 
 async def handle_waive_settlement(
     tool_input: dict[str, object],
-    current_user: Person,
-    persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     async def _load(uow: UnitOfWorkProtocol) -> SettlementLedger:
         async with uow:
@@ -1509,8 +1483,8 @@ async def handle_waive_settlement(
         raise ToolExecutionError("Balance is already settled — nothing to waive")
 
     outstanding = ledger.outstanding
-    from_name = _person_name(outstanding.from_person_id, persons)
-    to_name = _person_name(outstanding.to_person_id, persons)
+    from_name = _person_name(outstanding.from_person_id, ctx.persons)
+    to_name = _person_name(outstanding.to_person_id, ctx.persons)
     notes = cast(str, tool_input.get("notes", ""))
     span = _span_dict(ledger.span)
 
@@ -1528,14 +1502,13 @@ async def handle_waive_settlement(
         "notes": _user_str(notes) if notes else None,
     }
     return _propose_action(
-        current_user, "waive_settlement", tool_input, description, details
+        ctx.current_user, "waive_settlement", tool_input, description, details
     )
 
 
 async def handle_delete_settlement(
     tool_input: dict[str, object],
-    current_user: Person,
-    persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     try:
         settlement_id = UUID(cast(str, tool_input["settlement_id"]))
@@ -1557,8 +1530,8 @@ async def handle_delete_settlement(
             ])
             return {
                 "amount": _fmt(settlement.amount),
-                "from": _person_name(settlement.from_person_id, persons),
-                "to": _person_name(settlement.to_person_id, persons),
+                "from": _person_name(settlement.from_person_id, ctx.persons),
+                "to": _person_name(settlement.to_person_id, ctx.persons),
                 "settled_at": settlement.settled_at.date().isoformat(),
                 "is_waived": settlement.is_waived,
                 "linked_transaction_count": len(links),
@@ -1573,14 +1546,13 @@ async def handle_delete_settlement(
     )
     details: dict[str, object] = {"settlement_id": str(settlement_id), **info}
     return _propose_action(
-        current_user, "delete_settlement", tool_input, description, details
+        ctx.current_user, "delete_settlement", tool_input, description, details
     )
 
 
 async def handle_link_settlement_transaction(
     tool_input: dict[str, object],
-    current_user: Person,
-    persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     try:
         transaction_id = UUID(cast(str, tool_input["transaction_id"]))
@@ -1620,7 +1592,7 @@ async def handle_link_settlement_transaction(
                 "merchant": _user_str(tx.merchant),
                 "date": tx.date.isoformat(),
                 "amount": _fmt(tx.amount),
-                "payer": _person_name(tx.payer_person_id, persons),
+                "payer": _person_name(tx.payer_person_id, ctx.persons),
             }
 
     info = await execute_use_case(_fetch)
@@ -1637,14 +1609,17 @@ async def handle_link_settlement_transaction(
         **info,
     }
     return _propose_action(
-        current_user, "link_settlement_transaction", tool_input, description, details
+        ctx.current_user,
+        "link_settlement_transaction",
+        tool_input,
+        description,
+        details,
     )
 
 
 async def handle_unlink_settlement_transaction(
     tool_input: dict[str, object],
-    current_user: Person,
-    _persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     try:
         settlement_id = UUID(cast(str, tool_input["settlement_id"]))
@@ -1692,14 +1667,17 @@ async def handle_unlink_settlement_transaction(
         **info,
     }
     return _propose_action(
-        current_user, "unlink_settlement_transaction", tool_input, description, details
+        ctx.current_user,
+        "unlink_settlement_transaction",
+        tool_input,
+        description,
+        details,
     )
 
 
 async def handle_manage_settlement_merchant(
     tool_input: dict[str, object],
-    current_user: Person,
-    _persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     action = cast(str, tool_input["action"])
     name = cast(str, tool_input["name"])
@@ -1747,5 +1725,5 @@ async def handle_manage_settlement_merchant(
         raise ToolExecutionError(f"Unknown action: {action}")
 
     return _propose_action(
-        current_user, "manage_settlement_merchant", tool_input, description, details
+        ctx.current_user, "manage_settlement_merchant", tool_input, description, details
     )

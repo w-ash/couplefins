@@ -5,8 +5,9 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 
 from src.application.chat.events import TextDelta
-from src.application.chat.protocols import LLMResponse, ToolUseBlock
+from src.application.chat.protocols import LLMResponse, ToolContext, ToolUseBlock
 from src.config.settings import EffortLevel
+from src.domain.entities.person import Person
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,3 +64,14 @@ class FakeLLMClient:
         self.captured_messages.append(list(messages))
         script = self._scripts.pop(0) if self._scripts else FakeScript()
         yield _FakeStream(script)
+
+
+def make_tool_context(
+    current_user: Person,
+    persons: list[Person],
+    llm: FakeLLMClient | None = None,
+) -> ToolContext:
+    """ToolContext for handler tests — a fresh fake LLM unless one is given."""
+    return ToolContext(
+        current_user=current_user, persons=persons, llm=llm or FakeLLMClient()
+    )

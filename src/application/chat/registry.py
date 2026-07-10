@@ -16,14 +16,17 @@ reachable from a ToolSpec or explicitly accounted for as blacklisted
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
+from typing import Literal
 
 from src.application.chat import confirmed_actions, tool_executor, tools
 from src.application.chat.pending_actions import PendingAction
+from src.application.chat.protocols import ToolContext
 from src.domain.entities.person import Person
 from src.domain.exceptions import ToolExecutionError
 
+type ToolKind = Literal["read", "write", "agentic"]
 type ToolHandler = Callable[
-    [dict[str, object], Person, list[Person]], Awaitable[dict[str, object]]
+    [dict[str, object], ToolContext], Awaitable[dict[str, object]]
 ]
 type ConfirmedExecutor = Callable[[PendingAction, Person], Awaitable[dict[str, object]]]
 
@@ -32,15 +35,19 @@ type ConfirmedExecutor = Callable[[PendingAction, Person], Awaitable[dict[str, o
 class ToolSpec:
     """One chat capability: schema + handler + parity accounting.
 
-    A spec with an executor is a write tool (two-phase confirmation); one
-    without is a read tool. Invariants are enforced at construction so an
-    inconsistent spec cannot exist past import time.
+    Kind is explicit: "read" tools answer queries, "write" tools propose
+    two-phase mutations (executor + broadcast required), "agentic" tools are
+    capabilities rather than queries (code execution, delegation) — they may
+    be server-executed, in which case they carry no handler. Invariants are
+    enforced at construction so an inconsistent spec cannot exist past
+    import time.
     """
 
     name: str
     schema: Mapping[str, object]
-    handler: ToolHandler
+    handler: ToolHandler | None
     use_cases: tuple[str, ...]
+    kind: ToolKind = "read"
     executor: ConfirmedExecutor | None = None
     broadcast_entity: str | None = None
 
@@ -49,9 +56,17 @@ class ToolSpec:
             raise ValueError(
                 f"ToolSpec {self.name!r} bound to schema {self.schema['name']!r}"
             )
+        if (self.kind == "write") != (self.executor is not None):
+            raise ValueError(
+                f"{self.name}: kind {self.kind!r} inconsistent with executor"
+            )
         if (self.executor is None) != (self.broadcast_entity is None):
             raise ValueError(
                 f"{self.name}: executor and broadcast_entity must be set together"
+            )
+        if self.handler is None and self.kind != "agentic":
+            raise ValueError(
+                f"{self.name}: only agentic server tools may omit a handler"
             )
 
 
@@ -157,6 +172,7 @@ REGISTRY: tuple[ToolSpec, ...] = (
         # upsert semantics via SaveBudgetUseCase — capability parity, not
         # endpoint parity.
         use_cases=("SaveBudgetUseCase", "UpdateBudgetUseCase"),
+        kind="write",
         executor=confirmed_actions.exec_budget,
         broadcast_entity="budgets",
     ),
@@ -165,6 +181,7 @@ REGISTRY: tuple[ToolSpec, ...] = (
         schema=tools.UPDATE_TRANSACTION_SPLIT_SCHEMA,
         handler=tool_executor.handle_update_transaction_split,
         use_cases=("UpdateTransactionSplitsUseCase",),
+        kind="write",
         executor=confirmed_actions.exec_split,
         broadcast_entity="transactions",
     ),
@@ -173,6 +190,7 @@ REGISTRY: tuple[ToolSpec, ...] = (
         schema=tools.BULK_UPDATE_TRANSACTIONS_SCHEMA,
         handler=tool_executor.handle_bulk_update_transactions,
         use_cases=("BulkUpdateTransactionsUseCase", "BulkModifyTagsUseCase"),
+        kind="write",
         executor=confirmed_actions.exec_bulk,
         broadcast_entity="transactions",
     ),
@@ -181,6 +199,7 @@ REGISTRY: tuple[ToolSpec, ...] = (
         schema=tools.DELETE_BUDGET_SCHEMA,
         handler=tool_executor.handle_delete_budget,
         use_cases=("DeleteBudgetUseCase",),
+        kind="write",
         executor=confirmed_actions.exec_delete_budget,
         broadcast_entity="budgets",
     ),
@@ -189,6 +208,7 @@ REGISTRY: tuple[ToolSpec, ...] = (
         schema=tools.COPY_BUDGETS_SCHEMA,
         handler=tool_executor.handle_copy_budgets,
         use_cases=("CopyBudgetsUseCase",),
+        kind="write",
         executor=confirmed_actions.exec_copy_budgets,
         broadcast_entity="budgets",
     ),
@@ -201,6 +221,7 @@ REGISTRY: tuple[ToolSpec, ...] = (
             "UpdateCategoryGroupUseCase",
             "DeleteCategoryGroupUseCase",
         ),
+        kind="write",
         executor=confirmed_actions.exec_category_group,
         broadcast_entity="reconciliation",
     ),
@@ -209,6 +230,7 @@ REGISTRY: tuple[ToolSpec, ...] = (
         schema=tools.MAP_CATEGORIES_SCHEMA,
         handler=tool_executor.handle_map_categories,
         use_cases=("BulkUpdateMappingsUseCase",),
+        kind="write",
         executor=confirmed_actions.exec_map_categories,
         broadcast_entity="reconciliation",
     ),
@@ -217,6 +239,7 @@ REGISTRY: tuple[ToolSpec, ...] = (
         schema=tools.SET_CATEGORY_PERSONAL_SCHEMA,
         handler=tool_executor.handle_set_category_personal,
         use_cases=("UpdateCategoryUseCase",),
+        kind="write",
         executor=confirmed_actions.exec_category_personal,
         broadcast_entity="reconciliation",
     ),
@@ -225,6 +248,7 @@ REGISTRY: tuple[ToolSpec, ...] = (
         schema=tools.FINALIZE_PERIOD_SCHEMA,
         handler=tool_executor.handle_finalize_period,
         use_cases=("FinalizePeriodUseCase",),
+        kind="write",
         executor=confirmed_actions.exec_finalize,
         broadcast_entity="reconciliation",
     ),
@@ -233,6 +257,7 @@ REGISTRY: tuple[ToolSpec, ...] = (
         schema=tools.UNFINALIZE_PERIOD_SCHEMA,
         handler=tool_executor.handle_unfinalize_period,
         use_cases=("UnfinalizePeriodUseCase",),
+        kind="write",
         executor=confirmed_actions.exec_unfinalize,
         broadcast_entity="reconciliation",
     ),
@@ -241,6 +266,7 @@ REGISTRY: tuple[ToolSpec, ...] = (
         schema=tools.RECORD_SETTLEMENT_SCHEMA,
         handler=tool_executor.handle_record_settlement,
         use_cases=("RecordSettlementUseCase",),
+        kind="write",
         executor=confirmed_actions.exec_record_settlement,
         broadcast_entity="settlements",
     ),
@@ -249,6 +275,7 @@ REGISTRY: tuple[ToolSpec, ...] = (
         schema=tools.WAIVE_SETTLEMENT_SCHEMA,
         handler=tool_executor.handle_waive_settlement,
         use_cases=("RecordWaivedSettlementUseCase",),
+        kind="write",
         executor=confirmed_actions.exec_waive_settlement,
         broadcast_entity="settlements",
     ),
@@ -257,6 +284,7 @@ REGISTRY: tuple[ToolSpec, ...] = (
         schema=tools.DELETE_SETTLEMENT_SCHEMA,
         handler=tool_executor.handle_delete_settlement,
         use_cases=("DeleteSettlementUseCase",),
+        kind="write",
         executor=confirmed_actions.exec_delete_settlement,
         broadcast_entity="settlements",
     ),
@@ -265,6 +293,7 @@ REGISTRY: tuple[ToolSpec, ...] = (
         schema=tools.LINK_SETTLEMENT_TRANSACTION_SCHEMA,
         handler=tool_executor.handle_link_settlement_transaction,
         use_cases=("MarkTransactionAsSettlementUseCase",),
+        kind="write",
         executor=confirmed_actions.exec_link_settlement_tx,
         broadcast_entity="settlements",
     ),
@@ -273,6 +302,7 @@ REGISTRY: tuple[ToolSpec, ...] = (
         schema=tools.UNLINK_SETTLEMENT_TRANSACTION_SCHEMA,
         handler=tool_executor.handle_unlink_settlement_transaction,
         use_cases=("UnlinkSettlementTransactionUseCase",),
+        kind="write",
         executor=confirmed_actions.exec_unlink_settlement_tx,
         broadcast_entity="settlements",
     ),
@@ -284,6 +314,7 @@ REGISTRY: tuple[ToolSpec, ...] = (
             "CreateSettlementMerchantUseCase",
             "DeleteSettlementMerchantUseCase",
         ),
+        kind="write",
         executor=confirmed_actions.exec_settlement_merchant,
         broadcast_entity="settlements",
     ),
@@ -310,15 +341,16 @@ TOOLS: list[dict[str, object]] = _build_tools()
 async def execute_tool(
     name: str,
     tool_input: dict[str, object],
-    current_user: Person,
-    persons: list[Person],
+    ctx: ToolContext,
 ) -> dict[str, object]:
     """Dispatch a tool call to its handler and return a summary dict."""
     spec = _SPECS_BY_NAME.get(name)
     if spec is None:
         raise ToolExecutionError(f"Unknown tool: {name}")
+    if spec.handler is None:
+        raise ToolExecutionError(f"Tool '{name}' executes server-side")
     try:
-        return await spec.handler(tool_input, current_user, persons)
+        return await spec.handler(tool_input, ctx)
     except ToolExecutionError:
         raise
     except Exception as e:

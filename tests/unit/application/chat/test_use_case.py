@@ -1,5 +1,7 @@
 """Stop-reason handling in the agentic tool loop."""
 
+from unittest.mock import AsyncMock
+
 import pytest
 
 from src.application.chat.protocols import LLMResponse
@@ -11,6 +13,9 @@ from tests.fixtures.fake_llm_client import FakeLLMClient, FakeScript
 _PAUSED_RAW_CONTENT: list[dict[str, object]] = [
     {"type": "server_tool_use", "id": "srvtoolu_1", "name": "web_search"}
 ]
+
+# These scripts never emit tool_use blocks, so the executor must stay uncalled.
+_unused_executor = AsyncMock(side_effect=AssertionError("unexpected tool call"))
 
 
 def _pause_script() -> FakeScript:
@@ -47,7 +52,9 @@ class TestStopReasons:
         fake = FakeLLMClient([_pause_script(), FakeScript()])
         original = [{"role": "user", "content": "hi"}]
 
-        await _drain(ChatUseCase(fake), _command(original, max_turns=3))
+        await _drain(
+            ChatUseCase(fake, _unused_executor), _command(original, max_turns=3)
+        )
 
         assert len(fake.captured_messages) == 2
         first, second = fake.captured_messages
@@ -61,7 +68,7 @@ class TestStopReasons:
 
         with pytest.raises(MaxRoundsExceededError):
             await _drain(
-                ChatUseCase(fake),
+                ChatUseCase(fake, _unused_executor),
                 _command([{"role": "user", "content": "hi"}], max_turns=2),
             )
 
@@ -76,6 +83,6 @@ class TestStopReasons:
 
         with pytest.raises(ResponseTruncatedError):
             await _drain(
-                ChatUseCase(fake),
+                ChatUseCase(fake, _unused_executor),
                 _command([{"role": "user", "content": "hi"}], max_turns=3),
             )

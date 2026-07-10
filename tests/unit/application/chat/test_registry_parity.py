@@ -127,8 +127,32 @@ class TestRegistryShape:
                 schema=template.schema,
                 handler=template.handler,
                 use_cases=template.use_cases,
+                kind="write",
                 executor=template.executor,
                 broadcast_entity=None,
+            )
+
+    def test_kind_inconsistent_with_executor_is_rejected(self) -> None:
+        template = next(spec for spec in REGISTRY if spec.executor is not None)
+        with pytest.raises(ValueError, match="inconsistent with executor"):
+            ToolSpec(
+                name=template.name,
+                schema=template.schema,
+                handler=template.handler,
+                use_cases=template.use_cases,
+                kind="read",
+                executor=template.executor,
+                broadcast_entity=template.broadcast_entity,
+            )
+
+    def test_handler_required_outside_agentic_kind(self) -> None:
+        template = REGISTRY[0]
+        with pytest.raises(ValueError, match="only agentic server tools"):
+            ToolSpec(
+                name=template.name,
+                schema=template.schema,
+                handler=None,
+                use_cases=template.use_cases,
             )
 
     def test_only_last_tool_carries_cache_control(self) -> None:
@@ -152,10 +176,13 @@ class TestRegistryShape:
         """The frontend derives 'proposing vs looking up' from tool names:
         reads are get_*/search_*, writes are anything else (see
         isMutationTool in ToolCallIndicator.tsx). Pin the convention here
-        so a misnamed tool fails CI instead of mislabeling the indicator."""
+        so a misnamed tool fails CI instead of mislabeling the indicator.
+        Agentic tools are exempt — the frontend special-cases them."""
         for spec in REGISTRY:
+            if spec.kind == "agentic":
+                continue
             is_read_name = spec.name.startswith(("get_", "search_"))
-            if spec.executor is None:
+            if spec.kind == "read":
                 assert is_read_name, f"read tool misnamed: {spec.name}"
             else:
                 assert not is_read_name, f"write tool misnamed: {spec.name}"

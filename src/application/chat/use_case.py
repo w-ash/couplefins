@@ -7,8 +7,11 @@ import json
 from structlog.stdlib import get_logger
 
 from src.application.chat.events import TextDelta, ToolResultEvent, ToolStartEvent
-from src.application.chat.protocols import LLMClientProtocol
-from src.application.chat.registry import execute_tool
+from src.application.chat.protocols import (
+    LLMClientProtocol,
+    ToolContext,
+    ToolExecutorFn,
+)
 from src.config.settings import EffortLevel
 from src.domain.entities.person import Person
 from src.domain.exceptions import MaxRoundsExceededError, ResponseTruncatedError
@@ -32,11 +35,22 @@ class ChatCommand:
 
 
 class ChatUseCase:
-    def __init__(self, llm_client: LLMClientProtocol) -> None:
+    def __init__(
+        self, llm_client: LLMClientProtocol, tool_executor: ToolExecutorFn
+    ) -> None:
+        # The executor is injected (rather than imported from the registry)
+        # so agentic tools can run this loop without an import cycle:
+        # registry -> subagent -> use_case must never lead back to registry.
         self._llm = llm_client
+        self._execute_tool = tool_executor
 
     async def execute(self, command: ChatCommand) -> AsyncGenerator[ChatEvent]:
         messages = list(command.messages)
+        ctx = ToolContext(
+            current_user=command.current_user,
+            persons=command.persons,
+            llm=self._llm,
+        )
 
         for turn in range(command.max_turns):
             async with self._llm.stream(
@@ -84,12 +98,7 @@ class ChatUseCase:
             tool_results: list[dict[str, object]] = []
             for tu in response.content:
                 try:
-                    summary = await execute_tool(
-                        tu.name,
-                        tu.input,
-                        command.current_user,
-                        command.persons,
-                    )
+                    summary = await self._execute_tool(tu.name, tu.input, ctx)
                     yield ToolResultEvent(
                         name=tu.name, tool_use_id=tu.id, summary=summary
                     )

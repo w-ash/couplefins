@@ -18,10 +18,12 @@ from src.application.use_cases.list_category_groups import (
 from src.domain.entities.category_group import CategoryGroup
 from src.domain.exceptions import ToolExecutionError
 from tests.fixtures.factories import make_person, make_transaction
+from tests.fixtures.fake_llm_client import make_tool_context
 
 ALICE = make_person(name="Alice", id=uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
 BOB = make_person(name="Bob", id=uuid.UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"))
 PERSONS = [ALICE, BOB]
+CTX = make_tool_context(ALICE, PERSONS)
 
 FOOD_GROUP_ID = uuid.UUID("11111111-1111-1111-1111-111111111111")
 
@@ -61,8 +63,7 @@ async def test_update_budget_returns_pending_confirmation() -> None:
         result = await execute_tool(
             "update_budget",
             {"group_name": "Food & Dining", "amount": 700, "year": 2026, "month": 4},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     assert result["status"] == "pending_confirmation"
@@ -95,8 +96,7 @@ async def test_update_budget_unknown_group_raises() -> None:
         await execute_tool(
             "update_budget",
             {"group_name": "Nonexistent", "amount": 100, "year": 2026, "month": 4},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
 
@@ -133,8 +133,7 @@ async def test_update_transaction_split_returns_pending() -> None:
         result = await execute_tool(
             "update_transaction_split",
             {"transaction_id": str(tx.id), "payer_percentage": 70},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     assert result["status"] == "pending_confirmation"
@@ -164,8 +163,7 @@ async def test_update_transaction_split_batch_returns_pending() -> None:
                     {"transaction_id": str(tx_b.id), "payer_percentage": 60},
                 ]
             },
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     assert result["status"] == "pending_confirmation"
@@ -178,7 +176,7 @@ async def test_update_transaction_split_batch_returns_pending() -> None:
 @pytest.mark.anyio
 async def test_update_transaction_split_requires_some_form() -> None:
     with pytest.raises(ToolExecutionError, match="transaction_id"):
-        await execute_tool("update_transaction_split", {}, ALICE, PERSONS)
+        await execute_tool("update_transaction_split", {}, CTX)
 
 
 @pytest.mark.anyio
@@ -187,8 +185,7 @@ async def test_update_transaction_split_invalid_uuid_raises() -> None:
         await execute_tool(
             "update_transaction_split",
             {"transaction_id": "not-a-uuid", "payer_percentage": 50},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
 
@@ -203,8 +200,7 @@ async def test_bulk_update_exceeds_limit_raises() -> None:
         await execute_tool(
             "bulk_update_transactions",
             {"transaction_ids": ids, "changes": {"household": True}},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
 
@@ -227,8 +223,7 @@ async def test_bulk_update_returns_pending() -> None:
                     "tags": {"action": "add", "values": ["discuss"]},
                 },
             },
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     assert result["status"] == "pending_confirmation"
@@ -256,8 +251,7 @@ async def test_search_transactions_includes_id() -> None:
         result = await execute_tool(
             "search_transactions",
             {"year": 2026, "month": 3},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     assert "id" in result["transactions"][0]
@@ -319,8 +313,7 @@ async def test_delete_budget_returns_pending_with_current_amount() -> None:
         result = await execute_tool(
             "delete_budget",
             {"group_name": "Food & Dining", "year": 2026, "month": 3},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     assert result["status"] == "pending_confirmation"
@@ -348,8 +341,7 @@ async def test_delete_budget_missing_budget_raises() -> None:
         await execute_tool(
             "delete_budget",
             {"group_name": "Food & Dining", "year": 2026, "month": 3},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
 
@@ -375,8 +367,7 @@ async def test_copy_budgets_counts_skips() -> None:
         result = await execute_tool(
             "copy_budgets",
             {"from_year": 2026, "from_month": 3, "to_year": 2026, "to_month": 4},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     assert result["details"]["copy_count"] == 1
@@ -396,8 +387,7 @@ async def test_manage_category_group_rename_unknown_lists_valid_names() -> None:
         await execute_tool(
             "manage_category_group",
             {"action": "rename", "name": "Bogus", "new_name": "Better"},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
 
@@ -434,8 +424,7 @@ async def test_manage_category_group_delete_surfaces_category_fate() -> None:
                 "name": "Food & Dining",
                 "move_categories_to": "Lifestyle",
             },
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     assert result["details"]["category_count"] == 2
@@ -456,8 +445,7 @@ async def test_map_categories_unknown_group_lists_valid_names() -> None:
         await execute_tool(
             "map_categories",
             {"mappings": [{"category": "Pets", "group_name": "Animals"}]},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
 
@@ -471,8 +459,7 @@ async def test_map_categories_resolves_group_ids() -> None:
         result = await execute_tool(
             "map_categories",
             {"mappings": [{"category": "Pets", "group_name": "food & dining"}]},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     mapping = result["details"]["mappings"][0]
@@ -490,9 +477,7 @@ async def test_finalize_period_already_finalized_raises() -> None:
         ),
         pytest.raises(ToolExecutionError, match="already finalized"),
     ):
-        await execute_tool(
-            "finalize_period", {"year": 2026, "month": 3}, ALICE, PERSONS
-        )
+        await execute_tool("finalize_period", {"year": 2026, "month": 3}, CTX)
 
 
 @pytest.mark.anyio
@@ -502,9 +487,7 @@ async def test_finalize_period_surfaces_advisory_warnings() -> None:
         new_callable=AsyncMock,
         return_value=_settle_data(warnings=["No upload from Bob"]),
     ):
-        result = await execute_tool(
-            "finalize_period", {"year": 2026, "month": 3}, ALICE, PERSONS
-        )
+        result = await execute_tool("finalize_period", {"year": 2026, "month": 3}, CTX)
 
     assert result["status"] == "pending_confirmation"
     assert result["details"]["warnings"] == ["No upload from Bob"]
@@ -521,9 +504,7 @@ async def test_unfinalize_period_not_finalized_raises() -> None:
         ),
         pytest.raises(ToolExecutionError, match="not finalized"),
     ):
-        await execute_tool(
-            "unfinalize_period", {"year": 2026, "month": 3}, ALICE, PERSONS
-        )
+        await execute_tool("unfinalize_period", {"year": 2026, "month": 3}, CTX)
 
 
 @pytest.mark.anyio
@@ -532,8 +513,7 @@ async def test_record_settlement_unknown_person_lists_couple() -> None:
         await execute_tool(
             "record_settlement",
             {"from_person": "Carol", "to_person": "Bob", "amount": 100},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
 
@@ -549,8 +529,7 @@ async def test_record_settlement_returns_pending_with_annotation() -> None:
             "year": 2026,
             "month": 3,
         },
-        ALICE,
-        PERSONS,
+        CTX,
     )
 
     assert result["status"] == "pending_confirmation"
@@ -582,7 +561,7 @@ async def test_waive_settlement_nothing_outstanding_raises() -> None:
         ),
         pytest.raises(ToolExecutionError, match="nothing to waive"),
     ):
-        await execute_tool("waive_settlement", {}, ALICE, PERSONS)
+        await execute_tool("waive_settlement", {}, CTX)
 
 
 @pytest.mark.anyio
@@ -608,7 +587,7 @@ async def test_waive_settlement_captures_direction() -> None:
         new_callable=AsyncMock,
         return_value=ledger,
     ):
-        result = await execute_tool("waive_settlement", {}, ALICE, PERSONS)
+        result = await execute_tool("waive_settlement", {}, CTX)
 
     details = result["details"]
     assert details["from_person_id"] == str(BOB.id)
@@ -638,8 +617,7 @@ async def test_manage_settlement_merchant_remove_unknown_lists_configured() -> N
         await execute_tool(
             "manage_settlement_merchant",
             {"action": "remove", "name": "Wise"},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
 
@@ -664,6 +642,5 @@ async def test_manage_settlement_merchant_add_duplicate_raises() -> None:
         await execute_tool(
             "manage_settlement_merchant",
             {"action": "add", "name": "venmo", "pattern": "venmo"},
-            ALICE,
-            PERSONS,
+            CTX,
         )

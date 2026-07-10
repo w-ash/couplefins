@@ -23,11 +23,13 @@ from src.domain.exceptions import ToolExecutionError
 from src.domain.ledger import LedgerMonth, MonthSettlementStatus
 from src.domain.reconciliation import SettlementResult
 from tests.fixtures.factories import make_person, make_transaction
+from tests.fixtures.fake_llm_client import make_tool_context
 from tests.fixtures.mocks import make_mock_uow
 
 ALICE = make_person(name="Alice", id=uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
 BOB = make_person(name="Bob", id=uuid.UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"))
 PERSONS = [ALICE, BOB]
+CTX = make_tool_context(ALICE, PERSONS)
 
 
 def _settle_result(
@@ -92,8 +94,7 @@ async def test_settlement_balance_happy_path() -> None:
         result = await execute_tool(
             "get_settlement_balance",
             {"year": 2026, "month": 3},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     assert result["from"] == "Alice"
@@ -126,8 +127,7 @@ async def test_settlement_balance_overpayment_names_reversed_debtor() -> None:
         result = await execute_tool(
             "get_settlement_balance",
             {"year": 2026, "month": 3},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     assert result["from"] == "Alice"
@@ -147,8 +147,7 @@ async def test_settlement_balance_month_includes_ledger_row() -> None:
         result = await execute_tool(
             "get_settlement_balance",
             {"year": 2026, "month": 3},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     assert result["month_ledger"] == {
@@ -187,7 +186,7 @@ async def test_settlement_balance_without_month_returns_outstanding() -> None:
         new_callable=AsyncMock,
         return_value=ledger,
     ):
-        result = await execute_tool("get_settlement_balance", {}, ALICE, PERSONS)
+        result = await execute_tool("get_settlement_balance", {}, CTX)
 
     assert result["scope"] == "all_months"
     assert result["outstanding"] == {
@@ -218,7 +217,7 @@ async def test_settlement_balance_without_month_all_settled() -> None:
         new_callable=AsyncMock,
         return_value=ledger,
     ):
-        result = await execute_tool("get_settlement_balance", {}, ALICE, PERSONS)
+        result = await execute_tool("get_settlement_balance", {}, CTX)
 
     assert result["outstanding"] is None
     assert result["outstanding_span"] is None
@@ -242,8 +241,7 @@ async def test_settlement_balance_no_owed() -> None:
         result = await execute_tool(
             "get_settlement_balance",
             {"year": 2026, "month": 3},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     assert result["gross_amount"] == pytest.approx(0.0)
@@ -260,8 +258,7 @@ async def test_dashboard_status_happy_path() -> None:
         result = await execute_tool(
             "get_dashboard_status",
             {"year": 2026, "month": 3},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     assert result["is_finalized"] is False
@@ -287,8 +284,7 @@ async def test_dashboard_status_includes_warnings() -> None:
         result = await execute_tool(
             "get_dashboard_status",
             {"year": 2026, "month": 3},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     assert result["finalization_warnings"] == ["3 unmapped categories"]
@@ -297,7 +293,7 @@ async def test_dashboard_status_includes_warnings() -> None:
 @pytest.mark.asyncio
 async def test_unknown_tool_raises() -> None:
     with pytest.raises(ToolExecutionError, match="Unknown tool"):
-        await execute_tool("nonexistent_tool", {}, ALICE, PERSONS)
+        await execute_tool("nonexistent_tool", {}, CTX)
 
 
 @pytest.mark.asyncio
@@ -313,8 +309,7 @@ async def test_tool_execution_error_wraps_exception() -> None:
         await execute_tool(
             "get_settlement_balance",
             {"year": 2026, "month": 3},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
 
@@ -359,8 +354,7 @@ async def test_budget_overview_happy_path() -> None:
         result = await execute_tool(
             "get_budget_overview",
             {"year": 2026, "month": 3},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     assert result["month"] == "2026-03"
@@ -396,8 +390,7 @@ async def test_search_transactions_happy_path() -> None:
         result = await execute_tool(
             "search_transactions",
             {"year": 2026, "month": 3, "merchant": "Whole Foods"},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     assert result["total_count"] == 1
@@ -429,9 +422,7 @@ async def test_search_transactions_default_scope_is_all() -> None:
         ),
         patch.object(SearchTransactionsUseCase, "execute", mock_execute),
     ):
-        await execute_tool(
-            "search_transactions", {"year": 2026, "month": 3}, ALICE, PERSONS
-        )
+        await execute_tool("search_transactions", {"year": 2026, "month": 3}, CTX)
 
     command = mock_execute.call_args.args[0]
     assert command.scope == "all"
@@ -453,8 +444,7 @@ async def test_search_transactions_household_scope() -> None:
         await execute_tool(
             "search_transactions",
             {"year": 2026, "month": 3, "scope": "household"},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     command = mock_execute.call_args.args[0]
@@ -476,8 +466,7 @@ async def test_search_transactions_personal_scope_uses_current_user() -> None:
         await execute_tool(
             "search_transactions",
             {"year": 2026, "month": 3, "scope": "personal"},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     command = mock_execute.call_args.args[0]
@@ -511,8 +500,7 @@ async def test_bulk_update_transactions_rejects_unknown_category() -> None:
                 "transaction_ids": [str(tx.id)],
                 "changes": {"category": "Bogus"},
             },
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
 
@@ -575,7 +563,7 @@ async def test_get_tags_wraps_and_truncates() -> None:
         new_callable=AsyncMock,
         return_value=GetTagsResult(tags=tags),
     ):
-        result = await execute_tool("get_tags", {}, ALICE, PERSONS)
+        result = await execute_tool("get_tags", {}, CTX)
 
     assert result["total_count"] == 25
     assert result["showing"] == 20
@@ -591,7 +579,7 @@ async def test_get_tags_empty() -> None:
         new_callable=AsyncMock,
         return_value=GetTagsResult(tags=[]),
     ):
-        result = await execute_tool("get_tags", {}, ALICE, PERSONS)
+        result = await execute_tool("get_tags", {}, CTX)
 
     assert result == {"total_count": 0, "showing": 0, "tags": []}
 
@@ -625,7 +613,7 @@ async def test_get_transaction_history_happy_path() -> None:
         return_value=history,
     ):
         result = await execute_tool(
-            "get_transaction_history", {"transaction_id": str(tx_id)}, ALICE, PERSONS
+            "get_transaction_history", {"transaction_id": str(tx_id)}, CTX
         )
 
     assert result["total_count"] == 1
@@ -640,9 +628,7 @@ async def test_get_transaction_history_happy_path() -> None:
 @pytest.mark.asyncio
 async def test_get_transaction_history_rejects_bad_uuid() -> None:
     with pytest.raises(ToolExecutionError, match="Invalid transaction ID"):
-        await execute_tool(
-            "get_transaction_history", {"transaction_id": "nope"}, ALICE, PERSONS
-        )
+        await execute_tool("get_transaction_history", {"transaction_id": "nope"}, CTX)
 
 
 def _category_groups_result() -> object:
@@ -695,9 +681,7 @@ async def test_get_budgets_filters_and_resolves_group_names() -> None:
         new_callable=AsyncMock,
         side_effect=[budgets, groups],
     ):
-        result = await execute_tool(
-            "get_budgets", {"year": 2026, "month": 3}, ALICE, PERSONS
-        )
+        result = await execute_tool("get_budgets", {"year": 2026, "month": 3}, CTX)
 
     assert result["total_count"] == 2
     assert {row["scope"] for row in result["budgets"]} == {"household", "personal"}
@@ -726,8 +710,7 @@ async def test_get_budgets_scope_household_only() -> None:
         result = await execute_tool(
             "get_budgets",
             {"year": 2026, "month": 3, "scope": "household"},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     assert result["total_count"] == 1
@@ -748,7 +731,7 @@ async def test_get_category_setup_happy_path() -> None:
             ListUnmappedCategoriesResult(categories=["Mystery"]),
         ],
     ):
-        result = await execute_tool("get_category_setup", {}, ALICE, PERSONS)
+        result = await execute_tool("get_category_setup", {}, CTX)
 
     group = result["groups"][0]
     assert group["group"] == "Food & Dining"
@@ -785,7 +768,7 @@ async def test_get_upload_history_newest_first_with_limit() -> None:
         new_callable=AsyncMock,
         return_value=history,
     ):
-        result = await execute_tool("get_upload_history", {"limit": 2}, ALICE, PERSONS)
+        result = await execute_tool("get_upload_history", {"limit": 2}, CTX)
 
     assert result["total_count"] == 3
     assert result["showing"] == 2
@@ -817,7 +800,7 @@ async def test_get_reconciliation_report_concise() -> None:
         return_value=recon,
     ):
         result = await execute_tool(
-            "get_reconciliation_report", {"year": 2026, "month": 3}, ALICE, PERSONS
+            "get_reconciliation_report", {"year": 2026, "month": 3}, CTX
         )
 
     assert result["month"] == "2026-03"
@@ -865,8 +848,7 @@ async def test_get_reconciliation_report_detailed_adds_breakdown_and_rows() -> N
         result = await execute_tool(
             "get_reconciliation_report",
             {"year": 2026, "month": 3, "response_format": "detailed"},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     assert result["group_breakdown"][0]["group"] == "Food & Dining"
@@ -940,7 +922,7 @@ async def test_get_settlement_activity_with_outstanding_fetches_candidates() -> 
         side_effect=[settle, merchants, candidates],
     ) as mock_execute:
         result = await execute_tool(
-            "get_settlement_activity", {"year": 2026, "month": 3}, ALICE, PERSONS
+            "get_settlement_activity", {"year": 2026, "month": 3}, CTX
         )
 
     assert mock_execute.call_count == 3
@@ -982,7 +964,7 @@ async def test_get_settlement_activity_settled_skips_candidates() -> None:
         side_effect=[settle, ListSettlementMerchantsResult(merchants=[])],
     ) as mock_execute:
         result = await execute_tool(
-            "get_settlement_activity", {"year": 2026, "month": 3}, ALICE, PERSONS
+            "get_settlement_activity", {"year": 2026, "month": 3}, CTX
         )
 
     assert mock_execute.call_count == 2
@@ -1043,9 +1025,7 @@ async def test_get_dashboard_summary_household() -> None:
         new_callable=AsyncMock,
         return_value=_dashboard_result(),
     ):
-        result = await execute_tool(
-            "get_dashboard_summary", {"year": 2026}, ALICE, PERSONS
-        )
+        result = await execute_tool("get_dashboard_summary", {"year": 2026}, CTX)
 
     assert result["household_spending_ytd"] == pytest.approx(3400.0)
     assert result["outstanding"]["from"] == "Alice"
@@ -1080,8 +1060,7 @@ async def test_get_dashboard_summary_personal_adds_my_fields() -> None:
         result = await execute_tool(
             "get_dashboard_summary",
             {"year": 2026, "scope": "personal"},
-            ALICE,
-            PERSONS,
+            CTX,
         )
 
     command = mock_execute.call_args.args[0]
@@ -1123,7 +1102,7 @@ async def test_get_adjustments_preview_happy_path() -> None:
         patch.object(PreviewAdjustmentsUseCase, "execute", mock_execute),
     ):
         result = await execute_tool(
-            "get_adjustments_preview", {"year": 2026, "month": 3}, ALICE, PERSONS
+            "get_adjustments_preview", {"year": 2026, "month": 3}, CTX
         )
 
     command = mock_execute.call_args.args[0]

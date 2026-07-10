@@ -1,12 +1,13 @@
 """LLM client protocol — application-layer abstraction over any LLM provider."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from typing import Protocol
 
 from src.application.chat.events import TextDelta
 from src.config.settings import EffortLevel
+from src.domain.entities.person import Person
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,3 +49,22 @@ class LLMClientProtocol(Protocol):
         tools: list[dict[str, object]],
         messages: list[dict[str, object]],
     ) -> AbstractAsyncContextManager[LLMStream]: ...
+
+
+@dataclass(frozen=True, slots=True)
+class ToolContext:
+    """Everything a tool handler may need beyond its own input.
+
+    Carries the LLM client so agentic tools (delegate_analysis) can run a
+    sub-loop without the registry importing the use case — the context flows
+    down from the loop that already owns the client.
+    """
+
+    current_user: Person
+    persons: list[Person]
+    llm: LLMClientProtocol
+
+
+type ToolExecutorFn = Callable[
+    [str, dict[str, object], ToolContext], Awaitable[dict[str, object]]
+]
