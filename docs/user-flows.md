@@ -553,6 +553,24 @@ A natural language assistant for quick answers without page-hopping. Optional �
 - Given a recorded settlement from get_settlement_activity, when I ask to delete it or to link/unlink its bank transaction, then the assistant proposes the change with the concrete transaction and settlement details, and confirming applies it with the same month-lock guards as the app
 - Given a settlement proposal I don't confirm, then nothing is recorded and the ledger is unchanged
 
+**US-CHAT-20** (v1.8.x): As a partner, I want the assistant to compute complex analyses with code, so projections and multi-step math are exact instead of estimated.
+
+- Given months of data, when I ask "project our year-end Food & Dining total", then the assistant runs code in the sandbox that calls the read tools programmatically, aggregates there, and answers with the computed figures — raw transaction lists never flood the conversation
+- Given a running computation, then the chat shows a code card with the command and, when finished, collapsible stdout/stderr with the exit status
+- Given the sandbox calls a read tool, then the call still renders as a "Looking up…" indicator; write tools are never callable from code
+- Given code execution is disabled by config (CHAT__ENABLE_CODE_EXECUTION=false), then the assistant answers with direct tool calls only
+
+**US-CHAT-21** (v1.8.x): As a partner, I want to hand open-ended investigations to a research subagent, so a deep dive doesn't derail my conversation.
+
+- Given a broad request like "find anomalies this year" or "audit our splits for mistakes", then the assistant calls delegate_analysis once, progress shows as a single "Looking up deep analysis…" indicator, and the reply cites concrete figures and transaction IDs from the subagent's summary
+- Given the subagent hits its turn limit mid-investigation, then the assistant still receives its partial findings (prefixed as truncated) rather than an error
+- Given the subagent runs, then it uses read tools only — it can never propose or apply mutations, run code, or delegate further
+
+**US-CHAT-22** (v1.8.x): As a partner, I want to choose how hard the assistant thinks per question, so quick lookups stay fast and audits get depth.
+
+- Given the chat panel, then an Effort control (Quick / Standard / Thorough) sits by the input, my choice persists across sessions on this device, and each request is sent with the matching effort level
+- Given Quick, then simple questions answer with minimal latency; given Thorough, then multi-step analyses get the deepest reasoning
+
 ---
 
 ## User Journeys

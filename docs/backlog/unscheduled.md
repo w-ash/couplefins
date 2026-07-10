@@ -22,6 +22,9 @@ Ideas and features without version assignment. Move to a version file when ready
 - Recurring expense detection — same merchant + similar amount across months → surface as a "Subscriptions" view
 - ~~Natural language spending queries via Claude API~~ → moved to v1.5.x (Chat Assistant)
 
+## Chat Assistant
+- Memory tool / cross-session persistence — needs storage + person-scoping design. Security note for that design: persistent memory is a prompt-injection reinfection vector (Anthropic containment write-up, May 2026) — plan startup-phase scanning of persisted state.
+
 ## UI & UX
 - Keyboard shortcuts for common actions
 - PWA manifest + service worker — installable on mobile, push notification for "time to export your CSV" on the 1st

@@ -171,7 +171,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.8.0 | Agentic chat foundations — Opus 4.8 + adaptive thinking, tool registry + human-only blacklist, parity contract test, trigger-first tool descriptions ([spec](v1.8.0-chat-foundations.md), [series overview](v1.8.x-agentic-chat.md)) | Completed (2026-07-09) | M |
 | v1.8.1 | Chat read parity — 9 new read tools covering every human-visible query surface, strict schemas, untrusted-content labeling | Completed (2026-07-10) ([spec](v1.8.1-chat-read-parity.md)) | M |
 | v1.8.2 | Chat write parity — 12 new mutation tools (all two-phase confirmed), batch splits, parity contract complete | Completed (2026-07-10) ([spec](v1.8.2-chat-write-parity.md)) | L |
-| v1.8.3 | Agentic chat — code execution sandbox + delegate_analysis subagent | Planned ([spec](v1.8.3-chat-agentic.md)) | L |
+| v1.8.3 | Agentic chat — code execution sandbox + programmatic tool calling, delegate_analysis subagent, tool search, context management, per-request effort | Completed (2026-07-10) ([spec](v1.8.3-chat-agentic.md)) | L |
 
 ## Infrastructure Readiness
 
