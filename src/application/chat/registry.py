@@ -52,6 +52,10 @@ class ToolSpec:
     kind: ToolKind = "read"
     executor: ConfirmedExecutor | None = None
     broadcast_entity: str | None = None
+    # Deferred tools stay out of the prompt until tool search surfaces them.
+    # Deferred is the default so new tools stay cheap; only the hot tools
+    # (observed traffic) and agentic capabilities load up front.
+    defer_loading: bool = True
 
     def __post_init__(self) -> None:
         if self.name != self.schema["name"]:
@@ -69,6 +73,11 @@ class ToolSpec:
         if self.handler is None and self.kind != "agentic":
             raise ValueError(
                 f"{self.name}: only agentic server tools may omit a handler"
+            )
+        if self.kind == "agentic" and self.defer_loading:
+            raise ValueError(
+                f"{self.name}: agentic capabilities must not be deferred — "
+                "the model under-reaches for them as it is"
             )
 
 
@@ -99,18 +108,21 @@ REGISTRY: tuple[ToolSpec, ...] = (
         schema=tools.GET_SETTLEMENT_BALANCE_SCHEMA,
         handler=tool_executor.handle_settlement_balance,
         use_cases=("GetSettleUpDataUseCase",),
+        defer_loading=False,
     ),
     ToolSpec(
         name="get_budget_overview",
         schema=tools.GET_BUDGET_OVERVIEW_SCHEMA,
         handler=tool_executor.handle_budget_overview,
         use_cases=("GetBudgetOverviewUseCase",),
+        defer_loading=False,
     ),
     ToolSpec(
         name="search_transactions",
         schema=tools.SEARCH_TRANSACTIONS_SCHEMA,
         handler=tool_executor.handle_search_transactions,
         use_cases=("SearchTransactionsUseCase",),
+        defer_loading=False,
     ),
     ToolSpec(
         name="get_spending_by_group",
@@ -347,6 +359,7 @@ REGISTRY: tuple[ToolSpec, ...] = (
         handler=None,
         use_cases=(),
         kind="agentic",
+        defer_loading=False,
     ),
     ToolSpec(
         name="delegate_analysis",
@@ -354,6 +367,15 @@ REGISTRY: tuple[ToolSpec, ...] = (
         handler=_handle_delegate_analysis,
         use_cases=(),
         kind="agentic",
+        defer_loading=False,
+    ),
+    ToolSpec(
+        name="tool_search_tool_bm25",
+        schema=tools.TOOL_SEARCH_SCHEMA,
+        handler=None,
+        use_cases=(),
+        kind="agentic",
+        defer_loading=False,
     ),
 )
 
@@ -369,21 +391,29 @@ _READ_ALLOWED_CALLERS: tuple[str, ...] = ("direct", "code_execution_20260120")
 
 
 def build_tools(*, enable_code_execution: bool = True) -> list[dict[str, object]]:
-    """API tool list in registry order, cache breakpoint on the last entry.
+    """API tool list in registry order.
 
     Order must be deterministic — tools render first in the prompt, so any
     reordering invalidates the whole prompt cache. Shallow copies keep the
-    cache stamp off the schema constants.
+    cache stamp off the schema constants. The cache breakpoint goes on the
+    LAST NON-DEFERRED entry: a tool with defer_loading cannot carry
+    cache_control (API 400), and deferred tools are excluded from the
+    cached prefix anyway.
     """
     tool_list: list[dict[str, object]] = []
+    last_loaded_index = -1
     for spec in REGISTRY:
         if spec.name == "code_execution" and not enable_code_execution:
             continue
         tool = dict(spec.schema)
         if enable_code_execution and spec.kind == "read":
             tool["allowed_callers"] = list(_READ_ALLOWED_CALLERS)
+        if spec.defer_loading:
+            tool["defer_loading"] = True
+        else:
+            last_loaded_index = len(tool_list)
         tool_list.append(tool)
-    tool_list[-1]["cache_control"] = {"type": "ephemeral"}
+    tool_list[last_loaded_index]["cache_control"] = {"type": "ephemeral"}
     return tool_list
 
 

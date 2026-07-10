@@ -1165,3 +1165,12 @@ DELEGATE_ANALYSIS_SCHEMA: dict[str, object] = {
         "additionalProperties": False,
     },
 }
+
+# Server-side tool discovery (BM25 over names/descriptions). Executed by
+# the API — no input_schema, no handler. Recommended at 10+ tools; this
+# registry holds ~34, and deferred tools measurably improve tool-selection
+# accuracy, not just token use.
+TOOL_SEARCH_SCHEMA: dict[str, object] = {
+    "type": "tool_search_tool_bm25_20251119",
+    "name": "tool_search_tool_bm25",
+}

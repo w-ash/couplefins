@@ -157,9 +157,32 @@ class TestRegistryShape:
                 use_cases=template.use_cases,
             )
 
-    def test_only_last_tool_carries_cache_control(self) -> None:
-        assert all("cache_control" not in t for t in TOOLS[:-1])
-        assert TOOLS[-1]["cache_control"] == {"type": "ephemeral"}
+    def test_single_cache_stamp_on_last_non_deferred_tool(self) -> None:
+        """Deferred tools cannot carry cache_control (API 400), so the one
+        breakpoint sits on the last non-deferred entry."""
+        stamped = [t for t in TOOLS if "cache_control" in t]
+        assert len(stamped) == 1
+        assert stamped[0]["cache_control"] == {"type": "ephemeral"}
+        non_deferred = [t for t in TOOLS if not t.get("defer_loading")]
+        assert stamped[0] is non_deferred[-1]
+        assert all("cache_control" not in t for t in TOOLS if t.get("defer_loading"))
+
+    def test_hot_tools_load_up_front_everything_else_defers(self) -> None:
+        """The hot set is pinned from observed traffic plus the agentic
+        capabilities the model under-reaches for; adjust deliberately, not
+        by accident — reordering or re-flagging churns the prompt cache."""
+        hot = {t["name"] for t in TOOLS if not t.get("defer_loading")}
+        assert hot == {
+            "get_settlement_balance",
+            "get_budget_overview",
+            "search_transactions",
+            "code_execution",
+            "delegate_analysis",
+            "tool_search_tool_bm25",
+        }
+        for tool in TOOLS:
+            if tool["name"] not in hot:
+                assert tool["defer_loading"] is True, tool["name"]
 
     def test_no_strict_schemas(self) -> None:
         """strict: true was tried and abandoned — the API caps strict tools
