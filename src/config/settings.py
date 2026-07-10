@@ -81,6 +81,8 @@ class ChatConfig(BaseModel):
     max_tokens: int = 16384
     effort: EffortLevel = "high"
     enable_code_execution: bool = True
+    subagent_max_turns: int = 12
+    subagent_effort: EffortLevel = "low"
 
 
 class Settings(BaseSettings):

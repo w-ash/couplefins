@@ -37,6 +37,10 @@ describe("isMutationTool", () => {
       expect(isMutationTool(name)).toBe(true);
     }
   });
+
+  it("classifies agentic read overrides as lookups despite their names", () => {
+    expect(isMutationTool("delegate_analysis")).toBe(false);
+  });
 });
 
 describe("ToolCallIndicator", () => {
@@ -52,6 +56,13 @@ describe("ToolCallIndicator", () => {
       <ToolCallIndicator toolCall={{ id: "1", name: "get_upload_history" }} />,
     );
     expect(screen.getByText("Looking up upload history…")).toBeInTheDocument();
+  });
+
+  it("shows Looking up (never Proposing) for delegate_analysis", () => {
+    render(
+      <ToolCallIndicator toolCall={{ id: "1", name: "delegate_analysis" }} />,
+    );
+    expect(screen.getByText("Looking up deep analysis…")).toBeInTheDocument();
   });
 
   it("shows Checked when the result arrived", () => {

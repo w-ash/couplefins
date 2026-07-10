@@ -1129,3 +1129,39 @@ CODE_EXECUTION_SCHEMA: dict[str, object] = {
     "type": "code_execution_20260120",
     "name": "code_execution",
 }
+
+DELEGATE_ANALYSIS_SCHEMA: dict[str, object] = {
+    "name": "delegate_analysis",
+    "description": (
+        "Call this for open-ended analysis that would need many searches — "
+        "'review our whole year and find anomalies', 'audit our splits for "
+        "mistakes', 'summarize how our spending habits changed' — so the "
+        "main conversation stays focused. A research subagent investigates "
+        "with read-only tools in a fresh context and returns one dense "
+        "summary with concrete figures and transaction IDs. Do NOT call it "
+        "for questions one or two tools can answer, and do NOT call it for "
+        "arithmetic over known data — use the code sandbox for that."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "question": {
+                "type": "string",
+                "description": (
+                    "The complete investigation question, self-contained: "
+                    "the subagent sees nothing from this conversation, so "
+                    "include names, periods, and thresholds it needs."
+                ),
+            },
+            "scope": {
+                "type": "string",
+                "description": (
+                    "Optional boundaries for the investigation — date "
+                    "range, category groups, or persons to focus on."
+                ),
+            },
+        },
+        "required": ["question"],
+        "additionalProperties": False,
+    },
+}

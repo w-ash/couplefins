@@ -21,6 +21,8 @@ from typing import Literal
 from src.application.chat import confirmed_actions, tool_executor, tools
 from src.application.chat.pending_actions import PendingAction
 from src.application.chat.protocols import ToolContext
+from src.application.chat.subagent import run_subagent
+from src.config.settings import get_settings
 from src.domain.entities.person import Person
 from src.domain.exceptions import ToolExecutionError
 
@@ -68,6 +70,27 @@ class ToolSpec:
             raise ValueError(
                 f"{self.name}: only agentic server tools may omit a handler"
             )
+
+
+# Lives here (not tool_executor.py) because it needs the registry's read
+# toolset and executor: tool_executor is imported BY this module, so putting
+# it there would create a cycle. Name resolution of REGISTRY/execute_tool
+# happens at call time, after this module is fully loaded.
+async def _handle_delegate_analysis(
+    tool_input: dict[str, object], ctx: ToolContext
+) -> dict[str, object]:
+    question = str(tool_input.get("question", "")).strip()
+    if not question:
+        raise ToolExecutionError("question is required")
+    scope = tool_input.get("scope")
+    return await run_subagent(
+        question,
+        str(scope) if scope is not None else None,
+        ctx,
+        tools=build_subagent_tools(),
+        execute_fn=execute_tool,
+        cfg=get_settings().chat,
+    )
 
 
 REGISTRY: tuple[ToolSpec, ...] = (
@@ -325,6 +348,13 @@ REGISTRY: tuple[ToolSpec, ...] = (
         use_cases=(),
         kind="agentic",
     ),
+    ToolSpec(
+        name="delegate_analysis",
+        schema=tools.DELEGATE_ANALYSIS_SCHEMA,
+        handler=_handle_delegate_analysis,
+        use_cases=(),
+        kind="agentic",
+    ),
 )
 
 _SPECS_BY_NAME: dict[str, ToolSpec] = {spec.name: spec for spec in REGISTRY}
@@ -353,6 +383,18 @@ def build_tools(*, enable_code_execution: bool = True) -> list[dict[str, object]
         if enable_code_execution and spec.kind == "read":
             tool["allowed_callers"] = list(_READ_ALLOWED_CALLERS)
         tool_list.append(tool)
+    tool_list[-1]["cache_control"] = {"type": "ephemeral"}
+    return tool_list
+
+
+def build_subagent_tools() -> list[dict[str, object]]:
+    """Read-only toolset for the research subagent.
+
+    No mutations, no code execution, no nested delegate_analysis (one level
+    of delegation only), and no allowed_callers — the subagent has no
+    sandbox to call from.
+    """
+    tool_list = [dict(spec.schema) for spec in REGISTRY if spec.kind == "read"]
     tool_list[-1]["cache_control"] = {"type": "ephemeral"}
     return tool_list
 

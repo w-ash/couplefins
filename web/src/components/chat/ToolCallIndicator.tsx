@@ -33,11 +33,17 @@ const TOOL_LABELS: Record<string, string> = {
   link_settlement_transaction: "settlement link",
   unlink_settlement_transaction: "settlement unlink",
   manage_settlement_merchant: "merchant pattern change",
+  delegate_analysis: "deep analysis",
 };
+
+// Agentic tools break the get_*/search_* naming convention but read, never
+// propose — the backend shape test exempts them for the same reason.
+const READ_TOOL_OVERRIDES = new Set(["delegate_analysis"]);
 
 // Derived, not hand-maintained: the backend names every read tool get_* or
 // search_* (registry convention) — everything else proposes a mutation.
 export function isMutationTool(name: string): boolean {
+  if (READ_TOOL_OVERRIDES.has(name)) return false;
   return !name.startsWith("get_") && !name.startsWith("search_");
 }
 
