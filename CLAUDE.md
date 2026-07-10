@@ -14,8 +14,11 @@ These two fields are orthogonal — a transaction can be household without being
 The Monarch CSV `shared` tag maps to `household=true` with a default 50/50 split on import. "Shared" is a tag name, not a domain concept — the domain concept is "household."
 
 Domain details: @docs/domain.md
-User goals and monthly workflow: @docs/user-flows.md
-Implementation roadmap: @docs/backlog/README.md
+
+Read these on demand — they are not preloaded:
+
+- `docs/user-flows.md` — user stories, acceptance criteria, the monthly ritual. Read before planning or implementing any feature.
+- `docs/backlog/README.md` — version matrix, roadmap, setup instructions. Read when shipping a version or checking what landed when.
 
 ## Core Principles (YOU MUST FOLLOW)
 
