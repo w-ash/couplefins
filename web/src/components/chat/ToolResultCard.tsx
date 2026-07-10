@@ -3,7 +3,12 @@ import { ConfirmationCard } from "@/components/chat/ConfirmationCard";
 import { ProgressBar } from "@/components/ProgressBar";
 import type { ConfirmationState, ToolCall } from "@/lib/chat";
 import { cn } from "@/lib/cn";
-import { amountColorClass, formatCurrency, formatDate } from "@/lib/format";
+import {
+  amountColorClass,
+  formatCurrency,
+  formatDate,
+  stripUserData,
+} from "@/lib/format";
 import { getHealthStyle } from "@/lib/health-styles";
 import { heroCardClass, tableHeaderRowClass } from "@/lib/layout";
 
@@ -190,7 +195,7 @@ function TransactionTableCard({ result }: { result: SearchResult }) {
               <td className="py-1 pr-2 text-muted-foreground">
                 {formatDate(tx.date)}
               </td>
-              <td className="py-1 pr-2">{tx.merchant}</td>
+              <td className="py-1 pr-2">{stripUserData(tx.merchant)}</td>
               <td
                 className={cn(
                   "py-1 pr-2 text-right tabular-nums",
@@ -199,7 +204,9 @@ function TransactionTableCard({ result }: { result: SearchResult }) {
               >
                 {formatCurrency(tx.amount)}
               </td>
-              <td className="py-1 text-muted-foreground">{tx.category}</td>
+              <td className="py-1 text-muted-foreground">
+                {stripUserData(tx.category)}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -287,6 +294,102 @@ function DashboardStatusCard({ result }: { result: DashboardStatusResult }) {
   );
 }
 
+// --- Generic renderer (default for tools without a bespoke card) ---
+
+function formatGenericValue(value: unknown): string {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "boolean") return value ? "yes" : "no";
+  if (typeof value === "string") return stripUserData(value);
+  if (typeof value === "number") return String(value);
+  if (typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([k, v]) => `${formatGenericKey(k)}: ${formatGenericValue(v)}`)
+      .join(" · ");
+  }
+  return String(value);
+}
+
+function formatGenericKey(key: string): string {
+  return key.replaceAll("_", " ");
+}
+
+function GenericListTable({ rows }: { rows: Record<string, unknown>[] }) {
+  const columns = Object.keys(rows[0]);
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className={tableHeaderRowClass}>
+            {columns.map((col) => (
+              <th key={col} className="py-1 pr-2 text-left font-medium">
+                {formatGenericKey(col)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: rows are static render-once data
+            <tr key={i} className="border-b border-border/50">
+              {columns.map((col) => (
+                <td key={col} className="py-1 pr-2">
+                  {formatGenericValue(row[col])}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function GenericToolResultCard({
+  result,
+}: {
+  result: Record<string, unknown>;
+}) {
+  const entries = Object.entries(result);
+  if (entries.length === 0) return null;
+  const scalars = entries.filter(([, v]) => !Array.isArray(v));
+  const lists = entries.filter((entry): entry is [string, unknown[]] =>
+    Array.isArray(entry[1]),
+  );
+
+  return (
+    <div className="space-y-2 text-xs">
+      {scalars.length > 0 && (
+        <div className="space-y-0.5">
+          {scalars.map(([key, value]) => (
+            <div key={key} className="flex justify-between gap-4">
+              <span className="text-muted-foreground">
+                {formatGenericKey(key)}
+              </span>
+              <span className="text-right tabular-nums">
+                {formatGenericValue(value)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {lists.map(([key, items]) => (
+        <div key={key} className="space-y-0.5">
+          <p className="font-medium text-muted-foreground">
+            {formatGenericKey(key)}
+          </p>
+          {items.length === 0 ? (
+            <p className="text-muted-foreground">none</p>
+          ) : typeof items[0] === "object" && items[0] !== null ? (
+            <GenericListTable rows={items as Record<string, unknown>[]} />
+          ) : (
+            <p>{items.map(formatGenericValue).join(", ")}</p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // --- Pending confirmation detection ---
 
 interface PendingConfirmationResult {
@@ -348,6 +451,12 @@ export function ToolResultCard({
     case "get_dashboard_status":
       return <DashboardStatusCard result={result as DashboardStatusResult} />;
     default:
+      // Every other tool renders through the generic key/value card.
+      if (result && typeof result === "object" && !Array.isArray(result)) {
+        return (
+          <GenericToolResultCard result={result as Record<string, unknown>} />
+        );
+      }
       return null;
   }
 }

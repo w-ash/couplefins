@@ -5,7 +5,28 @@ import {
   formatMonthSpan,
   formatSignedCurrency,
   isZeroCurrency,
+  stripUserData,
 } from "./format";
+
+describe("stripUserData", () => {
+  it("strips wrapper tags from a wrapped value", () => {
+    expect(stripUserData("<user_data>Whole Foods</user_data>")).toBe(
+      "Whole Foods",
+    );
+  });
+
+  it("leaves unwrapped values untouched", () => {
+    expect(stripUserData("Whole Foods")).toBe("Whole Foods");
+  });
+
+  it("strips every occurrence in a composed sentence", () => {
+    expect(
+      stripUserData(
+        "Change <user_data>Uber</user_data> and <user_data>Lyft</user_data>",
+      ),
+    ).toBe("Change Uber and Lyft");
+  });
+});
 
 describe("isZeroCurrency", () => {
   it("treats exact zero and negative zero as zero", () => {

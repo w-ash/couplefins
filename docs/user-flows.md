@@ -523,6 +523,18 @@ A natural language assistant for quick answers without page-hopping. Optional â€
 - Given I send a message and the conversation exceeds the backend cap (50 messages), then I see an inline error: "This conversation is full. Start a new one to continue."
 - Given the error, then the New Conversation control is visibly emphasized so recovery is a single click
 
+**US-CHAT-17** (v1.8.x): As a partner, I want to ask the assistant about anything I can see in the app, so I never have to leave the conversation to look something up.
+
+- Given a month with uploads, when I ask "what did our March reconciliation look like?", then the assistant calls get_reconciliation_report and answers with totals, per-person paid vs. fair share, and the gross settlement matching the Transactions page
+- Given uploads exist, when I ask "when did Bob last upload?", then the assistant answers from get_upload_history with the date, filename, and transaction count shown on the Upload page
+- Given tagged transactions, when I ask "what tags do we use?", then the assistant lists the distinct tags from get_tags
+- Given an edited transaction found via search, when I ask "who changed it?", then the assistant reports the edit timeline and import provenance from get_transaction_history
+- Given configured budgets, when I ask "which budgets are set for April?", then the assistant lists the configured amounts (not spending) from get_budgets
+- Given category mappings, when I ask "how are our categories organized?" or "anything unmapped?", then the assistant answers from get_category_setup
+- Given recorded settlements, when I ask "what payments have we recorded?", then the assistant answers from get_settlement_activity including what each payment covered
+- Given a year of data, when I ask "how's the year going?", then the assistant answers from get_dashboard_summary with YTD totals and per-month settlement status matching the Dashboard
+- Given my adjustment account is configured, when I ask "what adjustments would March produce?", then the assistant previews my adjustment rows from get_adjustments_preview
+
 ---
 
 ## User Journeys

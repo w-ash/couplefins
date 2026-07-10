@@ -139,3 +139,32 @@ class TestRegistryShape:
     def test_only_last_tool_carries_cache_control(self) -> None:
         assert all("cache_control" not in t for t in TOOLS[:-1])
         assert TOOLS[-1]["cache_control"] == {"type": "ephemeral"}
+
+    def test_every_schema_is_strict(self) -> None:
+        """strict: true guarantees schema-conformant tool calls; the API
+        requires additionalProperties: false alongside it."""
+        for spec in REGISTRY:
+            assert spec.schema.get("strict") is True, spec.name
+            input_schema = spec.schema["input_schema"]
+            assert isinstance(input_schema, dict)
+            assert input_schema.get("additionalProperties") is False, spec.name
+            assert "required" in input_schema, spec.name
+
+    def test_no_unsupported_constraints_in_strict_schemas(self) -> None:
+        """The API rejects numeric/array constraints on strict schemas
+        (live-verified 400: 'properties maximum, minimum are not supported').
+        Ranges belong in the description, enforcement in the handler."""
+        banned = {"minimum", "maximum", "maxItems", "minItems", "multipleOf"}
+
+        def walk(node: object, path: str) -> None:
+            if isinstance(node, dict):
+                overlap = banned & node.keys()
+                assert not overlap, f"{path}: unsupported constraints {overlap}"
+                for key, value in node.items():
+                    walk(value, f"{path}.{key}")
+            elif isinstance(node, list):
+                for i, value in enumerate(node):
+                    walk(value, f"{path}[{i}]")
+
+        for spec in REGISTRY:
+            walk(spec.schema["input_schema"], spec.name)

@@ -94,6 +94,63 @@ REGISTRY: tuple[ToolSpec, ...] = (
         use_cases=("GetSettleUpDataUseCase",),
     ),
     ToolSpec(
+        name="get_tags",
+        schema=tools.GET_TAGS_SCHEMA,
+        handler=tool_executor.handle_get_tags,
+        use_cases=("GetTagsUseCase",),
+    ),
+    ToolSpec(
+        name="get_transaction_history",
+        schema=tools.GET_TRANSACTION_HISTORY_SCHEMA,
+        handler=tool_executor.handle_get_transaction_history,
+        use_cases=("GetTransactionEditsUseCase",),
+    ),
+    ToolSpec(
+        name="get_budgets",
+        schema=tools.GET_BUDGETS_SCHEMA,
+        handler=tool_executor.handle_get_budgets,
+        use_cases=("list_budgets",),
+    ),
+    ToolSpec(
+        name="get_category_setup",
+        schema=tools.GET_CATEGORY_SETUP_SCHEMA,
+        handler=tool_executor.handle_get_category_setup,
+        use_cases=("ListUnmappedCategoriesUseCase",),
+    ),
+    ToolSpec(
+        name="get_upload_history",
+        schema=tools.GET_UPLOAD_HISTORY_SCHEMA,
+        handler=tool_executor.handle_get_upload_history,
+        use_cases=("GetUploadHistoryUseCase",),
+    ),
+    ToolSpec(
+        name="get_reconciliation_report",
+        schema=tools.GET_RECONCILIATION_REPORT_SCHEMA,
+        handler=tool_executor.handle_get_reconciliation_report,
+        use_cases=("GetReconciliationUseCase",),
+    ),
+    ToolSpec(
+        name="get_settlement_activity",
+        schema=tools.GET_SETTLEMENT_ACTIVITY_SCHEMA,
+        handler=tool_executor.handle_get_settlement_activity,
+        use_cases=(
+            "FindSettlementCandidatesUseCase",
+            "ListSettlementMerchantsUseCase",
+        ),
+    ),
+    ToolSpec(
+        name="get_dashboard_summary",
+        schema=tools.GET_DASHBOARD_SUMMARY_SCHEMA,
+        handler=tool_executor.handle_get_dashboard_summary,
+        use_cases=("GetDashboardUseCase",),
+    ),
+    ToolSpec(
+        name="get_adjustments_preview",
+        schema=tools.GET_ADJUSTMENTS_PREVIEW_SCHEMA,
+        handler=tool_executor.handle_get_adjustments_preview,
+        use_cases=("PreviewAdjustmentsUseCase",),
+    ),
+    ToolSpec(
         name="update_budget",
         schema=tools.UPDATE_BUDGET_SCHEMA,
         handler=tool_executor.handle_update_budget,
@@ -199,22 +256,11 @@ INTERNAL_USE_CASES: frozenset[str] = frozenset({
     "ListCategoryGroupsUseCase",
 })
 
-# Scheduled parity work. v1.8.1 ships the reads, v1.8.2 the writes; entries
-# move into REGISTRY use_cases as their tools land. A use case appearing in
-# neither this set nor any other bucket fails the parity test — that is the
-# point.
+# Scheduled parity work. v1.8.1 shipped the reads; v1.8.2 ships the writes,
+# whose entries move into REGISTRY use_cases as their tools land. A use case
+# appearing in neither this set nor any other bucket fails the parity test —
+# that is the point.
 PENDING_PARITY_USE_CASES: frozenset[str] = frozenset({
-    # v1.8.1 — reads
-    "GetTagsUseCase",
-    "GetTransactionEditsUseCase",
-    "list_budgets",
-    "ListUnmappedCategoriesUseCase",
-    "GetUploadHistoryUseCase",
-    "GetReconciliationUseCase",
-    "GetDashboardUseCase",
-    "PreviewAdjustmentsUseCase",
-    "FindSettlementCandidatesUseCase",
-    "ListSettlementMerchantsUseCase",
     # v1.8.2 — writes
     "UpdateBudgetUseCase",
     "DeleteBudgetUseCase",

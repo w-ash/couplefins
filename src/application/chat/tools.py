@@ -9,6 +9,11 @@ most important factor in tool selection quality.
 Opus 4.8 under-reaches for tools unless told when to use them, so every
 description leads with an explicit trigger ("Call this when...") — the
 opposite of the Sonnet 4.6 tuning this file originally carried.
+
+Every schema sets strict: true (guaranteed schema-conformant calls), which
+requires additionalProperties: false and rejects numeric/array constraints
+(minimum, maximum, maxItems — the API 400s on them). State ranges in the
+property description and enforce them in the handler instead.
 """
 
 GET_SETTLEMENT_BALANCE_SCHEMA: dict[str, object] = {
@@ -29,8 +34,10 @@ GET_SETTLEMENT_BALANCE_SCHEMA: dict[str, object] = {
         "(net_from/net_to), upload status for each person, and whether "
         "the month is finalized."
     ),
+    "strict": True,
     "input_schema": {
         "type": "object",
+        "additionalProperties": False,
         "properties": {
             "year": {
                 "type": "integer",
@@ -60,8 +67,10 @@ GET_BUDGET_OVERVIEW_SCHEMA: dict[str, object] = {
         "or over_budget). Groups with no budget set show null for budget "
         "and health fields. Supports both household and personal scope."
     ),
+    "strict": True,
     "input_schema": {
         "type": "object",
+        "additionalProperties": False,
         "properties": {
             "year": {
                 "type": "integer",
@@ -103,8 +112,10 @@ SEARCH_TRANSACTIONS_SCHEMA: dict[str, object] = {
         "category, amount, payer, split ratio, and household flag, plus "
         "the total count of matches."
     ),
+    "strict": True,
     "input_schema": {
         "type": "object",
+        "additionalProperties": False,
         "properties": {
             "year": {
                 "type": "integer",
@@ -157,8 +168,10 @@ GET_SPENDING_BY_GROUP_SCHEMA: dict[str, object] = {
         "Simpler than get_budget_overview — only spending amounts, no "
         "budget comparisons or health indicators."
     ),
+    "strict": True,
     "input_schema": {
         "type": "object",
+        "additionalProperties": False,
         "properties": {
             "year": {
                 "type": "integer",
@@ -185,8 +198,10 @@ GET_SPENDING_TRENDS_SCHEMA: dict[str, object] = {
         "year-over-year analysis. Does not include budget amounts — use "
         "get_budget_overview for budget comparisons."
     ),
+    "strict": True,
     "input_schema": {
         "type": "object",
+        "additionalProperties": False,
         "properties": {
             "year": {
                 "type": "integer",
@@ -212,8 +227,278 @@ GET_DASHBOARD_STATUS_SCHEMA: dict[str, object] = {
         "whether the month is finalized (locked against further changes). "
         "Useful for checking readiness before settling up or reviewing."
     ),
+    "strict": True,
     "input_schema": {
         "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "year": {
+                "type": "integer",
+                "description": "The year (e.g. 2026).",
+            },
+            "month": {
+                "type": "integer",
+                "description": "The month (1-12).",
+            },
+        },
+        "required": ["year", "month"],
+    },
+}
+
+GET_TAGS_SCHEMA: dict[str, object] = {
+    "name": "get_tags",
+    "description": (
+        "Call this when the user asks what tags exist, how things are "
+        "tagged, or before filtering by a tag whose exact spelling you "
+        "don't know. "
+        "Returns the distinct tags across all imported transactions. "
+        "Useful before search_transactions with a tag filter, or before "
+        "proposing tag changes with bulk_update_transactions."
+    ),
+    "strict": True,
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {},
+        "required": [],
+    },
+}
+
+GET_TRANSACTION_HISTORY_SCHEMA: dict[str, object] = {
+    "name": "get_transaction_history",
+    "description": (
+        "Call this when the user asks who changed a transaction, what its "
+        "original values were, or when it was imported. "
+        "Returns the edit timeline for one transaction (field, old value, "
+        "new value, when, by whom) plus its import provenance (who uploaded "
+        "it and when). The transaction_id must come from search_transactions "
+        "results — never guess an ID."
+    ),
+    "strict": True,
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "transaction_id": {
+                "type": "string",
+                "description": "Transaction UUID from search_transactions results.",
+            },
+        },
+        "required": ["transaction_id"],
+    },
+}
+
+GET_BUDGETS_SCHEMA: dict[str, object] = {
+    "name": "get_budgets",
+    "description": (
+        "Call this when the user asks which budgets are configured, what a "
+        "budget amount is set to, or which months have budgets — questions "
+        "about the configured amounts themselves, with no spending "
+        "comparison. For 'are we on/over budget' questions use "
+        "get_budget_overview instead. "
+        "Returns the raw budget rows visible to the current user: category "
+        "group, monthly amount, month, and scope (household budgets are "
+        "shared; personal budgets are the current user's own)."
+    ),
+    "strict": True,
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "year": {
+                "type": "integer",
+                "description": "The year (e.g. 2026).",
+            },
+            "month": {
+                "type": "integer",
+                "description": "The month (1-12). Omit for all months of the year.",
+            },
+            "scope": {
+                "type": "string",
+                "enum": ["household", "personal", "all"],
+                "description": (
+                    "Which budgets to list. Default 'all' (both household "
+                    "and the current user's personal budgets)."
+                ),
+            },
+        },
+        "required": ["year"],
+    },
+}
+
+GET_CATEGORY_SETUP_SCHEMA: dict[str, object] = {
+    "name": "get_category_setup",
+    "description": (
+        "Call this when the user asks how their categories are organized, "
+        "which group a category belongs to, which categories count personal "
+        "spending toward the budget, or whether anything is unmapped. "
+        "Returns every category group with its member categories, the "
+        "categories flagged include_personal (their group's budget also "
+        "counts personal transactions), and the list of categories not yet "
+        "mapped to any group."
+    ),
+    "strict": True,
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {},
+        "required": [],
+    },
+}
+
+GET_UPLOAD_HISTORY_SCHEMA: dict[str, object] = {
+    "name": "get_upload_history",
+    "description": (
+        "Call this when the user asks what has been uploaded, when someone "
+        "last imported their CSV, or how many transactions an upload "
+        "brought in. "
+        "Returns recent Monarch CSV uploads, newest first: who uploaded, "
+        "filename, when, the date range covered, and transaction counts "
+        "(total and household). Default 12 entries."
+    ),
+    "strict": True,
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "limit": {
+                "type": "integer",
+                "description": "Maximum entries to return (1-20). Default 12.",
+            },
+        },
+        "required": [],
+    },
+}
+
+GET_RECONCILIATION_REPORT_SCHEMA: dict[str, object] = {
+    "name": "get_reconciliation_report",
+    "description": (
+        "Call this when the user wants the month's full reconciliation "
+        "picture — total household spending, refunds, each person's paid "
+        "vs. fair share, and the gross settlement position — the numbers "
+        "the Transactions page summary shows. "
+        "Use response_format 'concise' (default) for totals and per-person "
+        "nets; 'detailed' adds the per-category-group breakdown and the "
+        "largest transactions. For the running who-owes-whom balance use "
+        "get_settlement_balance instead — this report is the month's gross "
+        "position before payments."
+    ),
+    "strict": True,
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "year": {
+                "type": "integer",
+                "description": "The year (e.g. 2026).",
+            },
+            "month": {
+                "type": "integer",
+                "description": "The month (1-12).",
+            },
+            "response_format": {
+                "type": "string",
+                "enum": ["concise", "detailed"],
+                "description": (
+                    "'concise' (default): totals + per-person nets + "
+                    "settlement. 'detailed': adds per-group breakdown and "
+                    "the largest transactions (max 20 rows)."
+                ),
+            },
+        },
+        "required": ["year", "month"],
+    },
+    "input_examples": [
+        {"year": 2026, "month": 6},
+        {"year": 2026, "month": 6, "response_format": "detailed"},
+    ],
+}
+
+GET_SETTLEMENT_ACTIVITY_SCHEMA: dict[str, object] = {
+    "name": "get_settlement_activity",
+    "description": (
+        "Call this when the user asks about recorded settlement payments "
+        "(who paid, when, how much, what they covered), about linking a "
+        "bank transfer to a settlement, or before proposing any settlement "
+        "mutation — it surfaces the settlement and transaction IDs those "
+        "mutations need. "
+        "Returns for the given month context: recorded payments with their "
+        "FIFO coverage and linked transactions, transactions that look like "
+        "the outstanding settlement transfer (candidates, scored), and the "
+        "configured settlement merchant patterns."
+    ),
+    "strict": True,
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "year": {
+                "type": "integer",
+                "description": "The year (e.g. 2026).",
+            },
+            "month": {
+                "type": "integer",
+                "description": "The month (1-12).",
+            },
+        },
+        "required": ["year", "month"],
+    },
+}
+
+GET_DASHBOARD_SUMMARY_SCHEMA: dict[str, object] = {
+    "name": "get_dashboard_summary",
+    "description": (
+        "Call this when the user asks how the year is going, wants the "
+        "overview the Dashboard page shows, or asks about a past month's "
+        "totals — year-to-date spending, total settled this year, and the "
+        "month-by-month history with each month's settlement status. "
+        "Scope 'household' (default) covers shared spending; 'personal' "
+        "adds the current user's own spending and their household share. "
+        "For single-month budget health use get_budget_overview; for "
+        "upload/finalization readiness use get_dashboard_status."
+    ),
+    "strict": True,
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "year": {
+                "type": "integer",
+                "description": "The year (e.g. 2026).",
+            },
+            "month": {
+                "type": "integer",
+                "description": (
+                    "The month (1-12) for the current-month figures. "
+                    "Defaults to the latest month with data."
+                ),
+            },
+            "scope": {
+                "type": "string",
+                "enum": ["household", "personal"],
+                "description": "Dashboard scope. Default 'household'.",
+            },
+        },
+        "required": ["year"],
+    },
+}
+
+GET_ADJUSTMENTS_PREVIEW_SCHEMA: dict[str, object] = {
+    "name": "get_adjustments_preview",
+    "description": (
+        "Call this when the user asks what adjustment entries a month would "
+        "produce for their Monarch import — the correcting entries that "
+        "make their personal spending totals accurate after splits. "
+        "Returns the current user's adjustment rows for the month (date, "
+        "merchant, category, amount, account) as the CSV export would "
+        "contain them. Requires the user's adjustment account to be "
+        "configured in their profile; the actual file download is only "
+        "available in the app."
+    ),
+    "strict": True,
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
         "properties": {
             "year": {
                 "type": "integer",
@@ -241,8 +526,10 @@ UPDATE_BUDGET_SCHEMA: dict[str, object] = {
         "match an existing category group exactly. Scope defaults to "
         "'household'; use 'personal' for the current user's personal budget."
     ),
+    "strict": True,
     "input_schema": {
         "type": "object",
+        "additionalProperties": False,
         "properties": {
             "group_name": {
                 "type": "string",
@@ -281,8 +568,10 @@ UPDATE_TRANSACTION_SPLIT_SCHEMA: dict[str, object] = {
         "search_transactions first to find the matching transaction, then "
         "use its id field. Returns a pending confirmation card."
     ),
+    "strict": True,
     "input_schema": {
         "type": "object",
+        "additionalProperties": False,
         "properties": {
             "transaction_id": {
                 "type": "string",
@@ -290,8 +579,6 @@ UPDATE_TRANSACTION_SPLIT_SCHEMA: dict[str, object] = {
             },
             "payer_percentage": {
                 "type": "integer",
-                "minimum": 0,
-                "maximum": 100,
                 "description": "The payer's share (0-100). 50 = 50/50, 0 = spotted.",
             },
         },
@@ -312,17 +599,19 @@ BULK_UPDATE_TRANSACTIONS_SCHEMA: dict[str, object] = {
         "category, or tag modifications. Returns a pending confirmation "
         "card listing the affected transactions and proposed changes."
     ),
+    "strict": True,
     "input_schema": {
         "type": "object",
+        "additionalProperties": False,
         "properties": {
             "transaction_ids": {
                 "type": "array",
                 "items": {"type": "string"},
-                "maxItems": 100,
-                "description": "Transaction UUIDs from search_transactions.",
+                "description": "Transaction UUIDs from search_transactions (max 100).",
             },
             "changes": {
                 "type": "object",
+                "additionalProperties": False,
                 "description": "Fields to update on all transactions.",
                 "properties": {
                     "household": {
@@ -331,8 +620,6 @@ BULK_UPDATE_TRANSACTIONS_SCHEMA: dict[str, object] = {
                     },
                     "payer_percentage": {
                         "type": "integer",
-                        "minimum": 0,
-                        "maximum": 100,
                         "description": "Set the payer's share (0-100).",
                     },
                     "is_excluded": {
@@ -345,6 +632,7 @@ BULK_UPDATE_TRANSACTIONS_SCHEMA: dict[str, object] = {
                     },
                     "tags": {
                         "type": "object",
+                        "additionalProperties": False,
                         "description": "Tag modification.",
                         "properties": {
                             "action": {

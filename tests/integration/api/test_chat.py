@@ -141,6 +141,32 @@ async def test_single_tool_use(client: AsyncClient) -> None:
     assert len(done_events) == 1
 
 
+# --- Test 2b: v1.8.1 read tool end-to-end against real uploaded data ---
+
+
+async def test_read_parity_tool_upload_history(client: AsyncClient) -> None:
+    persons, cookies = await setup_and_login(client)
+    alice_id = persons[0]["id"]
+    await upload_csv(client, alice_id, _SIMPLE_CSV, auth=cookies)
+
+    fake = FakeLLMClient([
+        _tool_use_script("get_upload_history", {}),
+        _text_only_script("One upload so far."),
+    ])
+
+    events = await _post_chat(client, cookies, fake)
+
+    tool_results = [e for e in events if e["type"] == "tool_result"]
+    assert len(tool_results) == 1
+    assert tool_results[0]["is_error"] is False
+    summary = tool_results[0]["summary"]
+    assert summary["total_count"] == 1
+    upload = summary["uploads"][0]
+    assert upload["transaction_count"] == 2
+    # Filenames are user-originated — labeled for the model.
+    assert upload["filename"].startswith("<user_data>")
+
+
 # --- Test 3: Parallel tool_use ---
 
 

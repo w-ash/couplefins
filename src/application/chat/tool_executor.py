@@ -26,10 +26,30 @@ from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
 from src.application.use_cases._shared.settlement_math import load_ledger
+from src.application.use_cases.export_adjustments import (
+    ExportAdjustmentsCommand,
+    PreviewAdjustmentsResult,
+    PreviewAdjustmentsUseCase,
+)
+from src.application.use_cases.find_settlement_candidates import (
+    FindSettlementCandidatesCommand,
+    FindSettlementCandidatesResult,
+    FindSettlementCandidatesUseCase,
+)
 from src.application.use_cases.get_budget_overview import (
     GetBudgetOverviewCommand,
     GetBudgetOverviewResult,
     GetBudgetOverviewUseCase,
+)
+from src.application.use_cases.get_dashboard import (
+    GetDashboardCommand,
+    GetDashboardResult,
+    GetDashboardUseCase,
+)
+from src.application.use_cases.get_reconciliation import (
+    GetReconciliationCommand,
+    GetReconciliationResult,
+    GetReconciliationUseCase,
 )
 from src.application.use_cases.get_settle_up_data import (
     GetSettleUpDataCommand,
@@ -41,9 +61,32 @@ from src.application.use_cases.get_spending_trends import (
     GetSpendingTrendsResult,
     GetSpendingTrendsUseCase,
 )
+from src.application.use_cases.get_tags import GetTagsResult, GetTagsUseCase
+from src.application.use_cases.get_transaction_edits import (
+    GetTransactionEditsCommand,
+    GetTransactionEditsResult,
+    GetTransactionEditsUseCase,
+)
+from src.application.use_cases.get_upload_history import (
+    GetUploadHistoryCommand,
+    GetUploadHistoryResult,
+    GetUploadHistoryUseCase,
+)
+from src.application.use_cases.list_budgets import ListBudgetsResult, list_budgets
 from src.application.use_cases.list_category_groups import (
     ListCategoryGroupsCommand,
+    ListCategoryGroupsResult,
     ListCategoryGroupsUseCase,
+)
+from src.application.use_cases.list_settlement_merchants import (
+    ListSettlementMerchantsCommand,
+    ListSettlementMerchantsResult,
+    ListSettlementMerchantsUseCase,
+)
+from src.application.use_cases.list_unmapped_categories import (
+    ListUnmappedCategoriesCommand,
+    ListUnmappedCategoriesResult,
+    ListUnmappedCategoriesUseCase,
 )
 from src.application.use_cases.search_transactions import (
     SearchTransactionsCommand,
@@ -66,10 +109,24 @@ def _person_name(person_id: UUID, persons: list[Person]) -> str:
 
 _MAX_PAYER_PERCENTAGE = 100
 _MAX_BULK_TRANSACTIONS = 100
+_MAX_LIST_ROWS = 20
+_DEFAULT_UPLOAD_HISTORY = 12
 
 
 def _fmt(amount: Decimal) -> float:
     return float(round(amount, 2))
+
+
+def _user_str(value: str) -> str:
+    """Label a user-originated string as untrusted data for the model.
+
+    Applies to free-text values imported from CSVs or typed by the couple —
+    merchant names, notes, tags, category names, upload filenames, settlement
+    notes. Category *group* names stay unwrapped: they are app-managed config
+    the system prompt already lists verbatim and tools match exactly.
+    The frontend strips the tags before rendering (stripUserData).
+    """
+    return f"<user_data>{value}</user_data>"
 
 
 # --- Tool handlers ---
@@ -259,9 +316,9 @@ async def handle_search_transactions(
         txns.append({
             "id": str(t.id),
             "date": t.date.isoformat(),
-            "merchant": f"<user_data>{t.merchant}</user_data>",
+            "merchant": _user_str(t.merchant),
             "amount": _fmt(t.amount),
-            "category": t.category,
+            "category": _user_str(t.category),
             "payer": _person_name(t.payer_person_id, persons),
             "split": split,
             "household": t.household,
@@ -274,12 +331,16 @@ async def handle_search_transactions(
     }
 
 
-async def _resolve_category_group_id(name: str) -> UUID | None:
-    result = await execute_use_case(
+async def _load_category_groups() -> ListCategoryGroupsResult:
+    return await execute_use_case(
         lambda uow: ListCategoryGroupsUseCase().execute(
             ListCategoryGroupsCommand(), uow
         )
     )
+
+
+async def _resolve_category_group_id(name: str) -> UUID | None:
+    result = await _load_category_groups()
     name_lower = name.lower()
     for item in result.items:
         if item.group.name.lower() == name_lower:
@@ -356,6 +417,405 @@ async def handle_dashboard_status(
         "is_finalized": result.is_finalized,
         "transaction_count": result.transaction_count,
         "finalization_warnings": result.finalization_warnings,
+    }
+
+
+async def handle_get_tags(
+    _tool_input: dict[str, object],
+    _current_user: Person,
+    _persons: list[Person],
+) -> dict[str, object]:
+    result: GetTagsResult = await execute_use_case(
+        lambda uow: GetTagsUseCase().execute(uow)
+    )
+    shown = result.tags[:_MAX_LIST_ROWS]
+    return {
+        "total_count": len(result.tags),
+        "showing": len(shown),
+        "tags": [_user_str(t) for t in shown],
+    }
+
+
+async def handle_get_transaction_history(
+    tool_input: dict[str, object],
+    _current_user: Person,
+    persons: list[Person],
+) -> dict[str, object]:
+    try:
+        transaction_id = UUID(cast(str, tool_input["transaction_id"]))
+    except ValueError as e:
+        raise ToolExecutionError(
+            f"Invalid transaction ID: {tool_input['transaction_id']}"
+        ) from e
+
+    command = GetTransactionEditsCommand(transaction_id=transaction_id)
+    result: GetTransactionEditsResult = await execute_use_case(
+        lambda uow: GetTransactionEditsUseCase().execute(command, uow)
+    )
+
+    shown = result.edits[:_MAX_LIST_ROWS]
+    edits: list[dict[str, object]] = [
+        {
+            "field": e.field_name,
+            "old_value": _user_str(e.old_value),
+            "new_value": _user_str(e.new_value),
+            "edited_at": e.edited_at.isoformat(),
+            "edited_by": (
+                _person_name(e.edited_by_person_id, persons)
+                if e.edited_by_person_id
+                else None
+            ),
+        }
+        for e in shown
+    ]
+    imported: dict[str, object] | None = None
+    if result.import_event is not None:
+        imported = {
+            "by": _person_name(result.import_event.person_id, persons),
+            "at": result.import_event.imported_at.isoformat(),
+        }
+    return {
+        "transaction_id": str(transaction_id),
+        "total_count": len(result.edits),
+        "showing": len(shown),
+        "edits": edits,
+        "imported": imported,
+    }
+
+
+async def handle_get_budgets(
+    tool_input: dict[str, object],
+    current_user: Person,
+    _persons: list[Person],
+) -> dict[str, object]:
+    year = cast(int, tool_input["year"])
+    month = cast(int | None, tool_input.get("month"))
+    scope = cast(str, tool_input.get("scope", "all"))
+
+    result: ListBudgetsResult = await execute_use_case(
+        lambda uow: list_budgets(uow, current_user.id)
+    )
+    groups = await _load_category_groups()
+    group_names = {item.group.id: item.group.name for item in groups.items}
+
+    rows: list[dict[str, object]] = []
+    for b in sorted(result.budgets, key=lambda b: (b.month, b.person_id is not None)):
+        if b.year != year or (month is not None and b.month != month):
+            continue
+        b_scope = "household" if b.person_id is None else "personal"
+        if scope not in {"all", b_scope}:
+            continue
+        rows.append({
+            "group": group_names.get(b.group_id, "Unknown"),
+            "amount": _fmt(b.monthly_amount),
+            "month": f"{b.year}-{b.month:02d}",
+            "scope": b_scope,
+        })
+    return {
+        "year": year,
+        "scope": scope,
+        "total_count": len(rows),
+        "showing": min(len(rows), _MAX_LIST_ROWS),
+        "budgets": rows[:_MAX_LIST_ROWS],
+    }
+
+
+async def handle_get_category_setup(
+    _tool_input: dict[str, object],
+    _current_user: Person,
+    _persons: list[Person],
+) -> dict[str, object]:
+    groups = await _load_category_groups()
+    unmapped: ListUnmappedCategoriesResult = await execute_use_case(
+        lambda uow: ListUnmappedCategoriesUseCase().execute(
+            ListUnmappedCategoriesCommand(), uow
+        )
+    )
+    return {
+        "groups": [
+            {
+                "group": item.group.name,
+                "categories": [_user_str(c.name) for c in item.categories],
+            }
+            for item in groups.items
+        ],
+        "include_personal_categories": [
+            _user_str(c.name)
+            for item in groups.items
+            for c in item.categories
+            if c.include_personal
+        ],
+        "unmapped_categories": [_user_str(name) for name in unmapped.categories],
+    }
+
+
+async def handle_get_upload_history(
+    tool_input: dict[str, object],
+    _current_user: Person,
+    _persons: list[Person],
+) -> dict[str, object]:
+    limit = max(
+        1,
+        min(
+            cast(int, tool_input.get("limit", _DEFAULT_UPLOAD_HISTORY)), _MAX_LIST_ROWS
+        ),
+    )
+    result: GetUploadHistoryResult = await execute_use_case(
+        lambda uow: GetUploadHistoryUseCase().execute(GetUploadHistoryCommand(), uow)
+    )
+    newest_first = sorted(result.entries, key=lambda e: e.uploaded_at, reverse=True)
+    shown = newest_first[:limit]
+    return {
+        "total_count": len(result.entries),
+        "showing": len(shown),
+        "uploads": [
+            {
+                "person": e.person_name,
+                "filename": _user_str(e.filename),
+                "uploaded_at": e.uploaded_at.isoformat(),
+                "covers": (
+                    f"{e.date_range_start.isoformat()} to "
+                    f"{e.date_range_end.isoformat()}"
+                    if e.date_range_start and e.date_range_end
+                    else None
+                ),
+                "transaction_count": e.transaction_count,
+                "household_count": e.household_count,
+            }
+            for e in shown
+        ],
+    }
+
+
+async def handle_get_reconciliation_report(
+    tool_input: dict[str, object],
+    _current_user: Person,
+    persons: list[Person],
+) -> dict[str, object]:
+    year = cast(int, tool_input["year"])
+    month = cast(int, tool_input["month"])
+    response_format = cast(str, tool_input.get("response_format", "concise"))
+
+    command = GetReconciliationCommand.from_month(year, month)
+    result: GetReconciliationResult = await execute_use_case(
+        lambda uow: GetReconciliationUseCase().execute(command, uow)
+    )
+    s = result.summary
+
+    summary: dict[str, object] = {
+        "month": f"{year}-{month:02d}",
+        "total_household_spending": _fmt(s.total_household_spending),
+        "total_refunds": _fmt(s.total_household_refunds),
+        "net_household_spending": _fmt(s.net_household_spending),
+        "transaction_count": s.transaction_count,
+        "persons": [
+            {
+                "name": _person_name(ps.person_id, persons),
+                "paid": _fmt(ps.total_paid),
+                "fair_share": _fmt(ps.total_share),
+            }
+            for ps in s.person_summaries
+        ],
+        # The month's gross position before payments — the running balance
+        # lives in get_settlement_balance.
+        "gross_settlement": _owed_dict(s.settlement, persons),
+        "uploads": [
+            {"person": us.person_name, "uploaded": us.has_uploaded}
+            for us in result.upload_statuses
+        ],
+    }
+    if result.unmapped_categories:
+        summary["unmapped_categories"] = [
+            _user_str(name) for name in result.unmapped_categories
+        ]
+    if response_format == "detailed":
+        summary["group_breakdown"] = [
+            {
+                "group": b.group_name,
+                "total": _fmt(b.total_amount),
+                "transaction_count": b.transaction_count,
+            }
+            for b in s.category_group_breakdowns
+        ]
+        largest = sorted(
+            result.transactions, key=lambda t: abs(t.amount), reverse=True
+        )[:_MAX_LIST_ROWS]
+        summary["largest_transactions"] = [
+            {
+                "id": str(t.id),
+                "date": t.date.isoformat(),
+                "merchant": _user_str(t.merchant),
+                "amount": _fmt(t.amount),
+                "category": _user_str(t.category),
+                "payer": _person_name(t.payer_person_id, persons),
+                "split": f"{t.payer_percentage}/{100 - t.payer_percentage}",
+            }
+            for t in largest
+        ]
+    return summary
+
+
+async def handle_get_settlement_activity(
+    tool_input: dict[str, object],
+    _current_user: Person,
+    persons: list[Person],
+) -> dict[str, object]:
+    year = cast(int, tool_input["year"])
+    month = cast(int, tool_input["month"])
+
+    settle_command = GetSettleUpDataCommand(year=year, month=month)
+    data: GetSettleUpDataResult = await execute_use_case(
+        lambda uow: GetSettleUpDataUseCase().execute(settle_command, uow)
+    )
+    merchants: ListSettlementMerchantsResult = await execute_use_case(
+        lambda uow: ListSettlementMerchantsUseCase().execute(
+            ListSettlementMerchantsCommand(), uow
+        )
+    )
+
+    # all_settlements is chronological ascending — newest first for chat.
+    newest_first = list(reversed(data.all_settlements))
+    shown = newest_first[:_MAX_LIST_ROWS]
+    settlements: list[dict[str, object]] = []
+    for lr in shown:
+        s = lr.record.settlement
+        settlements.append({
+            "id": str(s.id),
+            "amount": _fmt(s.amount),
+            "from": _person_name(s.from_person_id, persons),
+            "to": _person_name(s.to_person_id, persons),
+            "settled_at": s.settled_at.date().isoformat(),
+            "method": _user_str(s.method) if s.method else None,
+            "notes": _user_str(s.notes) if s.notes else None,
+            "is_waived": s.is_waived,
+            # Display-only annotation — coverage below is the math.
+            "recorded_against": f"{s.year}-{s.month:02d}" if s.year else None,
+            "covered_months": [
+                {"month": f"{y}-{m:02d}", "amount": _fmt(amount)}
+                for (y, m, amount) in lr.coverage.covered
+            ],
+            "linked_transaction_ids": [
+                str(tid) for tid in lr.record.linked_transaction_ids
+            ],
+        })
+
+    # Candidate transactions only make sense against an amount to settle —
+    # match the UI, which searches for the outstanding balance.
+    candidates: list[dict[str, object]] = []
+    if data.outstanding is not None:
+        cand_command = FindSettlementCandidatesCommand(amount=data.outstanding.amount)
+        cand: FindSettlementCandidatesResult = await execute_use_case(
+            lambda uow: FindSettlementCandidatesUseCase().execute(cand_command, uow)
+        )
+        candidates = [
+            {
+                "transaction_id": str(c.transaction.id),
+                "date": c.transaction.date.isoformat(),
+                "merchant": _user_str(c.transaction.merchant),
+                "amount": _fmt(c.transaction.amount),
+                "score": c.score,
+                "match_reasons": list(c.match_reasons),
+            }
+            for c in cand.candidates[:_MAX_LIST_ROWS]
+        ]
+
+    return {
+        "month": f"{year}-{month:02d}",
+        "outstanding": _owed_dict(data.outstanding, persons),
+        "outstanding_span": _span_dict(data.outstanding_span),
+        "settlements_total": len(data.all_settlements),
+        "settlements_showing": len(shown),
+        "settlements": settlements,
+        "candidate_transactions": candidates,
+        "settlement_merchants": [
+            {"name": _user_str(m.name), "pattern": _user_str(m.merchant_pattern)}
+            for m in merchants.merchants
+        ],
+    }
+
+
+async def handle_get_dashboard_summary(
+    tool_input: dict[str, object],
+    current_user: Person,
+    persons: list[Person],
+) -> dict[str, object]:
+    year = cast(int, tool_input["year"])
+    month = cast(int | None, tool_input.get("month"))
+    scope = cast(Literal["household", "personal"], tool_input.get("scope", "household"))
+
+    command = GetDashboardCommand(
+        year=year,
+        month=month,
+        scope=scope,
+        person_id=current_user.id if scope == "personal" else None,
+    )
+    result: GetDashboardResult = await execute_use_case(
+        lambda uow: GetDashboardUseCase().execute(command, uow)
+    )
+
+    summary: dict[str, object] = {
+        "year": year,
+        "scope": scope,
+        "household_spending_month": _fmt(result.household_spending_month),
+        "household_spending_ytd": _fmt(result.household_spending_ytd),
+        "ytd_total_settled": _fmt(result.ytd_total_settled),
+        "outstanding": _owed_dict(result.outstanding_balance, persons),
+        "outstanding_span": _span_dict(result.outstanding_span),
+        "unmapped_category_count": len(result.unmapped_categories),
+        "month_history": [
+            {
+                "month": f"{e.year}-{e.month:02d}",
+                "household_spending": _fmt(e.total_household_spending),
+                "settlement_gross": _fmt(e.settlement_amount),
+                "settlement_remaining": _fmt(e.settlement_remaining),
+                "settlement_status": e.settlement_status,
+                "finalized": e.is_finalized,
+            }
+            for e in result.month_history
+        ],
+    }
+    if scope == "personal":
+        for key, value in {
+            "my_spending_month": result.my_spending_month,
+            "my_household_share_month": result.my_household_share_month,
+            "my_personal_spending_month": result.my_personal_spending_month,
+            "my_spending_ytd": result.my_spending_ytd,
+        }.items():
+            if value is not None:
+                summary[key] = _fmt(value)
+    return summary
+
+
+async def handle_get_adjustments_preview(
+    tool_input: dict[str, object],
+    current_user: Person,
+    _persons: list[Person],
+) -> dict[str, object]:
+    year = cast(int, tool_input["year"])
+    month = cast(int, tool_input["month"])
+
+    command = ExportAdjustmentsCommand(
+        person_id=current_user.id, year=year, month=month
+    )
+    result: PreviewAdjustmentsResult = await execute_use_case(
+        lambda uow: PreviewAdjustmentsUseCase().execute(command, uow)
+    )
+    shown = result.adjustments[:_MAX_LIST_ROWS]
+    return {
+        "month": f"{year}-{month:02d}",
+        "person": result.person_name,
+        "total_count": result.adjustment_count,
+        "showing": len(shown),
+        "adjustments": [
+            {
+                "date": a.date.isoformat(),
+                "merchant": _user_str(a.merchant),
+                "category": _user_str(a.category),
+                "amount": _fmt(a.amount),
+                "account": _user_str(a.account),
+            }
+            for a in shown
+        ],
     }
 
 
@@ -489,7 +949,7 @@ async def handle_update_transaction_split(
                     "The user needs to unfinalize it before making changes."
                 )
             return {
-                "merchant": tx.merchant,
+                "merchant": _user_str(tx.merchant),
                 "date": tx.date.isoformat(),
                 "amount": _fmt(tx.amount),
                 "current_split": f"{tx.payer_percentage}/{100 - tx.payer_percentage}",

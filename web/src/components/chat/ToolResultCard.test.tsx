@@ -24,13 +24,101 @@ describe("ToolResultCard", () => {
     expect(container.innerHTML).toBe("");
   });
 
-  it("returns null for unknown tool names", () => {
+  it("returns null for unknown tool names with an empty result", () => {
     const { container } = renderWithProviders(
       <ToolResultCard
         toolCall={{ id: "1", name: "unknown_tool", result: {} }}
       />,
     );
     expect(container.innerHTML).toBe("");
+  });
+
+  describe("GenericToolResultCard (default branch)", () => {
+    it("renders scalar entries as key/value rows and strips user_data", () => {
+      renderWithProviders(
+        <ToolResultCard
+          toolCall={{
+            id: "1",
+            name: "get_upload_history",
+            result: {
+              total_count: 3,
+              person: "<user_data>Alice</user_data>",
+              is_finalized: false,
+            },
+          }}
+        />,
+      );
+      expect(screen.getByText("total count")).toBeInTheDocument();
+      expect(screen.getByText("3")).toBeInTheDocument();
+      expect(screen.getByText("Alice")).toBeInTheDocument();
+      expect(screen.getByText("no")).toBeInTheDocument();
+    });
+
+    it("renders a list of objects as a compact table", () => {
+      renderWithProviders(
+        <ToolResultCard
+          toolCall={{
+            id: "1",
+            name: "get_upload_history",
+            result: {
+              uploads: [
+                {
+                  person: "Alice",
+                  filename: "<user_data>march.csv</user_data>",
+                  transaction_count: 47,
+                },
+                {
+                  person: "Bob",
+                  filename: "<user_data>march-bob.csv</user_data>",
+                  transaction_count: 35,
+                },
+              ],
+            },
+          }}
+        />,
+      );
+      expect(screen.getByRole("table")).toBeInTheDocument();
+      expect(screen.getByText("filename")).toBeInTheDocument();
+      expect(screen.getByText("march.csv")).toBeInTheDocument();
+      expect(screen.getByText("march-bob.csv")).toBeInTheDocument();
+    });
+
+    it("renders scalar lists inline and empty lists as none", () => {
+      renderWithProviders(
+        <ToolResultCard
+          toolCall={{
+            id: "1",
+            name: "get_tags",
+            result: {
+              tags: [
+                "<user_data>discuss</user_data>",
+                "<user_data>shared</user_data>",
+              ],
+              unmapped_categories: [],
+            },
+          }}
+        />,
+      );
+      expect(screen.getByText("discuss, shared")).toBeInTheDocument();
+      expect(screen.getByText("none")).toBeInTheDocument();
+    });
+
+    it("renders nested objects inline", () => {
+      renderWithProviders(
+        <ToolResultCard
+          toolCall={{
+            id: "1",
+            name: "get_settlement_activity",
+            result: {
+              outstanding: { amount: 147.5, from: "Alice", to: "Bob" },
+            },
+          }}
+        />,
+      );
+      expect(
+        screen.getByText("amount: 147.5 · from: Alice · to: Bob"),
+      ).toBeInTheDocument();
+    });
   });
 
   describe("SettlementCard", () => {

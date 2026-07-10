@@ -89,6 +89,13 @@ export function plural(word: string, count: number): string {
   return `${count} ${word}${count !== 1 ? "s" : ""}`;
 }
 
+// The chat backend wraps user-originated strings (merchants, tags, notes) in
+// <user_data> tags so the model treats them as data, not instructions. Strip
+// the markers before rendering — they are a model-facing convention only.
+export function stripUserData(value: string): string {
+  return value.replaceAll(/<\/?user_data>/g, "");
+}
+
 export function amountColorClass(amount: number): string {
   return amount < 0 ? "text-negative" : "text-positive";
 }

@@ -405,6 +405,7 @@ async def test_search_transactions_happy_path() -> None:
     assert result["scope"] == "all"
     tx = result["transactions"][0]
     assert tx["merchant"] == "<user_data>Whole Foods</user_data>"
+    assert tx["category"] == "<user_data>Groceries</user_data>"
     assert tx["payer"] == "Alice"
     assert "id" in tx
 
@@ -513,3 +514,623 @@ async def test_bulk_update_transactions_rejects_unknown_category() -> None:
             ALICE,
             PERSONS,
         )
+
+
+# --- v1.8.1 read tools ---
+
+
+def _recon_summary(**overrides: object) -> object:
+    from datetime import date
+
+    from src.domain.categories import CategoryGroupBreakdown
+    from src.domain.reconciliation import PersonSummary, ReconciliationSummary
+
+    defaults: dict[str, object] = {
+        "start_date": date(2026, 3, 1),
+        "end_date": date(2026, 3, 31),
+        "total_household_spending": Decimal("1200.00"),
+        "total_household_refunds": Decimal("50.00"),
+        "net_household_spending": Decimal("1150.00"),
+        "person_summaries": [
+            PersonSummary(
+                person_id=ALICE.id,
+                total_paid=Decimal("700.00"),
+                total_share=Decimal("575.00"),
+            ),
+            PersonSummary(
+                person_id=BOB.id,
+                total_paid=Decimal("450.00"),
+                total_share=Decimal("575.00"),
+            ),
+        ],
+        "settlement": SettlementResult(
+            amount=Decimal("125.00"),
+            from_person_id=BOB.id,
+            to_person_id=ALICE.id,
+        ),
+        "category_group_breakdowns": [
+            CategoryGroupBreakdown(
+                group_id=uuid.uuid4(),
+                group_name="Food & Dining",
+                total_amount=Decimal("-800.00"),
+                transaction_count=12,
+                categories=[],
+            )
+        ],
+        "transaction_count": 42,
+        "split_transactions": [],
+        "category_lookup": {},
+    }
+    defaults.update(overrides)
+    return ReconciliationSummary(**defaults)  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_get_tags_wraps_and_truncates() -> None:
+    from src.application.use_cases.get_tags import GetTagsResult
+
+    tags = [f"tag{i}" for i in range(25)]
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        return_value=GetTagsResult(tags=tags),
+    ):
+        result = await execute_tool("get_tags", {}, ALICE, PERSONS)
+
+    assert result["total_count"] == 25
+    assert result["showing"] == 20
+    assert result["tags"][0] == "<user_data>tag0</user_data>"
+
+
+@pytest.mark.asyncio
+async def test_get_tags_empty() -> None:
+    from src.application.use_cases.get_tags import GetTagsResult
+
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        return_value=GetTagsResult(tags=[]),
+    ):
+        result = await execute_tool("get_tags", {}, ALICE, PERSONS)
+
+    assert result == {"total_count": 0, "showing": 0, "tags": []}
+
+
+@pytest.mark.asyncio
+async def test_get_transaction_history_happy_path() -> None:
+    from datetime import UTC, datetime
+
+    from src.application.use_cases.get_transaction_edits import (
+        GetTransactionEditsResult,
+    )
+    from src.domain.entities.import_event import ImportEvent
+    from tests.fixtures.factories import make_transaction_edit
+
+    tx_id = uuid.uuid4()
+    edit = make_transaction_edit(
+        transaction_id=tx_id,
+        old_value="Dining Out",
+        new_value="Fast Food",
+        edited_by_person_id=BOB.id,
+    )
+    history = GetTransactionEditsResult(
+        edits=[edit],
+        import_event=ImportEvent(
+            person_id=ALICE.id, imported_at=datetime(2026, 3, 2, tzinfo=UTC)
+        ),
+    )
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        return_value=history,
+    ):
+        result = await execute_tool(
+            "get_transaction_history", {"transaction_id": str(tx_id)}, ALICE, PERSONS
+        )
+
+    assert result["total_count"] == 1
+    entry = result["edits"][0]
+    assert entry["field"] == "category"
+    assert entry["old_value"] == "<user_data>Dining Out</user_data>"
+    assert entry["new_value"] == "<user_data>Fast Food</user_data>"
+    assert entry["edited_by"] == "Bob"
+    assert result["imported"] == {"by": "Alice", "at": "2026-03-02T00:00:00+00:00"}
+
+
+@pytest.mark.asyncio
+async def test_get_transaction_history_rejects_bad_uuid() -> None:
+    with pytest.raises(ToolExecutionError, match="Invalid transaction ID"):
+        await execute_tool(
+            "get_transaction_history", {"transaction_id": "nope"}, ALICE, PERSONS
+        )
+
+
+def _category_groups_result() -> object:
+    from src.application.use_cases.list_category_groups import (
+        CategoryGroupWithCategories,
+        ListCategoryGroupsResult,
+    )
+    from tests.fixtures.factories import make_category, make_category_group
+
+    food = make_category_group(name="Food & Dining")
+    return ListCategoryGroupsResult(
+        items=[
+            CategoryGroupWithCategories(
+                group=food,
+                categories=[
+                    make_category(
+                        name="Groceries", group_id=food.id, include_personal=True
+                    ),
+                    make_category(name="Dining Out", group_id=food.id),
+                ],
+            )
+        ]
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_budgets_filters_and_resolves_group_names() -> None:
+    from src.application.use_cases.list_budgets import ListBudgetsResult
+    from tests.fixtures.factories import make_category_group_budget
+
+    groups = _category_groups_result()
+    group_id = groups.items[0].group.id
+    budgets = ListBudgetsResult(
+        budgets=[
+            make_category_group_budget(
+                group_id=group_id, monthly_amount=Decimal("700.00"), month=3
+            ),
+            make_category_group_budget(
+                group_id=group_id,
+                monthly_amount=Decimal("100.00"),
+                month=3,
+                person_id=ALICE.id,
+            ),
+            make_category_group_budget(group_id=group_id, month=4),
+            make_category_group_budget(group_id=group_id, month=3, year=2025),
+        ]
+    )
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        side_effect=[budgets, groups],
+    ):
+        result = await execute_tool(
+            "get_budgets", {"year": 2026, "month": 3}, ALICE, PERSONS
+        )
+
+    assert result["total_count"] == 2
+    assert {row["scope"] for row in result["budgets"]} == {"household", "personal"}
+    assert result["budgets"][0]["group"] == "Food & Dining"
+    assert result["budgets"][0]["amount"] == pytest.approx(700.0)
+
+
+@pytest.mark.asyncio
+async def test_get_budgets_scope_household_only() -> None:
+    from src.application.use_cases.list_budgets import ListBudgetsResult
+    from tests.fixtures.factories import make_category_group_budget
+
+    groups = _category_groups_result()
+    group_id = groups.items[0].group.id
+    budgets = ListBudgetsResult(
+        budgets=[
+            make_category_group_budget(group_id=group_id, month=3),
+            make_category_group_budget(group_id=group_id, month=3, person_id=ALICE.id),
+        ]
+    )
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        side_effect=[budgets, groups],
+    ):
+        result = await execute_tool(
+            "get_budgets",
+            {"year": 2026, "month": 3, "scope": "household"},
+            ALICE,
+            PERSONS,
+        )
+
+    assert result["total_count"] == 1
+    assert result["budgets"][0]["scope"] == "household"
+
+
+@pytest.mark.asyncio
+async def test_get_category_setup_happy_path() -> None:
+    from src.application.use_cases.list_unmapped_categories import (
+        ListUnmappedCategoriesResult,
+    )
+
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        side_effect=[
+            _category_groups_result(),
+            ListUnmappedCategoriesResult(categories=["Mystery"]),
+        ],
+    ):
+        result = await execute_tool("get_category_setup", {}, ALICE, PERSONS)
+
+    group = result["groups"][0]
+    assert group["group"] == "Food & Dining"
+    assert "<user_data>Groceries</user_data>" in group["categories"]
+    assert result["include_personal_categories"] == ["<user_data>Groceries</user_data>"]
+    assert result["unmapped_categories"] == ["<user_data>Mystery</user_data>"]
+
+
+@pytest.mark.asyncio
+async def test_get_upload_history_newest_first_with_limit() -> None:
+    from datetime import UTC, date, datetime
+
+    from src.application.use_cases.get_upload_history import (
+        GetUploadHistoryResult,
+        UploadHistoryEntry,
+    )
+
+    def entry(day: int) -> UploadHistoryEntry:
+        return UploadHistoryEntry(
+            upload_id=uuid.uuid4(),
+            person_id=ALICE.id,
+            person_name="Alice",
+            filename=f"march-{day}.csv",
+            uploaded_at=datetime(2026, 3, day, tzinfo=UTC),
+            transaction_count=40 + day,
+            household_count=20,
+            date_range_start=date(2026, 3, 1),
+            date_range_end=date(2026, 3, 31),
+        )
+
+    history = GetUploadHistoryResult(entries=[entry(1), entry(5), entry(3)])
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        return_value=history,
+    ):
+        result = await execute_tool("get_upload_history", {"limit": 2}, ALICE, PERSONS)
+
+    assert result["total_count"] == 3
+    assert result["showing"] == 2
+    uploads = result["uploads"]
+    assert uploads[0]["filename"] == "<user_data>march-5.csv</user_data>"
+    assert uploads[1]["filename"] == "<user_data>march-3.csv</user_data>"
+    assert uploads[0]["covers"] == "2026-03-01 to 2026-03-31"
+
+
+@pytest.mark.asyncio
+async def test_get_reconciliation_report_concise() -> None:
+    from src.application.use_cases.get_reconciliation import GetReconciliationResult
+
+    recon = GetReconciliationResult(
+        summary=_recon_summary(),
+        transactions=[],
+        upload_statuses=[],
+        unmapped_categories=[],
+        persons=PERSONS,
+        is_finalized=False,
+        finalized_at=None,
+        year=2026,
+        month=3,
+        latest_transaction_month=(2026, 3),
+    )
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        return_value=recon,
+    ):
+        result = await execute_tool(
+            "get_reconciliation_report", {"year": 2026, "month": 3}, ALICE, PERSONS
+        )
+
+    assert result["month"] == "2026-03"
+    assert result["net_household_spending"] == pytest.approx(1150.0)
+    assert result["gross_settlement"] == {
+        "amount": pytest.approx(125.0),
+        "from": "Bob",
+        "to": "Alice",
+    }
+    assert result["persons"][0] == {
+        "name": "Alice",
+        "paid": pytest.approx(700.0),
+        "fair_share": pytest.approx(575.0),
+    }
+    assert "group_breakdown" not in result
+    assert "largest_transactions" not in result
+    assert "unmapped_categories" not in result
+
+
+@pytest.mark.asyncio
+async def test_get_reconciliation_report_detailed_adds_breakdown_and_rows() -> None:
+    from src.application.use_cases.get_reconciliation import GetReconciliationResult
+
+    txns = [
+        make_transaction(merchant=f"Store {i}", amount=Decimal(f"-{10 + i}"))
+        for i in range(25)
+    ]
+    recon = GetReconciliationResult(
+        summary=_recon_summary(),
+        transactions=txns,
+        upload_statuses=[],
+        unmapped_categories=["Mystery"],
+        persons=PERSONS,
+        is_finalized=False,
+        finalized_at=None,
+        year=2026,
+        month=3,
+        latest_transaction_month=(2026, 3),
+    )
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        return_value=recon,
+    ):
+        result = await execute_tool(
+            "get_reconciliation_report",
+            {"year": 2026, "month": 3, "response_format": "detailed"},
+            ALICE,
+            PERSONS,
+        )
+
+    assert result["group_breakdown"][0]["group"] == "Food & Dining"
+    largest = result["largest_transactions"]
+    assert len(largest) == 20
+    # Sorted by |amount| descending — Store 24 (-34) first.
+    assert largest[0]["merchant"] == "<user_data>Store 24</user_data>"
+    assert result["unmapped_categories"] == ["<user_data>Mystery</user_data>"]
+
+
+def _ledger_settlement_record() -> object:
+    from src.application.use_cases._shared.settlement_math import (
+        LedgerSettlementRecord,
+    )
+    from src.application.use_cases._shared.settlement_records import SettlementRecord
+    from src.domain.ledger import PaymentCoverage
+    from tests.fixtures.factories import make_settlement
+
+    linked_tx = uuid.uuid4()
+    settlement = make_settlement(
+        from_person_id=ALICE.id,
+        to_person_id=BOB.id,
+        amount=Decimal("147.50"),
+        notes="rent catch-up",
+        year=2026,
+        month=3,
+    )
+    return LedgerSettlementRecord(
+        record=SettlementRecord(
+            settlement=settlement,
+            linked_transaction_ids=[linked_tx],
+        ),
+        coverage=PaymentCoverage(
+            settlement_id=settlement.id,
+            covered=((2026, 3, Decimal("147.50")),),
+            unapplied=Decimal(0),
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_settlement_activity_with_outstanding_fetches_candidates() -> None:
+    from attrs import evolve
+
+    from src.application.use_cases.find_settlement_candidates import (
+        FindSettlementCandidatesResult,
+    )
+    from src.application.use_cases.list_settlement_merchants import (
+        ListSettlementMerchantsResult,
+    )
+    from src.domain.settlement_matching import SettlementCandidate
+    from tests.fixtures.factories import make_settlement_merchant
+
+    settle = evolve(_settle_result(), all_settlements=[_ledger_settlement_record()])
+    merchants = ListSettlementMerchantsResult(
+        merchants=[make_settlement_merchant(name="Venmo", merchant_pattern="venmo")]
+    )
+    candidate_tx = make_transaction(merchant="Venmo Payment", amount=Decimal("147.50"))
+    candidates = FindSettlementCandidatesResult(
+        candidates=[
+            SettlementCandidate(
+                transaction=candidate_tx,
+                score=5,
+                match_reasons=("amount match", "merchant match"),
+            )
+        ]
+    )
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        side_effect=[settle, merchants, candidates],
+    ) as mock_execute:
+        result = await execute_tool(
+            "get_settlement_activity", {"year": 2026, "month": 3}, ALICE, PERSONS
+        )
+
+    assert mock_execute.call_count == 3
+    payment = result["settlements"][0]
+    assert payment["from"] == "Alice"
+    assert payment["notes"] == "<user_data>rent catch-up</user_data>"
+    assert payment["recorded_against"] == "2026-03"
+    assert payment["covered_months"] == [
+        {"month": "2026-03", "amount": pytest.approx(147.5)}
+    ]
+    assert len(payment["linked_transaction_ids"]) == 1
+    cand = result["candidate_transactions"][0]
+    assert cand["merchant"] == "<user_data>Venmo Payment</user_data>"
+    assert cand["score"] == 5
+    assert result["settlement_merchants"] == [
+        {
+            "name": "<user_data>Venmo</user_data>",
+            "pattern": "<user_data>venmo</user_data>",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_get_settlement_activity_settled_skips_candidates() -> None:
+    from attrs import evolve
+
+    from src.application.use_cases.list_settlement_merchants import (
+        ListSettlementMerchantsResult,
+    )
+
+    settle = evolve(
+        _settle_result(),
+        outstanding=None,
+        outstanding_span=None,
+    )
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        side_effect=[settle, ListSettlementMerchantsResult(merchants=[])],
+    ) as mock_execute:
+        result = await execute_tool(
+            "get_settlement_activity", {"year": 2026, "month": 3}, ALICE, PERSONS
+        )
+
+    assert mock_execute.call_count == 2
+    assert result["outstanding"] is None
+    assert result["candidate_transactions"] == []
+
+
+def _dashboard_result(**overrides: object) -> object:
+    from src.application.use_cases.get_dashboard import (
+        GetDashboardResult,
+        MonthHistoryEntry,
+    )
+
+    defaults: dict[str, object] = {
+        "scope": "household",
+        "current_person_id": None,
+        "current_month": _recon_summary(),
+        "upload_statuses": [],
+        "household_spending_month": Decimal("1150.00"),
+        "household_spending_ytd": Decimal("3400.00"),
+        "ytd_settlement": None,
+        "ytd_net_settlement": None,
+        "ytd_total_settled": Decimal("500.00"),
+        "outstanding_balance": SettlementResult(
+            amount=Decimal("147.50"),
+            from_person_id=ALICE.id,
+            to_person_id=BOB.id,
+        ),
+        "outstanding_span": ((2026, 2), (2026, 3)),
+        "month_history": [
+            MonthHistoryEntry(
+                year=2026,
+                month=2,
+                total_household_spending=Decimal("1000.00"),
+                settlement_amount=Decimal("200.00"),
+                settlement_remaining=Decimal("50.00"),
+                settlement_from_person_id=ALICE.id,
+                settlement_to_person_id=BOB.id,
+                is_finalized=True,
+                is_settled=False,
+                settlement_status="partially_settled",
+                settled_at=None,
+            )
+        ],
+        "persons": PERSONS,
+        "unmapped_categories": ["Mystery"],
+        "is_finalized": False,
+        "finalized_at": None,
+    }
+    defaults.update(overrides)
+    return GetDashboardResult(**defaults)  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_get_dashboard_summary_household() -> None:
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        return_value=_dashboard_result(),
+    ):
+        result = await execute_tool(
+            "get_dashboard_summary", {"year": 2026}, ALICE, PERSONS
+        )
+
+    assert result["household_spending_ytd"] == pytest.approx(3400.0)
+    assert result["outstanding"]["from"] == "Alice"
+    assert result["unmapped_category_count"] == 1
+    row = result["month_history"][0]
+    assert row["month"] == "2026-02"
+    assert row["settlement_status"] == "partially_settled"
+    assert row["settlement_remaining"] == pytest.approx(50.0)
+    assert "my_spending_month" not in result
+
+
+@pytest.mark.asyncio
+async def test_get_dashboard_summary_personal_adds_my_fields() -> None:
+    dashboard = _dashboard_result(
+        scope="personal",
+        current_person_id=ALICE.id,
+        my_spending_month=Decimal("400.00"),
+        my_household_share_month=Decimal("575.00"),
+        my_personal_spending_month=Decimal("125.00"),
+        my_spending_ytd=Decimal("1200.00"),
+    )
+    from src.application.use_cases.get_dashboard import GetDashboardUseCase
+
+    mock_execute = AsyncMock(return_value=dashboard)
+    with (
+        patch(
+            "src.application.chat.tool_executor.execute_use_case",
+            side_effect=_run_factory_with_stub_uow,
+        ),
+        patch.object(GetDashboardUseCase, "execute", mock_execute),
+    ):
+        result = await execute_tool(
+            "get_dashboard_summary",
+            {"year": 2026, "scope": "personal"},
+            ALICE,
+            PERSONS,
+        )
+
+    command = mock_execute.call_args.args[0]
+    assert command.person_id == ALICE.id
+    assert result["my_spending_month"] == pytest.approx(400.0)
+    assert result["my_spending_ytd"] == pytest.approx(1200.0)
+
+
+@pytest.mark.asyncio
+async def test_get_adjustments_preview_happy_path() -> None:
+    from datetime import date
+
+    from src.application.use_cases.export_adjustments import PreviewAdjustmentsResult
+    from src.domain.export.adjustments import Adjustment
+
+    preview = PreviewAdjustmentsResult(
+        adjustments=[
+            Adjustment(
+                dedup_id="adj-1",
+                source_transaction_id=uuid.uuid4(),
+                date=date(2026, 3, 14),
+                merchant="Whole Foods",
+                category="Groceries",
+                amount=Decimal("-41.71"),
+                account="Adjustments",
+            )
+        ],
+        person_name="Alice",
+        adjustment_count=1,
+    )
+    from src.application.use_cases.export_adjustments import PreviewAdjustmentsUseCase
+
+    mock_execute = AsyncMock(return_value=preview)
+    with (
+        patch(
+            "src.application.chat.tool_executor.execute_use_case",
+            side_effect=_run_factory_with_stub_uow,
+        ),
+        patch.object(PreviewAdjustmentsUseCase, "execute", mock_execute),
+    ):
+        result = await execute_tool(
+            "get_adjustments_preview", {"year": 2026, "month": 3}, ALICE, PERSONS
+        )
+
+    command = mock_execute.call_args.args[0]
+    assert command.person_id == ALICE.id
+    assert result["person"] == "Alice"
+    assert result["total_count"] == 1
+    row = result["adjustments"][0]
+    assert row["merchant"] == "<user_data>Whole Foods</user_data>"
+    assert row["account"] == "<user_data>Adjustments</user_data>"
+    assert row["amount"] == pytest.approx(-41.71)
