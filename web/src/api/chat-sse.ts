@@ -135,12 +135,14 @@ export async function sendChatMessage(
   callbacks: ChatSSECallbacks,
   signal: AbortSignal,
   confirmation?: ConfirmationPayload,
+  effort?: string,
 ): Promise<void> {
   const body: Record<string, unknown> = {
     messages,
     client_date: localISODate(),
   };
   if (confirmation) body.confirmation = confirmation;
+  if (effort) body.effort = effort;
 
   const response = await fetch("/api/v1/chat", {
     method: "POST",

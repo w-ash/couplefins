@@ -3,6 +3,8 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
 
+from src.config.settings import EffortLevel
+
 _MAX_CONTENT_PER_MESSAGE = 20_480  # 20 KB
 _MAX_TOTAL_CONTENT = 102_400  # 100 KB
 
@@ -25,6 +27,9 @@ class ChatRequest(BaseModel):
     # tomorrow (or next month) for the entire US evening. Falls back to
     # server UTC when absent (headless callers, tests).
     client_date: date | None = None
+    # Per-request effort override — the user picks per task in the chat UI
+    # (quick lookup vs. deep analysis). Falls back to ChatConfig.effort.
+    effort: EffortLevel | None = None
 
     @model_validator(mode="after")
     def _check_total_content_size(self) -> Self:

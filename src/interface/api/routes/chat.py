@@ -95,7 +95,7 @@ async def _build_command(
         model_id=settings.chat.model_id,
         max_turns=settings.chat.max_turns,
         max_tokens=settings.chat.max_tokens,
-        effort=settings.chat.effort,
+        effort=body.effort or settings.chat.effort,
         current_user=current_user,
         persons=persons,
     )

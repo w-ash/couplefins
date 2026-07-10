@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { type EffortChoice, getStoredEffort, storeEffort } from "@/lib/effort";
 
 export interface ToolCall {
   id: string;
@@ -37,6 +38,8 @@ interface ChatState {
   abortController: AbortController | null;
   isPanelOpen: boolean;
   confirmationStates: Record<string, ConfirmationState>;
+  effort: EffortChoice;
+  setEffort: (choice: EffortChoice) => void;
 
   addUserMessage: (text: string) => string;
   startAssistantMessage: () => string;
@@ -84,6 +87,12 @@ export const useChatStore = create<ChatState>()((set) => ({
   abortController: null,
   isPanelOpen: false,
   confirmationStates: {},
+  effort: getStoredEffort(),
+
+  setEffort: (choice) => {
+    storeEffort(choice);
+    set({ effort: choice });
+  },
 
   addUserMessage: (text) => {
     const id = crypto.randomUUID();

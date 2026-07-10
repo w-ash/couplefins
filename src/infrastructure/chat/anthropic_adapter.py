@@ -5,13 +5,16 @@ from contextlib import asynccontextmanager
 from typing import cast
 
 from anthropic import AsyncAnthropic
-from anthropic.lib.streaming import AsyncMessageStream
-from anthropic.types import (
-    MessageParam,
-    ServerToolUseBlock,
-    TextBlockParam,
-    ToolParam,
-    ToolUseBlock as SDKToolUseBlock,
+from anthropic.lib.streaming import BetaAsyncMessageStream
+from anthropic.types.beta import (
+    BetaMessageParam,
+    BetaServerToolUseBlock,
+    BetaTextBlockParam,
+    BetaToolUnionParam,
+    BetaToolUseBlock as SDKToolUseBlock,
+)
+from anthropic.types.beta.beta_context_management_config_param import (
+    BetaContextManagementConfigParam,
 )
 from pydantic import BaseModel
 
@@ -27,9 +30,27 @@ from src.application.chat.protocols import (
     ToolUseBlock,
 )
 
+# Tool-result clearing (context editing, beta): once the conversation
+# passes the trigger, the oldest tool results are cleared server-side,
+# keeping the most recent 3 tool interactions. clear_at_least makes each
+# cache invalidation buy meaningful savings. Turns multiply in v1.8.3
+# (sandbox rounds + subagent loops), so growth is bounded here rather than
+# client-side.
+_CONTEXT_MANAGEMENT_BETA = "context-management-2025-06-27"
+_CONTEXT_MANAGEMENT: BetaContextManagementConfigParam = {
+    "edits": [
+        {
+            "type": "clear_tool_uses_20250919",
+            "trigger": {"type": "input_tokens", "value": 30000},
+            "keep": {"type": "tool_uses", "value": 3},
+            "clear_at_least": {"type": "input_tokens", "value": 5000},
+        }
+    ]
+}
 
-def _to_message_params(messages: list[dict[str, object]]) -> list[MessageParam]:
-    return cast(list[MessageParam], messages)
+
+def _to_message_params(messages: list[dict[str, object]]) -> list[BetaMessageParam]:
+    return cast(list[BetaMessageParam], messages)
 
 
 def _strip_cache_control(content: object) -> object:
@@ -140,12 +161,12 @@ def _with_incremental_cache(
     return result
 
 
-def _to_tool_params(tools: list[dict[str, object]]) -> list[ToolParam]:
-    return cast(list[ToolParam], tools)
+def _to_tool_params(tools: list[dict[str, object]]) -> list[BetaToolUnionParam]:
+    return cast(list[BetaToolUnionParam], tools)
 
 
-def _to_system_params(system: list[dict[str, object]]) -> list[TextBlockParam]:
-    return cast(list[TextBlockParam], system)
+def _to_system_params(system: list[dict[str, object]]) -> list[BetaTextBlockParam]:
+    return cast(list[BetaTextBlockParam], system)
 
 
 def _content_block_to_dict(block: BaseModel) -> dict[str, object]:
@@ -218,7 +239,7 @@ def _server_tool_result_event(block_dict: dict[str, object]) -> ServerToolResult
 class _AdapterStream:
     """Wraps Anthropic's async message stream to implement LLMStream."""
 
-    def __init__(self, stream: AsyncMessageStream[None]) -> None:
+    def __init__(self, stream: BetaAsyncMessageStream[None]) -> None:
         self._stream = stream
         self._container_id: str | None = None
 
@@ -244,7 +265,7 @@ class _AdapterStream:
                         input=block.input,
                     )
                 elif (
-                    isinstance(block, ServerToolUseBlock)
+                    isinstance(block, BetaServerToolUseBlock)
                     and block.name in _CODE_SERVER_TOOL_NAMES
                 ):
                     yield ServerToolStartEvent(
@@ -286,8 +307,10 @@ class AnthropicAdapter:
     @asynccontextmanager
     async def stream(self, request: LLMRequest) -> AsyncGenerator[_AdapterStream]:
         # Adaptive thinking must be explicit — Opus 4.8 runs without thinking
-        # when the parameter is omitted.
-        async with self._client.messages.stream(
+        # when the parameter is omitted. The beta surface is required for
+        # context_management; everything else it accepts is a superset of
+        # the stable stream.
+        async with self._client.beta.messages.stream(
             model=request.model,
             max_tokens=request.max_tokens,
             thinking={"type": "adaptive"},
@@ -296,5 +319,7 @@ class AnthropicAdapter:
             tools=_to_tool_params(request.tools),
             messages=_to_message_params(_with_incremental_cache(request.messages)),
             container=request.container,
+            context_management=_CONTEXT_MANAGEMENT,
+            betas=[_CONTEXT_MANAGEMENT_BETA],
         ) as sdk_stream:
             yield _AdapterStream(sdk_stream)

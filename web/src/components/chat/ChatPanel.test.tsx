@@ -30,6 +30,7 @@ describe("ChatPanel", () => {
       abortController: null,
       isPanelOpen: false,
       confirmationStates: {},
+      effort: "standard",
     });
   });
 
@@ -95,6 +96,28 @@ describe("ChatPanel", () => {
     expect(state.messages[1].id).not.toBe("assistant-1");
     expect(state.messages[1].isStreaming).toBe(true);
     expect(sendChatMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends the selected effort with each request", () => {
+    renderWithProviders(<ChatPanel />);
+
+    fireEvent.click(screen.getByRole("radio", { name: "Thorough" }));
+    const textarea = screen.getByPlaceholderText(/ask about your finances/i);
+    fireEvent.change(textarea, { target: { value: "audit the year" } });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+
+    expect(vi.mocked(sendChatMessage).mock.calls[0][4]).toBe("xhigh");
+    expect(useChatStore.getState().effort).toBe("thorough");
+  });
+
+  it("defaults effort to standard (high)", () => {
+    renderWithProviders(<ChatPanel />);
+
+    const textarea = screen.getByPlaceholderText(/ask about your finances/i);
+    fireEvent.change(textarea, { target: { value: "hello" } });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+
+    expect(vi.mocked(sendChatMessage).mock.calls[0][4]).toBe("high");
   });
 
   it("surfaces the limit error and blocks sending when the conversation is full", () => {

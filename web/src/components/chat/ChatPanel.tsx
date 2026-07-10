@@ -4,8 +4,10 @@ import type { ChatSSECallbacks, ConfirmationPayload } from "@/api/chat-sse";
 import { sendChatMessage } from "@/api/chat-sse";
 import { Button } from "@/components/Button";
 import { InlineError } from "@/components/InlineError";
+import { SegmentedControl } from "@/components/SegmentedControl";
 import { useKeyboardShortcut } from "@/hooks/useKeyboardShortcut";
 import { useChatStore } from "@/lib/chat";
+import { EFFORT_API_VALUES, EFFORT_OPTIONS } from "@/lib/effort";
 import { ChatInput } from "./ChatInput";
 import { ChatMessageList } from "./ChatMessageList";
 import { SuggestedQuestions } from "./SuggestedQuestions";
@@ -51,14 +53,23 @@ function startStream(assistantId: string, confirmation?: ConfirmationPayload) {
 
   const apiMessages = buildApiMessages();
   const callbacks = buildCallbacks(assistantId);
+  const effort = EFFORT_API_VALUES[useChatStore.getState().effort];
 
-  sendChatMessage(apiMessages, callbacks, controller.signal, confirmation);
+  sendChatMessage(
+    apiMessages,
+    callbacks,
+    controller.signal,
+    confirmation,
+    effort,
+  );
 }
 
 export function ChatPanel({ fullScreen = false }: { fullScreen?: boolean }) {
   const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const abortController = useChatStore((s) => s.abortController);
+  const effort = useChatStore((s) => s.effort);
+  const setEffort = useChatStore((s) => s.setEffort);
   const [limitError, setLimitError] = useState<string | null>(null);
 
   const sendQuestion = useCallback((text: string) => {
@@ -202,6 +213,16 @@ export function ChatPanel({ fullScreen = false }: { fullScreen?: boolean }) {
         </div>
       )}
 
+      <div className="flex items-center justify-between gap-2 px-4 pt-2">
+        <span className="text-xs text-muted-foreground">Effort</span>
+        <SegmentedControl
+          size="sm"
+          shape="pill"
+          options={EFFORT_OPTIONS}
+          value={effort}
+          onChange={setEffort}
+        />
+      </div>
       <ChatInput
         onSubmit={sendQuestion}
         isStreaming={isStreaming}

@@ -264,6 +264,53 @@ async def test_missing_client_date_falls_back_to_server_date(
     assert "Today is 20" in system_text  # any real 20xx calendar date
 
 
+async def test_effort_override_reaches_llm_request(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
+    fake = FakeLLMClient([_text_only_script()])
+    _override_llm(client, fake)
+    try:
+        resp = await client.post(
+            "/api/v1/chat",
+            json={
+                "messages": [{"role": "user", "content": "Hello"}],
+                "effort": "low",
+            },
+            auth=cookies,
+        )
+        assert resp.status_code == 200
+    finally:
+        _clear_llm_override(client)
+
+    assert fake.captured_requests[0].effort == "low"
+
+
+async def test_effort_defaults_to_config(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
+    fake = FakeLLMClient([_text_only_script()])
+
+    await _post_chat(client, cookies, fake)
+
+    assert fake.captured_requests[0].effort == "high"
+
+
+async def test_invalid_effort_rejected(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
+    _override_llm(client, FakeLLMClient([_text_only_script()]))
+    try:
+        resp = await client.post(
+            "/api/v1/chat",
+            json={
+                "messages": [{"role": "user", "content": "Hello"}],
+                "effort": "turbo",
+            },
+            auth=cookies,
+        )
+    finally:
+        _clear_llm_override(client)
+
+    assert resp.status_code == 422
+
+
 # --- Test 4: Unauthenticated → 401 ---
 
 

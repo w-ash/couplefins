@@ -6,7 +6,9 @@ turn is echoed back on the next request of a tool loop. Lossy serialization
 on models with adaptive thinking.
 """
 
+import asyncio
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 import copy
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -21,16 +23,18 @@ from anthropic.types import (
     Container,
     Message,
     RedactedThinkingBlock,
-    ServerToolUseBlock,
     TextBlock,
     ThinkingBlock,
     ToolUseBlock,
     Usage,
 )
+from anthropic.types.beta import BetaServerToolUseBlock
 from anthropic.types.parsed_message import ParsedContentBlock
 
 from src.application.chat.events import ServerToolResultEvent, ServerToolStartEvent
+from src.application.chat.protocols import LLMRequest
 from src.infrastructure.chat.anthropic_adapter import (
+    AnthropicAdapter,
     _AdapterStream,
     _content_block_to_dict,
     _server_tool_result_event,
@@ -171,7 +175,9 @@ async def _iter_adapter_events(blocks: list[object]) -> list[object]:
 
 class TestStreamEventMapping:
     async def test_code_execution_server_tool_use_yields_start_event(self) -> None:
-        block = ServerToolUseBlock(
+        # Beta twin — the adapter streams via client.beta.messages, so beta
+        # block classes are what actually arrive.
+        block = BetaServerToolUseBlock(
             type="server_tool_use",
             id="srvtoolu_1",
             name="code_execution",
@@ -187,7 +193,7 @@ class TestStreamEventMapping:
         ]
 
     async def test_tool_search_server_tool_use_is_silent(self) -> None:
-        block = ServerToolUseBlock(
+        block = BetaServerToolUseBlock(
             type="server_tool_use",
             id="srvtoolu_3",
             name="tool_search_tool_bm25",
@@ -254,6 +260,44 @@ class TestStreamEventMapping:
         response = await stream.get_final_response()
 
         assert response.container_id == "cont_1"
+
+
+class TestBetaSurfaceParams:
+    async def test_context_management_and_beta_header_sent(self) -> None:
+        captured: dict[str, object] = {}
+
+        @asynccontextmanager
+        async def fake_stream(**kwargs: object) -> AsyncIterator[_StubSDKStream]:
+            await asyncio.sleep(0)
+            captured.update(kwargs)
+            yield _StubSDKStream([])
+
+        client = SimpleNamespace(
+            beta=SimpleNamespace(messages=SimpleNamespace(stream=fake_stream))
+        )
+        adapter = AnthropicAdapter(client)
+        request = LLMRequest(
+            model="claude-opus-4-8",
+            max_tokens=1024,
+            effort="high",
+            system=[],
+            tools=[],
+            messages=[{"role": "user", "content": "hi"}],
+            container="cont_9",
+        )
+
+        async with adapter.stream(request):
+            pass
+
+        assert captured["betas"] == ["context-management-2025-06-27"]
+        context_management = captured["context_management"]
+        assert isinstance(context_management, dict)
+        (edit,) = context_management["edits"]
+        assert edit["type"] == "clear_tool_uses_20250919"
+        assert edit["keep"] == {"type": "tool_uses", "value": 3}
+        assert captured["container"] == "cont_9"
+        assert captured["output_config"] == {"effort": "high"}
+        assert captured["thinking"] == {"type": "adaptive"}
 
 
 _EPHEMERAL = {"type": "ephemeral"}
