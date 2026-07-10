@@ -10,10 +10,14 @@ Opus 4.8 under-reaches for tools unless told when to use them, so every
 description leads with an explicit trigger ("Call this when...") — the
 opposite of the Sonnet 4.6 tuning this file originally carried.
 
-Every schema sets strict: true (guaranteed schema-conformant calls), which
-requires additionalProperties: false and rejects numeric/array constraints
-(minimum, maximum, maxItems — the API 400s on them). State ranges in the
-property description and enforce them in the handler instead.
+No schema sets strict: true. It was tried in v1.8.1/v1.8.2 and abandoned
+after three live-verified API limits at this registry size (31 tools): a cap
+of 20 strict tools per request, a compiled-grammar size cap ("The compiled
+grammar is too large") even at 16, and strict's rejection of numeric/array
+constraints (minimum, maximum, maxItems). Handlers validate every input at
+the boundary instead — state ranges in the property description and enforce
+them in the handler. All schemas keep additionalProperties: false, and
+strict remains incompatible with v1.8.3's allowed_callers anyway.
 """
 
 GET_SETTLEMENT_BALANCE_SCHEMA: dict[str, object] = {
@@ -34,7 +38,6 @@ GET_SETTLEMENT_BALANCE_SCHEMA: dict[str, object] = {
         "(net_from/net_to), upload status for each person, and whether "
         "the month is finalized."
     ),
-    "strict": True,
     "input_schema": {
         "type": "object",
         "additionalProperties": False,
@@ -67,7 +70,6 @@ GET_BUDGET_OVERVIEW_SCHEMA: dict[str, object] = {
         "or over_budget). Groups with no budget set show null for budget "
         "and health fields. Supports both household and personal scope."
     ),
-    "strict": True,
     "input_schema": {
         "type": "object",
         "additionalProperties": False,
@@ -112,7 +114,6 @@ SEARCH_TRANSACTIONS_SCHEMA: dict[str, object] = {
         "category, amount, payer, split ratio, and household flag, plus "
         "the total count of matches."
     ),
-    "strict": True,
     "input_schema": {
         "type": "object",
         "additionalProperties": False,
@@ -168,7 +169,6 @@ GET_SPENDING_BY_GROUP_SCHEMA: dict[str, object] = {
         "Simpler than get_budget_overview — only spending amounts, no "
         "budget comparisons or health indicators."
     ),
-    "strict": True,
     "input_schema": {
         "type": "object",
         "additionalProperties": False,
@@ -198,7 +198,6 @@ GET_SPENDING_TRENDS_SCHEMA: dict[str, object] = {
         "year-over-year analysis. Does not include budget amounts — use "
         "get_budget_overview for budget comparisons."
     ),
-    "strict": True,
     "input_schema": {
         "type": "object",
         "additionalProperties": False,
@@ -227,7 +226,6 @@ GET_DASHBOARD_STATUS_SCHEMA: dict[str, object] = {
         "whether the month is finalized (locked against further changes). "
         "Useful for checking readiness before settling up or reviewing."
     ),
-    "strict": True,
     "input_schema": {
         "type": "object",
         "additionalProperties": False,
@@ -255,7 +253,6 @@ GET_TAGS_SCHEMA: dict[str, object] = {
         "Useful before search_transactions with a tag filter, or before "
         "proposing tag changes with bulk_update_transactions."
     ),
-    "strict": True,
     "input_schema": {
         "type": "object",
         "additionalProperties": False,
@@ -274,7 +271,6 @@ GET_TRANSACTION_HISTORY_SCHEMA: dict[str, object] = {
         "it and when). The transaction_id must come from search_transactions "
         "results — never guess an ID."
     ),
-    "strict": True,
     "input_schema": {
         "type": "object",
         "additionalProperties": False,
@@ -300,7 +296,6 @@ GET_BUDGETS_SCHEMA: dict[str, object] = {
         "group, monthly amount, month, and scope (household budgets are "
         "shared; personal budgets are the current user's own)."
     ),
-    "strict": True,
     "input_schema": {
         "type": "object",
         "additionalProperties": False,
@@ -337,7 +332,6 @@ GET_CATEGORY_SETUP_SCHEMA: dict[str, object] = {
         "counts personal transactions), and the list of categories not yet "
         "mapped to any group."
     ),
-    "strict": True,
     "input_schema": {
         "type": "object",
         "additionalProperties": False,
@@ -356,7 +350,6 @@ GET_UPLOAD_HISTORY_SCHEMA: dict[str, object] = {
         "filename, when, the date range covered, and transaction counts "
         "(total and household). Default 12 entries."
     ),
-    "strict": True,
     "input_schema": {
         "type": "object",
         "additionalProperties": False,
@@ -383,7 +376,6 @@ GET_RECONCILIATION_REPORT_SCHEMA: dict[str, object] = {
         "get_settlement_balance instead — this report is the month's gross "
         "position before payments."
     ),
-    "strict": True,
     "input_schema": {
         "type": "object",
         "additionalProperties": False,
@@ -427,7 +419,6 @@ GET_SETTLEMENT_ACTIVITY_SCHEMA: dict[str, object] = {
         "the outstanding settlement transfer (candidates, scored), and the "
         "configured settlement merchant patterns."
     ),
-    "strict": True,
     "input_schema": {
         "type": "object",
         "additionalProperties": False,
@@ -457,7 +448,6 @@ GET_DASHBOARD_SUMMARY_SCHEMA: dict[str, object] = {
         "For single-month budget health use get_budget_overview; for "
         "upload/finalization readiness use get_dashboard_status."
     ),
-    "strict": True,
     "input_schema": {
         "type": "object",
         "additionalProperties": False,
@@ -495,7 +485,6 @@ GET_ADJUSTMENTS_PREVIEW_SCHEMA: dict[str, object] = {
         "configured in their profile; the actual file download is only "
         "available in the app."
     ),
-    "strict": True,
     "input_schema": {
         "type": "object",
         "additionalProperties": False,
@@ -526,7 +515,6 @@ UPDATE_BUDGET_SCHEMA: dict[str, object] = {
         "match an existing category group exactly. Scope defaults to "
         "'household'; use 'personal' for the current user's personal budget."
     ),
-    "strict": True,
     "input_schema": {
         "type": "object",
         "additionalProperties": False,
@@ -560,30 +548,67 @@ UPDATE_BUDGET_SCHEMA: dict[str, object] = {
 UPDATE_TRANSACTION_SPLIT_SCHEMA: dict[str, object] = {
     "name": "update_transaction_split",
     "description": (
-        "Call this when the user wants to change how a single transaction "
-        "is split between them (e.g. 'make that 70/30', 'Bob should cover "
-        "that one') — don't just explain, propose the change. "
-        "The transaction_id is a UUID returned by "
-        "search_transactions — never guess or fabricate an ID. Always call "
-        "search_transactions first to find the matching transaction, then "
-        "use its id field. Returns a pending confirmation card."
+        "Call this when the user wants to change how transactions are "
+        "split between them (e.g. 'make that 70/30', 'Bob should cover "
+        "that one', 'split all three rent charges 60/40') — don't just "
+        "explain, propose the change. For one transaction pass "
+        "transaction_id + payer_percentage; for several pass the splits "
+        "array (each entry with its own percentage). All IDs are UUIDs "
+        "returned by search_transactions — never guess or fabricate an "
+        "ID. Returns a pending confirmation card."
     ),
-    "strict": True,
     "input_schema": {
         "type": "object",
         "additionalProperties": False,
         "properties": {
             "transaction_id": {
                 "type": "string",
-                "description": "Transaction UUID from search_transactions results.",
+                "description": (
+                    "Single-transaction form: transaction UUID from "
+                    "search_transactions results."
+                ),
             },
             "payer_percentage": {
                 "type": "integer",
-                "description": "The payer's share (0-100). 50 = 50/50, 0 = spotted.",
+                "description": (
+                    "Single-transaction form: the payer's share (0-100). "
+                    "50 = 50/50, 0 = spotted."
+                ),
+            },
+            "splits": {
+                "type": "array",
+                "description": (
+                    "Batch form: one entry per transaction (max 100). "
+                    "Overrides the single-transaction fields."
+                ),
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "transaction_id": {
+                            "type": "string",
+                            "description": "Transaction UUID.",
+                        },
+                        "payer_percentage": {
+                            "type": "integer",
+                            "description": "The payer's share (0-100).",
+                        },
+                    },
+                    "required": ["transaction_id", "payer_percentage"],
+                },
             },
         },
-        "required": ["transaction_id", "payer_percentage"],
+        "required": [],
     },
+    "input_examples": [
+        {"transaction_id": "1c9e...", "payer_percentage": 70},
+        {
+            "splits": [
+                {"transaction_id": "1c9e...", "payer_percentage": 60},
+                {"transaction_id": "2d8f...", "payer_percentage": 60},
+            ]
+        },
+    ],
 }
 
 BULK_UPDATE_TRANSACTIONS_SCHEMA: dict[str, object] = {
@@ -599,7 +624,6 @@ BULK_UPDATE_TRANSACTIONS_SCHEMA: dict[str, object] = {
         "category, or tag modifications. Returns a pending confirmation "
         "card listing the affected transactions and proposed changes."
     ),
-    "strict": True,
     "input_schema": {
         "type": "object",
         "additionalProperties": False,
@@ -650,5 +674,450 @@ BULK_UPDATE_TRANSACTIONS_SCHEMA: dict[str, object] = {
             },
         },
         "required": ["transaction_ids", "changes"],
+    },
+}
+
+DELETE_BUDGET_SCHEMA: dict[str, object] = {
+    "name": "delete_budget",
+    "description": (
+        "Call this when the user asks to remove or clear a budget for a "
+        "category group in a given month. Proposes the deletion — nothing "
+        "is applied until the user confirms via the confirmation card, "
+        "which shows the current amount being deleted. The group_name must "
+        "match an existing category group with a budget configured for "
+        "that month and scope."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "group_name": {
+                "type": "string",
+                "description": "Category group name (exact match).",
+            },
+            "year": {
+                "type": "integer",
+                "description": "The year (e.g. 2026).",
+            },
+            "month": {
+                "type": "integer",
+                "description": "The month (1-12).",
+            },
+            "scope": {
+                "type": "string",
+                "enum": ["household", "personal"],
+                "description": "Budget scope. Default 'household'.",
+            },
+        },
+        "required": ["group_name", "year", "month"],
+    },
+}
+
+COPY_BUDGETS_SCHEMA: dict[str, object] = {
+    "name": "copy_budgets",
+    "description": (
+        "Call this when the user wants to reuse a month's budgets for "
+        "another month ('same budgets as June', 'copy May's budgets to "
+        "July'). Proposes copying every budget (household plus the current "
+        "user's personal) from the source month to the target month — "
+        "groups that already have a target budget are skipped, never "
+        "overwritten. Nothing is applied until the user confirms."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "from_year": {
+                "type": "integer",
+                "description": "Source year (e.g. 2026).",
+            },
+            "from_month": {
+                "type": "integer",
+                "description": "Source month (1-12).",
+            },
+            "to_year": {
+                "type": "integer",
+                "description": "Target year (e.g. 2026).",
+            },
+            "to_month": {
+                "type": "integer",
+                "description": "Target month (1-12).",
+            },
+        },
+        "required": ["from_year", "from_month", "to_year", "to_month"],
+    },
+}
+
+MANAGE_CATEGORY_GROUP_SCHEMA: dict[str, object] = {
+    "name": "manage_category_group",
+    "description": (
+        "Call this when the user wants to create, rename, or delete a "
+        "category group (the budget-level grouping, e.g. 'Food & Dining') "
+        "— not individual categories, which map_categories handles. "
+        "Proposes the change; nothing is applied until the user confirms. "
+        "Deleting a group requires deciding where its categories go: pass "
+        "move_categories_to with another group's name, or omit it to leave "
+        "them unmapped. The group's budgets are deleted with it."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": ["create", "rename", "delete"],
+                "description": "What to do with the group.",
+            },
+            "name": {
+                "type": "string",
+                "description": (
+                    "The group name. For create: the new group's name. For "
+                    "rename/delete: the existing group (exact match)."
+                ),
+            },
+            "new_name": {
+                "type": "string",
+                "description": "Rename only: the new name for the group.",
+            },
+            "move_categories_to": {
+                "type": "string",
+                "description": (
+                    "Delete only: group name to move the deleted group's "
+                    "categories to. Omit to leave them unmapped."
+                ),
+            },
+        },
+        "required": ["action", "name"],
+    },
+    "input_examples": [
+        {"action": "create", "name": "Pets"},
+        {"action": "rename", "name": "Playa", "new_name": "Burning Man"},
+        {"action": "delete", "name": "Festivals", "move_categories_to": "Lifestyle"},
+    ],
+}
+
+MAP_CATEGORIES_SCHEMA: dict[str, object] = {
+    "name": "map_categories",
+    "description": (
+        "Call this when the user wants to assign categories to category "
+        "groups — mapping unmapped categories after an upload, or moving a "
+        "category to a different group. Proposes the mapping; nothing is "
+        "applied until the user confirms. Each group_name must match an "
+        "existing category group exactly (see get_category_setup); "
+        "categories that don't exist yet are created with the mapping."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "mappings": {
+                "type": "array",
+                "description": "Category → group assignments.",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "category": {
+                            "type": "string",
+                            "description": "Category name.",
+                        },
+                        "group_name": {
+                            "type": "string",
+                            "description": "Target category group (exact match).",
+                        },
+                    },
+                    "required": ["category", "group_name"],
+                },
+            },
+        },
+        "required": ["mappings"],
+    },
+}
+
+SET_CATEGORY_PERSONAL_SCHEMA: dict[str, object] = {
+    "name": "set_category_personal",
+    "description": (
+        "Call this when the user wants a category's budget to also count "
+        "personal (non-household) spending — or to stop counting it. "
+        "Proposes toggling the category's include_personal flag; nothing "
+        "is applied until the user confirms. The category must already "
+        "exist (see get_category_setup)."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "category": {
+                "type": "string",
+                "description": "Category name (exact match).",
+            },
+            "include_personal": {
+                "type": "boolean",
+                "description": (
+                    "true: personal transactions in this category count "
+                    "toward its group's budget. false: household only."
+                ),
+            },
+        },
+        "required": ["category", "include_personal"],
+    },
+}
+
+FINALIZE_PERIOD_SCHEMA: dict[str, object] = {
+    "name": "finalize_period",
+    "description": (
+        "Call this when the user wants to finalize, close, or lock a month "
+        "after settling up. Proposes the finalization; nothing is applied "
+        "until the user confirms. The confirmation card surfaces advisory "
+        "warnings (missing uploads, outstanding balance, unmapped "
+        "categories) — they don't block, matching the app. Finalizing "
+        "locks the month's transactions against uploads and edits; "
+        "payments against the ledger stay possible."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "year": {
+                "type": "integer",
+                "description": "The year (e.g. 2026).",
+            },
+            "month": {
+                "type": "integer",
+                "description": "The month (1-12).",
+            },
+            "notes": {
+                "type": "string",
+                "description": "Optional closing notes recorded on the period.",
+            },
+        },
+        "required": ["year", "month"],
+    },
+}
+
+UNFINALIZE_PERIOD_SCHEMA: dict[str, object] = {
+    "name": "unfinalize_period",
+    "description": (
+        "Call this when the user wants to unlock, reopen, or unfinalize a "
+        "previously finalized month so transactions can be edited again. "
+        "Proposes the unlock; nothing is applied until the user confirms. "
+        "The month must currently be finalized."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "year": {
+                "type": "integer",
+                "description": "The year (e.g. 2026).",
+            },
+            "month": {
+                "type": "integer",
+                "description": "The month (1-12).",
+            },
+        },
+        "required": ["year", "month"],
+    },
+}
+
+RECORD_SETTLEMENT_SCHEMA: dict[str, object] = {
+    "name": "record_settlement",
+    "description": (
+        "Call this when the user says a settlement payment happened — 'I "
+        "paid Bob back', 'record the $500 Venmo'. Proposes recording the "
+        "payment against the running ledger; nothing is applied until the "
+        "user confirms. Payments apply to the oldest open months first "
+        "(FIFO) — year/month is only a display annotation ('recorded "
+        "against April'), never math. Optionally link the matching bank "
+        "transaction(s) using IDs from get_settlement_activity's "
+        "candidates, which excludes them from settlement math."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "from_person": {
+                "type": "string",
+                "description": "Name of the person who paid.",
+            },
+            "to_person": {
+                "type": "string",
+                "description": "Name of the person who was paid.",
+            },
+            "amount": {
+                "type": "number",
+                "description": "Payment amount in dollars (positive).",
+            },
+            "method": {
+                "type": "string",
+                "description": "How it was paid (e.g. 'Venmo', 'Zelle', 'cash').",
+            },
+            "notes": {
+                "type": "string",
+                "description": "Optional note stored on the settlement.",
+            },
+            "year": {
+                "type": "integer",
+                "description": (
+                    "Optional 'recorded against' annotation year — display "
+                    "only, set together with month."
+                ),
+            },
+            "month": {
+                "type": "integer",
+                "description": (
+                    "Optional 'recorded against' annotation month (1-12) — "
+                    "display only, set together with year."
+                ),
+            },
+            "linked_transaction_ids": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "Optional transaction UUIDs to link (from "
+                    "get_settlement_activity candidates)."
+                ),
+            },
+        },
+        "required": ["from_person", "to_person", "amount"],
+    },
+}
+
+WAIVE_SETTLEMENT_SCHEMA: dict[str, object] = {
+    "name": "waive_settlement",
+    "description": (
+        "Call this when the user wants to forgive or write off the "
+        "outstanding balance without money changing hands — 'let's call it "
+        "even', 'waive what I owe'. Proposes waiving the TOTAL outstanding "
+        "balance across all months (the running ledger, not one month); "
+        "nothing is applied until the user confirms. Fails when nothing is "
+        "outstanding."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "notes": {
+                "type": "string",
+                "description": "Optional note recording why the balance was waived.",
+            },
+        },
+        "required": [],
+    },
+}
+
+DELETE_SETTLEMENT_SCHEMA: dict[str, object] = {
+    "name": "delete_settlement",
+    "description": (
+        "Call this when the user wants to remove a recorded settlement "
+        "payment — a duplicate, a wrong amount, a mistake. Proposes the "
+        "deletion; nothing is applied until the user confirms. The "
+        "settlement_id must come from get_settlement_activity. Deleting "
+        "also unlinks any linked transactions (their months must not be "
+        "finalized), and the ledger recomputes."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "settlement_id": {
+                "type": "string",
+                "description": "Settlement UUID from get_settlement_activity.",
+            },
+        },
+        "required": ["settlement_id"],
+    },
+}
+
+LINK_SETTLEMENT_TRANSACTION_SCHEMA: dict[str, object] = {
+    "name": "link_settlement_transaction",
+    "description": (
+        "Call this when the user wants to mark a bank transaction as a "
+        "settlement transfer — usually one of get_settlement_activity's "
+        "candidates ('yes, that Venmo is the payment'). Proposes marking "
+        "the transaction is_settlement (excluding it from spending and "
+        "settlement math), optionally linking it to a recorded settlement; "
+        "nothing is applied until the user confirms. IDs come from "
+        "get_settlement_activity or search_transactions."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "transaction_id": {
+                "type": "string",
+                "description": "Transaction UUID to mark as a settlement transfer.",
+            },
+            "settlement_id": {
+                "type": "string",
+                "description": ("Optional settlement UUID to link the transaction to."),
+            },
+        },
+        "required": ["transaction_id"],
+    },
+}
+
+UNLINK_SETTLEMENT_TRANSACTION_SCHEMA: dict[str, object] = {
+    "name": "unlink_settlement_transaction",
+    "description": (
+        "Call this when the user says a transaction was wrongly linked to "
+        "a settlement ('that Venmo wasn't the payment'). Proposes removing "
+        "the link between the settlement and the transaction — when it was "
+        "the transaction's only link, its is_settlement flag clears and it "
+        "re-enters settlement math. Nothing is applied until the user "
+        "confirms. Both IDs come from get_settlement_activity."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "settlement_id": {
+                "type": "string",
+                "description": "Settlement UUID the transaction is linked to.",
+            },
+            "transaction_id": {
+                "type": "string",
+                "description": "Transaction UUID to unlink.",
+            },
+        },
+        "required": ["settlement_id", "transaction_id"],
+    },
+}
+
+MANAGE_SETTLEMENT_MERCHANT_SCHEMA: dict[str, object] = {
+    "name": "manage_settlement_merchant",
+    "description": (
+        "Call this when the user wants the app to recognize (or stop "
+        "recognizing) a payment service when suggesting settlement "
+        "candidates — 'also match Wise transfers', 'remove the PayPal "
+        "pattern'. Proposes adding or removing a settlement merchant "
+        "pattern; nothing is applied until the user confirms. Existing "
+        "patterns are listed by get_settlement_activity."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": ["add", "remove"],
+                "description": "Add a new pattern or remove an existing one.",
+            },
+            "name": {
+                "type": "string",
+                "description": (
+                    "Merchant display name (e.g. 'Wise'). For remove: must "
+                    "match an existing merchant's name."
+                ),
+            },
+            "pattern": {
+                "type": "string",
+                "description": (
+                    "Add only: case-insensitive substring matched against "
+                    "transaction merchant names (min 2 chars, e.g. 'wise')."
+                ),
+            },
+        },
+        "required": ["action", "name"],
     },
 }

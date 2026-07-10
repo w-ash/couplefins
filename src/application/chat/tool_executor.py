@@ -111,6 +111,8 @@ _MAX_PAYER_PERCENTAGE = 100
 _MAX_BULK_TRANSACTIONS = 100
 _MAX_LIST_ROWS = 20
 _DEFAULT_UPLOAD_HISTORY = 12
+# Mirrors the SettlementMerchant entity's minimum pattern length.
+_MIN_MERCHANT_PATTERN = 2
 
 
 def _fmt(amount: Decimal) -> float:
@@ -918,61 +920,103 @@ async def handle_update_budget(
     )
 
 
+def _parse_split_entries(
+    tool_input: dict[str, object],
+) -> list[tuple[UUID, int]]:
+    """Accept the batch `splits` form or the legacy single-entry form."""
+    raw_entries: list[dict[str, object]]
+    if tool_input.get("splits"):
+        raw_entries = cast(list[dict[str, object]], tool_input["splits"])
+    elif "transaction_id" in tool_input and "payer_percentage" in tool_input:
+        raw_entries = [
+            {
+                "transaction_id": tool_input["transaction_id"],
+                "payer_percentage": tool_input["payer_percentage"],
+            }
+        ]
+    else:
+        raise ToolExecutionError(
+            "Provide either transaction_id + payer_percentage, or a splits array"
+        )
+    if len(raw_entries) > _MAX_BULK_TRANSACTIONS:
+        raise ToolExecutionError(
+            f"Maximum {_MAX_BULK_TRANSACTIONS} splits per call, got {len(raw_entries)}"
+        )
+
+    entries: list[tuple[UUID, int]] = []
+    for raw in raw_entries:
+        try:
+            transaction_id = UUID(cast(str, raw["transaction_id"]))
+        except (KeyError, ValueError, TypeError) as e:
+            raise ToolExecutionError(
+                f"Invalid transaction ID: {raw.get('transaction_id')}"
+            ) from e
+        payer_percentage = cast(int, raw["payer_percentage"])
+        if not 0 <= payer_percentage <= _MAX_PAYER_PERCENTAGE:
+            raise ToolExecutionError(
+                f"payer_percentage must be 0-100, got {payer_percentage}"
+            )
+        entries.append((transaction_id, payer_percentage))
+    return entries
+
+
 async def handle_update_transaction_split(
     tool_input: dict[str, object],
     current_user: Person,
     persons: list[Person],
 ) -> dict[str, object]:
-    try:
-        transaction_id = UUID(cast(str, tool_input["transaction_id"]))
-    except ValueError as e:
-        raise ToolExecutionError(
-            f"Invalid transaction ID: {tool_input['transaction_id']}"
-        ) from e
+    entries = _parse_split_entries(tool_input)
 
-    payer_percentage = cast(int, tool_input["payer_percentage"])
-    if not 0 <= payer_percentage <= _MAX_PAYER_PERCENTAGE:
-        raise ToolExecutionError(
-            f"payer_percentage must be 0-100, got {payer_percentage}"
-        )
-
-    # Fetch transaction + check finalization in a single UoW
-    async def _fetch(uow: UnitOfWorkProtocol) -> dict[str, object]:
+    # Fetch all transactions + check finalization in a single UoW.
+    async def _fetch(uow: UnitOfWorkProtocol) -> list[dict[str, object]]:
         async with uow:
-            tx = await uow.transactions.get_by_id(transaction_id)
-            if tx is None:
-                raise ToolExecutionError(f"Transaction {transaction_id} not found")
-            is_finalized, _ = await load_period_status(uow, tx.date.year, tx.date.month)
-            if is_finalized:
-                raise ToolExecutionError(
-                    f"{_month_label(tx.date.year, tx.date.month)} is finalized. "
-                    "The user needs to unfinalize it before making changes."
-                )
-            return {
-                "merchant": _user_str(tx.merchant),
-                "date": tx.date.isoformat(),
-                "amount": _fmt(tx.amount),
-                "current_split": f"{tx.payer_percentage}/{100 - tx.payer_percentage}",
-                "payer": _person_name(tx.payer_person_id, persons),
-            }
+            rows: list[dict[str, object]] = []
+            checked_months: set[tuple[int, int]] = set()
+            for transaction_id, payer_percentage in entries:
+                tx = await uow.transactions.get_by_id(transaction_id)
+                if tx is None:
+                    raise ToolExecutionError(f"Transaction {transaction_id} not found")
+                month_key = (tx.date.year, tx.date.month)
+                if month_key not in checked_months:
+                    is_finalized, _ = await load_period_status(uow, *month_key)
+                    if is_finalized:
+                        raise ToolExecutionError(
+                            f"{_month_label(*month_key)} is finalized. The user "
+                            "needs to unfinalize it before making changes."
+                        )
+                    checked_months.add(month_key)
+                rows.append({
+                    "transaction_id": str(tx.id),
+                    "merchant": _user_str(tx.merchant),
+                    "date": tx.date.isoformat(),
+                    "amount": _fmt(tx.amount),
+                    "payer": _person_name(tx.payer_person_id, persons),
+                    "current_split": (
+                        f"{tx.payer_percentage}/{100 - tx.payer_percentage}"
+                    ),
+                    "new_split": f"{payer_percentage}/{100 - payer_percentage}",
+                    "payer_percentage": payer_percentage,
+                })
+            return rows
 
-    tx_info = await execute_use_case(_fetch)
+    rows = await execute_use_case(_fetch)
 
-    new_split = f"{payer_percentage}/{100 - payer_percentage}"
-    description = (
-        f"Change {tx_info['merchant']} ({tx_info['date']}) "
-        f"split from {tx_info['current_split']} to {new_split}"
-    )
-    details: dict[str, object] = {
-        "transaction_id": str(transaction_id),
-        "merchant": tx_info["merchant"],
-        "date": tx_info["date"],
-        "amount": tx_info["amount"],
-        "payer": tx_info["payer"],
-        "current_split": tx_info["current_split"],
-        "new_split": new_split,
-        "payer_percentage": payer_percentage,
-    }
+    if len(rows) == 1:
+        row = rows[0]
+        description = (
+            f"Change {row['merchant']} ({row['date']}) "
+            f"split from {row['current_split']} to {row['new_split']}"
+        )
+    else:
+        new_splits = {cast(str, r["new_split"]) for r in rows}
+        suffix = f" to {next(iter(new_splits))}" if len(new_splits) == 1 else ""
+        description = f"Change splits on {len(rows)} transactions{suffix}"
+
+    # Single-entry proposals keep the flat keys the frontend SplitDetails
+    # card renders; the executor always reads the splits list.
+    details: dict[str, object] = {"splits": rows, "count": len(rows)}
+    if len(rows) == 1:
+        details.update(rows[0])
     return _propose_action(
         current_user, "update_transaction_split", tool_input, description, details
     )
@@ -1046,4 +1090,662 @@ async def handle_bulk_update_transactions(
     }
     return _propose_action(
         current_user, "bulk_update_transactions", tool_input, description, details
+    )
+
+
+def _resolve_person(name: str, persons: list[Person]) -> Person:
+    match = next((p for p in persons if p.name.lower() == name.lower()), None)
+    if match is None:
+        valid = ", ".join(p.name for p in persons)
+        raise ToolExecutionError(f"Unknown person: {name}. The couple is: {valid}")
+    return match
+
+
+async def _require_group(name: str) -> tuple[UUID, list[str]]:
+    """Resolve a category group name → id, with an actionable error."""
+    groups = await _load_category_groups()
+    valid_names = [item.group.name for item in groups.items]
+    match = next(
+        (
+            item.group
+            for item in groups.items
+            if item.group.name.lower() == name.lower()
+        ),
+        None,
+    )
+    if match is None:
+        raise ToolExecutionError(
+            f"Unknown category group: {name}. Valid groups: {', '.join(valid_names)}"
+        )
+    return match.id, valid_names
+
+
+async def handle_delete_budget(
+    tool_input: dict[str, object],
+    current_user: Person,
+    _persons: list[Person],
+) -> dict[str, object]:
+    group_name = cast(str, tool_input["group_name"])
+    year = cast(int, tool_input["year"])
+    month = cast(int, tool_input["month"])
+    scope = cast(str, tool_input.get("scope", "household"))
+
+    await _check_finalization(year, month)
+    group_id, _ = await _require_group(group_name)
+
+    budgets = await execute_use_case(lambda uow: list_budgets(uow, current_user.id))
+    target_person = current_user.id if scope == "personal" else None
+    budget = next(
+        (
+            b
+            for b in budgets.budgets
+            if b.group_id == group_id
+            and (b.year, b.month) == (year, month)
+            and b.person_id == target_person
+        ),
+        None,
+    )
+    if budget is None:
+        raise ToolExecutionError(
+            f"No {scope} budget for {group_name} in {_month_label(year, month)}"
+        )
+
+    description = (
+        f"Delete the {group_name} budget of ${_fmt(budget.monthly_amount):,.2f} "
+        f"for {_month_label(year, month)} ({scope})"
+    )
+    details: dict[str, object] = {
+        "budget_id": str(budget.id),
+        "group_name": group_name,
+        "current_amount": _fmt(budget.monthly_amount),
+        "year": year,
+        "month": month,
+        "scope": scope,
+    }
+    return _propose_action(
+        current_user, "delete_budget", tool_input, description, details
+    )
+
+
+async def handle_copy_budgets(
+    tool_input: dict[str, object],
+    current_user: Person,
+    _persons: list[Person],
+) -> dict[str, object]:
+    from_year = cast(int, tool_input["from_year"])
+    from_month = cast(int, tool_input["from_month"])
+    to_year = cast(int, tool_input["to_year"])
+    to_month = cast(int, tool_input["to_month"])
+    if (from_year, from_month) == (to_year, to_month):
+        raise ToolExecutionError("Source and target month must differ")
+
+    await _check_finalization(to_year, to_month)
+
+    budgets = (
+        await execute_use_case(lambda uow: list_budgets(uow, current_user.id))
+    ).budgets
+    source = [b for b in budgets if (b.year, b.month) == (from_year, from_month)]
+    if not source:
+        raise ToolExecutionError(
+            f"No budgets found for {_month_label(from_year, from_month)}"
+        )
+    target_keys = {
+        (b.group_id, b.person_id)
+        for b in budgets
+        if (b.year, b.month) == (to_year, to_month)
+    }
+    to_copy = [b for b in source if (b.group_id, b.person_id) not in target_keys]
+    skipped = len(source) - len(to_copy)
+    if not to_copy:
+        raise ToolExecutionError(
+            f"All {len(source)} budgets already exist in "
+            f"{_month_label(to_year, to_month)} — nothing to copy"
+        )
+
+    description = (
+        f"Copy {len(to_copy)} budget{'s' if len(to_copy) != 1 else ''} from "
+        f"{_month_label(from_year, from_month)} to {_month_label(to_year, to_month)}"
+        + (f" ({skipped} already set, skipped)" if skipped else "")
+    )
+    details: dict[str, object] = {
+        "from": f"{from_year}-{from_month:02d}",
+        "to": f"{to_year}-{to_month:02d}",
+        "copy_count": len(to_copy),
+        "skipped_count": skipped,
+        "total_amount": _fmt(Decimal(sum(b.monthly_amount for b in to_copy))),
+        "from_year": from_year,
+        "from_month": from_month,
+        "to_year": to_year,
+        "to_month": to_month,
+    }
+    return _propose_action(
+        current_user, "copy_budgets", tool_input, description, details
+    )
+
+
+async def handle_manage_category_group(
+    tool_input: dict[str, object],
+    current_user: Person,
+    _persons: list[Person],
+) -> dict[str, object]:
+    action = cast(str, tool_input["action"])
+    name = cast(str, tool_input["name"])
+    if not name.strip():
+        raise ToolExecutionError("Group name must not be empty")
+
+    details: dict[str, object] = {"action": action, "name": name}
+    if action == "create":
+        if await _resolve_category_group_id(name) is not None:
+            raise ToolExecutionError(f"Category group '{name}' already exists")
+        description = f"Create category group '{name}'"
+    elif action == "rename":
+        new_name = cast(str | None, tool_input.get("new_name"))
+        if not new_name or not new_name.strip():
+            raise ToolExecutionError("new_name is required for rename")
+        group_id, _ = await _require_group(name)
+        if await _resolve_category_group_id(new_name) is not None:
+            raise ToolExecutionError(f"Category group '{new_name}' already exists")
+        description = f"Rename category group '{name}' to '{new_name}'"
+        details.update({"group_id": str(group_id), "new_name": new_name})
+    elif action == "delete":
+        group_id, _ = await _require_group(name)
+        groups = await _load_category_groups()
+        category_count = next(
+            len(item.categories) for item in groups.items if item.group.id == group_id
+        )
+        move_to_name = cast(str | None, tool_input.get("move_categories_to"))
+        move_to_id: UUID | None = None
+        if move_to_name:
+            move_to_id, _ = await _require_group(move_to_name)
+            if move_to_id == group_id:
+                raise ToolExecutionError(
+                    "Cannot move categories to the group being deleted"
+                )
+            fate = f"move to {move_to_name}"
+        else:
+            fate = "become unmapped"
+        description = (
+            f"Delete category group '{name}' — its {category_count} "
+            f"categor{'ies' if category_count != 1 else 'y'} {fate}; "
+            "its budgets are deleted"
+        )
+        details.update({
+            "group_id": str(group_id),
+            "category_count": category_count,
+            "categories_fate": fate,
+            "move_categories_to": move_to_name,
+            "move_to_group_id": str(move_to_id) if move_to_id else None,
+        })
+    else:  # pragma: no cover — enum-constrained by the schema
+        raise ToolExecutionError(f"Unknown action: {action}")
+
+    return _propose_action(
+        current_user, "manage_category_group", tool_input, description, details
+    )
+
+
+async def handle_map_categories(
+    tool_input: dict[str, object],
+    current_user: Person,
+    _persons: list[Person],
+) -> dict[str, object]:
+    raw_mappings = cast(list[dict[str, object]], tool_input.get("mappings") or [])
+    if not raw_mappings:
+        raise ToolExecutionError("No mappings specified")
+    if len(raw_mappings) > _MAX_BULK_TRANSACTIONS:
+        raise ToolExecutionError(f"Maximum {_MAX_BULK_TRANSACTIONS} mappings per call")
+
+    groups = await _load_category_groups()
+    by_name_lower = {item.group.name.lower(): item.group for item in groups.items}
+    valid_names = [item.group.name for item in groups.items]
+
+    resolved: list[dict[str, object]] = []
+    for entry in raw_mappings:
+        category = cast(str, entry["category"])
+        group_name = cast(str, entry["group_name"])
+        group = by_name_lower.get(group_name.lower())
+        if group is None:
+            raise ToolExecutionError(
+                f"Unknown category group: {group_name}. "
+                f"Valid groups: {', '.join(valid_names)}"
+            )
+        resolved.append({
+            "category": _user_str(category),
+            "group_name": group.name,
+            "group_id": str(group.id),
+        })
+
+    count = len(resolved)
+    description = (
+        f"Map {count} categor{'ies' if count != 1 else 'y'} to "
+        f"{'their groups' if count != 1 else cast(str, resolved[0]['group_name'])}"
+    )
+    details: dict[str, object] = {"mappings": resolved, "count": count}
+    return _propose_action(
+        current_user, "map_categories", tool_input, description, details
+    )
+
+
+async def handle_set_category_personal(
+    tool_input: dict[str, object],
+    current_user: Person,
+    _persons: list[Person],
+) -> dict[str, object]:
+    category = cast(str, tool_input["category"])
+    include_personal = cast(bool, tool_input["include_personal"])
+
+    async def _query(uow: UnitOfWorkProtocol) -> bool:
+        async with uow:
+            existing = await uow.categories.get_by_name(category)
+            if existing is None:
+                raise ToolExecutionError(f"Unknown category: {category}")
+            return existing.include_personal
+
+    current = await execute_use_case(_query)
+    if current == include_personal:
+        raise ToolExecutionError(
+            f"'{category}' already has include_personal={include_personal}"
+        )
+
+    verb = "count" if include_personal else "stop counting"
+    description = (
+        f"{verb.capitalize()} personal spending in '{category}' "
+        "toward its group's budget"
+    )
+    details: dict[str, object] = {
+        "category": _user_str(category),
+        "current": current,
+        "new": include_personal,
+    }
+    return _propose_action(
+        current_user, "set_category_personal", tool_input, description, details
+    )
+
+
+async def handle_finalize_period(
+    tool_input: dict[str, object],
+    current_user: Person,
+    _persons: list[Person],
+) -> dict[str, object]:
+    year = cast(int, tool_input["year"])
+    month = cast(int, tool_input["month"])
+    notes = cast(str, tool_input.get("notes", ""))
+
+    # Reuse the settle-up snapshot: it carries both the current lock state
+    # and the advisory warnings the app shows before finalizing.
+    command = GetSettleUpDataCommand(year=year, month=month)
+    data: GetSettleUpDataResult = await execute_use_case(
+        lambda uow: GetSettleUpDataUseCase().execute(command, uow)
+    )
+    if data.is_finalized:
+        raise ToolExecutionError(f"{_month_label(year, month)} is already finalized")
+
+    description = f"Finalize {_month_label(year, month)} (lock the month)"
+    details: dict[str, object] = {
+        "year": year,
+        "month": month,
+        "notes": notes,
+        # Advisory, not blocking — matching the app's finalize dialog.
+        "warnings": data.finalization_warnings,
+        "transaction_count": data.transaction_count,
+    }
+    return _propose_action(
+        current_user, "finalize_period", tool_input, description, details
+    )
+
+
+async def handle_unfinalize_period(
+    tool_input: dict[str, object],
+    current_user: Person,
+    _persons: list[Person],
+) -> dict[str, object]:
+    year = cast(int, tool_input["year"])
+    month = cast(int, tool_input["month"])
+
+    async def _query(uow: UnitOfWorkProtocol) -> tuple[bool, object]:
+        async with uow:
+            return await load_period_status(uow, year, month)
+
+    is_finalized, _ = await execute_use_case(_query)
+    if not is_finalized:
+        raise ToolExecutionError(f"{_month_label(year, month)} is not finalized")
+
+    description = f"Unlock {_month_label(year, month)} for editing"
+    details: dict[str, object] = {"year": year, "month": month}
+    return _propose_action(
+        current_user, "unfinalize_period", tool_input, description, details
+    )
+
+
+async def handle_record_settlement(
+    tool_input: dict[str, object],
+    current_user: Person,
+    persons: list[Person],
+) -> dict[str, object]:
+    from_person = _resolve_person(cast(str, tool_input["from_person"]), persons)
+    to_person = _resolve_person(cast(str, tool_input["to_person"]), persons)
+    if from_person.id == to_person.id:
+        raise ToolExecutionError("from_person and to_person must differ")
+
+    amount = Decimal(str(tool_input["amount"]))
+    if amount <= 0:
+        raise ToolExecutionError(f"amount must be positive, got {amount}")
+
+    year = cast(int | None, tool_input.get("year"))
+    month = cast(int | None, tool_input.get("month"))
+    if (year is None) != (month is None):
+        raise ToolExecutionError("year and month must be set together or not at all")
+
+    raw_linked = cast(list[str], tool_input.get("linked_transaction_ids") or [])
+    try:
+        linked_uuids = [UUID(tid) for tid in raw_linked]
+    except ValueError as e:
+        raise ToolExecutionError(f"Invalid transaction ID: {e}") from e
+    linked_ids = [str(tid) for tid in linked_uuids]
+
+    if linked_uuids:
+        # Propose-time existence check — the executor re-validates links
+        # and month locks, but a typo'd ID should fail before the card.
+        async def _verify(uow: UnitOfWorkProtocol) -> None:
+            async with uow:
+                txs = await uow.transactions.get_by_ids(linked_uuids)
+                missing = set(linked_uuids) - {tx.id for tx in txs}
+                if missing:
+                    raise ToolExecutionError(
+                        f"Transactions not found: {', '.join(map(str, missing))}"
+                    )
+
+        await execute_use_case(_verify)
+
+    method = cast(str, tool_input.get("method", ""))
+    notes = cast(str, tool_input.get("notes", ""))
+
+    annotation = (
+        f" (recorded against {_month_label(year, month)})"
+        if year is not None and month is not None
+        else ""
+    )
+    linked_note = (
+        f", linking {len(linked_ids)} transaction{'s' if len(linked_ids) != 1 else ''}"
+        if linked_ids
+        else ""
+    )
+    description = (
+        f"Record ${amount:,.2f} from {from_person.name} to {to_person.name}"
+        + (f" via {method}" if method else "")
+        + annotation
+        + linked_note
+    )
+    details: dict[str, object] = {
+        "amount": _fmt(amount),
+        "from": from_person.name,
+        "to": to_person.name,
+        "from_person_id": str(from_person.id),
+        "to_person_id": str(to_person.id),
+        "method": method or None,
+        "notes": _user_str(notes) if notes else None,
+        "recorded_against": f"{year}-{month:02d}" if year and month else None,
+        "year": year,
+        "month": month,
+        "linked_transaction_ids": linked_ids,
+    }
+    return _propose_action(
+        current_user, "record_settlement", tool_input, description, details
+    )
+
+
+async def handle_waive_settlement(
+    tool_input: dict[str, object],
+    current_user: Person,
+    persons: list[Person],
+) -> dict[str, object]:
+    async def _load(uow: UnitOfWorkProtocol) -> SettlementLedger:
+        async with uow:
+            ctx = await load_reconciliation_context(uow)
+            return (await load_ledger(uow, ctx)).ledger
+
+    ledger = await execute_use_case(_load)
+    if ledger.outstanding is None:
+        raise ToolExecutionError("Balance is already settled — nothing to waive")
+
+    outstanding = ledger.outstanding
+    from_name = _person_name(outstanding.from_person_id, persons)
+    to_name = _person_name(outstanding.to_person_id, persons)
+    notes = cast(str, tool_input.get("notes", ""))
+    span = _span_dict(ledger.span)
+
+    description = (
+        f"Waive the outstanding balance of ${outstanding.amount:,.2f} "
+        f"that {from_name} owes {to_name}"
+    )
+    details: dict[str, object] = {
+        "amount": _fmt(outstanding.amount),
+        "from": from_name,
+        "to": to_name,
+        "from_person_id": str(outstanding.from_person_id),
+        "to_person_id": str(outstanding.to_person_id),
+        "covers": f"{span['start']} to {span['end']}" if span else None,
+        "notes": _user_str(notes) if notes else None,
+    }
+    return _propose_action(
+        current_user, "waive_settlement", tool_input, description, details
+    )
+
+
+async def handle_delete_settlement(
+    tool_input: dict[str, object],
+    current_user: Person,
+    persons: list[Person],
+) -> dict[str, object]:
+    try:
+        settlement_id = UUID(cast(str, tool_input["settlement_id"]))
+    except ValueError as e:
+        raise ToolExecutionError(
+            f"Invalid settlement ID: {tool_input['settlement_id']}"
+        ) from e
+
+    async def _fetch(uow: UnitOfWorkProtocol) -> dict[str, object]:
+        async with uow:
+            settlement = await uow.settlements.get_by_id(settlement_id)
+            if settlement is None:
+                raise ToolExecutionError(
+                    f"Settlement {settlement_id} not found — use "
+                    "get_settlement_activity to list recorded settlements"
+                )
+            links = await uow.settlement_transaction_links.get_by_settlement_ids([
+                settlement_id
+            ])
+            return {
+                "amount": _fmt(settlement.amount),
+                "from": _person_name(settlement.from_person_id, persons),
+                "to": _person_name(settlement.to_person_id, persons),
+                "settled_at": settlement.settled_at.date().isoformat(),
+                "is_waived": settlement.is_waived,
+                "linked_transaction_count": len(links),
+            }
+
+    info = await execute_use_case(_fetch)
+
+    kind = "waived settlement" if info["is_waived"] else "settlement"
+    description = (
+        f"Delete the ${cast(float, info['amount']):,.2f} {kind} from "
+        f"{info['from']} to {info['to']} recorded {info['settled_at']}"
+    )
+    details: dict[str, object] = {"settlement_id": str(settlement_id), **info}
+    return _propose_action(
+        current_user, "delete_settlement", tool_input, description, details
+    )
+
+
+async def handle_link_settlement_transaction(
+    tool_input: dict[str, object],
+    current_user: Person,
+    persons: list[Person],
+) -> dict[str, object]:
+    try:
+        transaction_id = UUID(cast(str, tool_input["transaction_id"]))
+    except ValueError as e:
+        raise ToolExecutionError(
+            f"Invalid transaction ID: {tool_input['transaction_id']}"
+        ) from e
+    raw_settlement = cast(str | None, tool_input.get("settlement_id"))
+    settlement_id = None
+    if raw_settlement:
+        try:
+            settlement_id = UUID(raw_settlement)
+        except ValueError as e:
+            raise ToolExecutionError(f"Invalid settlement ID: {raw_settlement}") from e
+
+    async def _fetch(uow: UnitOfWorkProtocol) -> dict[str, object]:
+        async with uow:
+            tx = await uow.transactions.get_by_id(transaction_id)
+            if tx is None:
+                raise ToolExecutionError(f"Transaction {transaction_id} not found")
+            if tx.is_settlement:
+                raise ToolExecutionError(
+                    f"{tx.merchant} ({tx.date.isoformat()}) is already marked "
+                    "as a settlement transfer"
+                )
+            is_finalized, _ = await load_period_status(uow, tx.date.year, tx.date.month)
+            if is_finalized:
+                raise ToolExecutionError(
+                    f"{_month_label(tx.date.year, tx.date.month)} is finalized. "
+                    "The user needs to unfinalize it before making changes."
+                )
+            if settlement_id is not None:
+                settlement = await uow.settlements.get_by_id(settlement_id)
+                if settlement is None:
+                    raise ToolExecutionError(f"Settlement {settlement_id} not found")
+            return {
+                "merchant": _user_str(tx.merchant),
+                "date": tx.date.isoformat(),
+                "amount": _fmt(tx.amount),
+                "payer": _person_name(tx.payer_person_id, persons),
+            }
+
+    info = await execute_use_case(_fetch)
+
+    link_note = " and link it to the recorded settlement" if settlement_id else ""
+    description = (
+        f"Mark {info['merchant']} ({info['date']}, "
+        f"${abs(cast(float, info['amount'])):,.2f}) as a settlement "
+        f"transfer{link_note}"
+    )
+    details: dict[str, object] = {
+        "transaction_id": str(transaction_id),
+        "settlement_id": str(settlement_id) if settlement_id else None,
+        **info,
+    }
+    return _propose_action(
+        current_user, "link_settlement_transaction", tool_input, description, details
+    )
+
+
+async def handle_unlink_settlement_transaction(
+    tool_input: dict[str, object],
+    current_user: Person,
+    _persons: list[Person],
+) -> dict[str, object]:
+    try:
+        settlement_id = UUID(cast(str, tool_input["settlement_id"]))
+        transaction_id = UUID(cast(str, tool_input["transaction_id"]))
+    except ValueError as e:
+        raise ToolExecutionError(f"Invalid ID: {e}") from e
+
+    async def _fetch(uow: UnitOfWorkProtocol) -> dict[str, object]:
+        async with uow:
+            settlement = await uow.settlements.get_by_id(settlement_id)
+            if settlement is None:
+                raise ToolExecutionError(f"Settlement {settlement_id} not found")
+            tx = await uow.transactions.get_by_id(transaction_id)
+            if tx is None:
+                raise ToolExecutionError(f"Transaction {transaction_id} not found")
+            links = await uow.settlement_transaction_links.get_by_transaction_id(
+                transaction_id
+            )
+            if not any(link.settlement_id == settlement_id for link in links):
+                raise ToolExecutionError(
+                    f"{tx.merchant} ({tx.date.isoformat()}) is not linked to "
+                    "that settlement — get_settlement_activity lists the links"
+                )
+            is_finalized, _ = await load_period_status(uow, tx.date.year, tx.date.month)
+            if is_finalized:
+                raise ToolExecutionError(
+                    f"{_month_label(tx.date.year, tx.date.month)} is finalized. "
+                    "The user needs to unfinalize it before making changes."
+                )
+            return {
+                "merchant": _user_str(tx.merchant),
+                "date": tx.date.isoformat(),
+                "amount": _fmt(tx.amount),
+            }
+
+    info = await execute_use_case(_fetch)
+
+    description = (
+        f"Unlink {info['merchant']} ({info['date']}) from the settlement — "
+        "it re-enters settlement math"
+    )
+    details: dict[str, object] = {
+        "settlement_id": str(settlement_id),
+        "transaction_id": str(transaction_id),
+        **info,
+    }
+    return _propose_action(
+        current_user, "unlink_settlement_transaction", tool_input, description, details
+    )
+
+
+async def handle_manage_settlement_merchant(
+    tool_input: dict[str, object],
+    current_user: Person,
+    _persons: list[Person],
+) -> dict[str, object]:
+    action = cast(str, tool_input["action"])
+    name = cast(str, tool_input["name"])
+    if not name.strip():
+        raise ToolExecutionError("Merchant name must not be empty")
+
+    merchants = await execute_use_case(
+        lambda uow: ListSettlementMerchantsUseCase().execute(
+            ListSettlementMerchantsCommand(), uow
+        )
+    )
+    existing = next(
+        (m for m in merchants.merchants if m.name.lower() == name.lower()), None
+    )
+
+    details: dict[str, object] = {"action": action, "name": _user_str(name)}
+    if action == "add":
+        pattern = cast(str | None, tool_input.get("pattern"))
+        if not pattern or len(pattern) < _MIN_MERCHANT_PATTERN:
+            raise ToolExecutionError("pattern is required for add (min 2 characters)")
+        if existing is not None:
+            raise ToolExecutionError(
+                f"Settlement merchant '{existing.name}' already exists"
+            )
+        description = (
+            f"Add settlement merchant '{name}' matching merchants "
+            f"containing '{pattern}'"
+        )
+        details["pattern"] = _user_str(pattern)
+        details["raw_name"] = name
+        details["raw_pattern"] = pattern
+    elif action == "remove":
+        if existing is None:
+            valid = ", ".join(m.name for m in merchants.merchants) or "(none)"
+            raise ToolExecutionError(
+                f"Unknown settlement merchant: {name}. Configured: {valid}"
+            )
+        description = (
+            f"Remove settlement merchant '{existing.name}' "
+            f"(pattern '{existing.merchant_pattern}')"
+        )
+        details["merchant_id"] = str(existing.id)
+        details["pattern"] = _user_str(existing.merchant_pattern)
+    else:  # pragma: no cover — enum-constrained by the schema
+        raise ToolExecutionError(f"Unknown action: {action}")
+
+    return _propose_action(
+        current_user, "manage_settlement_merchant", tool_input, description, details
     )

@@ -535,6 +535,24 @@ A natural language assistant for quick answers without page-hopping. Optional â€
 - Given a year of data, when I ask "how's the year going?", then the assistant answers from get_dashboard_summary with YTD totals and per-month settlement status matching the Dashboard
 - Given my adjustment account is configured, when I ask "what adjustments would March produce?", then the assistant previews my adjustment rows from get_adjustments_preview
 
+**US-CHAT-18** (v1.8.x): As a partner, I want to manage budgets and categories through the chat, so routine setup doesn't require leaving the conversation.
+
+- Given a configured budget, when I ask "delete the Food & Dining budget for March", then the assistant proposes the deletion with a confirmation card showing the current amount being deleted, and nothing changes until I confirm
+- Given budgets in June, when I say "use the same budgets for July", then the assistant proposes copying them, the card states how many will be copied and how many are skipped (existing budgets are never overwritten), and confirming creates them
+- Given a category group, when I ask to create, rename, or delete a group, then the assistant proposes it; a delete proposal states where the group's categories go (another group or unmapped) and that its budgets are deleted
+- Given unmapped categories, when I ask "map Pets to Lifestyle", then the assistant proposes the mapping; an unknown group name is rejected with the list of valid groups
+- Given a category, when I ask "count personal Groceries spending toward the budget", then the assistant proposes toggling include_personal, showing the current and new value
+- Given I ask the assistant to change my password, theme, or chat voice, then it declines and points me to the app â€” those remain human-only
+
+**US-CHAT-19** (v1.8.x): As a partner, I want to settle up and close months through the chat with explicit confirmation, so money-touching actions are never applied on my behalf silently.
+
+- Given an open month, when I ask to finalize it, then the assistant proposes the lock with the same advisory warnings the app shows (missing uploads, outstanding balance, unmapped categories), and only confirming locks the month
+- Given a finalized month, when I ask to unlock it, then the assistant proposes the unlock and confirming reopens the month
+- Given I tell the assistant "I paid Kew back $500 via Venmo", then it proposes recording the settlement (amount, direction, method, optional recorded-against annotation), and confirming records it against the running ledger (FIFO), identically to the Settle Up page
+- Given an outstanding balance, when I say "let's call it even", then the assistant proposes waiving the total outstanding balance with its amount and direction on the card
+- Given a recorded settlement from get_settlement_activity, when I ask to delete it or to link/unlink its bank transaction, then the assistant proposes the change with the concrete transaction and settlement details, and confirming applies it with the same month-lock guards as the app
+- Given a settlement proposal I don't confirm, then nothing is recorded and the ledger is unchanged
+
 ---
 
 ## User Journeys

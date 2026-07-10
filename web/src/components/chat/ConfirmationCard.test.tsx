@@ -70,3 +70,56 @@ describe("ConfirmationCard", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("generic DetailDisplay (v1.8.2 mutations)", () => {
+  it("renders unknown mutation details through the generic card", () => {
+    render(
+      <ConfirmationCard
+        {...BASE_PROPS}
+        toolName="finalize_period"
+        description="Finalize March 2026 (lock the month)"
+        details={{
+          year: 2026,
+          month: 3,
+          warnings: ["No upload from Bob"],
+          transaction_count: 82,
+        }}
+        state="pending"
+      />,
+    );
+    expect(screen.getByText("transaction count")).toBeInTheDocument();
+    expect(screen.getByText("82")).toBeInTheDocument();
+    expect(screen.getByText("No upload from Bob")).toBeInTheDocument();
+  });
+
+  it("renders batch split proposals as a table via the generic card", () => {
+    render(
+      <ConfirmationCard
+        {...BASE_PROPS}
+        toolName="update_transaction_split"
+        description="Change splits on 2 transactions to 60/40"
+        details={{
+          count: 2,
+          splits: [
+            {
+              merchant: "<user_data>Rent Co</user_data>",
+              date: "2026-03-01",
+              current_split: "50/50",
+              new_split: "60/40",
+            },
+            {
+              merchant: "<user_data>Rent Co</user_data>",
+              date: "2026-04-01",
+              current_split: "50/50",
+              new_split: "60/40",
+            },
+          ],
+        }}
+        state="pending"
+      />,
+    );
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(screen.getAllByText("Rent Co")).toHaveLength(2);
+    expect(screen.getAllByText("60/40")).toHaveLength(2);
+  });
+});

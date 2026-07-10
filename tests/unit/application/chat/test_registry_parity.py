@@ -3,9 +3,8 @@
 Anything a human can do through the app, the chatbot can do for them — and
 nothing more. Every use case in src/application/use_cases must be accounted
 for in exactly one registry bucket: reachable from a chat tool, blacklisted
-(human-only), mechanically excluded (file I/O), internal plumbing, or pending
-a scheduled parity phase. Adding a use case without classifying it fails here
-by design.
+(human-only), mechanically excluded (file I/O), or internal plumbing. Adding
+a use case without classifying it fails here by design.
 """
 
 import importlib
@@ -19,7 +18,6 @@ from src.application.chat.registry import (
     BLACKLISTED_USE_CASES,
     INTERNAL_USE_CASES,
     MECHANICALLY_EXCLUDED_USE_CASES,
-    PENDING_PARITY_USE_CASES,
     REGISTRY,
     TOOLS,
     ToolSpec,
@@ -70,7 +68,6 @@ class TestParityContract:
             | BLACKLISTED_USE_CASES
             | MECHANICALLY_EXCLUDED_USE_CASES
             | INTERNAL_USE_CASES
-            | PENDING_PARITY_USE_CASES
         )
         unclassified = discovered - classified
         assert not unclassified, (
@@ -87,7 +84,6 @@ class TestParityContract:
             "blacklist": BLACKLISTED_USE_CASES,
             "mechanical": MECHANICALLY_EXCLUDED_USE_CASES,
             "internal": INTERNAL_USE_CASES,
-            "pending": PENDING_PARITY_USE_CASES,
         }.items():
             stale = bucket - discovered
             assert not stale, f"Stale names in {bucket_name}: {sorted(stale)}"
@@ -98,7 +94,6 @@ class TestParityContract:
             BLACKLISTED_USE_CASES,
             MECHANICALLY_EXCLUDED_USE_CASES,
             INTERNAL_USE_CASES,
-            PENDING_PARITY_USE_CASES,
         ]
         for i, a in enumerate(buckets):
             for b in buckets[i + 1 :]:
@@ -140,20 +135,35 @@ class TestRegistryShape:
         assert all("cache_control" not in t for t in TOOLS[:-1])
         assert TOOLS[-1]["cache_control"] == {"type": "ephemeral"}
 
-    def test_every_schema_is_strict(self) -> None:
-        """strict: true guarantees schema-conformant tool calls; the API
-        requires additionalProperties: false alongside it."""
+    def test_no_strict_schemas(self) -> None:
+        """strict: true was tried and abandoned — the API caps strict tools
+        at 20 per request and rejected even 16 on compiled-grammar size at
+        this registry's schema complexity (both live-verified 400s). The
+        boundary guard is handler validation; every schema still keeps
+        additionalProperties: false and a required list."""
         for spec in REGISTRY:
-            assert spec.schema.get("strict") is True, spec.name
+            assert "strict" not in spec.schema, spec.name
             input_schema = spec.schema["input_schema"]
             assert isinstance(input_schema, dict)
             assert input_schema.get("additionalProperties") is False, spec.name
             assert "required" in input_schema, spec.name
 
-    def test_no_unsupported_constraints_in_strict_schemas(self) -> None:
-        """The API rejects numeric/array constraints on strict schemas
-        (live-verified 400: 'properties maximum, minimum are not supported').
-        Ranges belong in the description, enforcement in the handler."""
+    def test_read_write_naming_convention(self) -> None:
+        """The frontend derives 'proposing vs looking up' from tool names:
+        reads are get_*/search_*, writes are anything else (see
+        isMutationTool in ToolCallIndicator.tsx). Pin the convention here
+        so a misnamed tool fails CI instead of mislabeling the indicator."""
+        for spec in REGISTRY:
+            is_read_name = spec.name.startswith(("get_", "search_"))
+            if spec.executor is None:
+                assert is_read_name, f"read tool misnamed: {spec.name}"
+            else:
+                assert not is_read_name, f"write tool misnamed: {spec.name}"
+
+    def test_no_numeric_or_array_constraints_in_schemas(self) -> None:
+        """House convention: ranges belong in the property description,
+        enforcement in the handler (they were unsupported under strict —
+        live-verified 400 — and handler validation is the boundary now)."""
         banned = {"minimum", "maximum", "maxItems", "minItems", "multipleOf"}
 
         def walk(node: object, path: str) -> None:

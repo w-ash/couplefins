@@ -1,5 +1,6 @@
 import { Check, X } from "lucide-react";
 import { Button } from "@/components/Button";
+import { GenericToolResultCard } from "@/components/chat/ToolResultCard";
 import type { ConfirmationState } from "@/lib/chat";
 import { cn } from "@/lib/cn";
 import { formatCurrency, SHORT_MONTHS, stripUserData } from "@/lib/format";
@@ -36,6 +37,11 @@ function BudgetDetails({ details }: { details: Record<string, unknown> }) {
 }
 
 function SplitDetails({ details }: { details: Record<string, unknown> }) {
+  // Batch proposals carry only the splits list — the generic renderer's
+  // table covers them; the bespoke layout below is for the single case.
+  if (!("merchant" in details)) {
+    return <GenericToolResultCard result={details} />;
+  }
   return (
     <div className="space-y-0.5 text-xs text-muted-foreground">
       <p>
@@ -124,7 +130,11 @@ function DetailDisplay({
     case "bulk_update_transactions":
       return <BulkDetails details={details} />;
     default:
-      return null;
+      // Anthropic's containment write-up measured ~93% of permission
+      // prompts being rubber-stamped — concrete before/after details are
+      // what make confirmation a real defense, so every mutation renders
+      // its details, bespoke card or not.
+      return <GenericToolResultCard result={details} />;
   }
 }
 

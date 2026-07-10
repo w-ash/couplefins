@@ -20,13 +20,26 @@ const TOOL_LABELS: Record<string, string> = {
   update_budget: "budget update",
   update_transaction_split: "split update",
   bulk_update_transactions: "bulk update",
+  delete_budget: "budget deletion",
+  copy_budgets: "budget copy",
+  manage_category_group: "category group change",
+  map_categories: "category mapping",
+  set_category_personal: "category setting",
+  finalize_period: "month lock",
+  unfinalize_period: "month unlock",
+  record_settlement: "settlement",
+  waive_settlement: "balance waiver",
+  delete_settlement: "settlement deletion",
+  link_settlement_transaction: "settlement link",
+  unlink_settlement_transaction: "settlement unlink",
+  manage_settlement_merchant: "merchant pattern change",
 };
 
-const MUTATION_TOOLS = new Set([
-  "update_budget",
-  "update_transaction_split",
-  "bulk_update_transactions",
-]);
+// Derived, not hand-maintained: the backend names every read tool get_* or
+// search_* (registry convention) — everything else proposes a mutation.
+export function isMutationTool(name: string): boolean {
+  return !name.startsWith("get_") && !name.startsWith("search_");
+}
 
 export function ToolCallIndicator({ toolCall }: { toolCall: ToolCall }) {
   const label = TOOL_LABELS[toolCall.name] ?? toolCall.name;
@@ -41,7 +54,7 @@ export function ToolCallIndicator({ toolCall }: { toolCall: ToolCall }) {
       )}
       {isDone
         ? `Checked ${label}`
-        : MUTATION_TOOLS.has(toolCall.name)
+        : isMutationTool(toolCall.name)
           ? `Proposing ${label}…`
           : `Looking up ${label}…`}
     </span>

@@ -459,3 +459,63 @@ async def test_rate_limit(client: AsyncClient) -> None:
     finally:
         _chat_limiter.reset()
         _clear_llm_override(client)
+
+
+# --- v1.8.2: end-to-end propose → confirm flow for a write tool ---
+
+
+async def test_finalize_period_propose_confirm_flow(client: AsyncClient) -> None:
+    """The two-phase mutation contract end-to-end: the tool call proposes,
+    the period stays open until the user confirms, and confirming locks it
+    identically to the UI path."""
+    persons, cookies = await setup_and_login(client)
+    alice_id = persons[0]["id"]
+    await upload_csv(client, alice_id, _SIMPLE_CSV, auth=cookies)
+
+    # Turn 1: the model proposes finalizing March.
+    fake = FakeLLMClient([
+        _tool_use_script("finalize_period", {"year": 2026, "month": 3}),
+        _text_only_script("Confirm to lock March."),
+    ])
+    events = await _post_chat(
+        client,
+        cookies,
+        fake,
+        messages=[{"role": "user", "content": "Lock March please"}],
+    )
+    tool_results = [e for e in events if e["type"] == "tool_result"]
+    assert tool_results[0]["is_error"] is False
+    summary = tool_results[0]["summary"]
+    assert summary["status"] == "pending_confirmation"
+    action_id = summary["action_id"]
+
+    # Nothing applied yet — the proposal alone must not lock the month.
+    status = await client.get(
+        "/api/v1/reconciliation/period-status",
+        params={"year": 2026, "month": 3},
+        auth=cookies,
+    )
+    assert status.json()["is_finalized"] is False
+
+    # Turn 2: the user confirms via the confirmation card.
+    fake2 = FakeLLMClient([_text_only_script("March is locked.")])
+    _override_llm(client, fake2)
+    try:
+        resp = await client.post(
+            "/api/v1/chat",
+            json={
+                "messages": [{"role": "user", "content": "Lock March please"}],
+                "confirmation": {"action_id": action_id, "approved": True},
+            },
+            auth=cookies,
+        )
+        assert resp.status_code == 200
+    finally:
+        _clear_llm_override(client)
+
+    status = await client.get(
+        "/api/v1/reconciliation/period-status",
+        params={"year": 2026, "month": 3},
+        auth=cookies,
+    )
+    assert status.json()["is_finalized"] is True

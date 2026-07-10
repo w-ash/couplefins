@@ -11,8 +11,7 @@ do for them — and nothing more. The classification sets below make that
 contract explicit and testable (see tests/unit/application/chat/
 test_registry_parity.py): every use case in src/application/use_cases must be
 reachable from a ToolSpec or explicitly accounted for as blacklisted
-(human-only), mechanically excluded (file I/O), internal plumbing, or pending
-a scheduled parity phase.
+(human-only), mechanically excluded (file I/O), or internal plumbing.
 """
 
 from collections.abc import Awaitable, Callable, Mapping
@@ -154,7 +153,10 @@ REGISTRY: tuple[ToolSpec, ...] = (
         name="update_budget",
         schema=tools.UPDATE_BUDGET_SCHEMA,
         handler=tool_executor.handle_update_budget,
-        use_cases=("SaveBudgetUseCase",),
+        # UpdateBudgetUseCase (PUT /budgets/{id}) is covered by this tool's
+        # upsert semantics via SaveBudgetUseCase — capability parity, not
+        # endpoint parity.
+        use_cases=("SaveBudgetUseCase", "UpdateBudgetUseCase"),
         executor=confirmed_actions.exec_budget,
         broadcast_entity="budgets",
     ),
@@ -173,6 +175,117 @@ REGISTRY: tuple[ToolSpec, ...] = (
         use_cases=("BulkUpdateTransactionsUseCase", "BulkModifyTagsUseCase"),
         executor=confirmed_actions.exec_bulk,
         broadcast_entity="transactions",
+    ),
+    ToolSpec(
+        name="delete_budget",
+        schema=tools.DELETE_BUDGET_SCHEMA,
+        handler=tool_executor.handle_delete_budget,
+        use_cases=("DeleteBudgetUseCase",),
+        executor=confirmed_actions.exec_delete_budget,
+        broadcast_entity="budgets",
+    ),
+    ToolSpec(
+        name="copy_budgets",
+        schema=tools.COPY_BUDGETS_SCHEMA,
+        handler=tool_executor.handle_copy_budgets,
+        use_cases=("CopyBudgetsUseCase",),
+        executor=confirmed_actions.exec_copy_budgets,
+        broadcast_entity="budgets",
+    ),
+    ToolSpec(
+        name="manage_category_group",
+        schema=tools.MANAGE_CATEGORY_GROUP_SCHEMA,
+        handler=tool_executor.handle_manage_category_group,
+        use_cases=(
+            "CreateCategoryGroupUseCase",
+            "UpdateCategoryGroupUseCase",
+            "DeleteCategoryGroupUseCase",
+        ),
+        executor=confirmed_actions.exec_category_group,
+        broadcast_entity="reconciliation",
+    ),
+    ToolSpec(
+        name="map_categories",
+        schema=tools.MAP_CATEGORIES_SCHEMA,
+        handler=tool_executor.handle_map_categories,
+        use_cases=("BulkUpdateMappingsUseCase",),
+        executor=confirmed_actions.exec_map_categories,
+        broadcast_entity="reconciliation",
+    ),
+    ToolSpec(
+        name="set_category_personal",
+        schema=tools.SET_CATEGORY_PERSONAL_SCHEMA,
+        handler=tool_executor.handle_set_category_personal,
+        use_cases=("UpdateCategoryUseCase",),
+        executor=confirmed_actions.exec_category_personal,
+        broadcast_entity="reconciliation",
+    ),
+    ToolSpec(
+        name="finalize_period",
+        schema=tools.FINALIZE_PERIOD_SCHEMA,
+        handler=tool_executor.handle_finalize_period,
+        use_cases=("FinalizePeriodUseCase",),
+        executor=confirmed_actions.exec_finalize,
+        broadcast_entity="reconciliation",
+    ),
+    ToolSpec(
+        name="unfinalize_period",
+        schema=tools.UNFINALIZE_PERIOD_SCHEMA,
+        handler=tool_executor.handle_unfinalize_period,
+        use_cases=("UnfinalizePeriodUseCase",),
+        executor=confirmed_actions.exec_unfinalize,
+        broadcast_entity="reconciliation",
+    ),
+    ToolSpec(
+        name="record_settlement",
+        schema=tools.RECORD_SETTLEMENT_SCHEMA,
+        handler=tool_executor.handle_record_settlement,
+        use_cases=("RecordSettlementUseCase",),
+        executor=confirmed_actions.exec_record_settlement,
+        broadcast_entity="settlements",
+    ),
+    ToolSpec(
+        name="waive_settlement",
+        schema=tools.WAIVE_SETTLEMENT_SCHEMA,
+        handler=tool_executor.handle_waive_settlement,
+        use_cases=("RecordWaivedSettlementUseCase",),
+        executor=confirmed_actions.exec_waive_settlement,
+        broadcast_entity="settlements",
+    ),
+    ToolSpec(
+        name="delete_settlement",
+        schema=tools.DELETE_SETTLEMENT_SCHEMA,
+        handler=tool_executor.handle_delete_settlement,
+        use_cases=("DeleteSettlementUseCase",),
+        executor=confirmed_actions.exec_delete_settlement,
+        broadcast_entity="settlements",
+    ),
+    ToolSpec(
+        name="link_settlement_transaction",
+        schema=tools.LINK_SETTLEMENT_TRANSACTION_SCHEMA,
+        handler=tool_executor.handle_link_settlement_transaction,
+        use_cases=("MarkTransactionAsSettlementUseCase",),
+        executor=confirmed_actions.exec_link_settlement_tx,
+        broadcast_entity="settlements",
+    ),
+    ToolSpec(
+        name="unlink_settlement_transaction",
+        schema=tools.UNLINK_SETTLEMENT_TRANSACTION_SCHEMA,
+        handler=tool_executor.handle_unlink_settlement_transaction,
+        use_cases=("UnlinkSettlementTransactionUseCase",),
+        executor=confirmed_actions.exec_unlink_settlement_tx,
+        broadcast_entity="settlements",
+    ),
+    ToolSpec(
+        name="manage_settlement_merchant",
+        schema=tools.MANAGE_SETTLEMENT_MERCHANT_SCHEMA,
+        handler=tool_executor.handle_manage_settlement_merchant,
+        use_cases=(
+            "CreateSettlementMerchantUseCase",
+            "DeleteSettlementMerchantUseCase",
+        ),
+        executor=confirmed_actions.exec_settlement_merchant,
+        broadcast_entity="settlements",
     ),
 )
 
@@ -256,27 +369,6 @@ INTERNAL_USE_CASES: frozenset[str] = frozenset({
     "ListCategoryGroupsUseCase",
 })
 
-# Scheduled parity work. v1.8.1 shipped the reads; v1.8.2 ships the writes,
-# whose entries move into REGISTRY use_cases as their tools land. A use case
-# appearing in neither this set nor any other bucket fails the parity test —
-# that is the point.
-PENDING_PARITY_USE_CASES: frozenset[str] = frozenset({
-    # v1.8.2 — writes
-    "UpdateBudgetUseCase",
-    "DeleteBudgetUseCase",
-    "CopyBudgetsUseCase",
-    "CreateCategoryGroupUseCase",
-    "UpdateCategoryGroupUseCase",
-    "DeleteCategoryGroupUseCase",
-    "BulkUpdateMappingsUseCase",
-    "UpdateCategoryUseCase",
-    "FinalizePeriodUseCase",
-    "UnfinalizePeriodUseCase",
-    "RecordSettlementUseCase",
-    "RecordWaivedSettlementUseCase",
-    "DeleteSettlementUseCase",
-    "MarkTransactionAsSettlementUseCase",
-    "UnlinkSettlementTransactionUseCase",
-    "CreateSettlementMerchantUseCase",
-    "DeleteSettlementMerchantUseCase",
-})
+# Parity is complete as of v1.8.2 — there is no pending bucket. A new use
+# case must land in REGISTRY use_cases or one of the exclusion sets above,
+# or the parity test fails. That is the point.
