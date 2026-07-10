@@ -69,10 +69,17 @@ class AuthConfig(BaseModel):
         return v
 
 
+# Mirrors the Anthropic SDK's OutputConfigParam.effort literal — a typo'd
+# CHAT__EFFORT env value fails at startup instead of 400ing every chat request.
+type EffortLevel = Literal["low", "medium", "high", "xhigh", "max"]
+
+
 class ChatConfig(BaseModel):
     anthropic_api_key: str | None = None
-    model_id: str = "claude-sonnet-4-6"
-    max_turns: int = 8
+    model_id: str = "claude-opus-4-8"
+    max_turns: int = 24
+    max_tokens: int = 16384
+    effort: EffortLevel = "high"
 
 
 class Settings(BaseSettings):

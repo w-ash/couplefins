@@ -260,7 +260,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.15" },
-    { name = "anthropic", specifier = ">=0.84,<1" },
+    { name = "anthropic", specifier = ">=0.97,<1" },
     { name = "argon2-cffi", specifier = ">=24.0" },
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "attrs", specifier = ">=26.1.0,<27.0.0" },

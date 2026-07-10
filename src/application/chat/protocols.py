@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from src.application.chat.events import TextDelta
+from src.config.settings import EffortLevel
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +43,7 @@ class LLMClientProtocol(Protocol):
         *,
         model: str,
         max_tokens: int,
+        effort: EffortLevel,
         system: list[dict[str, object]],
         tools: list[dict[str, object]],
         messages: list[dict[str, object]],

@@ -18,7 +18,7 @@ dependencies = [
     "attrs>=26.1.0,<27.0.0",
     "argon2-cffi>=24.0",
     "PyJWT>=2.9",
-    "anthropic>=0.84,<1",
+    "anthropic>=0.97,<1",
 ]
 
 [dependency-groups]
@@ -170,6 +170,7 @@ min_confidence = 60
 ignore_decorators = [
     "@router.*",               # FastAPI route handlers
     "@field_validator",        # Pydantic field validators
+    "@model_validator",        # Pydantic model validators
     "@app.*",                  # FastAPI exception handlers
     "@override",               # typing.override
 ]

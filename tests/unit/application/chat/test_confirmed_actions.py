@@ -4,8 +4,8 @@ from uuid import uuid4
 
 import pytest
 
-from src.application.chat.confirmed_actions import execute_confirmed_action
 from src.application.chat.pending_actions import PendingAction
+from src.application.chat.registry import execute_confirmed_action
 from src.domain.exceptions import PeriodFinalizedError, ValidationError
 from tests.fixtures.factories import (
     make_category_group,

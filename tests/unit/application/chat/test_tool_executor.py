@@ -10,7 +10,7 @@ import uuid
 
 import pytest
 
-from src.application.chat.tool_executor import execute_tool
+from src.application.chat.registry import execute_tool
 from src.application.use_cases._shared.upload_status import UploadStatus
 from src.application.use_cases.get_budget_overview import GetBudgetOverviewResult
 from src.application.use_cases.get_settle_up_data import GetSettleUpDataResult
@@ -167,7 +167,6 @@ async def test_settlement_balance_month_includes_ledger_row() -> None:
 
 @pytest.mark.asyncio
 async def test_settlement_balance_without_month_returns_outstanding() -> None:
-    from src.application.use_cases._shared.settlement_math import LedgerBundle
     from src.domain.ledger import SettlementLedger
 
     ledger = SettlementLedger(
@@ -181,12 +180,12 @@ async def test_settlement_balance_without_month_returns_outstanding() -> None:
         unapplied_payment_total=Decimal(0),
         span=((2026, 3), (2026, 5)),
     )
-    bundle = LedgerBundle(ledger=ledger, settlements=[], records=[])
 
+    # _outstanding_balance_summary's inner loader returns the ledger directly.
     with patch(
         "src.application.chat.tool_executor.execute_use_case",
         new_callable=AsyncMock,
-        return_value=bundle,
+        return_value=ledger,
     ):
         result = await execute_tool("get_settlement_balance", {}, ALICE, PERSONS)
 
@@ -204,7 +203,6 @@ async def test_settlement_balance_without_month_returns_outstanding() -> None:
 
 @pytest.mark.asyncio
 async def test_settlement_balance_without_month_all_settled() -> None:
-    from src.application.use_cases._shared.settlement_math import LedgerBundle
     from src.domain.ledger import SettlementLedger
 
     ledger = SettlementLedger(
@@ -214,12 +212,11 @@ async def test_settlement_balance_without_month_all_settled() -> None:
         unapplied_payment_total=Decimal(0),
         span=None,
     )
-    bundle = LedgerBundle(ledger=ledger, settlements=[], records=[])
 
     with patch(
         "src.application.chat.tool_executor.execute_use_case",
         new_callable=AsyncMock,
-        return_value=bundle,
+        return_value=ledger,
     ):
         result = await execute_tool("get_settlement_balance", {}, ALICE, PERSONS)
 

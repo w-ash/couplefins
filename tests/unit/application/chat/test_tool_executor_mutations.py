@@ -10,7 +10,7 @@ import uuid
 import pytest
 
 from src.application.chat.pending_actions import pending_action_store
-from src.application.chat.tool_executor import execute_tool
+from src.application.chat.registry import execute_tool
 from src.application.use_cases.list_category_groups import (
     CategoryGroupWithCategories,
     ListCategoryGroupsResult,

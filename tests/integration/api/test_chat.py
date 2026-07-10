@@ -327,6 +327,24 @@ async def test_max_rounds_exceeded(client: AsyncClient) -> None:
     assert error_events[0]["code"] == "MAX_ROUNDS_EXCEEDED"
 
 
+# --- Test 7b: max_tokens truncation → RESPONSE_TRUNCATED error ---
+
+
+async def test_max_tokens_truncation(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
+    truncated = FakeScript(
+        events=[TextDelta(text="Half an ans")],
+        response=LLMResponse(stop_reason="max_tokens", content=[], raw_content=[]),
+    )
+    fake = FakeLLMClient([truncated])
+
+    events = await _post_chat(client, cookies, fake)
+
+    error_events = [e for e in events if e["type"] == "error"]
+    assert len(error_events) == 1
+    assert error_events[0]["code"] == "RESPONSE_TRUNCATED"
+
+
 # --- Test 8: Client disconnect → clean cancellation ---
 
 

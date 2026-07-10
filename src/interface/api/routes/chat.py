@@ -11,12 +11,11 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from structlog.stdlib import get_logger
 
-from src.application.chat.confirmed_actions import execute_confirmed_action
 from src.application.chat.events import TextDelta
 from src.application.chat.pending_actions import pending_action_store
 from src.application.chat.protocols import LLMClientProtocol
+from src.application.chat.registry import TOOLS, execute_confirmed_action
 from src.application.chat.system_prompt import build_system_prompt
-from src.application.chat.tools import TOOLS
 from src.application.chat.use_case import ChatCommand, ChatUseCase
 from src.application.runner import execute_use_case
 from src.application.use_cases.list_category_groups import list_category_groups
@@ -91,6 +90,8 @@ async def _build_command(
         tools=TOOLS,
         model_id=settings.chat.model_id,
         max_turns=settings.chat.max_turns,
+        max_tokens=settings.chat.max_tokens,
+        effort=settings.chat.effort,
         current_user=current_user,
         persons=persons,
     )

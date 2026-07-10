@@ -42,6 +42,10 @@ class MaxRoundsExceededError(DomainError):
     pass
 
 
+class ResponseTruncatedError(DomainError):
+    pass
+
+
 class ActionExpiredError(DomainError):
     pass
 

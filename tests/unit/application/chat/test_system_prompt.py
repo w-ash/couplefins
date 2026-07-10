@@ -14,6 +14,23 @@ def test_includes_person_names() -> None:
     assert "Bob" in text
 
 
+def test_domain_primer_matches_spotted_semantics() -> None:
+    """Spotted is the beneficiary's PERSONAL spending (docs/domain.md).
+
+    A primer that claims household=true here steers the model into proposing
+    budget-corrupting mutations — pin the two load-bearing facts.
+    """
+    blocks = build_system_prompt(
+        make_person(name="A"),
+        make_person(name="B"),
+        date(2026, 3, 15),
+        [],
+    )
+    text = blocks[0]["text"]
+    assert "Spotted: household=false" in text
+    assert "person-name tags do NOT set it" in text
+
+
 def test_includes_current_date() -> None:
     blocks = build_system_prompt(
         make_person(name="A"),

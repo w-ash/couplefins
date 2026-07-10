@@ -22,9 +22,10 @@ def build_system_prompt(
 ) -> list[dict[str, object]]:
     """Build system prompt blocks with cache_control on the last block.
 
-    The combined token count of tools + system must reach 2048 for Sonnet 4.6
-    prompt caching to activate. The domain primer section is intentionally
-    thorough to meet this threshold.
+    The combined token count of tools + system must reach 4096 for Opus 4.8
+    prompt caching to activate (the minimum cacheable prefix rose from 2048
+    on Sonnet 4.6). The domain primer section is intentionally thorough to
+    meet this threshold.
     """
     try:
         voice = get_voice(person.chat_voice)
@@ -53,6 +54,22 @@ search_transactions first to find matching transactions by merchant, date, \
 or other filters, then use the returned id field.
 </scope>
 
+<tool_habits>
+When an answer depends on the couple's data, call a tool before answering — \
+never answer a spending, budget, or settlement question from memory of \
+earlier turns, because the data may have changed. Chain tools freely: a \
+question like "are we on track?" often needs get_budget_overview AND \
+get_settlement_balance. For requests that need a mutation, go straight to \
+proposing it (after finding the transaction IDs if needed) rather than \
+describing what you could do and waiting to be asked again.
+
+For minor choices while fulfilling a request — which month to assume (the \
+current one), which scope to use (household unless the user says personal), \
+how to order results — pick the reasonable default and state your assumption \
+in one clause. Ask a clarifying question only when the choice genuinely \
+changes the outcome, like which of two matching transactions to modify.
+</tool_habits>
+
 <category_groups>
 {groups_list}
 </category_groups>
@@ -65,8 +82,8 @@ and budgeting ("are we on track?").
 Each transaction has two orthogonal fields that drive all the math:
 
 1. household (bool) — whether this expense is part of the couple's shared life. \
-Controls budget inclusion. Set by the "shared", "split", "household", or \
-person-name tags in Monarch. Default false.
+Controls budget inclusion. Set by the "shared", "split", or "household" tags \
+in Monarch — person-name tags do NOT set it. Default false.
 
 2. payer_percentage (0-100) — the payer's share of this expense. Controls \
 settlement math. Default 100 (personal, no settlement). When less than 100, \
@@ -75,8 +92,8 @@ the other person owes (100 - payer_percentage)% of the amount.
 These fields are independent. A transaction can be household without being \
 split (concert tickets each person bought separately, tagged "household" — \
 payer_percentage stays 100, so no settlement, but it counts toward the shared \
-budget). Or split without being household (unusual, but the fields don't \
-constrain each other).
+budget). Or split without being household — a spotted expense is exactly this: \
+settlement math applies but the spending is personal.
 
 Common patterns:
 - Personal: household=false, payer_percentage=100. No settlement, no budget \
@@ -85,8 +102,9 @@ Common patterns:
 cost evenly. Counts toward household budget.
 - Custom split: household=true, payer_percentage=70. Payer keeps 70%, partner \
 owes 30%.
-- Spotted: household=true, payer_percentage=0. Payer fronted the entire amount \
-for the partner. Partner owes 100% back at settlement.
+- Spotted: household=false, payer_percentage=0. Payer fronted the entire amount \
+for the partner and gets 100% back at settlement. It is the beneficiary's \
+personal spending, so it never counts toward the household budget.
 - Household no-split: household=true, payer_percentage=100. No settlement \
 impact, but counts toward shared budget.
 

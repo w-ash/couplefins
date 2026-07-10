@@ -8,9 +8,10 @@ from structlog.stdlib import get_logger
 
 from src.application.chat.events import TextDelta, ToolResultEvent, ToolStartEvent
 from src.application.chat.protocols import LLMClientProtocol
-from src.application.chat.tool_executor import execute_tool
+from src.application.chat.registry import execute_tool
+from src.config.settings import EffortLevel
 from src.domain.entities.person import Person
-from src.domain.exceptions import MaxRoundsExceededError
+from src.domain.exceptions import MaxRoundsExceededError, ResponseTruncatedError
 
 logger = get_logger()
 
@@ -24,6 +25,8 @@ class ChatCommand:
     tools: list[dict[str, object]]
     model_id: str
     max_turns: int
+    max_tokens: int
+    effort: EffortLevel
     current_user: Person
     persons: list[Person]
 
@@ -38,7 +41,8 @@ class ChatUseCase:
         for turn in range(command.max_turns):
             async with self._llm.stream(
                 model=command.model_id,
-                max_tokens=8192,
+                max_tokens=command.max_tokens,
+                effort=command.effort,
                 system=command.system,
                 tools=command.tools,
                 messages=messages,
@@ -55,6 +59,21 @@ class ChatUseCase:
                 turn=turn,
                 stop_reason=response.stop_reason,
             )
+
+            if response.stop_reason == "pause_turn":
+                # A paused turn carries no client tool_use blocks, so it must
+                # be handled before the empty-content return below. Echo the
+                # assistant turn back and re-request; the API resumes it.
+                messages.append({
+                    "role": "assistant",
+                    "content": response.raw_content,
+                })
+                continue
+
+            if response.stop_reason == "max_tokens":
+                raise ResponseTruncatedError(
+                    f"Response hit the {command.max_tokens}-token limit"
+                )
 
             if response.stop_reason == "end_turn":
                 return

@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from src.application.chat.events import TextDelta
 from src.application.chat.protocols import LLMResponse, ToolUseBlock
+from src.config.settings import EffortLevel
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +46,7 @@ class FakeLLMClient:
     def __init__(self, scripts: list[FakeScript] | None = None) -> None:
         self._scripts = list(scripts or [])
         self.captured_system: list[dict[str, object]] | None = None
+        self.captured_messages: list[list[dict[str, object]]] = []
 
     @asynccontextmanager
     async def stream(
@@ -52,10 +54,12 @@ class FakeLLMClient:
         *,
         model: str,
         max_tokens: int,
+        effort: EffortLevel,
         system: list[dict[str, object]],
         tools: list[dict[str, object]],
         messages: list[dict[str, object]],
     ) -> AsyncIterator[_FakeStream]:
         self.captured_system = system
+        self.captured_messages.append(list(messages))
         script = self._scripts.pop(0) if self._scripts else FakeScript()
         yield _FakeStream(script)

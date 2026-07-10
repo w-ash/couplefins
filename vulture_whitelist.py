@@ -81,12 +81,6 @@ from src.domain.reconciliation import compute_net_position
 assert_adjustments_zero_sum  # zero-sum invariant, tested in test_adjustments.py
 compute_trailing_average  # tested in test_insights.py, planned for future Insights enhancements
 compute_net_position  # independent cross-check for the ledger invariants in test_ledger.py
-# --- Pydantic model validators: invoked by Pydantic framework ---
-
-from src.interface.api.schemas.chat import ChatRequest
-
-ChatRequest._check_total_content_size  # @model_validator called by Pydantic
-
 # --- Test-only utility: called from tests/integration/conftest.py ---
 
 from src.config.settings import reset_settings
@@ -123,3 +117,21 @@ from src.application.chat.voices import VoiceDict
 VoiceDict.identity  # accessed via dict["identity"] in system_prompt.py
 VoiceDict.voice_examples  # accessed via dict["voice_examples"] in system_prompt.py
 VoiceDict.rules  # accessed via dict["rules"] in system_prompt.py
+
+# --- Chat capability registry: consumed by the parity contract test ---
+
+from src.application.chat.registry import (
+    BLACKLISTED_USE_CASES,
+    INTERNAL_USE_CASES,
+    MECHANICALLY_EXCLUDED_USE_CASES,
+    PENDING_PARITY_USE_CASES,
+    ToolSpec,
+)
+
+# ToolSpec.use_cases is parity accounting, asserted in
+# tests/unit/application/chat/test_registry_parity.py.
+ToolSpec.use_cases
+BLACKLISTED_USE_CASES
+INTERNAL_USE_CASES
+MECHANICALLY_EXCLUDED_USE_CASES
+PENDING_PARITY_USE_CASES

@@ -21,6 +21,7 @@ from src.domain.exceptions import (
     ChatUnavailableError,
     MaxRoundsExceededError,
     RateLimitExceededError,
+    ResponseTruncatedError,
     ToolExecutionError,
 )
 
@@ -29,6 +30,11 @@ logger = get_logger()
 
 type QueueItem = str | ToolStartEvent | ToolResultEvent | None
 
+# Adaptive thinking can run 30-90s with no stream events; without periodic
+# bytes the connection looks dead to the browser and any proxy in between.
+# SSE comment lines (leading ":") are ignored by parsers.
+_KEEPALIVE_INTERVAL_SECONDS = 15.0
+
 
 _ERROR_CODE_MAP: dict[type[Exception], str] = {
     ActionExpiredError: "ACTION_EXPIRED",
@@ -36,6 +42,7 @@ _ERROR_CODE_MAP: dict[type[Exception], str] = {
     ChatUnavailableError: "CHAT_UNAVAILABLE",
     ToolExecutionError: "TOOL_EXECUTION_ERROR",
     MaxRoundsExceededError: "MAX_ROUNDS_EXCEEDED",
+    ResponseTruncatedError: "RESPONSE_TRUNCATED",
     AnthropicApiError: "ANTHROPIC_API_ERROR",
 }
 
@@ -73,7 +80,13 @@ def stream_chat_response(
     async def event_generator() -> AsyncGenerator[str]:
         try:
             while True:
-                item = await queue.get()
+                try:
+                    item = await asyncio.wait_for(
+                        queue.get(), timeout=_KEEPALIVE_INTERVAL_SECONDS
+                    )
+                except TimeoutError:
+                    yield ": keepalive\n\n"
+                    continue
                 if item is None:
                     exc = task.exception() if task.done() else None
                     if exc is not None:

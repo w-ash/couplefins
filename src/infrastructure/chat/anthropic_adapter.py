@@ -16,10 +16,63 @@ from anthropic.types import (
 
 from src.application.chat.events import TextDelta
 from src.application.chat.protocols import LLMResponse, ToolUseBlock
+from src.config.settings import EffortLevel
 
 
 def _to_message_params(messages: list[dict[str, object]]) -> list[MessageParam]:
     return cast(list[MessageParam], messages)
+
+
+def _strip_cache_control(content: object) -> object:
+    if not isinstance(content, list):
+        return content
+    stripped: list[object] = []
+    for block in cast(list[object], content):
+        if isinstance(block, dict):
+            block_dict = cast(dict[str, object], block)
+            stripped.append({
+                k: v for k, v in block_dict.items() if k != "cache_control"
+            })
+        else:
+            stripped.append(block)
+    return stripped
+
+
+def _with_incremental_cache(
+    messages: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    """Copy messages with one cache breakpoint on the final content block.
+
+    The tool loop re-sends the whole growing history every turn; stamping the
+    last block turns all prior turns into cache reads (tools + system carry
+    the other two breakpoints — 3 of the 4 allowed). Works on copies only:
+    the use case reuses one list (and re-echoes raw_content on pause_turn),
+    so stamps must never leak into or accumulate on the caller's dicts.
+    Stripping stale stamps first makes this idempotent. The 20-block cache
+    lookback is safe here — each turn appends at most 2 messages.
+    """
+    if not messages:
+        return messages
+    result = [
+        {**message, "content": _strip_cache_control(message.get("content"))}
+        for message in messages
+    ]
+    last_content = result[-1]["content"]
+    if isinstance(last_content, str):
+        result[-1]["content"] = [
+            {
+                "type": "text",
+                "text": last_content,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
+    elif isinstance(last_content, list) and last_content:
+        blocks = list(cast(list[object], last_content))
+        last_block = blocks[-1]
+        if isinstance(last_block, dict):
+            blocks[-1] = {**last_block, "cache_control": {"type": "ephemeral"}}
+        result[-1]["content"] = blocks
+    return result
 
 
 def _to_tool_params(tools: list[dict[str, object]]) -> list[ToolParam]:
@@ -31,17 +84,14 @@ def _to_system_params(system: list[dict[str, object]]) -> list[TextBlockParam]:
 
 
 def _content_block_to_dict(block: ContentBlock) -> dict[str, object]:
-    """Serialize an Anthropic ContentBlock to a plain dict for round-tripping."""
-    if block.type == "text":
-        return {"type": "text", "text": block.text}
-    if block.type == "tool_use":
-        return {
-            "type": "tool_use",
-            "id": block.id,
-            "name": block.name,
-            "input": block.input,
-        }
-    return {"type": block.type}
+    """Serialize an Anthropic ContentBlock to a plain dict for round-tripping.
+
+    Must preserve every block type byte-faithfully: thinking blocks carry a
+    `signature` the API validates when the turn is echoed back, and server-tool
+    blocks must survive pause_turn continuations. Lossy serialization here
+    degrades or 400s multi-turn tool loops.
+    """
+    return cast(dict[str, object], block.model_dump(mode="json", exclude_none=True))
 
 
 class _AdapterStream:
@@ -93,16 +143,20 @@ class AnthropicAdapter:
         *,
         model: str,
         max_tokens: int,
+        effort: EffortLevel,
         system: list[dict[str, object]],
         tools: list[dict[str, object]],
         messages: list[dict[str, object]],
     ) -> AsyncGenerator[_AdapterStream]:
+        # Adaptive thinking must be explicit — Opus 4.8 runs without thinking
+        # when the parameter is omitted.
         async with self._client.messages.stream(
             model=model,
             max_tokens=max_tokens,
+            thinking={"type": "adaptive"},
+            output_config={"effort": effort},
             system=_to_system_params(system),
             tools=_to_tool_params(tools),
-            messages=_to_message_params(messages),
-            extra_body={"output_config": {"effort": "medium"}},
+            messages=_to_message_params(_with_incremental_cache(messages)),
         ) as sdk_stream:
             yield _AdapterStream(sdk_stream)

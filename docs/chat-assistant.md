@@ -107,17 +107,21 @@ Mutation tools (v1.5.2) use a two-phase confirmation protocol: the model propose
 
 With exactly 2 users and a 5-minute TTL, an in-memory dict is sufficient. Actions are lost on server restart, which is acceptable — the user simply re-asks. No Redis, no database table, no background cleanup thread. The `_evict_expired()` method runs on every `create`/`claim` call.
 
-### Why Sonnet 4.6, not Opus or Haiku
+### Why Opus 4.8, not Sonnet or Haiku
 
-Claude Sonnet 4.6 hits the sweet spot for this use case: near-Opus tool routing accuracy at 1/5 the cost. Haiku is cheaper but less reliable at multi-tool selection — not worth the risk when the model is querying real financial data. The model ID is a single constant in `ChatConfig`, easy to swap if pricing or capabilities shift.
+Claude Opus 4.8 is the strongest model at multi-step tool routing and financial reasoning — worth it for a low-volume household tool where each conversation touches real money. It runs with adaptive thinking (set explicitly — Opus 4.8 runs without thinking when the parameter is omitted). The model ID is a single constant in `ChatConfig`, easy to swap if pricing or capabilities shift.
 
-### Why effort: medium
+### Why effort: high
 
-Sonnet 4.6 defaults to `effort: high`, which adds latency from deeper reasoning. For a chat assistant answering "who owes whom?" — where the hard work is done by the tools, not the model's reasoning — `medium` effort gives fast responses without sacrificing tool routing quality.
+Opus 4.8 respects `effort` strictly; at lower levels it under-reaches for tools. `high` (the API default) keeps tool selection reliable across the 24-turn agentic budget without paying `xhigh`/`max` latency for questions the tools mostly answer anyway. Valid values: `low`, `medium`, `high`, `xhigh`, `max` — enforced at startup by `ChatConfig`.
 
 ### Why prompt caching
 
-The system prompt and tool definitions are identical on every request. With prompt caching, the first request writes them to Anthropic's cache (2356 tokens), and every subsequent request within 5 minutes reads from cache at 10% of the input token cost. The system prompt's domain model section is intentionally thorough to clear Sonnet 4.6's 2048-token caching minimum.
+Tools, system prompt, and conversation history are re-sent on every request. Three cache breakpoints keep that cheap: one on the last tool schema, one on the system prompt (its domain-model section is intentionally thorough to clear Opus 4.8's 4096-token caching minimum for tools+system), and one stamped by the adapter on the last message content block — so each turn of the tool loop re-reads the prior turns from cache at ~10% of input cost instead of reprocessing the whole growing history.
+
+### Stop reasons and keepalive
+
+The tool loop handles Anthropic stop reasons explicitly: `pause_turn` is resumed by echoing the assistant turn back (bounded by `CHAT__MAX_TURNS`), and `max_tokens` surfaces as a `RESPONSE_TRUNCATED` SSE error instead of a silently cut-off reply. Because adaptive thinking can run 30-90s with no visible output, the SSE bridge emits a `: keepalive` comment line every 15s so the connection never looks dead to the browser or a proxy.
 
 ### Why a side panel, not a page
 
@@ -142,8 +146,10 @@ Full config (all have sensible defaults):
 | Setting | Default | Description |
 |---|---|---|
 | `CHAT__ANTHROPIC_API_KEY` | `None` | Anthropic API key. Chat is disabled when absent. |
-| `CHAT__MODEL_ID` | `claude-sonnet-4-6` | Model to use for chat completions. |
-| `CHAT__MAX_TURNS` | `8` | Maximum tool-calling rounds per request before bailing. |
+| `CHAT__MODEL_ID` | `claude-opus-4-8` | Model to use for chat completions. |
+| `CHAT__MAX_TURNS` | `24` | Maximum tool-calling rounds per request before bailing. |
+| `CHAT__MAX_TOKENS` | `16384` | Per-turn output cap (shared with adaptive thinking). Hitting it surfaces a `RESPONSE_TRUNCATED` error. |
+| `CHAT__EFFORT` | `high` | Reasoning effort: `low` / `medium` / `high` / `xhigh` / `max`. Invalid values fail at startup. |
 
 ---
 

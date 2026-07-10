@@ -1,4 +1,9 @@
-"""Execute confirmed chat mutations via the appropriate use cases."""
+"""Confirmed-mutation executors — run a claimed PendingAction's use case.
+
+Dispatch lives in registry.py: each write ToolSpec binds its executor here.
+All executors share the (action, current_user) signature so the registry can
+call them uniformly.
+"""
 
 from decimal import Decimal
 from typing import cast
@@ -29,31 +34,10 @@ from src.domain.entities.person import Person
 from src.domain.exceptions import ValidationError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
-ACTION_ENTITY_MAP: dict[str, str] = {
-    "update_budget": "budgets",
-    "update_transaction_split": "transactions",
-    "bulk_update_transactions": "transactions",
-}
 
-
-async def execute_confirmed_action(
-    action: PendingAction,
-    current_user: Person,
-) -> tuple[dict[str, object], str | None]:
-    """Execute a confirmed pending action. Returns (result_summary, entity_to_broadcast)."""
-    if action.tool_name == "update_budget":
-        result = await _exec_budget(action)
-    elif action.tool_name == "update_transaction_split":
-        result = await _exec_split(action, current_user)
-    elif action.tool_name == "bulk_update_transactions":
-        result = await _exec_bulk(action, current_user)
-    else:
-        raise ValueError(f"Unknown mutation tool: {action.tool_name}")
-    entity = ACTION_ENTITY_MAP.get(action.tool_name)
-    return result, entity
-
-
-async def _exec_budget(action: PendingAction) -> dict[str, object]:
+async def exec_budget(
+    action: PendingAction, _current_user: Person
+) -> dict[str, object]:
     details = action.details
     group_id = UUID(cast(str, details["group_id"]))
     person_id = (
@@ -76,7 +60,7 @@ async def _exec_budget(action: PendingAction) -> dict[str, object]:
     }
 
 
-async def _exec_split(action: PendingAction, current_user: Person) -> dict[str, object]:
+async def exec_split(action: PendingAction, current_user: Person) -> dict[str, object]:
     details = action.details
     command = UpdateTransactionSplitsCommand(
         splits=[
@@ -97,7 +81,7 @@ async def _exec_split(action: PendingAction, current_user: Person) -> dict[str, 
     }
 
 
-async def _exec_bulk(action: PendingAction, current_user: Person) -> dict[str, object]:
+async def exec_bulk(action: PendingAction, current_user: Person) -> dict[str, object]:
     """Run tag changes and field changes as one atomic operation.
 
     Both mutations run inside a single `execute_use_case` call — one UoW,
