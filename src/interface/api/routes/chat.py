@@ -15,7 +15,7 @@ from src.application.chat.events import TextDelta
 from src.application.chat.pending_actions import pending_action_store
 from src.application.chat.protocols import LLMClientProtocol
 from src.application.chat.registry import (
-    TOOLS,
+    build_tools,
     execute_confirmed_action,
     execute_tool,
 )
@@ -91,7 +91,7 @@ async def _build_command(
     return ChatCommand(
         messages=messages,
         system=system,
-        tools=TOOLS,
+        tools=build_tools(enable_code_execution=settings.chat.enable_code_execution),
         model_id=settings.chat.model_id,
         max_turns=settings.chat.max_turns,
         max_tokens=settings.chat.max_tokens,

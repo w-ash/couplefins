@@ -4,9 +4,12 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 
-from src.application.chat.events import TextDelta
-from src.application.chat.protocols import LLMResponse, ToolContext, ToolUseBlock
-from src.config.settings import EffortLevel
+from src.application.chat.protocols import (
+    LLMRequest,
+    LLMResponse,
+    LLMStreamEvent,
+    ToolContext,
+)
 from src.domain.entities.person import Person
 
 
@@ -14,7 +17,7 @@ from src.domain.entities.person import Person
 class FakeScript:
     """One turn's scripted response from the fake LLM."""
 
-    events: list[TextDelta | ToolUseBlock] = field(default_factory=list)
+    events: list[LLMStreamEvent] = field(default_factory=list)
     response: LLMResponse = field(
         default_factory=lambda: LLMResponse(
             stop_reason="end_turn", content=[], raw_content=[]
@@ -26,10 +29,10 @@ class _FakeStream:
     def __init__(self, script: FakeScript) -> None:
         self._script = script
 
-    def __aiter__(self) -> AsyncIterator[TextDelta | ToolUseBlock]:
+    def __aiter__(self) -> AsyncIterator[LLMStreamEvent]:
         return self._iter()
 
-    async def _iter(self) -> AsyncIterator[TextDelta | ToolUseBlock]:
+    async def _iter(self) -> AsyncIterator[LLMStreamEvent]:
         for event in self._script.events:
             yield event
 
@@ -46,22 +49,17 @@ class FakeLLMClient:
 
     def __init__(self, scripts: list[FakeScript] | None = None) -> None:
         self._scripts = list(scripts or [])
+        self.captured_requests: list[LLMRequest] = []
         self.captured_system: list[dict[str, object]] | None = None
         self.captured_messages: list[list[dict[str, object]]] = []
+        self.captured_containers: list[str | None] = []
 
     @asynccontextmanager
-    async def stream(
-        self,
-        *,
-        model: str,
-        max_tokens: int,
-        effort: EffortLevel,
-        system: list[dict[str, object]],
-        tools: list[dict[str, object]],
-        messages: list[dict[str, object]],
-    ) -> AsyncIterator[_FakeStream]:
-        self.captured_system = system
-        self.captured_messages.append(list(messages))
+    async def stream(self, request: LLMRequest) -> AsyncIterator[_FakeStream]:
+        self.captured_requests.append(request)
+        self.captured_system = request.system
+        self.captured_messages.append(list(request.messages))
+        self.captured_containers.append(request.container)
         script = self._scripts.pop(0) if self._scripts else FakeScript()
         yield _FakeStream(script)
 

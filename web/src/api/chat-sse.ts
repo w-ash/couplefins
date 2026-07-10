@@ -18,6 +18,13 @@ export interface ChatSSECallbacks {
     summary: unknown,
     isError: boolean,
   ) => void;
+  onCodeStart: (id: string, command: string) => void;
+  onCodeResult: (
+    id: string,
+    stdout: string,
+    stderr: string,
+    returnCode: number,
+  ) => void;
   onDone: () => void;
   onError: (code: string, message: string) => void;
 }
@@ -95,6 +102,17 @@ function handleChatEvents(callbacks: ChatSSECallbacks) {
           event.id as string,
           event.summary,
           (event.is_error as boolean) ?? false,
+        );
+        break;
+      case "code_start":
+        callbacks.onCodeStart(event.id as string, event.command as string);
+        break;
+      case "code_result":
+        callbacks.onCodeResult(
+          event.id as string,
+          event.stdout as string,
+          event.stderr as string,
+          event.return_code as number,
         );
         break;
       case "done":

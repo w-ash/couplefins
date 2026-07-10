@@ -1121,3 +1121,11 @@ MANAGE_SETTLEMENT_MERCHANT_SCHEMA: dict[str, object] = {
         "required": ["action", "name"],
     },
 }
+
+# Server-side sandbox (REPL persistence + programmatic tool calling). The
+# API executes this itself — no input_schema, no handler; the dict shape is
+# the SDK's CodeExecutionTool20260120Param, not a custom tool schema.
+CODE_EXECUTION_SCHEMA: dict[str, object] = {
+    "type": "code_execution_20260120",
+    "name": "code_execution",
+}

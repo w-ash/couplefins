@@ -25,6 +25,13 @@ function makeCallbacks() {
       summary: unknown;
       isError: boolean;
     }[],
+    codeStarts: [] as { id: string; command: string }[],
+    codeResults: [] as {
+      id: string;
+      stdout: string;
+      stderr: string;
+      returnCode: number;
+    }[],
     errors: [] as { code: string; message: string }[],
     doneCount: 0,
     onToken(text: string) {
@@ -35,6 +42,17 @@ function makeCallbacks() {
     },
     onToolResult(name: string, id: string, summary: unknown, isError: boolean) {
       cb.toolResults.push({ name, id, summary, isError });
+    },
+    onCodeStart(id: string, command: string) {
+      cb.codeStarts.push({ id, command });
+    },
+    onCodeResult(
+      id: string,
+      stdout: string,
+      stderr: string,
+      returnCode: number,
+    ) {
+      cb.codeResults.push({ id, stdout, stderr, returnCode });
     },
     onDone() {
       cb.doneCount++;
@@ -136,6 +154,39 @@ describe("sendChatMessage", () => {
       },
     ]);
     expect(cb.tokens).toEqual(["Alice owes Bob $147.50"]);
+  });
+
+  it("handles code_start and code_result events", async () => {
+    const body = makeSSEBody([
+      { type: "code_start", id: "srvtoolu_1", command: "print(total)" },
+      {
+        type: "code_result",
+        id: "srvtoolu_1",
+        stdout: "412.50\n",
+        stderr: "",
+        return_code: 0,
+      },
+      { type: "done" },
+    ]);
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        body: makeReadableStream(body),
+      }),
+    );
+
+    const cb = makeCallbacks();
+    await sendChatMessage([], cb, new AbortController().signal);
+
+    expect(cb.codeStarts).toEqual([
+      { id: "srvtoolu_1", command: "print(total)" },
+    ]);
+    expect(cb.codeResults).toEqual([
+      { id: "srvtoolu_1", stdout: "412.50\n", stderr: "", returnCode: 0 },
+    ]);
+    expect(cb.doneCount).toBe(1);
   });
 
   it("handles error events", async () => {

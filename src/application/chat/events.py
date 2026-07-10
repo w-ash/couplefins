@@ -26,3 +26,22 @@ class ToolResultEvent:
     tool_use_id: str
     summary: dict[str, object]
     is_error: bool = field(default=False)
+
+
+@dataclass(frozen=True, slots=True)
+class ServerToolStartEvent:
+    """Emitted when the API starts a server-side tool (code execution)."""
+
+    name: str
+    tool_use_id: str
+    input: dict[str, object]
+
+
+@dataclass(frozen=True, slots=True)
+class ServerToolResultEvent:
+    """Emitted when a server-side code execution finishes."""
+
+    tool_use_id: str
+    stdout: str
+    stderr: str
+    return_code: int

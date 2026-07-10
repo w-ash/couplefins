@@ -19,9 +19,11 @@ from src.application.chat.registry import (
     INTERNAL_USE_CASES,
     MECHANICALLY_EXCLUDED_USE_CASES,
     REGISTRY,
-    TOOLS,
     ToolSpec,
+    build_tools,
 )
+
+TOOLS = build_tools()
 
 
 def _discover_use_cases() -> set[str]:
@@ -164,9 +166,13 @@ class TestRegistryShape:
         at 20 per request and rejected even 16 on compiled-grammar size at
         this registry's schema complexity (both live-verified 400s). The
         boundary guard is handler validation; every schema still keeps
-        additionalProperties: false and a required list."""
+        additionalProperties: false and a required list. Server-tool entries
+        (code_execution) have no input_schema — the API owns their shape."""
         for spec in REGISTRY:
             assert "strict" not in spec.schema, spec.name
+            if "input_schema" not in spec.schema:
+                assert spec.kind == "agentic", spec.name
+                continue
             input_schema = spec.schema["input_schema"]
             assert isinstance(input_schema, dict)
             assert input_schema.get("additionalProperties") is False, spec.name
@@ -204,4 +210,29 @@ class TestRegistryShape:
                     walk(value, f"{path}[{i}]")
 
         for spec in REGISTRY:
-            walk(spec.schema["input_schema"], spec.name)
+            if "input_schema" in spec.schema:
+                walk(spec.schema["input_schema"], spec.name)
+
+    def test_allowed_callers_only_on_read_tools(self) -> None:
+        """Programmatic tool calling exposes read tools to the sandbox and
+        nothing else: write tools stay behind two-phase confirmation and
+        agentic tools stay top-level. Schema constants never carry the
+        field — build_tools stamps it, so it can be switched off."""
+        by_name = {t["name"]: t for t in TOOLS}
+        for spec in REGISTRY:
+            assert "allowed_callers" not in spec.schema, spec.name
+            built = by_name[spec.name]
+            if spec.kind == "read":
+                assert built["allowed_callers"] == [
+                    "direct",
+                    "code_execution_20260120",
+                ], spec.name
+            else:
+                assert "allowed_callers" not in built, spec.name
+
+    def test_disabling_code_execution_removes_sandbox_surface(self) -> None:
+        tool_list = build_tools(enable_code_execution=False)
+        names = {t["name"] for t in tool_list}
+        assert "code_execution" not in names
+        assert all("allowed_callers" not in t for t in tool_list)
+        assert tool_list[-1]["cache_control"] == {"type": "ephemeral"}

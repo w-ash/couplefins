@@ -80,6 +80,7 @@ class ChatConfig(BaseModel):
     max_turns: int = 24
     max_tokens: int = 16384
     effort: EffortLevel = "high"
+    enable_code_execution: bool = True
 
 
 class Settings(BaseSettings):

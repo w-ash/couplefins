@@ -14,7 +14,12 @@ import json
 from fastapi.responses import StreamingResponse
 from structlog.stdlib import get_logger
 
-from src.application.chat.events import ToolResultEvent, ToolStartEvent
+from src.application.chat.events import (
+    ServerToolResultEvent,
+    ServerToolStartEvent,
+    ToolResultEvent,
+    ToolStartEvent,
+)
 from src.domain.exceptions import (
     ActionExpiredError,
     AnthropicApiError,
@@ -28,7 +33,14 @@ from src.domain.exceptions import (
 logger = get_logger()
 
 
-type QueueItem = str | ToolStartEvent | ToolResultEvent | None
+type QueueItem = (
+    str
+    | ToolStartEvent
+    | ToolResultEvent
+    | ServerToolStartEvent
+    | ServerToolResultEvent
+    | None
+)
 
 # Adaptive thinking can run 30-90s with no stream events; without periodic
 # bytes the connection looks dead to the browser and any proxy in between.
@@ -112,6 +124,20 @@ def stream_chat_response(
                         "id": item.tool_use_id,
                         "summary": item.summary,
                         "is_error": item.is_error,
+                    })
+                elif isinstance(item, ServerToolStartEvent):
+                    yield _sse_line({
+                        "type": "code_start",
+                        "id": item.tool_use_id,
+                        "command": str(item.input.get("code", "")),
+                    })
+                elif isinstance(item, ServerToolResultEvent):
+                    yield _sse_line({
+                        "type": "code_result",
+                        "id": item.tool_use_id,
+                        "stdout": item.stdout,
+                        "stderr": item.stderr,
+                        "return_code": item.return_code,
                     })
                 else:
                     yield _sse_line({"type": "token", "text": item})

@@ -90,6 +90,31 @@ describe("chat store", () => {
     expect(msg.toolCalls?.[0].isError).toBe(false);
   });
 
+  it("adds and resolves code executions", () => {
+    const msgId = useChatStore.getState().startAssistantMessage();
+    useChatStore
+      .getState()
+      .addCodeExecution(msgId, "srvtoolu_1", "print(total)");
+
+    let msg = useChatStore.getState().messages[0];
+    expect(msg.codeExecutions).toHaveLength(1);
+    expect(msg.codeExecutions?.[0].command).toBe("print(total)");
+    expect(msg.codeExecutions?.[0].returnCode).toBeUndefined();
+
+    useChatStore
+      .getState()
+      .setCodeResult(msgId, "srvtoolu_1", "412.50\n", "", 0);
+
+    msg = useChatStore.getState().messages[0];
+    expect(msg.codeExecutions?.[0]).toEqual({
+      id: "srvtoolu_1",
+      command: "print(total)",
+      stdout: "412.50\n",
+      stderr: "",
+      returnCode: 0,
+    });
+  });
+
   it("toggles panel state", () => {
     expect(useChatStore.getState().isPanelOpen).toBe(false);
     useChatStore.getState().togglePanel();

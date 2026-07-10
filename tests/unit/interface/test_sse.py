@@ -1,10 +1,12 @@
-"""SSE keepalive behavior of the chat stream bridge."""
+"""SSE keepalive behavior and frame serialization of the chat stream bridge."""
 
 import asyncio
 from collections.abc import Awaitable, Callable
+import json
 
 import pytest
 
+from src.application.chat.events import ServerToolResultEvent, ServerToolStartEvent
 from src.interface.api import sse
 from src.interface.api.sse import QueueItem, stream_chat_response
 
@@ -42,3 +44,41 @@ async def test_no_keepalive_when_stream_is_busy() -> None:
 
     assert all(not chunk.startswith(":") for chunk in chunks)
     assert '{"type": "done"}' in chunks[-1]
+
+
+async def test_server_tool_events_serialize_as_code_frames() -> None:
+    async def run_fn(queue: asyncio.Queue[QueueItem]) -> None:
+        await asyncio.sleep(0)
+        queue.put_nowait(
+            ServerToolStartEvent(
+                name="code_execution",
+                tool_use_id="srvtoolu_1",
+                input={"code": "print(1)"},
+            )
+        )
+        queue.put_nowait(
+            ServerToolResultEvent(
+                tool_use_id="srvtoolu_1", stdout="1\n", stderr="", return_code=0
+            )
+        )
+
+    chunks = await _collect_chunks(run_fn)
+
+    frames = [
+        json.loads(chunk.removeprefix("data: "))
+        for chunk in chunks
+        if chunk.startswith("data: ")
+    ]
+    assert frames[0] == {
+        "type": "code_start",
+        "id": "srvtoolu_1",
+        "command": "print(1)",
+    }
+    assert frames[1] == {
+        "type": "code_result",
+        "id": "srvtoolu_1",
+        "stdout": "1\n",
+        "stderr": "",
+        "return_code": 0,
+    }
+    assert frames[-1] == {"type": "done"}

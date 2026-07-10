@@ -318,24 +318,43 @@ REGISTRY: tuple[ToolSpec, ...] = (
         executor=confirmed_actions.exec_settlement_merchant,
         broadcast_entity="settlements",
     ),
+    ToolSpec(
+        name="code_execution",
+        schema=tools.CODE_EXECUTION_SCHEMA,
+        handler=None,
+        use_cases=(),
+        kind="agentic",
+    ),
 )
 
 _SPECS_BY_NAME: dict[str, ToolSpec] = {spec.name: spec for spec in REGISTRY}
 
+# Read tools are callable both directly and from the sandbox. Listing both
+# callers deviates from the docs' pick-one guidance on purpose: direct calls
+# answer one-shot questions without container spin-up, programmatic calls
+# let sandbox code aggregate large results. Write and agentic tools NEVER
+# get allowed_callers — mutations stay two-phase behind human confirmation,
+# and delegation stays a top-level decision.
+_READ_ALLOWED_CALLERS: tuple[str, ...] = ("direct", "code_execution_20260120")
 
-def _build_tools() -> list[dict[str, object]]:
+
+def build_tools(*, enable_code_execution: bool = True) -> list[dict[str, object]]:
     """API tool list in registry order, cache breakpoint on the last entry.
 
     Order must be deterministic — tools render first in the prompt, so any
     reordering invalidates the whole prompt cache. Shallow copies keep the
     cache stamp off the schema constants.
     """
-    tool_list = [dict(spec.schema) for spec in REGISTRY]
+    tool_list: list[dict[str, object]] = []
+    for spec in REGISTRY:
+        if spec.name == "code_execution" and not enable_code_execution:
+            continue
+        tool = dict(spec.schema)
+        if enable_code_execution and spec.kind == "read":
+            tool["allowed_callers"] = list(_READ_ALLOWED_CALLERS)
+        tool_list.append(tool)
     tool_list[-1]["cache_control"] = {"type": "ephemeral"}
     return tool_list
-
-
-TOOLS: list[dict[str, object]] = _build_tools()
 
 
 async def execute_tool(

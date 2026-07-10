@@ -7,6 +7,14 @@ export interface ToolCall {
   isError?: boolean;
 }
 
+export interface CodeExecution {
+  id: string;
+  command: string;
+  stdout?: string;
+  stderr?: string;
+  returnCode?: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -14,6 +22,7 @@ export interface ChatMessage {
   isStreaming?: boolean;
   error?: { code: string; message: string };
   toolCalls?: ToolCall[];
+  codeExecutions?: CodeExecution[];
 }
 
 export type ConfirmationState =
@@ -38,6 +47,18 @@ interface ChatState {
     toolId: string,
     result: unknown,
     isError: boolean,
+  ) => void;
+  addCodeExecution: (
+    messageId: string,
+    codeId: string,
+    command: string,
+  ) => void;
+  setCodeResult: (
+    messageId: string,
+    codeId: string,
+    stdout: string,
+    stderr: string,
+    returnCode: number,
   ) => void;
   completeMessage: (id: string) => void;
   setMessageError: (id: string, code: string, message: string) => void;
@@ -106,6 +127,24 @@ export const useChatStore = create<ChatState>()((set) => ({
         ...m,
         toolCalls: (m.toolCalls ?? []).map((tc) =>
           tc.id === toolId ? { ...tc, result, isError } : tc,
+        ),
+      })),
+    })),
+
+  addCodeExecution: (messageId, codeId, command) =>
+    set((s) => ({
+      messages: updateMessage(s.messages, messageId, (m) => ({
+        ...m,
+        codeExecutions: [...(m.codeExecutions ?? []), { id: codeId, command }],
+      })),
+    })),
+
+  setCodeResult: (messageId, codeId, stdout, stderr, returnCode) =>
+    set((s) => ({
+      messages: updateMessage(s.messages, messageId, (m) => ({
+        ...m,
+        codeExecutions: (m.codeExecutions ?? []).map((ce) =>
+          ce.id === codeId ? { ...ce, stdout, stderr, returnCode } : ce,
         ),
       })),
     })),

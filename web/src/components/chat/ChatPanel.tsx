@@ -33,6 +33,12 @@ function buildCallbacks(assistantId: string): ChatSSECallbacks {
       useChatStore
         .getState()
         .setToolResult(assistantId, toolUseId, result, isError),
+    onCodeStart: (id, command) =>
+      useChatStore.getState().addCodeExecution(assistantId, id, command),
+    onCodeResult: (id, stdout, stderr, returnCode) =>
+      useChatStore
+        .getState()
+        .setCodeResult(assistantId, id, stdout, stderr, returnCode),
     onDone: () => useChatStore.getState().completeMessage(assistantId),
     onError: (code, message) =>
       useChatStore.getState().setMessageError(assistantId, code, message),

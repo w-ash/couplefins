@@ -8,6 +8,7 @@ import type {
   ConfirmationState,
 } from "@/lib/chat";
 import { cn } from "@/lib/cn";
+import { CodeExecutionCard } from "./CodeExecutionCard";
 import { ToolCallIndicator } from "./ToolCallIndicator";
 import { ToolResultCard } from "./ToolResultCard";
 
@@ -205,6 +206,13 @@ export function ChatMessage({
           </p>
         )}
       </div>
+      {message.codeExecutions && message.codeExecutions.length > 0 && (
+        <div className="flex w-full max-w-[85%] flex-col gap-2 px-1">
+          {message.codeExecutions.map((ce) => (
+            <CodeExecutionCard key={ce.id} execution={ce} />
+          ))}
+        </div>
+      )}
       {message.toolCalls && message.toolCalls.length > 0 && (
         <div className="flex max-w-[85%] flex-col gap-2 px-1">
           <div className="flex flex-wrap gap-1.5">
