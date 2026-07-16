@@ -5,9 +5,14 @@ import uuid
 
 from src.application.chat.events import TextDelta
 from src.application.chat.protocols import LLMResponse, ToolUseBlock
-from src.application.chat.registry import build_subagent_tools, execute_tool
+from src.application.chat.registry import (
+    _SUBAGENT_HOT_TOOLS,
+    build_subagent_tools,
+    execute_tool,
+)
 from src.application.chat.subagent import run_subagent
 from src.application.chat.use_case import ChatCommand, ChatUseCase
+from src.application.chat.user_data import UserData
 from src.config.settings import ChatConfig
 from tests.fixtures.factories import make_person
 from tests.fixtures.fake_llm_client import (
@@ -25,19 +30,52 @@ _CFG = ChatConfig(subagent_max_turns=3, subagent_effort="low")
 
 class TestSubagentToolset:
     def test_toolset_is_read_only(self) -> None:
-        names = {t["name"] for t in build_subagent_tools()}
-        assert names
-        assert all(n.startswith(("get_", "search_")) for n in names)
+        tool_list = build_subagent_tools()
+        # Every dispatched tool is a read; the only server block is the
+        # trailing tool-search tool (deferred reads need a way in).
+        dispatched = {t["name"] for t in tool_list if "input_schema" in t}
+        assert dispatched
+        assert all(n.startswith(("get_", "search_")) for n in dispatched)
+        names = {t["name"] for t in tool_list}
         assert "delegate_analysis" not in names
         assert "code_execution" not in names
+        assert tool_list[-1] == {
+            "type": "tool_search_tool_bm25_20251119",
+            "name": "tool_search_tool_bm25",
+        }
 
     def test_toolset_carries_no_allowed_callers(self) -> None:
         assert all("allowed_callers" not in t for t in build_subagent_tools())
 
-    def test_cache_stamp_on_last_tool_only(self) -> None:
+    def test_hot_set_loads_up_front_everything_else_defers(self) -> None:
         tool_list = build_subagent_tools()
-        assert all("cache_control" not in t for t in tool_list[:-1])
-        assert tool_list[-1]["cache_control"] == {"type": "ephemeral"}
+        loaded = {
+            t["name"]
+            for t in tool_list
+            if "defer_loading" not in t and "input_schema" in t
+        }
+        assert loaded == set(_SUBAGENT_HOT_TOOLS)
+        # Under the ~10-tool accuracy ceiling including the search block.
+        assert len(loaded) + 1 <= 10
+        deferred = {t["name"] for t in tool_list if t.get("defer_loading")}
+        assert deferred, "the long tail must stay deferred"
+        assert not deferred & set(_SUBAGENT_HOT_TOOLS)
+
+    def test_cache_stamp_on_last_hot_tool(self) -> None:
+        """The breakpoint sits on the last hot dispatched tool — never the
+        trailing raw search block, which rejects cache_control."""
+        tool_list = build_subagent_tools()
+        stamped = [t for t in tool_list if "cache_control" in t]
+        assert len(stamped) == 1
+        assert stamped[0]["cache_control"] == {"type": "ephemeral"}
+        assert "input_schema" in stamped[0]
+        assert stamped[0]["name"] in _SUBAGENT_HOT_TOOLS
+        hot_indices = [
+            i
+            for i, t in enumerate(tool_list)
+            if "input_schema" in t and "defer_loading" not in t
+        ]
+        assert tool_list.index(stamped[0]) == hot_indices[-1]
 
 
 class TestRunSubagent:
@@ -68,6 +106,9 @@ class TestRunSubagent:
 
         # Narration before the tool call is process, not answer.
         assert result == {"summary": "Found 3 anomalies."}
+        # Marked untrusted: the summary re-enters the write-capable main
+        # model, so the model boundary must wrap it (v1.9.1).
+        assert isinstance(result["summary"], UserData)
         assert executor.await_count == 1
 
     async def test_subagent_runs_with_own_settings_and_toolset(self) -> None:
@@ -115,7 +156,8 @@ class TestRunSubagent:
             cfg=_CFG,
         )
 
-        summary = str(result["summary"])
+        summary = result["summary"]
+        assert isinstance(summary, UserData)  # truncation payload wrapped too
         assert summary.startswith("[Analysis truncated at turn limit")
         assert "digging..." in summary
 
@@ -163,4 +205,12 @@ class TestNestedIntegration:
             for e in events
             if hasattr(e, "summary") and e.name == "delegate_analysis"
         ]
+        # The SSE-facing event summary is stripped raw text …
         assert summaries == [{"summary": "Two duplicate rent charges."}]
+        assert "<user_data>" not in str(summaries[0]["summary"])
+        # … while the model-facing tool_result carries the wrapped summary.
+        resumed_messages = fake.captured_messages[-1]
+        tool_result_content = str(resumed_messages[-1]["content"])
+        assert (
+            "<user_data>Two duplicate rent charges.</user_data>" in tool_result_content
+        )

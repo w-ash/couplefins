@@ -17,6 +17,7 @@ from src.application import use_cases as use_cases_pkg
 from src.application.chat.registry import (
     _MAX_PROMOTED_PER_PAGE,
     _PAGE_TOOL_HINTS,
+    _SUBAGENT_HOT_TOOLS,
     BLACKLISTED_USE_CASES,
     INTERNAL_USE_CASES,
     MECHANICALLY_EXCLUDED_USE_CASES,
@@ -262,6 +263,15 @@ class TestRegistryShape:
         for tool in TOOLS:
             if tool["name"] not in hot:
                 assert tool["defer_loading"] is True, tool["name"]
+
+    def test_subagent_hot_set_names_real_read_tools(self) -> None:
+        """Every subagent hot tool must be an existing read tool — the map
+        is hand-maintained and rots the same three ways as the page hints."""
+        by_name = {spec.name: spec for spec in REGISTRY}
+        for name in _SUBAGENT_HOT_TOOLS:
+            spec = by_name.get(name)
+            assert spec is not None, f"unknown subagent hot tool: {name}"
+            assert spec.kind == "read", f"{name} is {spec.kind}, not a read"
 
     def test_no_strict_schemas(self) -> None:
         """strict: true was tried and abandoned — the API caps strict tools

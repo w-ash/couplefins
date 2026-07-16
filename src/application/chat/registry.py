@@ -551,15 +551,46 @@ def build_tools(
     return prefix + promoted + rest
 
 
+# The research subagent's hot set: the reads an investigation reaches for
+# most. Same progressive-disclosure discipline as the main loop — kept under
+# the ~10 ceiling with the long tail deferred behind tool search. It matters
+# more here than anywhere: the subagent runs at low effort, where a bloated
+# tool list most degrades selection.
+_SUBAGENT_HOT_TOOLS: frozenset[str] = frozenset({
+    "search_transactions",
+    "get_settlement_balance",
+    "get_budget_overview",
+    "get_spending_trends",
+    "get_spending_by_group",
+    "get_transaction_history",
+    "get_settlement_activity",
+})
+
+
 def build_subagent_tools() -> list[dict[str, object]]:
     """Read-only toolset for the research subagent.
 
-    No mutations, no code execution, no nested delegate_analysis (one level
-    of delegation only), and no allowed_callers — the subagent has no
-    sandbox to call from.
+    The ``read`` slice only — no mutations, no code execution, no nested
+    delegate_analysis (delegation is one level deep), and no
+    ``allowed_callers`` (the subagent has no sandbox to call from). A
+    curated hot set loads upfront; the remaining reads defer behind the
+    trailing tool-search block so the subagent can still reach them. The
+    cache breakpoint sits on the last hot tool — never the raw search block,
+    which rejects cache_control.
     """
-    tool_list = [dict(spec.schema) for spec in REGISTRY if spec.kind == "read"]
-    tool_list[-1]["cache_control"] = {"type": "ephemeral"}
+    tool_list: list[dict[str, object]] = []
+    last_hot = -1
+    for spec in REGISTRY:
+        if spec.kind != "read":
+            continue
+        tool = dict(spec.schema)
+        if spec.name in _SUBAGENT_HOT_TOOLS:
+            last_hot = len(tool_list)
+        else:
+            tool["defer_loading"] = True
+        tool_list.append(tool)
+    tool_list.append(dict(_SPECS_BY_NAME["tool_search_tool_bm25"].schema))
+    _stamp_cache(tool_list, last_hot)
     return tool_list
 
 

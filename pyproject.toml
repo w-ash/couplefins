@@ -1,6 +1,6 @@
 [project]
 name = "couplefins"
-version = "1.9.0"
+version = "1.9.1"
 description = "Household finance tool for couples"
 requires-python = ">=3.14,<4.0"
 dependencies = [

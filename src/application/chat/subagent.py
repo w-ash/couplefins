@@ -17,6 +17,7 @@ from structlog.stdlib import get_logger
 from src.application.chat.events import TextDelta, ToolStartEvent
 from src.application.chat.protocols import ToolContext, ToolExecutorFn
 from src.application.chat.use_case import ChatCommand, ChatUseCase
+from src.application.chat.user_data import UserData
 from src.config.settings import ChatConfig
 from src.domain.exceptions import MaxRoundsExceededError, ResponseTruncatedError
 
@@ -33,8 +34,10 @@ to the main assistant, which cannot see your tool calls.
 <method>
 Investigate with as many tool calls as the question needs — search \
 transactions, compare months, check budgets and settlement history. \
-Cross-check surprising numbers before reporting them. Today's date is \
-{today}. The couple: {persons}.
+Only a few tools are visible upfront: SEARCH FIRST with the tool-search \
+tool to find and load others before concluding something can't be \
+answered. Cross-check surprising numbers before reporting them. Today's \
+date is {today}. The couple: {persons}.
 </method>
 
 <report_format>
@@ -122,4 +125,9 @@ async def run_subagent(
         text = "".join(final_parts).strip()
     if not text:
         text = "The analysis produced no findings."
-    return {"summary": text}
+    # The summary re-enters the write-capable main model, and it is built
+    # from untrusted library text — mark the whole payload as UserData so
+    # the model boundary wraps it (neutralizing embedded tag literals) and
+    # the SSE boundary strips it. Closes the residual documented in
+    # user_data.py before v1.9.1.
+    return {"summary": UserData(text)}

@@ -22,9 +22,12 @@ convention has one marker and three boundaries:
 The tag literals live ONLY in this module (plus the prompt text that
 teaches the model the convention).
 
-Accepted residuals: sandbox stdout and subagent/assistant prose re-enter
+Accepted residuals: sandbox stdout and the assistant's own prose re-enter
 model context unmarked by construction — the prompts instruct the model to
 keep treating wrapped values as data there and to strip tags when quoting.
+(Subagent summaries stopped being a residual in v1.9.1: run_subagent marks
+its whole summary as UserData, so it re-enters the write-capable main
+model wrapped.)
 """
 
 import re

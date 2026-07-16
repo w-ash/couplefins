@@ -4,5 +4,5 @@ from typing import Final
 class AppConfig:
     TITLE: Final = "Couplefins"
     API_V1_PREFIX: Final = "/api/v1"
-    APP_VERSION: Final = "1.9.0"
+    APP_VERSION: Final = "1.9.1"
     SCHEMA_VERSION: Final = "0010"  # must match current Alembic head
