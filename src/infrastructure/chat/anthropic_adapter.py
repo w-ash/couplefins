@@ -117,8 +117,10 @@ def _with_incremental_cache(
     """Copy messages with one cache breakpoint on the last stampable block.
 
     The tool loop re-sends the whole growing history every turn; stamping
-    near the end turns all prior turns into cache reads (tools + system
-    carry the other two breakpoints — 3 of the 4 allowed). The stamp walks
+    near the end turns all prior turns into cache reads. The 4-breakpoint
+    budget is fully spent since v1.9.0 — tools prefix + promoted page
+    segment (registry.build_tools) + system primer + this stamp — so
+    nothing may ever add a fifth. The stamp walks
     backwards past blocks the API rejects cache_control on (thinking,
     server-tool blocks, tool_results for sandbox-called tools). Works on
     copies only: the use case reuses one list (and re-echoes raw_content on

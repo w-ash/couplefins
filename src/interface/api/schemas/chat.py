@@ -30,6 +30,11 @@ class ChatRequest(BaseModel):
     # Per-request effort override — the user picks per task in the chat UI
     # (quick lookup vs. deep analysis). Falls back to ChatConfig.effort.
     effort: EffortLevel | None = None
+    # The coarse UI section the user is on (e.g. "budget"), so the server
+    # can promote that page's tools into the loaded set (registry
+    # _PAGE_TOOL_HINTS). Unknown/absent pages promote nothing — the value
+    # is a routing hint, never reflected into the prompt verbatim.
+    page: str | None = Field(default=None, max_length=64)
 
     @model_validator(mode="after")
     def _check_total_content_size(self) -> Self:

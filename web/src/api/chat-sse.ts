@@ -143,6 +143,7 @@ export async function sendChatMessage(
   signal: AbortSignal,
   confirmation?: ConfirmationPayload,
   effort?: string,
+  page?: string,
 ): Promise<void> {
   const body: Record<string, unknown> = {
     messages,
@@ -150,6 +151,7 @@ export async function sendChatMessage(
   };
   if (confirmation) body.confirmation = confirmation;
   if (effort) body.effort = effort;
+  if (page) body.page = page;
 
   const response = await fetch("/api/v1/chat", {
     method: "POST",

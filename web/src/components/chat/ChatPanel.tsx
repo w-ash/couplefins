@@ -1,5 +1,6 @@
 import { MessageSquarePlus, RotateCcw, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useLocation } from "react-router";
 import type { ChatSSECallbacks, ConfirmationPayload } from "@/api/chat-sse";
 import { sendChatMessage } from "@/api/chat-sse";
 import { Button } from "@/components/Button";
@@ -18,6 +19,26 @@ const LIMIT_FULL_MESSAGE =
   "This conversation is full. Start a new one to continue.";
 
 const closePanel = () => useChatStore.getState().setPanelOpen(false);
+
+// The coarse UI section the user is on, keyed by first path segment (index
+// → dashboard). Only sections the server routes tools for are emitted;
+// anything else (/ask, /account) sends no page and degrades to the static
+// core + tool search. Keep these keys in sync with _PAGE_TOOL_HINTS in
+// src/application/chat/registry.py.
+const SECTION_BY_SEGMENT: Record<string, string> = {
+  "": "dashboard",
+  transactions: "transactions",
+  settle: "settle",
+  budget: "budget",
+  insights: "insights",
+  upload: "upload",
+  settings: "settings",
+};
+
+function pageSection(pathname: string): string | undefined {
+  const segment = pathname.split("/").filter(Boolean)[0] ?? "";
+  return SECTION_BY_SEGMENT[segment];
+}
 
 function buildApiMessages() {
   return useChatStore
@@ -47,7 +68,11 @@ function buildCallbacks(assistantId: string): ChatSSECallbacks {
   };
 }
 
-function startStream(assistantId: string, confirmation?: ConfirmationPayload) {
+function startStream(
+  assistantId: string,
+  page?: string,
+  confirmation?: ConfirmationPayload,
+) {
   const controller = new AbortController();
   useChatStore.getState().setAbortController(controller);
 
@@ -61,6 +86,7 @@ function startStream(assistantId: string, confirmation?: ConfirmationPayload) {
     controller.signal,
     confirmation,
     effort,
+    page,
   );
 }
 
@@ -71,21 +97,25 @@ export function ChatPanel({ fullScreen = false }: { fullScreen?: boolean }) {
   const effort = useChatStore((s) => s.effort);
   const setEffort = useChatStore((s) => s.setEffort);
   const [limitError, setLimitError] = useState<string | null>(null);
+  const page = pageSection(useLocation().pathname);
 
-  const sendQuestion = useCallback((text: string) => {
-    const store = useChatStore.getState();
-    if (store.isStreaming) return;
+  const sendQuestion = useCallback(
+    (text: string) => {
+      const store = useChatStore.getState();
+      if (store.isStreaming) return;
 
-    if (store.messages.length >= MAX_MESSAGES) {
-      setLimitError(LIMIT_FULL_MESSAGE);
-      return;
-    }
+      if (store.messages.length >= MAX_MESSAGES) {
+        setLimitError(LIMIT_FULL_MESSAGE);
+        return;
+      }
 
-    setLimitError(null);
-    store.addUserMessage(text);
-    const assistantId = store.startAssistantMessage();
-    startStream(assistantId);
-  }, []);
+      setLimitError(null);
+      store.addUserMessage(text);
+      const assistantId = store.startAssistantMessage();
+      startStream(assistantId, page);
+    },
+    [page],
+  );
 
   const handleRegenerate = useCallback(() => {
     const store = useChatStore.getState();
@@ -95,8 +125,8 @@ export function ChatPanel({ fullScreen = false }: { fullScreen?: boolean }) {
 
     store.removeLastAssistantMessage();
     const assistantId = store.startAssistantMessage();
-    startStream(assistantId);
-  }, []);
+    startStream(assistantId, page);
+  }, [page]);
 
   const handleNewConversation = useCallback(() => {
     const ctrl = useChatStore.getState().abortController;
@@ -105,37 +135,43 @@ export function ChatPanel({ fullScreen = false }: { fullScreen?: boolean }) {
     setLimitError(null);
   }, []);
 
-  const handleConfirm = useCallback((actionId: string) => {
-    const store = useChatStore.getState();
-    if (store.isStreaming) return;
+  const handleConfirm = useCallback(
+    (actionId: string) => {
+      const store = useChatStore.getState();
+      if (store.isStreaming) return;
 
-    store.setConfirmationState(actionId, "loading");
-    const assistantId = store.startAssistantMessage();
+      store.setConfirmationState(actionId, "loading");
+      const assistantId = store.startAssistantMessage();
 
-    // Subscribe before starting stream to avoid race condition
-    const unsubscribe = useChatStore.subscribe((state) => {
-      if (!state.isStreaming) {
-        const msg = state.messages.find((m) => m.id === assistantId);
-        if (msg && !msg.error) {
-          useChatStore.getState().setConfirmationState(actionId, "confirmed");
-        } else if (msg?.error) {
-          useChatStore.getState().setConfirmationState(actionId, "pending");
+      // Subscribe before starting stream to avoid race condition
+      const unsubscribe = useChatStore.subscribe((state) => {
+        if (!state.isStreaming) {
+          const msg = state.messages.find((m) => m.id === assistantId);
+          if (msg && !msg.error) {
+            useChatStore.getState().setConfirmationState(actionId, "confirmed");
+          } else if (msg?.error) {
+            useChatStore.getState().setConfirmationState(actionId, "pending");
+          }
+          unsubscribe();
         }
-        unsubscribe();
-      }
-    });
+      });
 
-    startStream(assistantId, { action_id: actionId, approved: true });
-  }, []);
+      startStream(assistantId, page, { action_id: actionId, approved: true });
+    },
+    [page],
+  );
 
-  const handleCancel = useCallback((actionId: string) => {
-    const store = useChatStore.getState();
-    if (store.isStreaming) return;
+  const handleCancel = useCallback(
+    (actionId: string) => {
+      const store = useChatStore.getState();
+      if (store.isStreaming) return;
 
-    store.setConfirmationState(actionId, "cancelled");
-    const assistantId = store.startAssistantMessage();
-    startStream(assistantId, { action_id: actionId, approved: false });
-  }, []);
+      store.setConfirmationState(actionId, "cancelled");
+      const assistantId = store.startAssistantMessage();
+      startStream(assistantId, page, { action_id: actionId, approved: false });
+    },
+    [page],
+  );
 
   const handleStop = useCallback(() => {
     abortController?.abort();

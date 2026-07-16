@@ -299,6 +299,51 @@ async def test_effort_defaults_to_config(client: AsyncClient) -> None:
     assert fake.captured_requests[0].effort == "high"
 
 
+async def test_page_promotes_section_tools(client: AsyncClient) -> None:
+    """A page signal loads that section's deferred tools (v1.9.0 routing)."""
+    _, cookies = await setup_and_login(client)
+    fake = FakeLLMClient([_text_only_script()])
+    _override_llm(client, fake)
+    try:
+        resp = await client.post(
+            "/api/v1/chat",
+            json={
+                "messages": [{"role": "user", "content": "How are we doing?"}],
+                "page": "budget",
+            },
+            auth=cookies,
+        )
+        assert resp.status_code == 200
+    finally:
+        _clear_llm_override(client)
+
+    tools = fake.captured_requests[0].tools
+    loaded = {t["name"] for t in tools if "defer_loading" not in t and "name" in t}
+    assert {"get_budgets", "get_spending_by_group"} <= loaded
+
+
+async def test_unknown_page_is_harmless(client: AsyncClient) -> None:
+    """An unrecognized page promotes nothing and never errors."""
+    _, cookies = await setup_and_login(client)
+    fake = FakeLLMClient([_text_only_script()])
+    _override_llm(client, fake)
+    try:
+        resp = await client.post(
+            "/api/v1/chat",
+            json={
+                "messages": [{"role": "user", "content": "Hello"}],
+                "page": "not-a-page",
+            },
+            auth=cookies,
+        )
+        assert resp.status_code == 200
+    finally:
+        _clear_llm_override(client)
+
+    tools = fake.captured_requests[0].tools
+    assert all(t.get("defer_loading") for t in tools if t["name"] == "get_budgets")
+
+
 async def test_invalid_effort_rejected(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
     _override_llm(client, FakeLLMClient([_text_only_script()]))

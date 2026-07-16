@@ -117,6 +117,31 @@ describe("sendChatMessage", () => {
     expect(sentBody.client_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
+  it("sends the page section only when provided", async () => {
+    // Fresh stream per call — a consumed ReadableStream cannot be re-read.
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        body: makeReadableStream(makeSSEBody([{ type: "done" }])),
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const cb = makeCallbacks();
+    const signal = new AbortController().signal;
+    await sendChatMessage([], cb, signal, undefined, undefined, "budget");
+    await sendChatMessage([], cb, signal);
+
+    const bodies = fetchMock.mock.calls.map(
+      (call) =>
+        JSON.parse((call[1] as RequestInit).body as string) as {
+          page?: string;
+        },
+    );
+    expect(bodies[0].page).toBe("budget");
+    expect(bodies[1]).not.toHaveProperty("page");
+  });
+
   it("handles tool_start and tool_result events", async () => {
     const body = makeSSEBody([
       {

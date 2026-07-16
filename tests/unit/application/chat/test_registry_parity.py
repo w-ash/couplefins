@@ -15,11 +15,14 @@ import pytest
 
 from src.application import use_cases as use_cases_pkg
 from src.application.chat.registry import (
+    _MAX_PROMOTED_PER_PAGE,
+    _PAGE_TOOL_HINTS,
     BLACKLISTED_USE_CASES,
     INTERNAL_USE_CASES,
     MECHANICALLY_EXCLUDED_USE_CASES,
     REGISTRY,
     ToolSpec,
+    _validate_page_hints,
     build_tools,
 )
 
@@ -157,15 +160,91 @@ class TestRegistryShape:
                 use_cases=template.use_cases,
             )
 
-    def test_single_cache_stamp_on_last_non_deferred_tool(self) -> None:
-        """Deferred tools cannot carry cache_control (API 400), so the one
-        breakpoint sits on the last non-deferred entry."""
-        stamped = [t for t in TOOLS if "cache_control" in t]
-        assert len(stamped) == 1
-        assert stamped[0]["cache_control"] == {"type": "ephemeral"}
-        non_deferred = [t for t in TOOLS if not t.get("defer_loading")]
-        assert stamped[0] is non_deferred[-1]
+    def test_cache_breakpoints_per_tier(self) -> None:
+        """Two-tier tool caching: the page-invariant prefix always carries a
+        breakpoint; a page that promotes tools adds a second on the promoted
+        segment. Count is exactly 1 (pageless) or 2 (promoting page). A
+        breakpoint must never land on a raw {type, name} server block —
+        those reject cache_control."""
+        for enable in (True, False):
+            pageless = build_tools(enable_code_execution=enable)
+            assert len([t for t in pageless if "cache_control" in t]) == 1
+
+            promoting = build_tools(enable_code_execution=enable, page="budget")
+            breakpoints = [t for t in promoting if "cache_control" in t]
+            assert len(breakpoints) == 2, "prefix + promoted segment stamped"
+            for bp in breakpoints:
+                assert "input_schema" in bp, f"breakpoint on a server tool: {bp}"
+
         assert all("cache_control" not in t for t in TOOLS if t.get("defer_loading"))
+        # Dispatched tools carry the full wrapper; server tools emit their
+        # raw {type, name} block.
+        for t in TOOLS:
+            if "type" in t:
+                assert {"type", "name"} <= t.keys(), f"malformed server tool: {t}"
+            else:
+                assert {"name", "description", "input_schema"} <= t.keys()
+
+    def test_page_routing_keeps_the_prefix_invariant(self) -> None:
+        """The cached prefix — everything up to and including the FIRST
+        breakpoint — must be byte-identical across every page (and no page),
+        so navigation never busts the core cache. Promoted tools ride their
+        own segment past it."""
+
+        def cached_prefix(page: str | None) -> list[dict[str, object]]:
+            tool_list = build_tools(page=page)
+            cut = next(i for i, t in enumerate(tool_list) if "cache_control" in t)
+            return tool_list[: cut + 1]
+
+        baseline = cached_prefix(None)
+        for page in [*_PAGE_TOOL_HINTS, "nonsense"]:
+            assert cached_prefix(page) == baseline, f"{page!r} shifted the cache"
+
+        # On-page: the hinted tools are loaded (no defer_loading) …
+        on_page = {
+            t["name"]
+            for t in build_tools(page="budget")
+            if "defer_loading" not in t and "input_schema" in t
+        }
+        assert {"get_budgets", "get_spending_by_group"} <= on_page
+        # … and stay deferred when the user is elsewhere.
+        off_page = {
+            t["name"] for t in build_tools(page="upload") if t.get("defer_loading")
+        }
+        assert {"get_budgets", "get_spending_by_group"} <= off_page
+
+    def test_hot_set_stays_small_and_nonempty(self) -> None:
+        """Accuracy degrades past ~10 upfront tools; every page must respect
+        the ceiling, and the loaded set must never be empty (the API 400s
+        when all tools defer)."""
+        pages = [None, "nonsense", *_PAGE_TOOL_HINTS]
+        for enable in (True, False):
+            for page in pages:
+                loaded = [
+                    t
+                    for t in build_tools(enable_code_execution=enable, page=page)
+                    if "defer_loading" not in t
+                ]
+                assert loaded, "at least one tool must always be non-deferred"
+                names = [t.get("name") or t.get("type") for t in loaded]
+                assert len(loaded) <= 10, f"too many upfront on {page!r}: {names}"
+
+    def test_page_hint_map_is_valid_and_bounded(self) -> None:
+        """The import-time validator already ran; assert the invariants it
+        guards, and that it rejects the drift modes rather than passing
+        vacuously."""
+        _validate_page_hints()  # current map is well-formed
+        assert _MAX_PROMOTED_PER_PAGE >= 1
+        bad_maps: list[dict[str, tuple[str, ...]]] = [
+            {"not_a_page": ("get_tags",)},  # unknown page key
+            {"budget": ("no_such_tool",)},  # unknown tool name
+            {"budget": ("get_settlement_balance",)},  # already loaded (hot)
+            {"budget": ("update_budget",)},  # a write, not a deferred read
+            {"budget": ("get_tags",) * (_MAX_PROMOTED_PER_PAGE + 1)},  # ceiling
+        ]
+        for bad in bad_maps:
+            with pytest.raises(ValueError):
+                _validate_page_hints(bad)
 
     def test_hot_tools_load_up_front_everything_else_defers(self) -> None:
         """The hot set is pinned from observed traffic plus the agentic
@@ -243,4 +322,7 @@ class TestRegistryShape:
         names = {t["name"] for t in tool_list}
         assert "code_execution" not in names
         assert all("allowed_callers" not in t for t in tool_list)
-        assert tool_list[-1]["cache_control"] == {"type": "ephemeral"}
+        # The prefix breakpoint survives the flag (rest tier is uncached).
+        stamped = [t for t in tool_list if "cache_control" in t]
+        assert len(stamped) == 1
+        assert stamped[0]["cache_control"] == {"type": "ephemeral"}

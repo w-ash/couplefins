@@ -391,31 +391,164 @@ _SPECS_BY_NAME: dict[str, ToolSpec] = {spec.name: spec for spec in REGISTRY}
 _READ_ALLOWED_CALLERS: tuple[str, ...] = ("direct", "code_execution_20260120")
 
 
-def build_tools(*, enable_code_execution: bool = True) -> list[dict[str, object]]:
-    """API tool list in registry order.
+def _stamp_cache(tools_out: list[dict[str, object]], idx: int) -> None:
+    """Stamp the ephemeral cache breakpoint on ``tools_out[idx]``.
 
-    Order must be deterministic — tools render first in the prompt, so any
-    reordering invalidates the whole prompt cache. Shallow copies keep the
-    cache stamp off the schema constants. The cache breakpoint goes on the
-    LAST NON-DEFERRED entry: a tool with defer_loading cannot carry
-    cache_control (API 400), and deferred tools are excluded from the
-    cached prefix anyway.
+    A no-op for ``idx < 0`` (empty tier), so callers can pass
+    ``len(tier) - 1`` unconditionally.
     """
-    tool_list: list[dict[str, object]] = []
-    last_loaded_index = -1
+    if idx >= 0:
+        tools_out[idx]["cache_control"] = {"type": "ephemeral"}
+
+
+# --- Page-contextual tool routing (v1.9.0) ---------------------------------
+#
+# Rule-based context routing: the web client sends the coarse UI section the
+# user is on, and the deferred read tools relevant to that section are
+# promoted into the loaded set. Rule-based (not semantic) is the right call
+# at this scale — below ~50 tools a validated rule map is deterministic,
+# free, and more accurate than a retriever, and a UI route is the cleanest
+# domain signal there is. Each page's promotions ride a dedicated cache
+# breakpoint (the promoted segment in ``build_tools``), so the invariant
+# core stays cached across navigation while a section's tools cache across
+# that section's turns.
+#
+# Canonical page keys — the backend is the source of truth; the web client's
+# SECTION_BY_SEGMENT map (web/src/components/chat/ChatPanel.tsx) mirrors
+# this set and is kept in sync by hand. Unknown/absent pages promote
+# nothing. The mobile full-screen chat page (/ask) and /account are
+# deliberately unmapped — there is no domain signal on the chat page itself.
+_CANONICAL_PAGES: frozenset[str] = frozenset({
+    "dashboard",
+    "transactions",
+    "settle",
+    "budget",
+    "insights",
+    "upload",
+    "settings",
+})
+
+_PAGE_TOOL_HINTS: Mapping[str, tuple[str, ...]] = {
+    "dashboard": ("get_dashboard_summary", "get_dashboard_status"),
+    "transactions": ("get_transaction_history", "get_tags"),
+    "settle": ("get_settlement_activity", "get_adjustments_preview"),
+    "budget": ("get_budgets", "get_spending_by_group"),
+    "insights": ("get_spending_trends", "get_spending_by_group"),
+    "upload": ("get_upload_history", "get_reconciliation_report"),
+    "settings": ("get_category_setup", "get_tags"),
+}
+
+# The per-page promotion ceiling, DERIVED not hand-set: the loaded set must
+# stay under the ~10-tool accuracy ceiling, and everything not deferred (the
+# invariant prefix plus the agentic server blocks) is always loaded, so a
+# page may promote at most ``10 - <always-loaded>`` deferred reads.
+_TOOL_CEILING = 10
+_MAX_PROMOTED_PER_PAGE = _TOOL_CEILING - sum(1 for s in REGISTRY if not s.defer_loading)
+
+
+def _validate_page_hints(
+    hints: Mapping[str, tuple[str, ...]] | None = None,
+) -> None:
+    """Fail at import if the hint map drifts from the registry.
+
+    Same posture as ``ToolSpec.__post_init__``: an invalid routing table
+    cannot exist past import. Guards the three ways the hand-maintained map
+    rots — an unknown page key, a tool name that no longer exists (or
+    stopped being a deferred read), and silent breach of the derived
+    per-page ceiling. ``hints`` defaults to the module map; tests pass bad
+    maps directly.
+    """
+    if hints is None:
+        hints = _PAGE_TOOL_HINTS
+    for page, names in hints.items():
+        if page not in _CANONICAL_PAGES:
+            raise ValueError(
+                f"_PAGE_TOOL_HINTS: {page!r} is not a canonical page "
+                f"({sorted(_CANONICAL_PAGES)})"
+            )
+        if len(names) > _MAX_PROMOTED_PER_PAGE:
+            raise ValueError(
+                f"_PAGE_TOOL_HINTS[{page!r}]: promotes {len(names)} tools, "
+                f"exceeds the derived ceiling of {_MAX_PROMOTED_PER_PAGE}"
+            )
+        for name in names:
+            spec = _SPECS_BY_NAME.get(name)
+            if spec is None:
+                raise ValueError(f"_PAGE_TOOL_HINTS[{page!r}]: unknown tool {name!r}")
+            if not spec.defer_loading:
+                raise ValueError(
+                    f"_PAGE_TOOL_HINTS[{page!r}]: {name!r} is already loaded "
+                    "(not deferred) — promoting it is a no-op that wastes budget"
+                )
+            if spec.kind != "read":
+                raise ValueError(
+                    f"_PAGE_TOOL_HINTS[{page!r}]: {name!r} is {spec.kind!r}; "
+                    "only deferred reads may be promoted"
+                )
+
+
+_validate_page_hints()
+
+
+def _promoted_tool_names(page: str | None) -> frozenset[str]:
+    """Deferred read tools to load eagerly for the user's current UI section.
+
+    Unknown or absent pages promote nothing — the surface degrades cleanly
+    to the static core plus tool-search discovery.
+    """
+    return frozenset(_PAGE_TOOL_HINTS.get(page or "", ()))
+
+
+def build_tools(
+    *, enable_code_execution: bool = True, page: str | None = None
+) -> list[dict[str, object]]:
+    """Anthropic tool list in three cache tiers: prefix, promoted, rest.
+
+    - **prefix** — the always-hot curated core (the hot reads plus
+      delegate_analysis). Page-INVARIANT and byte-stable; its last entry
+      carries the primary tools breakpoint, so navigating between UI
+      sections never invalidates it.
+    - **promoted** — the deferred reads ``page`` surfaces for the current
+      section (see ``_PAGE_TOOL_HINTS``). Carries its own breakpoint, so a
+      section's tools cache across that section's turns and only this
+      segment is rewritten on navigation. Empty (no breakpoint) when the
+      page promotes nothing.
+    - **rest** — the raw ``{type, name}`` server-tool blocks (which reject a
+      cache stamp — the pre-v1.9.0 placement on tool_search was invalid)
+      and the deferred pool surfaced on demand via tool search. Uncached.
+
+    Order within each tier follows registry order (deterministic —
+    reordering invalidates the cache). Shallow copies keep stamps off the
+    schema constants.
+
+    CACHE-BREAKPOINT BUDGET (API cap: 4, fully spent — never add a fifth):
+    tools prefix (1) + promoted segment (1, promoting pages only) + system
+    primer (1, system_prompt.py) + incremental message stamp (1,
+    anthropic_adapter.py).
+    """
+    promoted_names = _promoted_tool_names(page)
+    prefix: list[dict[str, object]] = []  # always-hot, cached, page-invariant
+    promoted: list[dict[str, object]] = []  # page-promoted reads, cached per page
+    rest: list[dict[str, object]] = []  # server blocks + deferred pool, uncached
     for spec in REGISTRY:
         if spec.name == "code_execution" and not enable_code_execution:
             continue
         tool = dict(spec.schema)
+        if spec.handler is None:  # raw server-tool block (agentic, API-owned)
+            rest.append(tool)
+            continue
         if enable_code_execution and spec.kind == "read":
             tool["allowed_callers"] = list(_READ_ALLOWED_CALLERS)
-        if spec.defer_loading:
-            tool["defer_loading"] = True
+        if not spec.defer_loading:
+            prefix.append(tool)  # curated core + dispatched agentic
+        elif spec.name in promoted_names:
+            promoted.append(tool)  # loaded + cached for this section
         else:
-            last_loaded_index = len(tool_list)
-        tool_list.append(tool)
-    tool_list[last_loaded_index]["cache_control"] = {"type": "ephemeral"}
-    return tool_list
+            tool["defer_loading"] = True
+            rest.append(tool)  # deferred: discovered via tool search
+    _stamp_cache(prefix, len(prefix) - 1)
+    _stamp_cache(promoted, len(promoted) - 1)  # no-op when nothing promoted
+    return prefix + promoted + rest
 
 
 def build_subagent_tools() -> list[dict[str, object]]:

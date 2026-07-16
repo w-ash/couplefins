@@ -120,6 +120,28 @@ describe("ChatPanel", () => {
     expect(vi.mocked(sendChatMessage).mock.calls[0][4]).toBe("high");
   });
 
+  const sendFrom = (route: string) => {
+    renderWithProviders(<ChatPanel />, {
+      routerProps: { initialEntries: [route] },
+    });
+    const textarea = screen.getByPlaceholderText(/ask about your finances/i);
+    fireEvent.change(textarea, { target: { value: "hello" } });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    return vi.mocked(sendChatMessage).mock.calls[0][5];
+  };
+
+  it("sends the current UI section as the page signal", () => {
+    expect(sendFrom("/budget")).toBe("budget");
+  });
+
+  it("maps the index route to the dashboard section", () => {
+    expect(sendFrom("/")).toBe("dashboard");
+  });
+
+  it("sends no page from unrouted sections like the chat page", () => {
+    expect(sendFrom("/ask")).toBeUndefined();
+  });
+
   it("surfaces the limit error and blocks sending when the conversation is full", () => {
     const full: Partial<ChatMessage>[] = Array.from({ length: 50 }, (_, i) => ({
       role: i % 2 === 0 ? "user" : "assistant",
