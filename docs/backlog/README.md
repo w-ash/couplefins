@@ -175,7 +175,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.8.4 | Chat hardening — UserData boundary module (wrap/strip/sanitize), tool kind over SSE, multi-month finalization guard on bulk updates, validation + DRY consolidation | Completed (2026-07-15) ([spec](completed/v1.8.4-chat-hardening.md)) | S |
 | v1.9.0 | Page-contextual tool routing — page signal promotes deferred tools behind a cache-invariant prefix ([spec](v1.9.0-chat-tool-routing.md), [series overview](v1.9.x-context-engineering.md)) | Completed (2026-07-16) | M |
 | v1.9.1 | Subagent context discipline — curated hot set + deferred rest, summary re-wrapped as user_data ([spec](v1.9.1-chat-subagent-discipline.md)) | Completed (2026-07-16) | S |
-| v1.9.2 | Three-block system prompt — cached primer, volatile context, current-view grounding ([spec](v1.9.2-chat-prompt-blocks.md)) | Planned | S |
+| v1.9.2 | Three-block system prompt — cached primer, volatile context, current-view grounding ([spec](v1.9.2-chat-prompt-blocks.md)) | Completed (2026-07-16) | S |
 | v1.9.3 | MCP server — registry tools for external agents with in-band two-phase confirmation ([spec](v1.9.3-mcp-server.md)) | Planned | M |
 
 ## Infrastructure Readiness

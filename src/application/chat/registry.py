@@ -490,6 +490,15 @@ def _validate_page_hints(
 _validate_page_hints()
 
 
+def canonical_page(page: str | None) -> str | None:
+    """The validated page key, or None for anything unrecognized.
+
+    The prompt layer must never reflect arbitrary client strings — gate the
+    request's page through this before it reaches any model-facing text.
+    """
+    return page if page in _CANONICAL_PAGES else None
+
+
 def _promoted_tool_names(page: str | None) -> frozenset[str]:
     """Deferred read tools to load eagerly for the user's current UI section.
 

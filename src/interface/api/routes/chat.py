@@ -16,6 +16,7 @@ from src.application.chat.pending_actions import pending_action_store
 from src.application.chat.protocols import LLMClientProtocol
 from src.application.chat.registry import (
     build_tools,
+    canonical_page,
     execute_confirmed_action,
     execute_tool,
 )
@@ -84,7 +85,12 @@ async def _build_command(
     )
     partner = _find_partner(current_user, persons)
     today = body.client_date or datetime.now(UTC).date()
-    system = build_system_prompt(current_user, partner, today, category_groups)
+    # Validated once: unknown client strings become None (no promotion, no
+    # <current_view> block) — they must never reach model-facing text.
+    page = canonical_page(body.page)
+    system = build_system_prompt(
+        current_user, partner, today, category_groups, page=page
+    )
     messages: list[dict[str, object]] = [
         {"role": m.role, "content": m.content} for m in body.messages
     ]
@@ -96,7 +102,7 @@ async def _build_command(
         system=system,
         tools=build_tools(
             enable_code_execution=settings.chat.enable_code_execution,
-            page=body.page,
+            page=page,
         ),
         model_id=settings.chat.model_id,
         max_turns=settings.chat.max_turns,

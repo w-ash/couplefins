@@ -242,8 +242,11 @@ async def test_client_date_used_in_system_prompt(client: AsyncClient) -> None:
         _clear_llm_override(client)
 
     assert fake.captured_system is not None
-    system_text = fake.captured_system[0]["text"]
+    # Volatile context (the date) rides the uncached trailing block, not
+    # the cached primer (v1.9.2).
+    system_text = "\n".join(str(b["text"]) for b in fake.captured_system)
     assert "Today is 2026-12-31" in system_text
+    assert "Today is" not in str(fake.captured_system[0]["text"])
 
 
 async def test_missing_client_date_falls_back_to_server_date(
@@ -266,7 +269,7 @@ async def test_missing_client_date_falls_back_to_server_date(
         _clear_llm_override(client)
 
     assert fake.captured_system is not None
-    system_text = fake.captured_system[0]["text"]
+    system_text = "\n".join(str(b["text"]) for b in fake.captured_system)
     assert "Today is 20" in system_text  # any real 20xx calendar date
 
 
@@ -320,6 +323,10 @@ async def test_page_promotes_section_tools(client: AsyncClient) -> None:
     tools = fake.captured_requests[0].tools
     loaded = {t["name"] for t in tools if "defer_loading" not in t and "name" in t}
     assert {"get_budgets", "get_spending_by_group"} <= loaded
+    # The same validated page signal grounds the prompt (v1.9.2).
+    assert fake.captured_system is not None
+    assert "<current_view>" in str(fake.captured_system[-1]["text"])
+    assert "budget page" in str(fake.captured_system[-1]["text"])
 
 
 async def test_unknown_page_is_harmless(client: AsyncClient) -> None:
@@ -342,6 +349,11 @@ async def test_unknown_page_is_harmless(client: AsyncClient) -> None:
 
     tools = fake.captured_requests[0].tools
     assert all(t.get("defer_loading") for t in tools if t["name"] == "get_budgets")
+    # An unvalidated client string never reaches model-facing prompt text.
+    assert fake.captured_system is not None
+    full_system = "\n".join(str(b["text"]) for b in fake.captured_system)
+    assert "<current_view>" not in full_system
+    assert "not-a-page" not in full_system
 
 
 async def test_invalid_effort_rejected(client: AsyncClient) -> None:
