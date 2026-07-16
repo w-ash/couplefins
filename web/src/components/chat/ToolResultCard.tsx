@@ -3,12 +3,7 @@ import { ConfirmationCard } from "@/components/chat/ConfirmationCard";
 import { ProgressBar } from "@/components/ProgressBar";
 import type { ConfirmationState, ToolCall } from "@/lib/chat";
 import { cn } from "@/lib/cn";
-import {
-  amountColorClass,
-  formatCurrency,
-  formatDate,
-  stripUserData,
-} from "@/lib/format";
+import { amountColorClass, formatCurrency, formatDate } from "@/lib/format";
 import { getHealthStyle } from "@/lib/health-styles";
 import { heroCardClass, tableHeaderRowClass } from "@/lib/layout";
 
@@ -195,7 +190,7 @@ function TransactionTableCard({ result }: { result: SearchResult }) {
               <td className="py-1 pr-2 text-muted-foreground">
                 {formatDate(tx.date)}
               </td>
-              <td className="py-1 pr-2">{stripUserData(tx.merchant)}</td>
+              <td className="py-1 pr-2">{tx.merchant}</td>
               <td
                 className={cn(
                   "py-1 pr-2 text-right tabular-nums",
@@ -204,9 +199,7 @@ function TransactionTableCard({ result }: { result: SearchResult }) {
               >
                 {formatCurrency(tx.amount)}
               </td>
-              <td className="py-1 text-muted-foreground">
-                {stripUserData(tx.category)}
-              </td>
+              <td className="py-1 text-muted-foreground">{tx.category}</td>
             </tr>
           ))}
         </tbody>
@@ -299,7 +292,7 @@ function DashboardStatusCard({ result }: { result: DashboardStatusResult }) {
 function formatGenericValue(value: unknown): string {
   if (value === null || value === undefined) return "—";
   if (typeof value === "boolean") return value ? "yes" : "no";
-  if (typeof value === "string") return stripUserData(value);
+  if (typeof value === "string") return value;
   if (typeof value === "number") return String(value);
   if (typeof value === "object") {
     return Object.entries(value as Record<string, unknown>)

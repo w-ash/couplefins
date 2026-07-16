@@ -13,7 +13,12 @@ from src.application.chat.events import (
 )
 from src.application.chat.protocols import LLMResponse, ToolContext, ToolUseBlock
 from src.application.chat.use_case import ChatCommand, ChatEvent, ChatUseCase
-from src.domain.exceptions import MaxRoundsExceededError, ResponseTruncatedError
+from src.application.chat.user_data import UserData
+from src.domain.exceptions import (
+    MaxRoundsExceededError,
+    ResponseTruncatedError,
+    ToolExecutionError,
+)
 from tests.fixtures.factories import make_person
 from tests.fixtures.fake_llm_client import FakeLLMClient, FakeScript
 
@@ -145,6 +150,74 @@ class TestToolRoundTrip:
                 }
             ],
         }
+
+
+def _tool_use_script(tool_use: ToolUseBlock) -> FakeScript:
+    return FakeScript(
+        events=[tool_use],
+        response=LLMResponse(
+            stop_reason="tool_use",
+            content=[tool_use],
+            raw_content=[{"type": "tool_use", "id": tool_use.id}],
+        ),
+    )
+
+
+class TestUserDataBoundaries:
+    async def test_model_content_wrapped_event_summary_stripped(self) -> None:
+        """UserData values reach the model wrapped in <user_data> tags, but
+        the yielded ToolResultEvent (SSE → frontend) carries raw values."""
+        tool_use = ToolUseBlock(id="toolu_1", name="search_transactions", input={})
+        fake = FakeLLMClient([_tool_use_script(tool_use), FakeScript()])
+        executor = AsyncMock(
+            return_value={
+                "merchant": UserData("Whole Foods"),
+                "rows": [{"category": UserData("Pets")}],
+                "count": 1,
+            }
+        )
+
+        events = await _drain(
+            ChatUseCase(fake, executor),
+            _command([{"role": "user", "content": "hi"}], max_turns=3),
+        )
+
+        result_event = next(e for e in events if isinstance(e, ToolResultEvent))
+        assert result_event.summary == {
+            "merchant": "Whole Foods",
+            "rows": [{"category": "Pets"}],
+            "count": 1,
+        }
+        tool_result = fake.captured_messages[1][-1]["content"][0]
+        assert json.loads(tool_result["content"]) == {
+            "merchant": "<user_data>Whole Foods</user_data>",
+            "rows": [{"category": "<user_data>Pets</user_data>"}],
+            "count": 1,
+        }
+
+    async def test_error_event_summary_is_stripped(self) -> None:
+        """Handler errors may embed wrap()-tagged values — the model keeps
+        them (via str(e)), the event summary must not."""
+        tool_use = ToolUseBlock(id="toolu_1", name="get_tags", input={})
+        fake = FakeLLMClient([_tool_use_script(tool_use), FakeScript()])
+        executor = AsyncMock(
+            side_effect=ToolExecutionError(
+                "<user_data>Evil Corp</user_data> is already marked"
+            )
+        )
+
+        events = await _drain(
+            ChatUseCase(fake, executor),
+            _command([{"role": "user", "content": "hi"}], max_turns=3),
+        )
+
+        result_event = next(e for e in events if isinstance(e, ToolResultEvent))
+        assert result_event.is_error is True
+        assert result_event.summary == {"error": "Evil Corp is already marked"}
+        tool_result = fake.captured_messages[1][-1]["content"][0]
+        assert tool_result["content"] == (
+            "<user_data>Evil Corp</user_data> is already marked"
+        )
 
 
 class TestContainerThreading:

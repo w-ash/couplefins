@@ -168,10 +168,11 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.7.3 | Insights & chat accuracy — comparison cards, settled trend, YTD cutoff, chat scope & local dates | Completed (2026-07-03) | M |
 | v1.7.4 | Guardrails & DRY — shared exclusion predicate, suppression removal, fixture realism | Completed (2026-07-03) | S |
 | v1.7.5 | Settlement ledger — running outstanding balance, multi-month catch-ups, derived month status | Completed (2026-07-04) | L |
-| v1.8.0 | Agentic chat foundations — Opus 4.8 + adaptive thinking, tool registry + human-only blacklist, parity contract test, trigger-first tool descriptions ([spec](v1.8.0-chat-foundations.md), [series overview](v1.8.x-agentic-chat.md)) | Completed (2026-07-09) | M |
-| v1.8.1 | Chat read parity — 9 new read tools covering every human-visible query surface, strict schemas, untrusted-content labeling | Completed (2026-07-10) ([spec](v1.8.1-chat-read-parity.md)) | M |
-| v1.8.2 | Chat write parity — 12 new mutation tools (all two-phase confirmed), batch splits, parity contract complete | Completed (2026-07-10) ([spec](v1.8.2-chat-write-parity.md)) | L |
-| v1.8.3 | Agentic chat — code execution sandbox + programmatic tool calling, delegate_analysis subagent, tool search, context management, per-request effort | Completed (2026-07-10) ([spec](v1.8.3-chat-agentic.md)) | L |
+| v1.8.0 | Agentic chat foundations — Opus 4.8 + adaptive thinking, tool registry + human-only blacklist, parity contract test, trigger-first tool descriptions ([spec](completed/v1.8.0-chat-foundations.md), [series overview](completed/v1.8.x-agentic-chat.md)) | Completed (2026-07-09) | M |
+| v1.8.1 | Chat read parity — 9 new read tools covering every human-visible query surface, strict schemas, untrusted-content labeling | Completed (2026-07-10) ([spec](completed/v1.8.1-chat-read-parity.md)) | M |
+| v1.8.2 | Chat write parity — 12 new mutation tools (all two-phase confirmed), batch splits, parity contract complete | Completed (2026-07-10) ([spec](completed/v1.8.2-chat-write-parity.md)) | L |
+| v1.8.3 | Agentic chat — code execution sandbox + programmatic tool calling, delegate_analysis subagent, tool search, context management, per-request effort | Completed (2026-07-10) ([spec](completed/v1.8.3-chat-agentic.md)) | L |
+| v1.8.4 | Chat hardening — UserData boundary module (wrap/strip/sanitize), tool kind over SSE, multi-month finalization guard on bulk updates, validation + DRY consolidation | Completed (2026-07-15) ([spec](completed/v1.8.4-chat-hardening.md)) | S |
 
 ## Infrastructure Readiness
 

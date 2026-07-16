@@ -201,21 +201,6 @@ class TestRegistryShape:
             assert input_schema.get("additionalProperties") is False, spec.name
             assert "required" in input_schema, spec.name
 
-    def test_read_write_naming_convention(self) -> None:
-        """The frontend derives 'proposing vs looking up' from tool names:
-        reads are get_*/search_*, writes are anything else (see
-        isMutationTool in ToolCallIndicator.tsx). Pin the convention here
-        so a misnamed tool fails CI instead of mislabeling the indicator.
-        Agentic tools are exempt — the frontend special-cases them."""
-        for spec in REGISTRY:
-            if spec.kind == "agentic":
-                continue
-            is_read_name = spec.name.startswith(("get_", "search_"))
-            if spec.kind == "read":
-                assert is_read_name, f"read tool misnamed: {spec.name}"
-            else:
-                assert not is_read_name, f"write tool misnamed: {spec.name}"
-
     def test_no_numeric_or_array_constraints_in_schemas(self) -> None:
         """House convention: ranges belong in the property description,
         enforcement in the handler (they were unsupported under strict —

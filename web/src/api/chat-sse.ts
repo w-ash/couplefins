@@ -5,13 +5,14 @@
  * Uses fetch + ReadableStream (not EventSource) because the endpoint is POST.
  */
 
+import type { ToolKind } from "@/lib/chat";
 import { localISODate } from "@/lib/format";
 
 const TERMINAL_TYPES = new Set(["done", "error"]);
 
 export interface ChatSSECallbacks {
   onToken: (text: string) => void;
-  onToolStart: (name: string, id: string) => void;
+  onToolStart: (name: string, id: string, kind: ToolKind) => void;
   onToolResult: (
     name: string,
     id: string,
@@ -94,7 +95,13 @@ function handleChatEvents(callbacks: ChatSSECallbacks) {
         callbacks.onToken(event.text as string);
         break;
       case "tool_start":
-        callbacks.onToolStart(event.name as string, event.id as string);
+        callbacks.onToolStart(
+          event.name as string,
+          event.id as string,
+          event.kind === "write" || event.kind === "agentic"
+            ? event.kind
+            : "read",
+        );
         break;
       case "tool_result":
         callbacks.onToolResult(

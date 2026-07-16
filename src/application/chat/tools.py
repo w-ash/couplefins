@@ -20,6 +20,17 @@ them in the handler. All schemas keep additionalProperties: false, and
 strict remains incompatible with v1.8.3's allowed_callers anyway.
 """
 
+from typing import Final
+
+_YEAR_PROP: Final[dict[str, object]] = {
+    "type": "integer",
+    "description": "The year (e.g. 2026).",
+}
+_MONTH_PROP: Final[dict[str, object]] = {
+    "type": "integer",
+    "description": "The month (1-12).",
+}
+
 GET_SETTLEMENT_BALANCE_SCHEMA: dict[str, object] = {
     "name": "get_settlement_balance",
     "description": (
@@ -74,14 +85,8 @@ GET_BUDGET_OVERVIEW_SCHEMA: dict[str, object] = {
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "year": {
-                "type": "integer",
-                "description": "The year (e.g. 2026).",
-            },
-            "month": {
-                "type": "integer",
-                "description": "The month (1-12).",
-            },
+            "year": _YEAR_PROP,
+            "month": _MONTH_PROP,
             "scope": {
                 "type": "string",
                 "enum": ["household", "personal"],
@@ -118,14 +123,8 @@ SEARCH_TRANSACTIONS_SCHEMA: dict[str, object] = {
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "year": {
-                "type": "integer",
-                "description": "The year (e.g. 2026).",
-            },
-            "month": {
-                "type": "integer",
-                "description": "The month (1-12).",
-            },
+            "year": _YEAR_PROP,
+            "month": _MONTH_PROP,
             "merchant": {
                 "type": "string",
                 "description": "Substring to match against merchant names (case-insensitive).",
@@ -173,14 +172,8 @@ GET_SPENDING_BY_GROUP_SCHEMA: dict[str, object] = {
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "year": {
-                "type": "integer",
-                "description": "The year (e.g. 2026).",
-            },
-            "month": {
-                "type": "integer",
-                "description": "The month (1-12).",
-            },
+            "year": _YEAR_PROP,
+            "month": _MONTH_PROP,
         },
         "required": ["year", "month"],
     },
@@ -230,14 +223,8 @@ GET_DASHBOARD_STATUS_SCHEMA: dict[str, object] = {
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "year": {
-                "type": "integer",
-                "description": "The year (e.g. 2026).",
-            },
-            "month": {
-                "type": "integer",
-                "description": "The month (1-12).",
-            },
+            "year": _YEAR_PROP,
+            "month": _MONTH_PROP,
         },
         "required": ["year", "month"],
     },
@@ -300,10 +287,7 @@ GET_BUDGETS_SCHEMA: dict[str, object] = {
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "year": {
-                "type": "integer",
-                "description": "The year (e.g. 2026).",
-            },
+            "year": _YEAR_PROP,
             "month": {
                 "type": "integer",
                 "description": "The month (1-12). Omit for all months of the year.",
@@ -380,14 +364,8 @@ GET_RECONCILIATION_REPORT_SCHEMA: dict[str, object] = {
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "year": {
-                "type": "integer",
-                "description": "The year (e.g. 2026).",
-            },
-            "month": {
-                "type": "integer",
-                "description": "The month (1-12).",
-            },
+            "year": _YEAR_PROP,
+            "month": _MONTH_PROP,
             "response_format": {
                 "type": "string",
                 "enum": ["concise", "detailed"],
@@ -423,14 +401,8 @@ GET_SETTLEMENT_ACTIVITY_SCHEMA: dict[str, object] = {
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "year": {
-                "type": "integer",
-                "description": "The year (e.g. 2026).",
-            },
-            "month": {
-                "type": "integer",
-                "description": "The month (1-12).",
-            },
+            "year": _YEAR_PROP,
+            "month": _MONTH_PROP,
         },
         "required": ["year", "month"],
     },
@@ -452,10 +424,7 @@ GET_DASHBOARD_SUMMARY_SCHEMA: dict[str, object] = {
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "year": {
-                "type": "integer",
-                "description": "The year (e.g. 2026).",
-            },
+            "year": _YEAR_PROP,
             "month": {
                 "type": "integer",
                 "description": (
@@ -489,14 +458,8 @@ GET_ADJUSTMENTS_PREVIEW_SCHEMA: dict[str, object] = {
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "year": {
-                "type": "integer",
-                "description": "The year (e.g. 2026).",
-            },
-            "month": {
-                "type": "integer",
-                "description": "The month (1-12).",
-            },
+            "year": _YEAR_PROP,
+            "month": _MONTH_PROP,
         },
         "required": ["year", "month"],
     },
@@ -527,14 +490,8 @@ UPDATE_BUDGET_SCHEMA: dict[str, object] = {
                 "type": "number",
                 "description": "Monthly budget amount in dollars (e.g. 700).",
             },
-            "year": {
-                "type": "integer",
-                "description": "The year (e.g. 2026).",
-            },
-            "month": {
-                "type": "integer",
-                "description": "The month (1-12).",
-            },
+            "year": _YEAR_PROP,
+            "month": _MONTH_PROP,
             "scope": {
                 "type": "string",
                 "enum": ["household", "personal"],
@@ -695,14 +652,8 @@ DELETE_BUDGET_SCHEMA: dict[str, object] = {
                 "type": "string",
                 "description": "Category group name (exact match).",
             },
-            "year": {
-                "type": "integer",
-                "description": "The year (e.g. 2026).",
-            },
-            "month": {
-                "type": "integer",
-                "description": "The month (1-12).",
-            },
+            "year": _YEAR_PROP,
+            "month": _MONTH_PROP,
             "scope": {
                 "type": "string",
                 "enum": ["household", "personal"],
@@ -878,14 +829,8 @@ FINALIZE_PERIOD_SCHEMA: dict[str, object] = {
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "year": {
-                "type": "integer",
-                "description": "The year (e.g. 2026).",
-            },
-            "month": {
-                "type": "integer",
-                "description": "The month (1-12).",
-            },
+            "year": _YEAR_PROP,
+            "month": _MONTH_PROP,
             "notes": {
                 "type": "string",
                 "description": "Optional closing notes recorded on the period.",
@@ -907,14 +852,8 @@ UNFINALIZE_PERIOD_SCHEMA: dict[str, object] = {
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "year": {
-                "type": "integer",
-                "description": "The year (e.g. 2026).",
-            },
-            "month": {
-                "type": "integer",
-                "description": "The month (1-12).",
-            },
+            "year": _YEAR_PROP,
+            "month": _MONTH_PROP,
         },
         "required": ["year", "month"],
     },

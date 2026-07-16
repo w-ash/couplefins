@@ -2,136 +2,141 @@
 
 Each entry explains why the code appears unused to Vulture but is consumed
 at runtime by a framework, serialization, or test harness.
+
+Vulture only parses this file, so the TYPE_CHECKING guard costs nothing —
+but it keeps the module importable: several entries (Pydantic fields,
+TypedDict keys) raise AttributeError on class-level access at runtime.
 """
 
-# --- StrEnum members: consumed via Pydantic serialization/deserialization ---
+from typing import TYPE_CHECKING
 
-from src.application.use_cases.bulk_modify_tags import TagAction
+if TYPE_CHECKING:
+    # --- StrEnum members: consumed via Pydantic serialization/deserialization ---
 
-TagAction.REMOVE  # deserialized from API request body
+    from src.application.use_cases.bulk_modify_tags import TagAction
 
-# --- Auth result fields: constructed in use case, consumed by route handler ---
+    TagAction.REMOVE  # deserialized from API request body
 
-from src.application.use_cases.auth.change_password import ChangePasswordResult
-from src.application.use_cases.auth.reset_partner_password import (
-    ResetPartnerPasswordResult,
-)
+    # --- Auth result fields: constructed in use case, consumed by route handler ---
 
-ChangePasswordResult.success  # returned from change-password use case
-ResetPartnerPasswordResult.success  # returned from reset-partner-password use case
+    from src.application.use_cases.auth.change_password import ChangePasswordResult
+    from src.application.use_cases.auth.reset_partner_password import (
+        ResetPartnerPasswordResult,
+    )
 
-# --- attrs Result fields: constructed in use case, consumed by caller ---
+    ChangePasswordResult.success  # returned from change-password use case
+    ResetPartnerPasswordResult.success  # returned from reset-partner-password use case
 
-from src.application.use_cases.seed_category_groups import SeedCategoryGroupsResult
+    # --- attrs Result fields: constructed in use case, consumed by caller ---
 
-SeedCategoryGroupsResult.groups_created  # returned from startup seeder
-SeedCategoryGroupsResult.categories_created
-SeedCategoryGroupsResult.skipped
+    from src.application.use_cases.seed_category_groups import SeedCategoryGroupsResult
 
-from src.application.use_cases.seed_settlement_merchants import (
-    SeedSettlementMerchantsResult,
-)
+    SeedCategoryGroupsResult.groups_created  # returned from startup seeder
+    SeedCategoryGroupsResult.categories_created
+    SeedCategoryGroupsResult.skipped
 
-SeedSettlementMerchantsResult.merchants_created  # returned from startup seeder
-SeedSettlementMerchantsResult.skipped
+    from src.application.use_cases.seed_settlement_merchants import (
+        SeedSettlementMerchantsResult,
+    )
 
-# --- Pydantic BaseModel fields: serialized to JSON by FastAPI ---
+    SeedSettlementMerchantsResult.merchants_created  # returned from startup seeder
+    SeedSettlementMerchantsResult.skipped
 
-from src.interface.api.schemas.dashboard import DashboardResponse
+    # --- Pydantic BaseModel fields: serialized to JSON by FastAPI ---
 
-DashboardResponse.current_month_year  # response fields — serialized, never accessed as attributes
-DashboardResponse.current_month_month
-DashboardResponse.current_month_total_household_spending
-DashboardResponse.current_month_net_household_spending
-DashboardResponse.current_month_transaction_count
-DashboardResponse.current_month_person_summaries
-DashboardResponse.current_month_settlement
+    from src.interface.api.schemas.dashboard import DashboardResponse
 
-from src.interface.api.schemas.auth import AuthPersonResponse
+    DashboardResponse.current_month_year  # response fields — serialized, never accessed as attributes
+    DashboardResponse.current_month_month
+    DashboardResponse.current_month_total_household_spending
+    DashboardResponse.current_month_net_household_spending
+    DashboardResponse.current_month_transaction_count
+    DashboardResponse.current_month_person_summaries
+    DashboardResponse.current_month_settlement
 
-AuthPersonResponse.has_password  # serialized to JSON in GET /auth/persons
+    from src.interface.api.schemas.auth import AuthPersonResponse
 
-from src.interface.api.routes.health import HealthResponse
+    AuthPersonResponse.has_password  # serialized to JSON in GET /auth/persons
 
-HealthResponse.version  # serialized to JSON in GET /health
-HealthResponse.schema_version
-HealthResponse.schema_ok
-HealthResponse.database_host
-HealthResponse.database_mode
-HealthResponse.chat_available
+    from src.interface.api.routes.health import HealthResponse
 
-# --- Domain value objects: attrs fields accessed by callers ---
+    HealthResponse.version  # serialized to JSON in GET /health
+    HealthResponse.schema_version
+    HealthResponse.schema_ok
+    HealthResponse.database_host
+    HealthResponse.database_mode
+    HealthResponse.chat_available
 
-from src.domain.entities.import_event import ImportEvent
+    # --- Domain value objects: attrs fields accessed by callers ---
 
-ImportEvent.imported_at  # accessed by route handler + tests
+    from src.domain.entities.import_event import ImportEvent
 
-# --- Pydantic schema fields: serialized to JSON ---
+    ImportEvent.imported_at  # accessed by route handler + tests
 
-from src.interface.api.schemas.transactions import ImportEventResponse
+    # --- Pydantic schema fields: serialized to JSON ---
 
-ImportEventResponse.imported_at  # serialized to JSON in GET /transactions/{id}/edits
+    from src.interface.api.schemas.transactions import ImportEventResponse
 
-# --- Domain functions: tested + public API, not yet wired into a use case ---
+    ImportEventResponse.imported_at  # serialized to JSON in GET /transactions/{id}/edits
 
-from src.domain.export.adjustments import assert_adjustments_zero_sum
-from src.domain.insights import compute_trailing_average
-from src.domain.reconciliation import compute_net_position
+    # --- Domain functions: tested + public API, not yet wired into a use case ---
 
-assert_adjustments_zero_sum  # zero-sum invariant, tested in test_adjustments.py
-compute_trailing_average  # tested in test_insights.py, planned for future Insights enhancements
-compute_net_position  # independent cross-check for the ledger invariants in test_ledger.py
-# --- Test-only utility: called from tests/integration/conftest.py ---
+    from src.domain.export.adjustments import assert_adjustments_zero_sum
+    from src.domain.insights import compute_trailing_average
+    from src.domain.reconciliation import compute_net_position
 
-from src.config.settings import reset_settings
+    assert_adjustments_zero_sum  # zero-sum invariant, tested in test_adjustments.py
+    compute_trailing_average  # tested in test_insights.py, planned for future Insights enhancements
+    compute_net_position  # independent cross-check for the ledger invariants in test_ledger.py
+    # --- Test-only utility: called from tests/integration/conftest.py ---
 
-reset_settings  # resets settings cache between tests
+    from src.config.settings import reset_settings
 
-# --- Pydantic BaseModel fields: serialized to JSON by FastAPI ---
+    reset_settings  # resets settings cache between tests
 
-from src.interface.api.schemas.settlements import (
-    PayerGroupSplitSummaryResponse,
-    PayerSplitSummaryResponse,
-)
+    # --- Pydantic BaseModel fields: serialized to JSON by FastAPI ---
 
-PayerSplitSummaryResponse.fronted  # serialized in GET /settle-up
-PayerSplitSummaryResponse.their_share
-PayerSplitSummaryResponse.partner_share
-PayerGroupSplitSummaryResponse.fronted
-PayerGroupSplitSummaryResponse.their_share
-PayerGroupSplitSummaryResponse.partner_share
+    from src.interface.api.schemas.settlements import (
+        PayerGroupSplitSummaryResponse,
+        PayerSplitSummaryResponse,
+    )
 
-# --- Settlement ledger domain API: tested in test_ledger.py ---
+    PayerSplitSummaryResponse.fronted  # serialized in GET /settle-up
+    PayerSplitSummaryResponse.their_share
+    PayerSplitSummaryResponse.partner_share
+    PayerGroupSplitSummaryResponse.fronted
+    PayerGroupSplitSummaryResponse.their_share
+    PayerGroupSplitSummaryResponse.partner_share
 
-from src.domain.ledger import SettlementLedger
+    # --- Settlement ledger domain API: tested in test_ledger.py ---
 
-# Aggregate overpayment/reverse-payment credit. The UI surfaces per-payment
-# `unapplied` instead; this total anchors the zero-sum invariants in
-# test_ledger.py.
-SettlementLedger.unapplied_payment_total
+    from src.domain.ledger import SettlementLedger
 
-# --- TypedDict fields: consumed by type checker + dict access ---
+    # Aggregate overpayment/reverse-payment credit. The UI surfaces per-payment
+    # `unapplied` instead; this total anchors the zero-sum invariants in
+    # test_ledger.py.
+    SettlementLedger.unapplied_payment_total
 
-from src.application.chat.voices import VoiceDict
+    # --- TypedDict fields: consumed by type checker + dict access ---
 
-VoiceDict.identity  # accessed via dict["identity"] in system_prompt.py
-VoiceDict.voice_examples  # accessed via dict["voice_examples"] in system_prompt.py
-VoiceDict.rules  # accessed via dict["rules"] in system_prompt.py
+    from src.application.chat.voices import VoiceDict
 
-# --- Chat capability registry: consumed by the parity contract test ---
+    VoiceDict.identity  # accessed via dict["identity"] in system_prompt.py
+    VoiceDict.voice_examples  # accessed via dict["voice_examples"] in system_prompt.py
+    VoiceDict.rules  # accessed via dict["rules"] in system_prompt.py
 
-from src.application.chat.registry import (
-    BLACKLISTED_USE_CASES,
-    INTERNAL_USE_CASES,
-    MECHANICALLY_EXCLUDED_USE_CASES,
-    PENDING_PARITY_USE_CASES,
-    ToolSpec,
-)
+    # --- Chat capability registry: consumed by the parity contract test ---
 
-# ToolSpec.use_cases is parity accounting, asserted in
-# tests/unit/application/chat/test_registry_parity.py.
-ToolSpec.use_cases
-BLACKLISTED_USE_CASES
-INTERNAL_USE_CASES
-MECHANICALLY_EXCLUDED_USE_CASES
-PENDING_PARITY_USE_CASES
+    from src.application.chat.registry import (
+        BLACKLISTED_USE_CASES,
+        INTERNAL_USE_CASES,
+        MECHANICALLY_EXCLUDED_USE_CASES,
+        ToolSpec,
+    )
+
+    # ToolSpec.use_cases is parity accounting, asserted in
+    # tests/unit/application/chat/test_registry_parity.py.
+    ToolSpec.use_cases
+    BLACKLISTED_USE_CASES
+    INTERNAL_USE_CASES
+    MECHANICALLY_EXCLUDED_USE_CASES

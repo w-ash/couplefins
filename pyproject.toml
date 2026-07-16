@@ -1,6 +1,6 @@
 [project]
 name = "couplefins"
-version = "1.8.3"
+version = "1.8.4"
 description = "Household finance tool for couples"
 requires-python = ">=3.14,<4.0"
 dependencies = [
@@ -84,6 +84,11 @@ fixable = ["ALL"]
 ]
 "src/application/use_cases/**/*.py" = [
     "PLR6301",  # Stateless execute() is intentional — use case architecture pattern
+]
+"src/application/chat/user_data.py" = [
+    "FURB189",  # UserData must BE a str: json.dumps serializes str subclasses
+                # as plain strings and str-typed interfaces accept the marker
+                # transparently — collections.UserString would break both
 ]
 "vulture_whitelist.py" = [
     "B018",    # Useless expressions — intentional, Vulture whitelist convention

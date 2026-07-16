@@ -6,10 +6,12 @@
  */
 import type { ChatMessageInput } from './chatMessageInput';
 import type { ConfirmationInput } from './confirmationInput';
+import type { EffortLevel } from './effortLevel';
 
 export interface ChatRequest {
   /** @maxItems 50 */
   messages: ChatMessageInput[];
   confirmation?: ConfirmationInput | null;
   client_date?: string | null;
+  effort?: EffortLevel | null;
 }

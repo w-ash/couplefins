@@ -34,7 +34,9 @@ describe("ToolResultCard", () => {
   });
 
   describe("GenericToolResultCard (default branch)", () => {
-    it("renders scalar entries as key/value rows and strips user_data", () => {
+    it("renders scalar entries as key/value rows", () => {
+      // Summaries arrive pre-stripped — the SSE boundary removes the
+      // model-facing user_data tags before the frontend sees values.
       renderWithProviders(
         <ToolResultCard
           toolCall={{
@@ -42,7 +44,7 @@ describe("ToolResultCard", () => {
             name: "get_upload_history",
             result: {
               total_count: 3,
-              person: "<user_data>Alice</user_data>",
+              person: "Alice",
               is_finalized: false,
             },
           }}
@@ -64,12 +66,12 @@ describe("ToolResultCard", () => {
               uploads: [
                 {
                   person: "Alice",
-                  filename: "<user_data>march.csv</user_data>",
+                  filename: "march.csv",
                   transaction_count: 47,
                 },
                 {
                   person: "Bob",
-                  filename: "<user_data>march-bob.csv</user_data>",
+                  filename: "march-bob.csv",
                   transaction_count: 35,
                 },
               ],
@@ -90,10 +92,7 @@ describe("ToolResultCard", () => {
             id: "1",
             name: "get_tags",
             result: {
-              tags: [
-                "<user_data>discuss</user_data>",
-                "<user_data>shared</user_data>",
-              ],
+              tags: ["discuss", "shared"],
               unmapped_categories: [],
             },
           }}

@@ -104,11 +104,6 @@ from src.domain.exceptions import ValidationError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
-def _strip_user_data(value: str) -> str:
-    """Undo the <user_data> labeling on values echoed through details."""
-    return value.removeprefix("<user_data>").removesuffix("</user_data>")
-
-
 async def exec_budget(
     action: PendingAction, _current_user: Person
 ) -> dict[str, object]:
@@ -325,7 +320,8 @@ async def exec_map_categories(
     command = BulkUpdateMappingsCommand(
         mappings=[
             MappingEntry(
-                category=_strip_user_data(cast(str, entry["category"])),
+                # Details values are raw (UserData) — usable as-is.
+                category=cast(str, entry["category"]),
                 group_id=UUID(cast(str, entry["group_id"])),
             )
             for entry in mappings
@@ -347,7 +343,7 @@ async def exec_category_personal(
 ) -> dict[str, object]:
     details = action.details
     command = UpdateCategoryCommand(
-        name=_strip_user_data(cast(str, details["category"])),
+        name=cast(str, details["category"]),
         include_personal=cast(bool, details["new"]),
     )
     # NotFoundError from the use case is the TOCTOU guard.
@@ -402,7 +398,7 @@ async def exec_record_settlement(
         method=cast(str, details.get("method") or ""),
         year=cast(int | None, details.get("year")),
         month=cast(int | None, details.get("month")),
-        notes=_strip_user_data(cast(str, details.get("notes") or "")),
+        notes=cast(str, details.get("notes") or ""),
         linked_transaction_ids=[UUID(tid) for tid in linked],
     )
     # The use case re-validates persons, linked transactions (existence,
@@ -425,7 +421,7 @@ async def exec_waive_settlement(
     command = RecordWaivedSettlementCommand(
         from_person_id=UUID(cast(str, details["from_person_id"])),
         to_person_id=UUID(cast(str, details["to_person_id"])),
-        notes=_strip_user_data(cast(str, details.get("notes") or "")),
+        notes=cast(str, details.get("notes") or ""),
     )
     # The use case recomputes the ledger: a balance that settled or flipped
     # direction between propose and confirm is rejected, not double-waived.
@@ -497,8 +493,8 @@ async def exec_settlement_merchant(
     }
     if cast(str, details["action"]) == "add":
         create_command = CreateSettlementMerchantCommand(
-            name=cast(str, details["raw_name"]),
-            merchant_pattern=cast(str, details["raw_pattern"]),
+            name=cast(str, details["name"]),
+            merchant_pattern=cast(str, details["pattern"]),
         )
         create_result = await execute_use_case(
             lambda uow: CreateSettlementMerchantUseCase().execute(create_command, uow)

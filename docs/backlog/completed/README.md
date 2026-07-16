@@ -84,3 +84,8 @@ Index of shipped versions. When all stories in a version file are done, move the
 | v1.7.3 | 2026-07-03 | Insights & chat accuracy — comparison cards, settled trend, YTD cutoff, chat scope & local dates |
 | v1.7.4 | 2026-07-03 | Guardrails & DRY — shared exclusion predicate, suppression removal, fixture realism |
 | v1.7.5 | 2026-07-04 | Settlement ledger — running outstanding balance, multi-month catch-ups, derived FIFO month status |
+| v1.8.0 | 2026-07-09 | Agentic chat foundations — Opus 4.8 + adaptive thinking, tool registry + human-only blacklist, parity contract test |
+| v1.8.1 | 2026-07-10 | Chat read parity — 9 new read tools covering every human-visible query surface, untrusted-content labeling |
+| v1.8.2 | 2026-07-10 | Chat write parity — 12 new mutation tools (all two-phase confirmed), batch splits, parity contract complete |
+| v1.8.3 | 2026-07-10 | Agentic chat — code execution sandbox + programmatic tool calling, delegate_analysis subagent, tool search, context management, per-request effort |
+| v1.8.4 | 2026-07-15 | Chat hardening — UserData boundary module (wrap/strip/sanitize), tool kind over SSE, multi-month finalization guard, validation + DRY consolidation |

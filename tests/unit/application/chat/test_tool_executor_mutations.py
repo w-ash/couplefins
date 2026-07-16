@@ -4,6 +4,7 @@ Each mutation handler stores a pending action and returns a
 pending_confirmation response — it never executes the mutation directly.
 """
 
+from datetime import date
 from unittest.mock import AsyncMock, patch
 import uuid
 
@@ -16,9 +17,15 @@ from src.application.use_cases.list_category_groups import (
     ListCategoryGroupsResult,
 )
 from src.domain.entities.category_group import CategoryGroup
+from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import ToolExecutionError
-from tests.fixtures.factories import make_person, make_transaction
+from tests.fixtures.factories import (
+    make_person,
+    make_reconciliation_period,
+    make_transaction,
+)
 from tests.fixtures.fake_llm_client import make_tool_context
+from tests.fixtures.mocks import make_mock_uow
 
 ALICE = make_person(name="Alice", id=uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
 BOB = make_person(name="Bob", id=uuid.UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"))
@@ -103,13 +110,13 @@ async def test_update_budget_unknown_group_raises() -> None:
 # --- update_transaction_split ---
 
 
-def _split_row(tx: object, payer_percentage: int) -> dict[str, object]:
+def _split_row(tx: Transaction, payer_percentage: int) -> dict[str, object]:
     """Mirror the row shape the handler's single-UoW _fetch builds."""
     return {
-        "transaction_id": str(tx.id),  # type: ignore[attr-defined]
-        "merchant": f"<user_data>{tx.merchant}</user_data>",  # type: ignore[attr-defined]
-        "date": tx.date.isoformat(),  # type: ignore[attr-defined]
-        "amount": float(round(tx.amount, 2)),  # type: ignore[attr-defined]
+        "transaction_id": str(tx.id),
+        "merchant": tx.merchant,
+        "date": tx.date.isoformat(),
+        "amount": float(round(tx.amount, 2)),
         "payer": "Alice",
         "current_split": "50/50",
         "new_split": f"{payer_percentage}/{100 - payer_percentage}",
@@ -229,7 +236,90 @@ async def test_bulk_update_returns_pending() -> None:
     assert result["status"] == "pending_confirmation"
     assert result["details"]["count"] == 1
     assert "household=true" in str(result["description"])
-    assert "add tags: discuss" in str(result["description"])
+    # Tag values are user data — wrapped inline in the model-facing prose.
+    assert "add tags: <user_data>discuss</user_data>" in str(result["description"])
+
+
+def _patch_execute_with_uow(uow: AsyncMock):
+    """Patch execute_use_case to run the handler's closure against a mock UoW."""
+
+    async def _run(factory):
+        return await factory(uow)
+
+    return patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        side_effect=_run,
+    )
+
+
+@pytest.mark.anyio
+async def test_bulk_update_spanning_finalized_month_rejected() -> None:
+    """A batch touching a finalized month is rejected at propose time —
+    even when other transactions in the batch are in open months."""
+    tx_open = make_transaction(date=date(2026, 3, 10))
+    tx_locked = make_transaction(date=date(2026, 2, 10))
+    uow = make_mock_uow()
+    uow.transactions.get_by_ids.return_value = [tx_open, tx_locked]
+    uow.reconciliation_periods.get_by_periods.return_value = [
+        make_reconciliation_period(year=2026, month=2, is_finalized=True)
+    ]
+
+    with (
+        _patch_execute_with_uow(uow),
+        pytest.raises(ToolExecutionError, match="February 2026 is finalized"),
+    ):
+        await execute_tool(
+            "bulk_update_transactions",
+            {
+                "transaction_ids": [str(tx_open.id), str(tx_locked.id)],
+                "changes": {"household": True},
+            },
+            CTX,
+        )
+
+
+@pytest.mark.anyio
+async def test_bulk_update_missing_transaction_rejected() -> None:
+    """Every ID in the batch must exist — not just the first."""
+    tx = make_transaction()
+    missing_id = uuid.uuid4()
+    uow = make_mock_uow()
+    uow.transactions.get_by_ids.return_value = [tx]
+
+    with (
+        _patch_execute_with_uow(uow),
+        pytest.raises(
+            ToolExecutionError, match=f"Transactions not found: {missing_id}"
+        ),
+    ):
+        await execute_tool(
+            "bulk_update_transactions",
+            {
+                "transaction_ids": [str(tx.id), str(missing_id)],
+                "changes": {"household": True},
+            },
+            CTX,
+        )
+
+
+@pytest.mark.anyio
+async def test_bulk_update_payer_percentage_out_of_range_raises() -> None:
+    with (
+        patch(
+            "src.application.chat.tool_executor.execute_use_case",
+            new_callable=AsyncMock,
+            return_value=None,  # _validate passes
+        ),
+        pytest.raises(ToolExecutionError, match="payer_percentage must be 0-100"),
+    ):
+        await execute_tool(
+            "bulk_update_transactions",
+            {
+                "transaction_ids": [str(uuid.uuid4())],
+                "changes": {"payer_percentage": 150},
+            },
+            CTX,
+        )
 
 
 # --- search_transactions includes id ---
@@ -464,7 +554,7 @@ async def test_map_categories_resolves_group_ids() -> None:
 
     mapping = result["details"]["mappings"][0]
     assert mapping["group_id"] == str(FOOD_GROUP_ID)
-    assert mapping["category"] == "<user_data>Pets</user_data>"
+    assert mapping["category"] == "Pets"
 
 
 @pytest.mark.anyio
@@ -612,7 +702,10 @@ async def test_manage_settlement_merchant_remove_unknown_lists_configured() -> N
             new_callable=AsyncMock,
             return_value=merchants,
         ),
-        pytest.raises(ToolExecutionError, match="Configured: Venmo"),
+        # DB-sourced merchant names are wrapped in model-facing error text.
+        pytest.raises(
+            ToolExecutionError, match="Configured: <user_data>Venmo</user_data>"
+        ),
     ):
         await execute_tool(
             "manage_settlement_merchant",

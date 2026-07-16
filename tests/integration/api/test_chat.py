@@ -163,8 +163,14 @@ async def test_read_parity_tool_upload_history(client: AsyncClient) -> None:
     assert summary["total_count"] == 1
     upload = summary["uploads"][0]
     assert upload["transaction_count"] == 2
-    # Filenames are user-originated — labeled for the model.
-    assert upload["filename"].startswith("<user_data>")
+    # Filenames are user-originated — wrapped for the model only. The SSE
+    # summary the frontend receives must carry no tags...
+    assert "<user_data>" not in json.dumps(summary)
+    # ...while the model-facing tool_result content on the follow-up
+    # request carries the wrapped filename.
+    follow_up = fake.captured_messages[1][-1]
+    model_content = json.dumps(follow_up)
+    assert "<user_data>" in model_content
 
 
 # --- Test 3: Parallel tool_use ---

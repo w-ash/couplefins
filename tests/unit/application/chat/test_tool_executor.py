@@ -4,24 +4,35 @@ Strategy: mock execute_use_case so each tool handler runs against
 controlled return values without needing a real database.
 """
 
+from datetime import date
 from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 import uuid
 
+from attrs import evolve
 import pytest
 
 from src.application.chat.registry import execute_tool
 from src.application.use_cases._shared.upload_status import UploadStatus
 from src.application.use_cases.get_budget_overview import GetBudgetOverviewResult
+from src.application.use_cases.get_dashboard import (
+    GetDashboardResult,
+    MonthHistoryEntry,
+)
 from src.application.use_cases.get_settle_up_data import GetSettleUpDataResult
 from src.application.use_cases.search_transactions import (
     SearchTransactionsResult,
     SearchTransactionsUseCase,
 )
 from src.domain.budget import BudgetOverview, CategoryGroupBudgetStatus
+from src.domain.categories import CategoryGroupBreakdown
 from src.domain.exceptions import ToolExecutionError
 from src.domain.ledger import LedgerMonth, MonthSettlementStatus
-from src.domain.reconciliation import SettlementResult
+from src.domain.reconciliation import (
+    PersonSummary,
+    ReconciliationSummary,
+    SettlementResult,
+)
 from tests.fixtures.factories import make_person, make_transaction
 from tests.fixtures.fake_llm_client import make_tool_context
 from tests.fixtures.mocks import make_mock_uow
@@ -226,6 +237,18 @@ async def test_settlement_balance_without_month_all_settled() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("tool_input", [{"year": 2026}, {"month": 3}])
+async def test_settlement_balance_partial_period_raises(
+    tool_input: dict[str, object],
+) -> None:
+    """Only one of year/month is an ambiguous request — reject it."""
+    with pytest.raises(
+        ToolExecutionError, match="year and month must be provided together"
+    ):
+        await execute_tool("get_settlement_balance", tool_input, CTX)
+
+
+@pytest.mark.asyncio
 async def test_settlement_balance_no_owed() -> None:
     no_owed = _settle_result()
     # Create a new result with owed=None
@@ -397,8 +420,8 @@ async def test_search_transactions_happy_path() -> None:
     assert result["showing"] == 1
     assert result["scope"] == "all"
     tx = result["transactions"][0]
-    assert tx["merchant"] == "<user_data>Whole Foods</user_data>"
-    assert tx["category"] == "<user_data>Groceries</user_data>"
+    assert tx["merchant"] == "Whole Foods"
+    assert tx["category"] == "Groceries"
     assert tx["payer"] == "Alice"
     assert "id" in tx
 
@@ -475,13 +498,35 @@ async def test_search_transactions_personal_scope_uses_current_user() -> None:
 
 
 @pytest.mark.asyncio
+async def test_search_transactions_unknown_group_raises() -> None:
+    """An unknown category_group is an error naming the valid groups —
+    never a silent unfiltered search."""
+    with (
+        patch(
+            "src.application.chat.tool_executor.execute_use_case",
+            new_callable=AsyncMock,
+            return_value=_category_groups_result(),
+        ),
+        pytest.raises(
+            ToolExecutionError,
+            match=r"Unknown category group: Pets\. Valid groups: Food & Dining",
+        ),
+    ):
+        await execute_tool(
+            "search_transactions",
+            {"year": 2026, "month": 3, "category_group": "Pets"},
+            CTX,
+        )
+
+
+@pytest.mark.asyncio
 async def test_bulk_update_transactions_rejects_unknown_category() -> None:
     """Propose-time validation — a typo'd category is rejected before the
     confirmation card is even shown, mirroring the confirm-time re-check
     in confirmed_actions._exec_bulk."""
     tx = make_transaction()
     uow = make_mock_uow()
-    uow.transactions.get_by_id.return_value = tx
+    uow.transactions.get_by_ids.return_value = [tx]
     uow.categories.get_by_name.return_value = None
 
     async def run_with_mock_uow(factory):
@@ -507,19 +552,14 @@ async def test_bulk_update_transactions_rejects_unknown_category() -> None:
 # --- v1.8.1 read tools ---
 
 
-def _recon_summary(**overrides: object) -> object:
-    from datetime import date
-
-    from src.domain.categories import CategoryGroupBreakdown
-    from src.domain.reconciliation import PersonSummary, ReconciliationSummary
-
-    defaults: dict[str, object] = {
-        "start_date": date(2026, 3, 1),
-        "end_date": date(2026, 3, 31),
-        "total_household_spending": Decimal("1200.00"),
-        "total_household_refunds": Decimal("50.00"),
-        "net_household_spending": Decimal("1150.00"),
-        "person_summaries": [
+def _recon_summary(**overrides: object) -> ReconciliationSummary:
+    base = ReconciliationSummary(
+        start_date=date(2026, 3, 1),
+        end_date=date(2026, 3, 31),
+        total_household_spending=Decimal("1200.00"),
+        total_household_refunds=Decimal("50.00"),
+        net_household_spending=Decimal("1150.00"),
+        person_summaries=[
             PersonSummary(
                 person_id=ALICE.id,
                 total_paid=Decimal("700.00"),
@@ -531,12 +571,12 @@ def _recon_summary(**overrides: object) -> object:
                 total_share=Decimal("575.00"),
             ),
         ],
-        "settlement": SettlementResult(
+        settlement=SettlementResult(
             amount=Decimal("125.00"),
             from_person_id=BOB.id,
             to_person_id=ALICE.id,
         ),
-        "category_group_breakdowns": [
+        category_group_breakdowns=[
             CategoryGroupBreakdown(
                 group_id=uuid.uuid4(),
                 group_name="Food & Dining",
@@ -545,12 +585,11 @@ def _recon_summary(**overrides: object) -> object:
                 categories=[],
             )
         ],
-        "transaction_count": 42,
-        "split_transactions": [],
-        "category_lookup": {},
-    }
-    defaults.update(overrides)
-    return ReconciliationSummary(**defaults)  # type: ignore[arg-type]
+        transaction_count=42,
+        split_transactions=[],
+        category_lookup={},
+    )
+    return evolve(base, **overrides)
 
 
 @pytest.mark.asyncio
@@ -567,7 +606,7 @@ async def test_get_tags_wraps_and_truncates() -> None:
 
     assert result["total_count"] == 25
     assert result["showing"] == 20
-    assert result["tags"][0] == "<user_data>tag0</user_data>"
+    assert result["tags"][0] == "tag0"
 
 
 @pytest.mark.asyncio
@@ -619,8 +658,8 @@ async def test_get_transaction_history_happy_path() -> None:
     assert result["total_count"] == 1
     entry = result["edits"][0]
     assert entry["field"] == "category"
-    assert entry["old_value"] == "<user_data>Dining Out</user_data>"
-    assert entry["new_value"] == "<user_data>Fast Food</user_data>"
+    assert entry["old_value"] == "Dining Out"
+    assert entry["new_value"] == "Fast Food"
     assert entry["edited_by"] == "Bob"
     assert result["imported"] == {"by": "Alice", "at": "2026-03-02T00:00:00+00:00"}
 
@@ -735,9 +774,9 @@ async def test_get_category_setup_happy_path() -> None:
 
     group = result["groups"][0]
     assert group["group"] == "Food & Dining"
-    assert "<user_data>Groceries</user_data>" in group["categories"]
-    assert result["include_personal_categories"] == ["<user_data>Groceries</user_data>"]
-    assert result["unmapped_categories"] == ["<user_data>Mystery</user_data>"]
+    assert "Groceries" in group["categories"]
+    assert result["include_personal_categories"] == ["Groceries"]
+    assert result["unmapped_categories"] == ["Mystery"]
 
 
 @pytest.mark.asyncio
@@ -773,8 +812,8 @@ async def test_get_upload_history_newest_first_with_limit() -> None:
     assert result["total_count"] == 3
     assert result["showing"] == 2
     uploads = result["uploads"]
-    assert uploads[0]["filename"] == "<user_data>march-5.csv</user_data>"
-    assert uploads[1]["filename"] == "<user_data>march-3.csv</user_data>"
+    assert uploads[0]["filename"] == "march-5.csv"
+    assert uploads[1]["filename"] == "march-3.csv"
     assert uploads[0]["covers"] == "2026-03-01 to 2026-03-31"
 
 
@@ -855,8 +894,8 @@ async def test_get_reconciliation_report_detailed_adds_breakdown_and_rows() -> N
     largest = result["largest_transactions"]
     assert len(largest) == 20
     # Sorted by |amount| descending — Store 24 (-34) first.
-    assert largest[0]["merchant"] == "<user_data>Store 24</user_data>"
-    assert result["unmapped_categories"] == ["<user_data>Mystery</user_data>"]
+    assert largest[0]["merchant"] == "Store 24"
+    assert result["unmapped_categories"] == ["Mystery"]
 
 
 def _ledger_settlement_record() -> object:
@@ -928,19 +967,19 @@ async def test_get_settlement_activity_with_outstanding_fetches_candidates() -> 
     assert mock_execute.call_count == 3
     payment = result["settlements"][0]
     assert payment["from"] == "Alice"
-    assert payment["notes"] == "<user_data>rent catch-up</user_data>"
+    assert payment["notes"] == "rent catch-up"
     assert payment["recorded_against"] == "2026-03"
     assert payment["covered_months"] == [
         {"month": "2026-03", "amount": pytest.approx(147.5)}
     ]
     assert len(payment["linked_transaction_ids"]) == 1
     cand = result["candidate_transactions"][0]
-    assert cand["merchant"] == "<user_data>Venmo Payment</user_data>"
+    assert cand["merchant"] == "Venmo Payment"
     assert cand["score"] == 5
     assert result["settlement_merchants"] == [
         {
-            "name": "<user_data>Venmo</user_data>",
-            "pattern": "<user_data>venmo</user_data>",
+            "name": "Venmo",
+            "pattern": "venmo",
         }
     ]
 
@@ -972,29 +1011,24 @@ async def test_get_settlement_activity_settled_skips_candidates() -> None:
     assert result["candidate_transactions"] == []
 
 
-def _dashboard_result(**overrides: object) -> object:
-    from src.application.use_cases.get_dashboard import (
-        GetDashboardResult,
-        MonthHistoryEntry,
-    )
-
-    defaults: dict[str, object] = {
-        "scope": "household",
-        "current_person_id": None,
-        "current_month": _recon_summary(),
-        "upload_statuses": [],
-        "household_spending_month": Decimal("1150.00"),
-        "household_spending_ytd": Decimal("3400.00"),
-        "ytd_settlement": None,
-        "ytd_net_settlement": None,
-        "ytd_total_settled": Decimal("500.00"),
-        "outstanding_balance": SettlementResult(
+def _dashboard_result(**overrides: object) -> GetDashboardResult:
+    base = GetDashboardResult(
+        scope="household",
+        current_person_id=None,
+        current_month=_recon_summary(),
+        upload_statuses=[],
+        household_spending_month=Decimal("1150.00"),
+        household_spending_ytd=Decimal("3400.00"),
+        ytd_settlement=None,
+        ytd_net_settlement=None,
+        ytd_total_settled=Decimal("500.00"),
+        outstanding_balance=SettlementResult(
             amount=Decimal("147.50"),
             from_person_id=ALICE.id,
             to_person_id=BOB.id,
         ),
-        "outstanding_span": ((2026, 2), (2026, 3)),
-        "month_history": [
+        outstanding_span=((2026, 2), (2026, 3)),
+        month_history=[
             MonthHistoryEntry(
                 year=2026,
                 month=2,
@@ -1009,13 +1043,12 @@ def _dashboard_result(**overrides: object) -> object:
                 settled_at=None,
             )
         ],
-        "persons": PERSONS,
-        "unmapped_categories": ["Mystery"],
-        "is_finalized": False,
-        "finalized_at": None,
-    }
-    defaults.update(overrides)
-    return GetDashboardResult(**defaults)  # type: ignore[arg-type]
+        persons=PERSONS,
+        unmapped_categories=["Mystery"],
+        is_finalized=False,
+        finalized_at=None,
+    )
+    return evolve(base, **overrides)
 
 
 @pytest.mark.asyncio
@@ -1110,6 +1143,6 @@ async def test_get_adjustments_preview_happy_path() -> None:
     assert result["person"] == "Alice"
     assert result["total_count"] == 1
     row = result["adjustments"][0]
-    assert row["merchant"] == "<user_data>Whole Foods</user_data>"
-    assert row["account"] == "<user_data>Adjustments</user_data>"
+    assert row["merchant"] == "Whole Foods"
+    assert row["account"] == "Adjustments"
     assert row["amount"] == pytest.approx(-41.71)

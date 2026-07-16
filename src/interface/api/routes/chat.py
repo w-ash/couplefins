@@ -21,6 +21,7 @@ from src.application.chat.registry import (
 )
 from src.application.chat.system_prompt import build_system_prompt
 from src.application.chat.use_case import ChatCommand, ChatUseCase
+from src.application.chat.user_data import wrap_for_model
 from src.application.runner import execute_use_case
 from src.application.use_cases.list_category_groups import list_category_groups
 from src.application.use_cases.list_persons import list_persons
@@ -57,9 +58,11 @@ async def _handle_confirmation(
             action_id=str(action_id),
             tool=action.tool_name,
         )
+        # Model-facing serialization — wrap UserData values here, at the
+        # boundary (this context string never reaches the frontend as-is).
         return (
             f"[The user confirmed the proposed action. "
-            f"Result: {json.dumps(result_summary)}. "
+            f"Result: {json.dumps(wrap_for_model(result_summary))}. "
             f"Acknowledge the change briefly.]"
         )
     pending_action_store.cancel(action_id, current_user.id)

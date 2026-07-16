@@ -20,6 +20,7 @@ from src.application.chat.events import (
     ToolResultEvent,
     ToolStartEvent,
 )
+from src.application.chat.registry import REGISTRY
 from src.domain.exceptions import (
     ActionExpiredError,
     AnthropicApiError,
@@ -46,6 +47,11 @@ type QueueItem = (
 # bytes the connection looks dead to the browser and any proxy in between.
 # SSE comment lines (leading ":") are ignored by parsers.
 _KEEPALIVE_INTERVAL_SECONDS = 15.0
+
+
+# Tool kind rides on the tool_start frame so the frontend never has to
+# guess read-vs-write from tool names.
+_TOOL_KINDS: dict[str, str] = {spec.name: spec.kind for spec in REGISTRY}
 
 
 _ERROR_CODE_MAP: dict[type[Exception], str] = {
@@ -116,6 +122,7 @@ def stream_chat_response(
                         "type": "tool_start",
                         "name": item.name,
                         "id": item.tool_use_id,
+                        "kind": _TOOL_KINDS.get(item.name, "read"),
                     })
                 elif isinstance(item, ToolResultEvent):
                     yield _sse_line({
@@ -129,7 +136,9 @@ def stream_chat_response(
                     yield _sse_line({
                         "type": "code_start",
                         "id": item.tool_use_id,
-                        "command": str(item.input.get("code", "")),
+                        "command": str(
+                            item.input.get("code") or item.input.get("command") or ""
+                        ),
                     })
                 elif isinstance(item, ServerToolResultEvent):
                     yield _sse_line({

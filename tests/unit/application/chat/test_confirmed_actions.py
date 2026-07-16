@@ -262,9 +262,9 @@ async def test_exec_unlink_toctou_link_gone() -> None:
         await execute_confirmed_action(action, user)
 
 
-async def test_exec_map_categories_strips_user_data_labels() -> None:
-    """Details carry <user_data>-wrapped names for display; the executor
-    must unwrap them before they reach the use case."""
+async def test_exec_map_categories_uses_raw_details_values() -> None:
+    """Details carry RAW category names (UserData marker, no tags) — the
+    executor passes them through to the use case unchanged."""
     user = make_person(name="Alice")
     group = make_category_group()
     uow = make_mock_uow()
@@ -279,7 +279,7 @@ async def test_exec_map_categories_strips_user_data_labels() -> None:
         {
             "mappings": [
                 {
-                    "category": "<user_data>Pets</user_data>",
+                    "category": "Pets",
                     "group_name": group.name,
                     "group_id": str(group.id),
                 }

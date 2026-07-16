@@ -102,13 +102,13 @@ describe("generic DetailDisplay (v1.8.2 mutations)", () => {
           count: 2,
           splits: [
             {
-              merchant: "<user_data>Rent Co</user_data>",
+              merchant: "Rent Co",
               date: "2026-03-01",
               current_split: "50/50",
               new_split: "60/40",
             },
             {
-              merchant: "<user_data>Rent Co</user_data>",
+              merchant: "Rent Co",
               date: "2026-04-01",
               current_split: "50/50",
               new_split: "60/40",

@@ -92,6 +92,34 @@ describe("ChatMessage", () => {
       expect(screen.getByText("Starting response...")).toBeInTheDocument();
     });
 
+    it("strips echoed <user_data> tags from assistant prose", () => {
+      // The model sees the tags in tool results and can echo them verbatim.
+      renderWithProviders(
+        <ChatMessage
+          message={makeMessage({
+            content: "You spent $50 at <user_data>Whole Foods</user_data>.",
+          })}
+        />,
+      );
+      expect(
+        screen.getByText("You spent $50 at Whole Foods."),
+      ).toBeInTheDocument();
+    });
+
+    it("leaves user message content untouched", () => {
+      renderWithProviders(
+        <ChatMessage
+          message={makeMessage({
+            role: "user",
+            content: "what is <user_data> about?",
+          })}
+        />,
+      );
+      expect(
+        screen.getByText("what is <user_data> about?"),
+      ).toBeInTheDocument();
+    });
+
     it("renders error state", () => {
       renderWithProviders(
         <ChatMessage

@@ -18,7 +18,7 @@ function makeReadableStream(text: string): ReadableStream<Uint8Array> {
 function makeCallbacks() {
   const cb = {
     tokens: [] as string[],
-    toolStarts: [] as { name: string; id: string }[],
+    toolStarts: [] as { name: string; id: string; kind: string }[],
     toolResults: [] as {
       name: string;
       id: string;
@@ -37,8 +37,8 @@ function makeCallbacks() {
     onToken(text: string) {
       cb.tokens.push(text);
     },
-    onToolStart(name: string, id: string) {
-      cb.toolStarts.push({ name, id });
+    onToolStart(name: string, id: string, kind: string) {
+      cb.toolStarts.push({ name, id, kind });
     },
     onToolResult(name: string, id: string, summary: unknown, isError: boolean) {
       cb.toolResults.push({ name, id, summary, isError });
@@ -119,7 +119,20 @@ describe("sendChatMessage", () => {
 
   it("handles tool_start and tool_result events", async () => {
     const body = makeSSEBody([
-      { type: "tool_start", name: "get_settlement_balance", id: "tc-1" },
+      {
+        type: "tool_start",
+        name: "get_settlement_balance",
+        id: "tc-1",
+        kind: "read",
+      },
+      {
+        type: "tool_start",
+        name: "record_settlement",
+        id: "tc-2",
+        kind: "write",
+      },
+      // No kind field (older stream) — client defaults to "read".
+      { type: "tool_start", name: "get_tags", id: "tc-3" },
       {
         type: "tool_result",
         name: "get_settlement_balance",
@@ -143,7 +156,9 @@ describe("sendChatMessage", () => {
     await sendChatMessage([], cb, new AbortController().signal);
 
     expect(cb.toolStarts).toEqual([
-      { name: "get_settlement_balance", id: "tc-1" },
+      { name: "get_settlement_balance", id: "tc-1", kind: "read" },
+      { name: "record_settlement", id: "tc-2", kind: "write" },
+      { name: "get_tags", id: "tc-3", kind: "read" },
     ]);
     expect(cb.toolResults).toEqual([
       {

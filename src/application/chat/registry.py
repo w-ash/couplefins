@@ -16,12 +16,13 @@ reachable from a ToolSpec or explicitly accounted for as blacklisted
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
 from src.application.chat import confirmed_actions, tool_executor, tools
 from src.application.chat.pending_actions import PendingAction
 from src.application.chat.protocols import ToolContext
 from src.application.chat.subagent import run_subagent
+from src.application.chat.user_data import strip_user_data
 from src.config.settings import get_settings
 from src.domain.entities.person import Person
 from src.domain.exceptions import ToolExecutionError
@@ -440,6 +441,10 @@ async def execute_tool(
         raise ToolExecutionError(f"Unknown tool: {name}")
     if spec.handler is None:
         raise ToolExecutionError(f"Tool '{name}' executes server-side")
+    # Input sanitizer: the model may echo user_data-wrapped values back
+    # as tool inputs — strip the tags here (the single dispatch point) so
+    # they can never break lookups or persist into stored tool_input.
+    tool_input = cast(dict[str, object], strip_user_data(tool_input))
     try:
         return await spec.handler(tool_input, ctx)
     except ToolExecutionError:

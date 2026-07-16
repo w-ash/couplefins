@@ -16,12 +16,18 @@ via ToolSpec entries, never called by name from this module.
 
 import calendar
 from decimal import Decimal
+from itertools import starmap
 from typing import Literal, cast
 from uuid import UUID
 
 from src.application.chat.pending_actions import pending_action_store
 from src.application.chat.protocols import ToolContext
+from src.application.chat.user_data import UserData, wrap
 from src.application.runner import execute_use_case
+from src.application.use_cases._shared.command_validators import (
+    assert_month_annotation_pair,
+    assert_positive_decimal,
+)
 from src.application.use_cases._shared.finalization import load_period_status
 from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
@@ -94,11 +100,14 @@ from src.application.use_cases.search_transactions import (
     SearchTransactionsResult,
     SearchTransactionsUseCase,
 )
+from src.domain.entities.category_group import CategoryGroup
 from src.domain.entities.person import Person
+from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import ToolExecutionError
 from src.domain.ledger import MonthKey, SettlementLedger
 from src.domain.reconciliation import SettlementResult
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
+from src.domain.splits import check_payer_percentage
 
 
 def _person_name(person_id: UUID, persons: list[Person]) -> str:
@@ -108,7 +117,6 @@ def _person_name(person_id: UUID, persons: list[Person]) -> str:
     return "Unknown"
 
 
-_MAX_PAYER_PERCENTAGE = 100
 _MAX_BULK_TRANSACTIONS = 100
 _MAX_LIST_ROWS = 20
 _DEFAULT_UPLOAD_HISTORY = 12
@@ -120,16 +128,11 @@ def _fmt(amount: Decimal) -> float:
     return float(round(amount, 2))
 
 
-def _user_str(value: str) -> str:
-    """Label a user-originated string as untrusted data for the model.
-
-    Applies to free-text values imported from CSVs or typed by the couple —
-    merchant names, notes, tags, category names, upload filenames, settlement
-    notes. Category *group* names stay unwrapped: they are app-managed config
-    the system prompt already lists verbatim and tools match exactly.
-    The frontend strips the tags before rendering (stripUserData).
-    """
-    return f"<user_data>{value}</user_data>"
+# UserData marks free-text values imported from CSVs or typed by the couple —
+# merchant names, notes, tags, category names, upload filenames, settlement
+# notes. Category *group* names stay unmarked: they are app-managed config
+# the system prompt already lists verbatim and tools match exactly.
+# Wrapping/stripping happens at the serialization boundaries — see user_data.py.
 
 
 # --- Tool handlers ---
@@ -164,6 +167,10 @@ async def handle_settlement_balance(
 ) -> dict[str, object]:
     year = cast(int | None, tool_input.get("year"))
     month = cast(int | None, tool_input.get("month"))
+    if (year is None) != (month is None):
+        raise ToolExecutionError(
+            "year and month must be provided together, or both omitted"
+        )
     if year is None or month is None:
         return await _outstanding_balance_summary(ctx.persons)
     return await _month_settlement_summary(year, month, ctx.persons)
@@ -292,7 +299,7 @@ async def handle_search_transactions(
     group_id: UUID | None = None
     group_name = cast(str | None, tool_input.get("category_group"))
     if group_name:
-        group_id = await _resolve_category_group_id(group_name)
+        group_id = (await _require_group(group_name)).id
 
     scope = cast(
         Literal["all", "household", "personal"], tool_input.get("scope", "all")
@@ -316,9 +323,9 @@ async def handle_search_transactions(
         txns.append({
             "id": str(t.id),
             "date": t.date.isoformat(),
-            "merchant": _user_str(t.merchant),
+            "merchant": UserData(t.merchant),
             "amount": _fmt(t.amount),
-            "category": _user_str(t.category),
+            "category": UserData(t.category),
             "payer": _person_name(t.payer_person_id, ctx.persons),
             "split": split,
             "household": t.household,
@@ -339,13 +346,27 @@ async def _load_category_groups() -> ListCategoryGroupsResult:
     )
 
 
-async def _resolve_category_group_id(name: str) -> UUID | None:
-    result = await _load_category_groups()
+def _find_group_in(groups: ListCategoryGroupsResult, name: str) -> CategoryGroup | None:
     name_lower = name.lower()
-    for item in result.items:
-        if item.group.name.lower() == name_lower:
-            return item.group.id
-    return None
+    return next(
+        (item.group for item in groups.items if item.group.name.lower() == name_lower),
+        None,
+    )
+
+
+def _require_group_in(groups: ListCategoryGroupsResult, name: str) -> CategoryGroup:
+    """Resolve a category group name, with an actionable error."""
+    match = _find_group_in(groups, name)
+    if match is None:
+        valid = ", ".join(item.group.name for item in groups.items)
+        raise ToolExecutionError(
+            f"Unknown category group: {name}. Valid groups: {valid}"
+        )
+    return match
+
+
+async def _require_group(name: str) -> CategoryGroup:
+    return _require_group_in(await _load_category_groups(), name)
 
 
 async def handle_spending_by_group(
@@ -428,7 +449,7 @@ async def handle_get_tags(
     return {
         "total_count": len(result.tags),
         "showing": len(shown),
-        "tags": [_user_str(t) for t in shown],
+        "tags": [UserData(t) for t in shown],
     }
 
 
@@ -452,8 +473,8 @@ async def handle_get_transaction_history(
     edits: list[dict[str, object]] = [
         {
             "field": e.field_name,
-            "old_value": _user_str(e.old_value),
-            "new_value": _user_str(e.new_value),
+            "old_value": UserData(e.old_value),
+            "new_value": UserData(e.new_value),
             "edited_at": e.edited_at.isoformat(),
             "edited_by": (
                 _person_name(e.edited_by_person_id, ctx.persons)
@@ -528,17 +549,17 @@ async def handle_get_category_setup(
         "groups": [
             {
                 "group": item.group.name,
-                "categories": [_user_str(c.name) for c in item.categories],
+                "categories": [UserData(c.name) for c in item.categories],
             }
             for item in groups.items
         ],
         "include_personal_categories": [
-            _user_str(c.name)
+            UserData(c.name)
             for item in groups.items
             for c in item.categories
             if c.include_personal
         ],
-        "unmapped_categories": [_user_str(name) for name in unmapped.categories],
+        "unmapped_categories": [UserData(name) for name in unmapped.categories],
     }
 
 
@@ -563,7 +584,7 @@ async def handle_get_upload_history(
         "uploads": [
             {
                 "person": e.person_name,
-                "filename": _user_str(e.filename),
+                "filename": UserData(e.filename),
                 "uploaded_at": e.uploaded_at.isoformat(),
                 "covers": (
                     f"{e.date_range_start.isoformat()} to "
@@ -617,7 +638,7 @@ async def handle_get_reconciliation_report(
     }
     if result.unmapped_categories:
         summary["unmapped_categories"] = [
-            _user_str(name) for name in result.unmapped_categories
+            UserData(name) for name in result.unmapped_categories
         ]
     if response_format == "detailed":
         summary["group_breakdown"] = [
@@ -635,9 +656,9 @@ async def handle_get_reconciliation_report(
             {
                 "id": str(t.id),
                 "date": t.date.isoformat(),
-                "merchant": _user_str(t.merchant),
+                "merchant": UserData(t.merchant),
                 "amount": _fmt(t.amount),
-                "category": _user_str(t.category),
+                "category": UserData(t.category),
                 "payer": _person_name(t.payer_person_id, ctx.persons),
                 "split": f"{t.payer_percentage}/{100 - t.payer_percentage}",
             }
@@ -675,8 +696,8 @@ async def handle_get_settlement_activity(
             "from": _person_name(s.from_person_id, ctx.persons),
             "to": _person_name(s.to_person_id, ctx.persons),
             "settled_at": s.settled_at.date().isoformat(),
-            "method": _user_str(s.method) if s.method else None,
-            "notes": _user_str(s.notes) if s.notes else None,
+            "method": UserData(s.method) if s.method else None,
+            "notes": UserData(s.notes) if s.notes else None,
             "is_waived": s.is_waived,
             # Display-only annotation — coverage below is the math.
             "recorded_against": f"{s.year}-{s.month:02d}" if s.year else None,
@@ -701,7 +722,7 @@ async def handle_get_settlement_activity(
             {
                 "transaction_id": str(c.transaction.id),
                 "date": c.transaction.date.isoformat(),
-                "merchant": _user_str(c.transaction.merchant),
+                "merchant": UserData(c.transaction.merchant),
                 "amount": _fmt(c.transaction.amount),
                 "score": c.score,
                 "match_reasons": list(c.match_reasons),
@@ -718,7 +739,7 @@ async def handle_get_settlement_activity(
         "settlements": settlements,
         "candidate_transactions": candidates,
         "settlement_merchants": [
-            {"name": _user_str(m.name), "pattern": _user_str(m.merchant_pattern)}
+            {"name": UserData(m.name), "pattern": UserData(m.merchant_pattern)}
             for m in merchants.merchants
         ],
     }
@@ -797,10 +818,10 @@ async def handle_get_adjustments_preview(
         "adjustments": [
             {
                 "date": a.date.isoformat(),
-                "merchant": _user_str(a.merchant),
-                "category": _user_str(a.category),
+                "merchant": UserData(a.merchant),
+                "category": UserData(a.category),
                 "amount": _fmt(a.amount),
-                "account": _user_str(a.account),
+                "account": UserData(a.account),
             }
             for a in shown
         ],
@@ -814,19 +835,46 @@ def _month_label(year: int, month: int) -> str:
     return f"{calendar.month_name[month]} {year}"
 
 
+async def _assert_months_open(
+    uow: UnitOfWorkProtocol, months: set[tuple[int, int]]
+) -> None:
+    """Raise ToolExecutionError if any of the given months is finalized."""
+    if not months:
+        return
+    periods = await uow.reconciliation_periods.get_by_periods(months)
+    finalized = sorted((p.year, p.month) for p in periods if p.is_finalized)
+    if not finalized:
+        return
+    labels = ", ".join(starmap(_month_label, finalized))
+    plural = len(finalized) > 1
+    raise ToolExecutionError(
+        f"{labels} {'are' if plural else 'is'} finalized. The user needs to "
+        f"unfinalize {'them' if plural else 'it'} before making changes."
+    )
+
+
 async def _check_finalization(year: int, month: int) -> None:
     """Raise ToolExecutionError if the period is finalized."""
 
-    async def _query(uow: UnitOfWorkProtocol) -> tuple[bool, object]:
+    async def _query(uow: UnitOfWorkProtocol) -> None:
         async with uow:
-            return await load_period_status(uow, year, month)
+            await _assert_months_open(uow, {(year, month)})
 
-    is_finalized, _ = await execute_use_case(_query)
-    if is_finalized:
+    await execute_use_case(_query)
+
+
+async def _fetch_transactions(
+    uow: UnitOfWorkProtocol, ids: list[UUID]
+) -> dict[UUID, Transaction]:
+    """Batch-fetch transactions by ID, raising on any missing ID."""
+    transactions = await uow.transactions.get_by_ids(ids)
+    by_id = {tx.id: tx for tx in transactions}
+    missing = set(ids) - by_id.keys()
+    if missing:
         raise ToolExecutionError(
-            f"{_month_label(year, month)} is finalized. "
-            "The user needs to unfinalize it before making changes."
+            f"Transactions not found: {', '.join(sorted(map(str, missing)))}"
         )
+    return by_id
 
 
 async def _check_category_exists(category: str) -> None:
@@ -882,9 +930,7 @@ async def handle_update_budget(
 
     await _check_finalization(year, month)
 
-    group_id = await _resolve_category_group_id(group_name)
-    if group_id is None:
-        raise ToolExecutionError(f"Unknown category group: {group_name}")
+    group = await _require_group(group_name)
 
     person_id = ctx.current_user.id if scope == "personal" else None
     description = (
@@ -893,7 +939,7 @@ async def handle_update_budget(
     )
     details: dict[str, object] = {
         "group_name": group_name,
-        "group_id": str(group_id),
+        "group_id": str(group.id),
         "amount": amount,
         "year": year,
         "month": month,
@@ -903,6 +949,14 @@ async def handle_update_budget(
     return _propose_action(
         ctx.current_user, "update_budget", tool_input, description, details
     )
+
+
+def _validate_payer_percentage(pct: int) -> None:
+    """Wrap the domain range check in a ToolExecutionError."""
+    try:
+        check_payer_percentage(pct)
+    except ValueError as e:
+        raise ToolExecutionError(str(e)) from e
 
 
 def _parse_split_entries(
@@ -937,10 +991,7 @@ def _parse_split_entries(
                 f"Invalid transaction ID: {raw.get('transaction_id')}"
             ) from e
         payer_percentage = cast(int, raw["payer_percentage"])
-        if not 0 <= payer_percentage <= _MAX_PAYER_PERCENTAGE:
-            raise ToolExecutionError(
-                f"payer_percentage must be 0-100, got {payer_percentage}"
-            )
+        _validate_payer_percentage(payer_percentage)
         entries.append((transaction_id, payer_percentage))
     return entries
 
@@ -954,24 +1005,16 @@ async def handle_update_transaction_split(
     # Fetch all transactions + check finalization in a single UoW.
     async def _fetch(uow: UnitOfWorkProtocol) -> list[dict[str, object]]:
         async with uow:
+            by_id = await _fetch_transactions(uow, [tid for tid, _ in entries])
+            await _assert_months_open(
+                uow, {(tx.date.year, tx.date.month) for tx in by_id.values()}
+            )
             rows: list[dict[str, object]] = []
-            checked_months: set[tuple[int, int]] = set()
             for transaction_id, payer_percentage in entries:
-                tx = await uow.transactions.get_by_id(transaction_id)
-                if tx is None:
-                    raise ToolExecutionError(f"Transaction {transaction_id} not found")
-                month_key = (tx.date.year, tx.date.month)
-                if month_key not in checked_months:
-                    is_finalized, _ = await load_period_status(uow, *month_key)
-                    if is_finalized:
-                        raise ToolExecutionError(
-                            f"{_month_label(*month_key)} is finalized. The user "
-                            "needs to unfinalize it before making changes."
-                        )
-                    checked_months.add(month_key)
+                tx = by_id[transaction_id]
                 rows.append({
                     "transaction_id": str(tx.id),
-                    "merchant": _user_str(tx.merchant),
+                    "merchant": UserData(tx.merchant),
                     "date": tx.date.isoformat(),
                     "amount": _fmt(tx.amount),
                     "payer": _person_name(tx.payer_person_id, ctx.persons),
@@ -987,8 +1030,10 @@ async def handle_update_transaction_split(
 
     if len(rows) == 1:
         row = rows[0]
+        # Descriptions are model-facing prose — f-string interpolation would
+        # lose the UserData marker, so wrap user-originated values inline.
         description = (
-            f"Change {row['merchant']} ({row['date']}) "
+            f"Change {wrap(cast(str, row['merchant']))} ({row['date']}) "
             f"split from {row['current_split']} to {row['new_split']}"
         )
     else:
@@ -1021,20 +1066,13 @@ async def handle_bulk_update_transactions(
     except ValueError as e:
         raise ToolExecutionError(f"Invalid transaction ID: {e}") from e
 
-    # Validate first transaction exists + check finalization in one UoW
+    # Validate every transaction exists + check finalization in one UoW
     async def _validate(uow: UnitOfWorkProtocol) -> None:
         async with uow:
-            first = await uow.transactions.get_by_id(transaction_ids[0])
-            if first is None:
-                raise ToolExecutionError(f"Transaction {transaction_ids[0]} not found")
-            is_finalized, _ = await load_period_status(
-                uow, first.date.year, first.date.month
+            by_id = await _fetch_transactions(uow, transaction_ids)
+            await _assert_months_open(
+                uow, {(tx.date.year, tx.date.month) for tx in by_id.values()}
             )
-            if is_finalized:
-                raise ToolExecutionError(
-                    f"{_month_label(first.date.year, first.date.month)} is finalized. "
-                    "The user needs to unfinalize it before making changes."
-                )
 
     await execute_use_case(_validate)
 
@@ -1050,16 +1088,17 @@ async def handle_bulk_update_transactions(
         parts.append(f"household={'true' if changes['household'] else 'false'}")
     if "payer_percentage" in changes:
         pct = cast(int, changes["payer_percentage"])
+        _validate_payer_percentage(pct)
         parts.append(f"split to {pct}/{100 - pct}")
     if "is_excluded" in changes:
         parts.append("exclude" if changes["is_excluded"] else "include")
     if "category" in changes:
-        parts.append(f"category to {changes['category']}")
+        parts.append(f"category to {wrap(cast(str, changes['category']))}")
     if "tags" in changes:
         tag_info = cast(dict[str, object], changes["tags"])
         tag_action = cast(str, tag_info["action"])
         values = cast(list[str], tag_info["values"])
-        parts.append(f"{tag_action} tags: {', '.join(values)}")
+        parts.append(f"{tag_action} tags: {', '.join(wrap(v) for v in values)}")
 
     change_desc = ", ".join(parts) if parts else "no changes"
     count = len(transaction_ids)
@@ -1084,25 +1123,6 @@ def _resolve_person(name: str, persons: list[Person]) -> Person:
     return match
 
 
-async def _require_group(name: str) -> tuple[UUID, list[str]]:
-    """Resolve a category group name → id, with an actionable error."""
-    groups = await _load_category_groups()
-    valid_names = [item.group.name for item in groups.items]
-    match = next(
-        (
-            item.group
-            for item in groups.items
-            if item.group.name.lower() == name.lower()
-        ),
-        None,
-    )
-    if match is None:
-        raise ToolExecutionError(
-            f"Unknown category group: {name}. Valid groups: {', '.join(valid_names)}"
-        )
-    return match.id, valid_names
-
-
 async def handle_delete_budget(
     tool_input: dict[str, object],
     ctx: ToolContext,
@@ -1113,7 +1133,7 @@ async def handle_delete_budget(
     scope = cast(str, tool_input.get("scope", "household"))
 
     await _check_finalization(year, month)
-    group_id, _ = await _require_group(group_name)
+    group_id = (await _require_group(group_name)).id
 
     budgets = await execute_use_case(lambda uow: list_budgets(uow, ctx.current_user.id))
     target_person = ctx.current_user.id if scope == "personal" else None
@@ -1213,30 +1233,30 @@ async def handle_manage_category_group(
     if not name.strip():
         raise ToolExecutionError("Group name must not be empty")
 
+    groups = await _load_category_groups()
     details: dict[str, object] = {"action": action, "name": name}
     if action == "create":
-        if await _resolve_category_group_id(name) is not None:
+        if _find_group_in(groups, name) is not None:
             raise ToolExecutionError(f"Category group '{name}' already exists")
         description = f"Create category group '{name}'"
     elif action == "rename":
         new_name = cast(str | None, tool_input.get("new_name"))
         if not new_name or not new_name.strip():
             raise ToolExecutionError("new_name is required for rename")
-        group_id, _ = await _require_group(name)
-        if await _resolve_category_group_id(new_name) is not None:
+        group_id = _require_group_in(groups, name).id
+        if _find_group_in(groups, new_name) is not None:
             raise ToolExecutionError(f"Category group '{new_name}' already exists")
         description = f"Rename category group '{name}' to '{new_name}'"
         details.update({"group_id": str(group_id), "new_name": new_name})
     elif action == "delete":
-        group_id, _ = await _require_group(name)
-        groups = await _load_category_groups()
+        group_id = _require_group_in(groups, name).id
         category_count = next(
             len(item.categories) for item in groups.items if item.group.id == group_id
         )
         move_to_name = cast(str | None, tool_input.get("move_categories_to"))
         move_to_id: UUID | None = None
         if move_to_name:
-            move_to_id, _ = await _require_group(move_to_name)
+            move_to_id = _require_group_in(groups, move_to_name).id
             if move_to_id == group_id:
                 raise ToolExecutionError(
                     "Cannot move categories to the group being deleted"
@@ -1275,21 +1295,13 @@ async def handle_map_categories(
         raise ToolExecutionError(f"Maximum {_MAX_BULK_TRANSACTIONS} mappings per call")
 
     groups = await _load_category_groups()
-    by_name_lower = {item.group.name.lower(): item.group for item in groups.items}
-    valid_names = [item.group.name for item in groups.items]
 
     resolved: list[dict[str, object]] = []
     for entry in raw_mappings:
         category = cast(str, entry["category"])
-        group_name = cast(str, entry["group_name"])
-        group = by_name_lower.get(group_name.lower())
-        if group is None:
-            raise ToolExecutionError(
-                f"Unknown category group: {group_name}. "
-                f"Valid groups: {', '.join(valid_names)}"
-            )
+        group = _require_group_in(groups, cast(str, entry["group_name"]))
         resolved.append({
-            "category": _user_str(category),
+            "category": UserData(category),
             "group_name": group.name,
             "group_id": str(group.id),
         })
@@ -1327,11 +1339,11 @@ async def handle_set_category_personal(
 
     verb = "count" if include_personal else "stop counting"
     description = (
-        f"{verb.capitalize()} personal spending in '{category}' "
+        f"{verb.capitalize()} personal spending in '{wrap(category)}' "
         "toward its group's budget"
     )
     details: dict[str, object] = {
-        "category": _user_str(category),
+        "category": UserData(category),
         "current": current,
         "new": include_personal,
     }
@@ -1403,13 +1415,13 @@ async def handle_record_settlement(
         raise ToolExecutionError("from_person and to_person must differ")
 
     amount = Decimal(str(tool_input["amount"]))
-    if amount <= 0:
-        raise ToolExecutionError(f"amount must be positive, got {amount}")
-
     year = cast(int | None, tool_input.get("year"))
     month = cast(int | None, tool_input.get("month"))
-    if (year is None) != (month is None):
-        raise ToolExecutionError("year and month must be set together or not at all")
+    try:
+        assert_positive_decimal(amount)
+        assert_month_annotation_pair(year, month)
+    except ValueError as e:
+        raise ToolExecutionError(str(e)) from e
 
     raw_linked = cast(list[str], tool_input.get("linked_transaction_ids") or [])
     try:
@@ -1423,12 +1435,7 @@ async def handle_record_settlement(
         # and month locks, but a typo'd ID should fail before the card.
         async def _verify(uow: UnitOfWorkProtocol) -> None:
             async with uow:
-                txs = await uow.transactions.get_by_ids(linked_uuids)
-                missing = set(linked_uuids) - {tx.id for tx in txs}
-                if missing:
-                    raise ToolExecutionError(
-                        f"Transactions not found: {', '.join(map(str, missing))}"
-                    )
+                await _fetch_transactions(uow, linked_uuids)
 
         await execute_use_case(_verify)
 
@@ -1458,7 +1465,7 @@ async def handle_record_settlement(
         "from_person_id": str(from_person.id),
         "to_person_id": str(to_person.id),
         "method": method or None,
-        "notes": _user_str(notes) if notes else None,
+        "notes": UserData(notes) if notes else None,
         "recorded_against": f"{year}-{month:02d}" if year and month else None,
         "year": year,
         "month": month,
@@ -1499,7 +1506,7 @@ async def handle_waive_settlement(
         "from_person_id": str(outstanding.from_person_id),
         "to_person_id": str(outstanding.to_person_id),
         "covers": f"{span['start']} to {span['end']}" if span else None,
-        "notes": _user_str(notes) if notes else None,
+        "notes": UserData(notes) if notes else None,
     }
     return _propose_action(
         ctx.current_user, "waive_settlement", tool_input, description, details
@@ -1574,22 +1581,18 @@ async def handle_link_settlement_transaction(
             if tx is None:
                 raise ToolExecutionError(f"Transaction {transaction_id} not found")
             if tx.is_settlement:
+                # Errors reach the model via str(e) — wrap DB-sourced values.
                 raise ToolExecutionError(
-                    f"{tx.merchant} ({tx.date.isoformat()}) is already marked "
-                    "as a settlement transfer"
+                    f"{wrap(tx.merchant)} ({tx.date.isoformat()}) is already "
+                    "marked as a settlement transfer"
                 )
-            is_finalized, _ = await load_period_status(uow, tx.date.year, tx.date.month)
-            if is_finalized:
-                raise ToolExecutionError(
-                    f"{_month_label(tx.date.year, tx.date.month)} is finalized. "
-                    "The user needs to unfinalize it before making changes."
-                )
+            await _assert_months_open(uow, {(tx.date.year, tx.date.month)})
             if settlement_id is not None:
                 settlement = await uow.settlements.get_by_id(settlement_id)
                 if settlement is None:
                     raise ToolExecutionError(f"Settlement {settlement_id} not found")
             return {
-                "merchant": _user_str(tx.merchant),
+                "merchant": UserData(tx.merchant),
                 "date": tx.date.isoformat(),
                 "amount": _fmt(tx.amount),
                 "payer": _person_name(tx.payer_person_id, ctx.persons),
@@ -1599,7 +1602,7 @@ async def handle_link_settlement_transaction(
 
     link_note = " and link it to the recorded settlement" if settlement_id else ""
     description = (
-        f"Mark {info['merchant']} ({info['date']}, "
+        f"Mark {wrap(cast(str, info['merchant']))} ({info['date']}, "
         f"${abs(cast(float, info['amount'])):,.2f}) as a settlement "
         f"transfer{link_note}"
     )
@@ -1640,17 +1643,12 @@ async def handle_unlink_settlement_transaction(
             )
             if not any(link.settlement_id == settlement_id for link in links):
                 raise ToolExecutionError(
-                    f"{tx.merchant} ({tx.date.isoformat()}) is not linked to "
-                    "that settlement — get_settlement_activity lists the links"
+                    f"{wrap(tx.merchant)} ({tx.date.isoformat()}) is not linked "
+                    "to that settlement — get_settlement_activity lists the links"
                 )
-            is_finalized, _ = await load_period_status(uow, tx.date.year, tx.date.month)
-            if is_finalized:
-                raise ToolExecutionError(
-                    f"{_month_label(tx.date.year, tx.date.month)} is finalized. "
-                    "The user needs to unfinalize it before making changes."
-                )
+            await _assert_months_open(uow, {(tx.date.year, tx.date.month)})
             return {
-                "merchant": _user_str(tx.merchant),
+                "merchant": UserData(tx.merchant),
                 "date": tx.date.isoformat(),
                 "amount": _fmt(tx.amount),
             }
@@ -1658,8 +1656,8 @@ async def handle_unlink_settlement_transaction(
     info = await execute_use_case(_fetch)
 
     description = (
-        f"Unlink {info['merchant']} ({info['date']}) from the settlement — "
-        "it re-enters settlement math"
+        f"Unlink {wrap(cast(str, info['merchant']))} ({info['date']}) from "
+        "the settlement — it re-enters settlement math"
     )
     details: dict[str, object] = {
         "settlement_id": str(settlement_id),
@@ -1693,34 +1691,32 @@ async def handle_manage_settlement_merchant(
         (m for m in merchants.merchants if m.name.lower() == name.lower()), None
     )
 
-    details: dict[str, object] = {"action": action, "name": _user_str(name)}
+    details: dict[str, object] = {"action": action, "name": UserData(name)}
     if action == "add":
         pattern = cast(str | None, tool_input.get("pattern"))
         if not pattern or len(pattern) < _MIN_MERCHANT_PATTERN:
             raise ToolExecutionError("pattern is required for add (min 2 characters)")
         if existing is not None:
             raise ToolExecutionError(
-                f"Settlement merchant '{existing.name}' already exists"
+                f"Settlement merchant '{wrap(existing.name)}' already exists"
             )
         description = (
-            f"Add settlement merchant '{name}' matching merchants "
-            f"containing '{pattern}'"
+            f"Add settlement merchant '{wrap(name)}' matching merchants "
+            f"containing '{wrap(pattern)}'"
         )
-        details["pattern"] = _user_str(pattern)
-        details["raw_name"] = name
-        details["raw_pattern"] = pattern
+        details["pattern"] = UserData(pattern)
     elif action == "remove":
         if existing is None:
-            valid = ", ".join(m.name for m in merchants.merchants) or "(none)"
+            valid = ", ".join(wrap(m.name) for m in merchants.merchants) or "(none)"
             raise ToolExecutionError(
                 f"Unknown settlement merchant: {name}. Configured: {valid}"
             )
         description = (
-            f"Remove settlement merchant '{existing.name}' "
-            f"(pattern '{existing.merchant_pattern}')"
+            f"Remove settlement merchant '{wrap(existing.name)}' "
+            f"(pattern '{wrap(existing.merchant_pattern)}')"
         )
         details["merchant_id"] = str(existing.id)
-        details["pattern"] = _user_str(existing.merchant_pattern)
+        details["pattern"] = UserData(existing.merchant_pattern)
     else:  # pragma: no cover — enum-constrained by the schema
         raise ToolExecutionError(f"Unknown action: {action}")
 

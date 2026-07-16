@@ -1,5 +1,5 @@
 import { Check, Copy, Loader2 } from "lucide-react";
-import { useCallback } from "react";
+import { memo, useCallback } from "react";
 import { Streamdown } from "streamdown";
 import "streamdown/styles.css";
 import { useCopyFeedback } from "@/hooks/useCopyFeedback";
@@ -8,6 +8,7 @@ import type {
   ConfirmationState,
 } from "@/lib/chat";
 import { cn } from "@/lib/cn";
+import { stripUserData } from "@/lib/format";
 import { CodeExecutionCard } from "./CodeExecutionCard";
 import { ToolCallIndicator } from "./ToolCallIndicator";
 import { ToolResultCard } from "./ToolResultCard";
@@ -153,7 +154,9 @@ function CopyButton({ content }: { content: string }) {
   );
 }
 
-export function ChatMessage({
+// Memoized: the store's updateMessage preserves identity of untouched
+// messages, so streaming one message no longer re-renders the whole list.
+export const ChatMessage = memo(function ChatMessage({
   message,
   confirmationStates,
   onConfirm,
@@ -165,6 +168,9 @@ export function ChatMessage({
   onCancel?: (actionId: string) => void;
 }) {
   const isUser = message.role === "user";
+  // The model sees user_data tags in its tool results and may echo them
+  // into prose — strip them before rendering (and copying) assistant text.
+  const content = isUser ? message.content : stripUserData(message.content);
   const showCopy =
     !isUser && !message.isStreaming && !message.error && !!message.content;
 
@@ -188,16 +194,16 @@ export function ChatMessage({
             <Loader2 className="size-4 animate-spin text-muted-foreground" />
           </output>
         )}
-        {message.content &&
+        {content &&
           (isUser ? (
-            <p className="whitespace-pre-wrap">{message.content}</p>
+            <p className="whitespace-pre-wrap">{content}</p>
           ) : (
             <Streamdown
               isAnimating={message.isStreaming}
               animated={false}
               components={markdownComponents}
             >
-              {message.content}
+              {content}
             </Streamdown>
           ))}
         {message.error && (
@@ -237,7 +243,7 @@ export function ChatMessage({
           })}
         </div>
       )}
-      {showCopy && <CopyButton content={message.content} />}
+      {showCopy && <CopyButton content={content} />}
     </div>
   );
-}
+});

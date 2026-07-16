@@ -36,17 +36,6 @@ const TOOL_LABELS: Record<string, string> = {
   delegate_analysis: "deep analysis",
 };
 
-// Agentic tools break the get_*/search_* naming convention but read, never
-// propose — the backend shape test exempts them for the same reason.
-const READ_TOOL_OVERRIDES = new Set(["delegate_analysis"]);
-
-// Derived, not hand-maintained: the backend names every read tool get_* or
-// search_* (registry convention) — everything else proposes a mutation.
-export function isMutationTool(name: string): boolean {
-  if (READ_TOOL_OVERRIDES.has(name)) return false;
-  return !name.startsWith("get_") && !name.startsWith("search_");
-}
-
 export function ToolCallIndicator({ toolCall }: { toolCall: ToolCall }) {
   const label = TOOL_LABELS[toolCall.name] ?? toolCall.name;
   const isDone = toolCall.result !== undefined;
@@ -60,7 +49,7 @@ export function ToolCallIndicator({ toolCall }: { toolCall: ToolCall }) {
       )}
       {isDone
         ? `Checked ${label}`
-        : isMutationTool(toolCall.name)
+        : toolCall.kind === "write"
           ? `Proposing ${label}…`
           : `Looking up ${label}…`}
     </span>

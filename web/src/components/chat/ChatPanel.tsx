@@ -29,8 +29,8 @@ function buildApiMessages() {
 function buildCallbacks(assistantId: string): ChatSSECallbacks {
   return {
     onToken: (t) => useChatStore.getState().appendToken(assistantId, t),
-    onToolStart: (name, id) =>
-      useChatStore.getState().addToolCall(assistantId, id, name),
+    onToolStart: (name, id, kind) =>
+      useChatStore.getState().addToolCall(assistantId, id, name, kind),
     onToolResult: (_name, toolUseId, result, isError) =>
       useChatStore
         .getState()

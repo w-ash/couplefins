@@ -1,9 +1,13 @@
 import { create } from "zustand";
 import { type EffortChoice, getStoredEffort, storeEffort } from "@/lib/effort";
 
+export type ToolKind = "read" | "write" | "agentic";
+
 export interface ToolCall {
   id: string;
   name: string;
+  /** Sent by the backend on tool_start; absent on frames from older streams. */
+  kind?: ToolKind;
   result?: unknown;
   isError?: boolean;
 }
@@ -44,7 +48,12 @@ interface ChatState {
   addUserMessage: (text: string) => string;
   startAssistantMessage: () => string;
   appendToken: (id: string, text: string) => void;
-  addToolCall: (messageId: string, toolId: string, name: string) => void;
+  addToolCall: (
+    messageId: string,
+    toolId: string,
+    name: string,
+    kind?: ToolKind,
+  ) => void;
   setToolResult: (
     messageId: string,
     toolId: string,
@@ -122,11 +131,11 @@ export const useChatStore = create<ChatState>()((set) => ({
       })),
     })),
 
-  addToolCall: (messageId, toolId, name) =>
+  addToolCall: (messageId, toolId, name, kind = "read") =>
     set((s) => ({
       messages: updateMessage(s.messages, messageId, (m) => ({
         ...m,
-        toolCalls: [...(m.toolCalls ?? []), { id: toolId, name }],
+        toolCalls: [...(m.toolCalls ?? []), { id: toolId, name, kind }],
       })),
     })),
 

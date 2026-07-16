@@ -90,8 +90,9 @@ export function plural(word: string, count: number): string {
 }
 
 // The chat backend wraps user-originated strings (merchants, tags, notes) in
-// <user_data> tags so the model treats them as data, not instructions. Strip
-// the markers before rendering — they are a model-facing convention only.
+// <user_data> tags for the model only — tool-result summaries arrive here
+// pre-stripped. The model can still echo the tags into its prose, so strip
+// them before rendering assistant message text.
 export function stripUserData(value: string): string {
   return value.replaceAll(/<\/?user_data>/g, "");
 }

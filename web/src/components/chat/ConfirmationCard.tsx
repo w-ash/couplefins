@@ -3,7 +3,7 @@ import { Button } from "@/components/Button";
 import { GenericToolResultCard } from "@/components/chat/ToolResultCard";
 import type { ConfirmationState } from "@/lib/chat";
 import { cn } from "@/lib/cn";
-import { formatCurrency, SHORT_MONTHS, stripUserData } from "@/lib/format";
+import { formatCurrency, SHORT_MONTHS } from "@/lib/format";
 
 interface ConfirmationCardProps {
   actionId: string;
@@ -46,7 +46,7 @@ function SplitDetails({ details }: { details: Record<string, unknown> }) {
     <div className="space-y-0.5 text-xs text-muted-foreground">
       <p>
         <span className="font-medium text-foreground">
-          {stripUserData(details.merchant as string)}
+          {details.merchant as string}
         </span>{" "}
         ({details.date as string}) &middot;{" "}
         <span className="tabular-nums">
@@ -160,9 +160,7 @@ export function ConfirmationCard({
         isResolved && "opacity-75",
       )}
     >
-      <p className="mb-2 text-xs font-medium text-foreground">
-        {stripUserData(description)}
-      </p>
+      <p className="mb-2 text-xs font-medium text-foreground">{description}</p>
 
       <DetailDisplay toolName={toolName} details={details} />
 

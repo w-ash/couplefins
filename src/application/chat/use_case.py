@@ -3,6 +3,7 @@
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 import json
+from typing import cast
 
 from structlog.stdlib import get_logger
 
@@ -19,6 +20,7 @@ from src.application.chat.protocols import (
     ToolContext,
     ToolExecutorFn,
 )
+from src.application.chat.user_data import strip_user_data, wrap_for_model
 from src.config.settings import EffortLevel
 from src.domain.entities.person import Person
 from src.domain.exceptions import MaxRoundsExceededError, ResponseTruncatedError
@@ -141,16 +143,25 @@ class ChatUseCase:
             for tu in response.content:
                 try:
                     summary = await self._execute_tool(tu.name, tu.input, ctx)
+                    # The model boundary wraps UserData values in user_data
+                    # tags; the event boundary strips any tag literals so the
+                    # frontend always renders raw values.
                     yield ToolResultEvent(
-                        name=tu.name, tool_use_id=tu.id, summary=summary
+                        name=tu.name,
+                        tool_use_id=tu.id,
+                        summary=cast(dict[str, object], strip_user_data(summary)),
                     )
                     tool_results.append({
                         "type": "tool_result",
                         "tool_use_id": tu.id,
-                        "content": json.dumps(summary),
+                        "content": json.dumps(wrap_for_model(summary)),
                     })
                 except Exception as e:
-                    error_summary: dict[str, object] = {"error": str(e)}
+                    # Error text may embed wrap()-tagged values — model
+                    # content keeps them, the event summary must not.
+                    error_summary = cast(
+                        dict[str, object], strip_user_data({"error": str(e)})
+                    )
                     yield ToolResultEvent(
                         name=tu.name,
                         tool_use_id=tu.id,
