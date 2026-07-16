@@ -89,3 +89,7 @@ Index of shipped versions. When all stories in a version file are done, move the
 | v1.8.2 | 2026-07-10 | Chat write parity — 12 new mutation tools (all two-phase confirmed), batch splits, parity contract complete |
 | v1.8.3 | 2026-07-10 | Agentic chat — code execution sandbox + programmatic tool calling, delegate_analysis subagent, tool search, context management, per-request effort |
 | v1.8.4 | 2026-07-15 | Chat hardening — UserData boundary module (wrap/strip/sanitize), tool kind over SSE, multi-month finalization guard, validation + DRY consolidation |
+| v1.9.0 | 2026-07-16 | Page-contextual tool routing — page signal promotes deferred tools behind a cache-invariant prefix/tail split |
+| v1.9.1 | 2026-07-16 | Subagent context discipline — curated hot set + deferred rest behind tool search, summary marked UserData |
+| v1.9.2 | 2026-07-16 | Three-block system prompt — cached primer, volatile context block, current-view page grounding |
+| v1.9.3 | 2026-07-16 | MCP server — registry read/write tools over stdio with in-band two-phase confirmation, args-drift rejection |

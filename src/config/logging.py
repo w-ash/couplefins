@@ -73,3 +73,34 @@ def setup_logging() -> None:
 
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+
+
+def setup_stderr_logging() -> None:
+    """Logging for stdio subprocesses (the MCP server).
+
+    stdout is the JSON-RPC channel there — a single stray log line corrupts
+    the protocol stream. Same structlog wiring as ``setup_logging`` but the
+    console handler targets stderr and there is no file handler (the server
+    is spawned from an arbitrary client cwd; don't scatter logs/ dirs).
+    """
+    settings = get_settings().logging
+
+    structlog.configure(
+        processors=[
+            *_native_processors,
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
+        wrapper_class=structlog.stdlib.BoundLogger,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
+
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setFormatter(_make_formatter(structlog.processors.JSONRenderer()))
+
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.addHandler(stderr_handler)
+    root.setLevel(settings.level)
+
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)

@@ -1,6 +1,6 @@
 [project]
 name = "couplefins"
-version = "1.9.2"
+version = "1.9.3"
 description = "Household finance tool for couples"
 requires-python = ">=3.14,<4.0"
 dependencies = [
@@ -19,6 +19,8 @@ dependencies = [
     "argon2-cffi>=24.0",
     "PyJWT>=2.9",
     "anthropic>=0.97,<1",
+    "mcp==2.0.0b1",
+    "mcp-types==2.0.0b1",
 ]
 
 [dependency-groups]
@@ -85,6 +87,17 @@ fixable = ["ALL"]
 "src/application/use_cases/**/*.py" = [
     "PLR6301",  # Stateless execute() is intentional — use case architecture pattern
 ]
+"src/interface/mcp/server.py" = [
+    "RUF029",   # MCP SDK's request-handler protocol requires async handlers
+                # even when a handler (tools/list) does no I/O
+    "ARG002",   # _UnavailableLLM.stream must match LLMClientProtocol's
+    "PLR6301",  # signature exactly — protocol conformance, not real logic
+]
+"src/interface/mcp/__main__.py" = [
+    "PLC0415",  # Deliberately deferred imports: stderr logging must be
+                # configured before the server (and its logger tree) loads —
+                # stdout is the JSON-RPC channel
+]
 "src/application/chat/user_data.py" = [
     "FURB189",  # UserData must BE a str: json.dumps serializes str subclasses
                 # as plain strings and str-typed interfaces accept the marker
@@ -109,6 +122,8 @@ fixable = ["ALL"]
     "PLC2701",  # Private imports (_shared helpers)
     "PT011",    # Broad pytest.raises
     "ERA001",   # Commented-out code (documentation)
+    "RUF029",   # Async test stubs replace awaited callables — they must be
+                # async even when the fake body does no async work
 ]
 
 [tool.ruff.lint.pylint]
