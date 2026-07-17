@@ -33,12 +33,10 @@ from src.domain.reconciliation import (
     ReconciliationSummary,
     SettlementResult,
 )
-from tests.fixtures.factories import make_person, make_transaction
+from tests.fixtures.factories import ALICE, BOB, make_transaction
 from tests.fixtures.fake_llm_client import make_tool_context
 from tests.fixtures.mocks import make_mock_uow
 
-ALICE = make_person(name="Alice", id=uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
-BOB = make_person(name="Bob", id=uuid.UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"))
 PERSONS = [ALICE, BOB]
 CTX = make_tool_context(ALICE, PERSONS)
 

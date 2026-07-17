@@ -24,6 +24,7 @@ from src.application.chat.registry import (
     REGISTRY,
     ToolSpec,
     _validate_page_hints,
+    _validate_subagent_hot,
     build_tools,
 )
 
@@ -234,7 +235,7 @@ class TestRegistryShape:
         """The import-time validator already ran; assert the invariants it
         guards, and that it rejects the drift modes rather than passing
         vacuously."""
-        _validate_page_hints()  # current map is well-formed
+        _validate_page_hints(_PAGE_TOOL_HINTS)  # current map is well-formed
         assert _MAX_PROMOTED_PER_PAGE >= 1
         bad_maps: list[dict[str, tuple[str, ...]]] = [
             {"not_a_page": ("get_tags",)},  # unknown page key
@@ -272,6 +273,10 @@ class TestRegistryShape:
             spec = by_name.get(name)
             assert spec is not None, f"unknown subagent hot tool: {name}"
             assert spec.kind == "read", f"{name} is {spec.kind}, not a read"
+        # And the import-time validator rejects the drift modes.
+        for bad in (frozenset({"no_such_tool"}), frozenset({"update_budget"})):
+            with pytest.raises(ValueError):
+                _validate_subagent_hot(bad)
 
     def test_no_strict_schemas(self) -> None:
         """strict: true was tried and abandoned — the API caps strict tools

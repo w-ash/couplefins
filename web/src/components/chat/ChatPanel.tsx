@@ -9,6 +9,7 @@ import { SegmentedControl } from "@/components/SegmentedControl";
 import { useKeyboardShortcut } from "@/hooks/useKeyboardShortcut";
 import { useChatStore } from "@/lib/chat";
 import { EFFORT_API_VALUES, EFFORT_OPTIONS } from "@/lib/effort";
+import { PRIMARY_ROUTES, SECONDARY_ROUTES } from "@/lib/navigation";
 import { ChatInput } from "./ChatInput";
 import { ChatMessageList } from "./ChatMessageList";
 import { SuggestedQuestions } from "./SuggestedQuestions";
@@ -20,23 +21,23 @@ const LIMIT_FULL_MESSAGE =
 
 const closePanel = () => useChatStore.getState().setPanelOpen(false);
 
-// The coarse UI section the user is on, keyed by first path segment (index
-// → dashboard). Only sections the server routes tools for are emitted;
-// anything else (/ask, /account) sends no page and degrades to the static
-// core + tool search. Keep these keys in sync with _PAGE_TOOL_HINTS in
-// src/application/chat/registry.py.
-const SECTION_BY_SEGMENT: Record<string, string> = {
-  "": "dashboard",
-  transactions: "transactions",
-  settle: "settle",
-  budget: "budget",
-  insights: "insights",
-  upload: "upload",
-  settings: "settings",
-};
+// The coarse UI section the user is on, keyed by first path segment and
+// derived from the nav registry (index route → dashboard). Only nav
+// sections are emitted; anything else (/ask, /account) sends no page and
+// degrades to the static core + tool search. Section names must match
+// _PAGE_TOOL_HINTS in src/application/chat/registry.py — the server
+// ignores any it doesn't route tools for.
+const SECTION_BY_SEGMENT: Record<string, string> = Object.fromEntries(
+  [...PRIMARY_ROUTES, ...SECONDARY_ROUTES].map((route) => {
+    const segment = route.to.split("/").filter(Boolean)[0] ?? "";
+    return [segment, segment || "dashboard"] as const;
+  }),
+);
 
 function pageSection(pathname: string): string | undefined {
-  const segment = pathname.split("/").filter(Boolean)[0] ?? "";
+  // Lowercased: React Router matches routes case-insensitively, so /Budget
+  // renders the page and must carry the same section signal as /budget.
+  const segment = pathname.split("/").filter(Boolean)[0]?.toLowerCase() ?? "";
   return SECTION_BY_SEGMENT[segment];
 }
 

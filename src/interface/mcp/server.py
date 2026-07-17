@@ -23,16 +23,18 @@ function. Iterating the registry into ``list_tools``/``call_tool`` is the
 faithful fit.
 
 Identity: the acting person comes from the ``COUPLEFINS_MCP_PERSON`` env
-var (a person name), resolved against the DB per call — couplefins'
-``ToolContext`` carries a full ``Person`` plus the persons list, not a bare
-id. Resolution failures surface as actionable tool errors.
+var (a person name), resolved against the DB through a short-TTL cache —
+couplefins' ``ToolContext`` carries a full ``Person`` plus the persons
+list, not a bare id. Resolution failures surface as actionable tool errors.
 """
 
 from collections.abc import Mapping
 from contextlib import AbstractAsyncContextManager
 import json
-from typing import cast
+import time
+from typing import Final, cast
 
+import anyio
 from mcp.server.context import ServerRequestContext
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
@@ -53,13 +55,19 @@ from src.application.chat.protocols import (
     ToolContext,
 )
 from src.application.chat.registry import REGISTRY, ToolSpec, execute_tool
+from src.application.chat.tool_executor import resolve_person
 from src.application.chat.user_data import strip_user_data
 from src.application.runner import execute_use_case
 from src.application.use_cases.list_persons import list_persons
 from src.domain.entities.person import Person
-from src.domain.exceptions import ToolExecutionError
-from src.interface.mcp.confirmation import handle_write_call
+from src.domain.exceptions import DomainError, ToolExecutionError
+from src.interface.mcp.confirmation import (
+    CONFIRM_FIELD,
+    CONFIRM_TOKEN_FIELD,
+    handle_write_call,
+)
 from src.interface.mcp.exposure import mcp_exposure
+from src.interface.mcp.install import ENV_PERSON
 
 logger = get_logger()
 
@@ -69,7 +77,7 @@ SERVER_NAME = "couplefins"
 # client can drive the two-phase confirmation in-band. The base schemas set
 # additionalProperties: false, so these must be declared as real properties.
 _CONFIRM_PROPERTIES: dict[str, object] = {
-    "confirm": {
+    CONFIRM_FIELD: {
         "type": "boolean",
         "description": (
             "Omit (or false) to preview the change and receive a confirm_token. "
@@ -77,7 +85,7 @@ _CONFIRM_PROPERTIES: dict[str, object] = {
             "arguments — to commit."
         ),
     },
-    "confirm_token": {
+    CONFIRM_TOKEN_FIELD: {
         "type": "string",
         "description": "The confirm_token returned by a prior preview call.",
     },
@@ -140,6 +148,34 @@ def _to_mcp_tool(spec: ToolSpec) -> Tool:
     )
 
 
+def _validate_no_confirm_collisions() -> None:
+    """Fail at import if a write tool declares the injected field names.
+
+    ``properties.update(_CONFIRM_PROPERTIES)`` would silently replace such a
+    property and ``handle_write_call`` would consume its value before the
+    handler ran — the tool would keep working in chat and break only over
+    MCP, with no test to catch the divergence.
+    """
+    for spec in exposed_specs():
+        if spec.kind != "write":
+            continue
+        schema = cast(Mapping[str, object], spec.schema["input_schema"])
+        props = cast(Mapping[str, object], schema.get("properties") or {})
+        overlap = _CONFIRM_PROPERTIES.keys() & props.keys()
+        if overlap:
+            raise ValueError(
+                f"{spec.name}: input_schema declares reserved MCP confirmation "
+                f"field(s) {sorted(overlap)}"
+            )
+
+
+_validate_no_confirm_collisions()
+
+# The registry is immutable for the process lifetime — build the wire-format
+# tool list once, not on every tools/list request.
+_MCP_TOOLS: Final[list[Tool]] = [_to_mcp_tool(spec) for spec in exposed_specs()]
+
+
 def _text_result(payload: object, *, is_error: bool = False) -> CallToolResult:
     """Wrap a JSON-serialisable result as a single-text-block CallToolResult."""
     text = json.dumps(payload, ensure_ascii=False, default=str)
@@ -148,22 +184,58 @@ def _text_result(payload: object, *, is_error: bool = False) -> CallToolResult:
     )
 
 
-async def _resolve_context(person_name: str) -> ToolContext:
-    """Resolve the acting person (by name, case-insensitive) from the DB.
+class _PersonsCache:
+    """The persons list, refreshed at most once per TTL window.
 
-    Per-call resolution keeps the server stateless across a long-lived
-    client session — a renamed or newly-created person is picked up without
-    a restart. Two rows; the query cost is negligible.
+    Per-call resolution kept the server stateless (a renamed person is
+    picked up without a restart), but with the Neon pooler endpoint the
+    engine uses NullPool — every ``execute_use_case`` opens a fresh TLS
+    connection, so an uncached lookup taxed every tool call with a remote
+    connection handshake. A short TTL keeps both properties: renames land
+    within a minute, and back-to-back tool calls pay the lookup once.
+    Failures are never cached — an exception leaves the stale-at marker
+    untouched, so the next call retries.
     """
-    result = await execute_use_case(list_persons)
-    persons: list[Person] = result.persons
-    match = next((p for p in persons if p.name.lower() == person_name.lower()), None)
-    if match is None:
-        names = ", ".join(p.name for p in persons) or "(none configured)"
-        raise ToolExecutionError(
-            f"Unknown person {person_name!r} in COUPLEFINS_MCP_PERSON. "
-            f"Configured persons: {names}"
+
+    def __init__(self, ttl_seconds: float = 60.0) -> None:
+        self._ttl = ttl_seconds
+        self._loaded_at: float | None = None
+        self._persons: list[Person] = []
+        self._refresh_lock = anyio.Lock()
+
+    def _fresh(self) -> bool:
+        return (
+            self._loaded_at is not None
+            and time.monotonic() - self._loaded_at < self._ttl
         )
+
+    async def get(self) -> list[Person]:
+        if self._fresh():
+            return self._persons
+        # The SDK dispatches each request in its own task; double-checked
+        # locking collapses a stale-TTL burst into one remote fetch.
+        async with self._refresh_lock:
+            if not self._fresh():
+                result = await execute_use_case(list_persons)
+                self._persons = result.persons
+                # An empty couple (pre-setup) is never cached: the next call
+                # retries so setup completing in the web app lands
+                # immediately instead of after a full TTL.
+                if result.persons:
+                    self._loaded_at = time.monotonic()
+        return self._persons
+
+
+_persons_cache = _PersonsCache()
+
+
+async def _resolve_context(person_name: str) -> ToolContext:
+    """Resolve the acting person (by name, case-insensitive) from the DB."""
+    persons = await _persons_cache.get()
+    try:
+        match = resolve_person(person_name, persons)
+    except ToolExecutionError as e:
+        raise ToolExecutionError(f"{e} (check {ENV_PERSON})") from e
     return ToolContext(current_user=match, persons=persons, llm=_UnavailableLLM())
 
 
@@ -172,7 +244,7 @@ async def _handle_list_tools(
     _params: PaginatedRequestParams,
 ) -> ListToolsResult:
     """Return every exposed tool. No pagination — the registry is small (~31)."""
-    return ListToolsResult(tools=[_to_mcp_tool(spec) for spec in exposed_specs()])
+    return ListToolsResult(tools=_MCP_TOOLS)
 
 
 def _build_call_handler(person_name: str):
@@ -197,10 +269,23 @@ def _build_call_handler(person_name: str):
                 )
             else:
                 result = await execute_tool(spec.name, arguments, ctx)
-        except ToolExecutionError as e:
+        except DomainError as e:
             # Actionable error as a tool result (the client's model
-            # self-corrects in-turn), not a protocol error.
+            # self-corrects in-turn), not a protocol error. Covers
+            # ToolExecutionError AND the domain errors executors raise
+            # directly on the commit path (ValidationError,
+            # PeriodFinalizedError, ...) — the web route maps those via
+            # FastAPI exception handlers; MCP has only this except.
             return _text_result({"error": str(e)}, is_error=True)
+        except Exception:
+            # A bug must not escape as a protocol-level failure in a
+            # long-lived stdio session (and on the commit path the confirm
+            # token is already consumed) — log it, answer in-band. Same
+            # posture as the chat loop's broad catch (use_case.py).
+            logger.exception("mcp_tool_call_failed", tool=params.name)
+            return _text_result(
+                {"error": f"Internal error executing {params.name}"}, is_error=True
+            )
         # Strip <user_data> tags before they reach the client (covers read
         # results and the write-preview payload). The tags are a chat-side
         # prompt-injection defense the chat model is taught to read; an MCP
@@ -226,7 +311,7 @@ async def serve_stdio(person_name: str) -> None:
     logger.info(
         "mcp_server_start",
         person=person_name,
-        tool_count=len(exposed_specs()),
+        tool_count=len(_MCP_TOOLS),
     )
     async with stdio_server() as (read_stream, write_stream):
         await server.run(

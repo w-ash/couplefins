@@ -20,7 +20,7 @@ Three XML-tagged blocks composed per request (v1.9.2):
 from datetime import date
 import functools
 
-from src.application.chat.voices import get_voice
+from src.application.chat.voices import VOICE_NAMES, get_voice
 from src.domain.entities.person import Person
 
 
@@ -262,11 +262,9 @@ def build_system_prompt(
     ``usage.cache_read_input_tokens`` on a second live request — the
     unit-test size heuristic is only a floor guard.
     """
-    try:
-        get_voice(person.chat_voice)
-        voice_name = person.chat_voice
-    except ValueError:
-        voice_name = "standard"
+    # Resolve the fallback BEFORE the cache key so an unknown name can't
+    # poison the _primer keyspace.
+    voice_name = person.chat_voice if person.chat_voice in VOICE_NAMES else "standard"
 
     blocks: list[dict[str, object]] = [
         {

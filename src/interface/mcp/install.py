@@ -12,7 +12,16 @@ The acting person rides in ``COUPLEFINS_MCP_PERSON``.
 """
 
 from pathlib import Path
+import shlex
 import shutil
+from typing import Final
+
+# The env var naming the acting person. One constant shared by the server
+# (reads it), the entrypoint (validates it), and this module (emits configs
+# that set it) — the emitter and the consumer must never disagree on the
+# name. It lives here because install is the leaf module all three can
+# import without pulling the MCP SDK.
+ENV_PERSON: Final = "COUPLEFINS_MCP_PERSON"
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -52,7 +61,7 @@ def server_entry(person_name: str) -> dict[str, object]:
             "-m",
             "src.interface.mcp",
         ],
-        "env": {"COUPLEFINS_MCP_PERSON": person_name},
+        "env": {ENV_PERSON: person_name},
     }
 
 
@@ -62,9 +71,16 @@ def build_client_config(person_name: str) -> dict[str, object]:
 
 
 def claude_code_command(person_name: str) -> str:
-    """The ``claude mcp add`` one-liner (env must travel on the command)."""
+    """The ``claude mcp add`` one-liner (env must travel on the command).
+
+    Every interpolated value is shell-quoted: person names allow spaces
+    (setup validates non-empty only), and uv/repo paths can contain them —
+    an unquoted token would silently truncate the env value.
+    """
+    env_arg = shlex.quote(f"{ENV_PERSON}={person_name}")
     return (
-        f"claude mcp add couplefins --env COUPLEFINS_MCP_PERSON={person_name} "
-        f"-- {_resolve_uv_command()} --directory {_REPO_ROOT} run python -m "
+        f"claude mcp add couplefins --env {env_arg} "
+        f"-- {shlex.quote(_resolve_uv_command())} "
+        f"--directory {shlex.quote(str(_REPO_ROOT))} run python -m "
         "src.interface.mcp"
     )

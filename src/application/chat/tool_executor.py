@@ -1115,10 +1115,16 @@ async def handle_bulk_update_transactions(
     )
 
 
-def _resolve_person(name: str, persons: list[Person]) -> Person:
+def resolve_person(name: str, persons: list[Person]) -> Person:
+    """The person matching ``name`` (case-insensitive), or a tool error.
+
+    The single person-by-name rule — chat tool handlers and the MCP
+    server's identity resolution both go through it so the matching
+    behavior can never drift between surfaces.
+    """
     match = next((p for p in persons if p.name.lower() == name.lower()), None)
     if match is None:
-        valid = ", ".join(p.name for p in persons)
+        valid = ", ".join(p.name for p in persons) or "(none configured)"
         raise ToolExecutionError(f"Unknown person: {name}. The couple is: {valid}")
     return match
 
@@ -1409,8 +1415,8 @@ async def handle_record_settlement(
     tool_input: dict[str, object],
     ctx: ToolContext,
 ) -> dict[str, object]:
-    from_person = _resolve_person(cast(str, tool_input["from_person"]), ctx.persons)
-    to_person = _resolve_person(cast(str, tool_input["to_person"]), ctx.persons)
+    from_person = resolve_person(cast(str, tool_input["from_person"]), ctx.persons)
+    to_person = resolve_person(cast(str, tool_input["to_person"]), ctx.persons)
     if from_person.id == to_person.id:
         raise ToolExecutionError("from_person and to_person must differ")
 

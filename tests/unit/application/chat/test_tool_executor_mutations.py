@@ -20,15 +20,14 @@ from src.domain.entities.category_group import CategoryGroup
 from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import ToolExecutionError
 from tests.fixtures.factories import (
-    make_person,
+    ALICE,
+    BOB,
     make_reconciliation_period,
     make_transaction,
 )
 from tests.fixtures.fake_llm_client import make_tool_context
 from tests.fixtures.mocks import make_mock_uow
 
-ALICE = make_person(name="Alice", id=uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
-BOB = make_person(name="Bob", id=uuid.UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"))
 PERSONS = [ALICE, BOB]
 CTX = make_tool_context(ALICE, PERSONS)
 

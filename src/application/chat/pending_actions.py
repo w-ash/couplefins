@@ -58,11 +58,15 @@ class PendingActionStore:
         self._actions[action.action_id] = action
         return action
 
-    def claim(self, action_id: UUID, person_id: UUID) -> PendingAction:
+    def claim(
+        self, action_id: UUID, person_id: UUID, tool_name: str | None = None
+    ) -> PendingAction:
         """Retrieve and remove a pending action for execution.
 
         Raises ActionExpiredError if not found (expired or never existed).
-        Raises ForbiddenError if the action belongs to a different user.
+        Raises ForbiddenError if the action belongs to a different user, or —
+        when ``tool_name`` is given — to a different tool. Both checks run
+        before removal, so a rejected claim leaves the action pending.
         """
         self._evict_expired()
         action = self._actions.get(action_id)
@@ -70,6 +74,11 @@ class PendingActionStore:
             raise ActionExpiredError("This action has expired. Please try again.")
         if action.person_id != person_id:
             raise ForbiddenError("Cannot confirm another person's action")
+        if tool_name is not None and action.tool_name != tool_name:
+            raise ForbiddenError(
+                f"This confirmation belongs to {action.tool_name}, not "
+                f"{tool_name}. The {action.tool_name} preview is still pending."
+            )
         del self._actions[action_id]
         return action
 

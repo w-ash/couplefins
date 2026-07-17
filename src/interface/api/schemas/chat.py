@@ -1,12 +1,13 @@
 from datetime import date
 from typing import Literal, Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.config.settings import EffortLevel
 
 _MAX_CONTENT_PER_MESSAGE = 20_480  # 20 KB
 _MAX_TOTAL_CONTENT = 102_400  # 100 KB
+_MAX_PAGE_HINT_LENGTH = 64
 
 
 class ChatMessageInput(BaseModel):
@@ -34,7 +35,15 @@ class ChatRequest(BaseModel):
     # can promote that page's tools into the loaded set (registry
     # _PAGE_TOOL_HINTS). Unknown/absent pages promote nothing — the value
     # is a routing hint, never reflected into the prompt verbatim.
-    page: str | None = Field(default=None, max_length=64)
+    page: str | None = None
+
+    @field_validator("page")
+    @classmethod
+    def _page_is_a_hint(cls, v: str | None) -> str | None:
+        """Degrade, never reject: an overlong value is just another unknown
+        page and must become None — a 422 here would fail the whole chat
+        message over a field that is advisory by design."""
+        return v if v is not None and len(v) <= _MAX_PAGE_HINT_LENGTH else None
 
     @model_validator(mode="after")
     def _check_total_content_size(self) -> Self:

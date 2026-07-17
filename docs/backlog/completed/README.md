@@ -93,3 +93,4 @@ Index of shipped versions. When all stories in a version file are done, move the
 | v1.9.1 | 2026-07-16 | Subagent context discipline — curated hot set + deferred rest behind tool search, summary marked UserData |
 | v1.9.2 | 2026-07-16 | Three-block system prompt — cached primer, volatile context block, current-view page grounding |
 | v1.9.3 | 2026-07-16 | MCP server — registry read/write tools over stdio with in-band two-phase confirmation, args-drift rejection |
+| v1.9.4 | 2026-07-17 | MCP + routing review hardening — token↔tool binding, null-tolerant two-phase confirmation, install arg-order fix, persons-cache lock, page-signal degradation |

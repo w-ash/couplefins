@@ -25,6 +25,7 @@ Guarantees:
   already consumed, so the client must re-preview to proceed).
 """
 
+from typing import cast
 from uuid import UUID
 
 from src.application.chat.pending_actions import pending_action_store
@@ -40,6 +41,24 @@ from src.domain.exceptions import (
     ForbiddenError,
     ToolExecutionError,
 )
+
+# The injected two-phase field names. server.py declares them in every
+# exposed write schema and this module consumes them — one constant pair so
+# the emitter and the consumer can never disagree on the names.
+CONFIRM_FIELD = "confirm"
+CONFIRM_TOKEN_FIELD = "confirm_token"
+
+
+def _normalized(args: dict[str, object]) -> dict[str, object]:
+    """The args with explicit-null optionals dropped, for drift comparison.
+
+    Every handler reads optionals with ``.get(...)``, so an explicit JSON
+    null and an omitted key are the same request; a client that normalizes
+    optionals to null on the confirm call must not be rejected as drift.
+    Only the accept/reject decision uses this — the commit always executes
+    the stored propose-time input, never the confirm-time args.
+    """
+    return {k: v for k, v in args.items() if v is not None}
 
 
 async def _preview(
@@ -67,8 +86,24 @@ async def handle_write_call(
     ``arguments`` still carries the injected ``confirm`` / ``confirm_token``
     fields; they are consumed here and never reach the handler.
     """
-    confirm = bool(arguments.pop("confirm", False))
-    token = arguments.pop("confirm_token", None)
+    confirm = arguments.pop(CONFIRM_FIELD, False)
+    token = arguments.pop(CONFIRM_TOKEN_FIELD, None)
+
+    # Schema-driven clients may serialize every declared optional as an
+    # explicit JSON null — null means "omitted", i.e. preview.
+    if confirm is None:
+        confirm = False
+
+    # The low-level MCP server does not validate arguments against the
+    # input schema, and bool("false") is True — a truthy-string coercion
+    # here could commit a change the client meant to preview. Require a
+    # real JSON boolean; the error is actionable so the client self-corrects.
+    if not isinstance(confirm, bool):
+        raise ToolExecutionError(
+            f"confirm must be a JSON boolean (true or false), got {confirm!r}. "
+            "Omit it to preview the change; send true with the confirm_token "
+            "to commit."
+        )
 
     if not confirm:
         return await _preview(spec, arguments, ctx)
@@ -84,7 +119,13 @@ async def handle_write_call(
         return await _preview(spec, arguments, ctx)
 
     try:
-        action = pending_action_store.claim(action_id, ctx.current_user.id)
+        # tool_name binds the token to the tool that minted it, checked
+        # BEFORE the store removes the action: a token issued by tool A's
+        # preview but presented on a call to tool B is rejected while A's
+        # pending confirmation stays intact and claimable.
+        action = pending_action_store.claim(
+            action_id, ctx.current_user.id, tool_name=spec.name
+        )
     except ActionExpiredError:
         # Expired or unknown token → a fresh preview, never a stale commit.
         return await _preview(spec, arguments, ctx)
@@ -96,8 +137,8 @@ async def handle_write_call(
     # tool_input; compare the stripped confirm-time args against it. A
     # mismatch is a rejection (not a silent re-preview) so a client can
     # never believe it confirmed B while A commits.
-    clean_args = strip_user_data(dict(arguments))
-    if clean_args != action.tool_input:
+    clean_args = cast(dict[str, object], strip_user_data(dict(arguments)))
+    if _normalized(clean_args) != _normalized(action.tool_input):
         raise ToolExecutionError(
             "Arguments changed since the preview; nothing was committed. Call "
             "again without confirm to get a fresh preview of the new arguments."

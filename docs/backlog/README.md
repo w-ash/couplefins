@@ -177,6 +177,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.9.1 | Subagent context discipline — curated hot set + deferred rest, summary re-wrapped as user_data ([spec](completed/v1.9.1-chat-subagent-discipline.md)) | Completed (2026-07-16) | S |
 | v1.9.2 | Three-block system prompt — cached primer, volatile context, current-view grounding ([spec](completed/v1.9.2-chat-prompt-blocks.md)) | Completed (2026-07-16) | S |
 | v1.9.3 | MCP server — registry tools for external agents with in-band two-phase confirmation ([spec](completed/v1.9.3-mcp-server.md)) | Completed (2026-07-16) | M |
+| v1.9.4 | MCP + routing review hardening — token↔tool binding in the store, null-tolerant confirmation, install/identity fixes, page-signal robustness ([spec](completed/v1.9.4-mcp-review-hardening.md)) | Completed (2026-07-17) | S |
 
 ## Infrastructure Readiness
 

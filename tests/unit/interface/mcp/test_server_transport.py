@@ -12,22 +12,21 @@ one.
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 import json
-import uuid
+from types import SimpleNamespace
 
 import anyio
 from mcp import ClientSession
 from mcp.shared.memory import create_client_server_memory_streams
 import pytest
 
-from src.application.chat import tool_executor
 from src.application.chat.pending_actions import PendingAction, PendingActionStore
 from src.application.chat.protocols import ToolContext
+from src.domain.entities.person import Person
+from src.domain.exceptions import ValidationError
 from src.interface.mcp import confirmation, server
-from tests.fixtures.factories import make_person
+from tests.fixtures.factories import ALICE, BOB
 from tests.fixtures.fake_llm_client import make_tool_context
-
-ALICE = make_person(name="Alice", id=uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
-BOB = make_person(name="Bob", id=uuid.UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"))
+from tests.unit.interface.mcp.conftest import settle_args
 
 
 @pytest.fixture(autouse=True)
@@ -139,29 +138,14 @@ class TestCallTool:
         assert "Unknown tool" in str(_text(result)["error"])
 
     async def test_write_two_phase_over_the_wire(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, store: PendingActionStore, committed: list[PendingAction]
     ) -> None:
-        fresh = PendingActionStore()
-        monkeypatch.setattr(confirmation, "pending_action_store", fresh)
-        monkeypatch.setattr(tool_executor, "pending_action_store", fresh)
-
-        async def _fake_commit(
-            action: PendingAction, current_user: object
-        ) -> tuple[dict[str, object], str | None]:
-            return {"status": "confirmed", "description": "done"}, "settlements"
-
-        monkeypatch.setattr(confirmation, "execute_confirmed_action", _fake_commit)
-
-        args: dict[str, object] = {
-            "from_person": "Alice",
-            "to_person": "Bob",
-            "amount": 50.0,
-        }
+        args = settle_args()
         async with _connected_client() as session:
             preview = _text(await session.call_tool("record_settlement", dict(args)))
             assert preview["status"] == "needs_confirmation"
 
-            committed = _text(
+            confirmed = _text(
                 await session.call_tool(
                     "record_settlement",
                     {
@@ -171,4 +155,99 @@ class TestCallTool:
                     },
                 )
             )
-        assert committed["status"] == "confirmed"
+        assert confirmed["status"] == "confirmed"
+        assert len(committed) == 1
+
+    async def test_commit_path_domain_error_is_in_band(
+        self, store: PendingActionStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Executors raise domain errors directly (e.g. the previewed state
+        changed before the confirm) — after the one-shot token is consumed,
+        the failure must come back as an is_error tool result the client can
+        act on, never a JSON-RPC protocol error."""
+
+        async def _fake_commit(
+            action: PendingAction, current_user: object
+        ) -> tuple[dict[str, object], str | None]:
+            raise ValidationError("That transaction is no longer linked")
+
+        monkeypatch.setattr(confirmation, "execute_confirmed_action", _fake_commit)
+
+        args = settle_args()
+        async with _connected_client() as session:
+            preview = _text(await session.call_tool("record_settlement", dict(args)))
+            result = await session.call_tool(
+                "record_settlement",
+                {**args, "confirm": True, "confirm_token": preview["confirm_token"]},
+            )
+        assert result.is_error
+        assert "no longer linked" in str(_text(result)["error"])
+
+    async def test_unexpected_exception_is_in_band(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A bug in a handler must not escape as a protocol-level failure in
+        a long-lived stdio session — logged, then answered in-band."""
+
+        async def _boom(
+            name: str, args: dict[str, object], ctx: ToolContext
+        ) -> dict[str, object]:
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(server, "execute_tool", _boom)
+        async with _connected_client() as session:
+            result = await session.call_tool("search_transactions", {})
+        assert result.is_error
+        assert "Internal error" in str(_text(result)["error"])
+
+
+class TestPersonsCache:
+    async def test_stale_burst_shares_one_fetch(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The SDK dispatches requests concurrently — a stale-TTL burst must
+        collapse into a single remote persons query."""
+        calls = 0
+
+        async def _fake_use_case(use_case: object) -> SimpleNamespace:
+            nonlocal calls
+            calls += 1
+            await anyio.sleep(0.01)
+            return SimpleNamespace(persons=[ALICE, BOB])
+
+        monkeypatch.setattr(server, "execute_use_case", _fake_use_case)
+        cache = server._PersonsCache()
+        results: list[list[Person]] = []
+
+        async def _get() -> None:
+            results.append(await cache.get())
+
+        async with anyio.create_task_group() as tg:
+            for _ in range(5):
+                tg.start_soon(_get)
+
+        assert calls == 1
+        assert results == [[ALICE, BOB]] * 5
+
+    async def test_empty_persons_list_is_never_cached(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Pre-setup emptiness must not pin identity failures for a full
+        TTL — the next call retries and picks the couple up immediately."""
+        calls = 0
+        persons: list[Person] = []
+
+        async def _fake_use_case(use_case: object) -> SimpleNamespace:
+            nonlocal calls
+            calls += 1
+            return SimpleNamespace(persons=list(persons))
+
+        monkeypatch.setattr(server, "execute_use_case", _fake_use_case)
+        cache = server._PersonsCache()
+
+        assert await cache.get() == []
+        persons.extend([ALICE, BOB])  # couple setup completes in the web app
+        assert await cache.get() == [ALICE, BOB]
+        assert calls == 2
+        assert await cache.get() == [ALICE, BOB]  # now cached
+        assert calls == 2

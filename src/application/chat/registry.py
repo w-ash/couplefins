@@ -413,21 +413,12 @@ def _stamp_cache(tools_out: list[dict[str, object]], idx: int) -> None:
 # core stays cached across navigation while a section's tools cache across
 # that section's turns.
 #
-# Canonical page keys — the backend is the source of truth; the web client's
-# SECTION_BY_SEGMENT map (web/src/components/chat/ChatPanel.tsx) mirrors
-# this set and is kept in sync by hand. Unknown/absent pages promote
-# nothing. The mobile full-screen chat page (/ask) and /account are
+# The single page registry — the backend is the source of truth; the web
+# client's SECTION_BY_SEGMENT map (web/src/components/chat/ChatPanel.tsx)
+# mirrors these keys and is kept in sync by hand. Unknown/absent pages
+# promote nothing. The mobile full-screen chat page (/ask) and /account are
 # deliberately unmapped — there is no domain signal on the chat page itself.
-_CANONICAL_PAGES: frozenset[str] = frozenset({
-    "dashboard",
-    "transactions",
-    "settle",
-    "budget",
-    "insights",
-    "upload",
-    "settings",
-})
-
+# A canonical page with no promotions would be an empty tuple value here.
 _PAGE_TOOL_HINTS: Mapping[str, tuple[str, ...]] = {
     "dashboard": ("get_dashboard_summary", "get_dashboard_status"),
     "transactions": ("get_transaction_history", "get_tags"),
@@ -438,6 +429,9 @@ _PAGE_TOOL_HINTS: Mapping[str, tuple[str, ...]] = {
     "settings": ("get_category_setup", "get_tags"),
 }
 
+# Derived, never hand-maintained — the hints map is the one page registry.
+_CANONICAL_PAGES: frozenset[str] = frozenset(_PAGE_TOOL_HINTS)
+
 # The per-page promotion ceiling, DERIVED not hand-set: the loaded set must
 # stay under the ~10-tool accuracy ceiling, and everything not deferred (the
 # invariant prefix plus the agentic server blocks) is always loaded, so a
@@ -446,20 +440,16 @@ _TOOL_CEILING = 10
 _MAX_PROMOTED_PER_PAGE = _TOOL_CEILING - sum(1 for s in REGISTRY if not s.defer_loading)
 
 
-def _validate_page_hints(
-    hints: Mapping[str, tuple[str, ...]] | None = None,
-) -> None:
+def _validate_page_hints(hints: Mapping[str, tuple[str, ...]]) -> None:
     """Fail at import if the hint map drifts from the registry.
 
     Same posture as ``ToolSpec.__post_init__``: an invalid routing table
-    cannot exist past import. Guards the three ways the hand-maintained map
-    rots — an unknown page key, a tool name that no longer exists (or
-    stopped being a deferred read), and silent breach of the derived
-    per-page ceiling. ``hints`` defaults to the module map; tests pass bad
-    maps directly.
+    cannot exist past import. Guards the ways the hand-maintained map
+    rots — a tool name that no longer exists (or stopped being a deferred
+    read) and silent breach of the derived per-page ceiling. The
+    unknown-page branch is vacuous for the module map (``_CANONICAL_PAGES``
+    is derived from it) but still guards arbitrary maps passed by tests.
     """
-    if hints is None:
-        hints = _PAGE_TOOL_HINTS
     for page, names in hints.items():
         if page not in _CANONICAL_PAGES:
             raise ValueError(
@@ -487,7 +477,7 @@ def _validate_page_hints(
                 )
 
 
-_validate_page_hints()
+_validate_page_hints(_PAGE_TOOL_HINTS)
 
 
 def canonical_page(page: str | None) -> str | None:
@@ -574,6 +564,26 @@ _SUBAGENT_HOT_TOOLS: frozenset[str] = frozenset({
     "get_transaction_history",
     "get_settlement_activity",
 })
+
+
+def _validate_subagent_hot(names: frozenset[str]) -> None:
+    """Fail at import if the hot set drifts from the registry.
+
+    Same posture as ``_validate_page_hints``: this map is hand-maintained
+    and rots the same ways — a renamed tool or a non-read would otherwise
+    just silently shrink the subagent's loaded set.
+    """
+    for name in names:
+        spec = _SPECS_BY_NAME.get(name)
+        if spec is None:
+            raise ValueError(f"_SUBAGENT_HOT_TOOLS: unknown tool {name!r}")
+        if spec.kind != "read":
+            raise ValueError(
+                f"_SUBAGENT_HOT_TOOLS: {name!r} is {spec.kind!r}, not a read"
+            )
+
+
+_validate_subagent_hot(_SUBAGENT_HOT_TOOLS)
 
 
 def build_subagent_tools() -> list[dict[str, object]]:

@@ -356,6 +356,32 @@ async def test_unknown_page_is_harmless(client: AsyncClient) -> None:
     assert "not-a-page" not in full_system
 
 
+async def test_overlong_page_degrades_instead_of_rejecting(
+    client: AsyncClient,
+) -> None:
+    """page is an advisory hint — an overlong value must behave like any
+    unknown page (no promotion, no <current_view>), never 422 the request."""
+    _, cookies = await setup_and_login(client)
+    fake = FakeLLMClient([_text_only_script()])
+    _override_llm(client, fake)
+    try:
+        resp = await client.post(
+            "/api/v1/chat",
+            json={
+                "messages": [{"role": "user", "content": "Hello"}],
+                "page": "x" * 200,
+            },
+            auth=cookies,
+        )
+        assert resp.status_code == 200
+    finally:
+        _clear_llm_override(client)
+
+    assert fake.captured_system is not None
+    full_system = "\n".join(str(b["text"]) for b in fake.captured_system)
+    assert "<current_view>" not in full_system
+
+
 async def test_invalid_effort_rejected(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
     _override_llm(client, FakeLLMClient([_text_only_script()]))

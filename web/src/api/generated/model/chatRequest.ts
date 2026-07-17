@@ -14,4 +14,5 @@ export interface ChatRequest {
   confirmation?: ConfirmationInput | null;
   client_date?: string | null;
   effort?: EffortLevel | null;
+  page?: string | null;
 }

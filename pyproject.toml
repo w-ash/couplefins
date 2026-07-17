@@ -1,6 +1,6 @@
 [project]
 name = "couplefins"
-version = "1.9.3"
+version = "1.9.4"
 description = "Household finance tool for couples"
 requires-python = ">=3.14,<4.0"
 dependencies = [
@@ -86,6 +86,10 @@ fixable = ["ALL"]
 ]
 "src/application/use_cases/**/*.py" = [
     "PLR6301",  # Stateless execute() is intentional — use case architecture pattern
+]
+"src/interface/mcp/confirmation.py" = [
+    "S105",     # CONFIRM_TOKEN_FIELD holds a JSON field NAME ("confirm_token"),
+                # not a credential — bandit's token-name heuristic false-positives
 ]
 "src/interface/mcp/server.py" = [
     "RUF029",   # MCP SDK's request-handler protocol requires async handlers

@@ -15,16 +15,20 @@ import os
 import sys
 
 from src.config.logging import setup_stderr_logging
+from src.interface.mcp.install import ENV_PERSON
 
-_ENV_PERSON = "COUPLEFINS_MCP_PERSON"
+
+def _person_from_env() -> str:
+    """The acting person from the env var — the one read-and-normalize rule."""
+    return os.environ.get(ENV_PERSON, "").strip()
 
 
 def _serve() -> None:
     setup_stderr_logging()
-    person_name = os.environ.get(_ENV_PERSON, "").strip()
+    person_name = _person_from_env()
     if not person_name:
         print(
-            f"{_ENV_PERSON} is not set. Set it to your person name "
+            f"{ENV_PERSON} is not set. Set it to your person name "
             "(the name you log into Couplefins with) and relaunch.",
             file=sys.stderr,
         )
@@ -45,15 +49,24 @@ def _install(argv: list[str]) -> None:
         claude_code_command,
     )
 
-    person_name = argv[0] if argv else os.environ.get(_ENV_PERSON, "").strip()
+    # Client keys and person names share the positional slots, so both
+    # orders are accepted: `install <person> [client]` and
+    # `install <client> [person]`. A leading client key is never treated as
+    # a person named "cursor" — silently embedding a client key as the
+    # person would fail every tool call after registration.
+    if argv and argv[0] in SUPPORTED_CLIENTS:
+        client = argv[0]
+        person_name = argv[1] if len(argv) > 1 else _person_from_env()
+    else:
+        person_name = argv[0] if argv else _person_from_env()
+        client = argv[1] if len(argv) > 1 else "claude-code"
     if not person_name:
         print(
             "Usage: python -m src.interface.mcp install <person> [client]\n"
-            f"(or set {_ENV_PERSON})",
+            f"(or set {ENV_PERSON} and pass just the client)",
             file=sys.stderr,
         )
         raise SystemExit(2)
-    client = argv[1] if len(argv) > 1 else "claude-code"
     if client not in SUPPORTED_CLIENTS:
         print(
             f"Unknown client {client!r}. Supported: {', '.join(SUPPORTED_CLIENTS)}",
@@ -74,6 +87,15 @@ def main() -> None:
     args = sys.argv[1:]
     if args and args[0] == "install":
         _install(args[1:])
+    elif args:
+        # A typo'd subcommand must not fall through to the stdio server —
+        # that blocks silently on stdin waiting for JSON-RPC that never comes.
+        print(
+            f"Unknown command {args[0]!r}. "
+            "Usage: python -m src.interface.mcp [install [person] [client]]",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
     else:
         _serve()
 

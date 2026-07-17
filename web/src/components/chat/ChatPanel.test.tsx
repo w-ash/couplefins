@@ -142,6 +142,10 @@ describe("ChatPanel", () => {
     expect(sendFrom("/ask")).toBeUndefined();
   });
 
+  it("matches route segments case-insensitively like the router", () => {
+    expect(sendFrom("/Budget")).toBe("budget");
+  });
+
   it("surfaces the limit error and blocks sending when the conversation is full", () => {
     const full: Partial<ChatMessage>[] = Array.from({ length: 50 }, (_, i) => ({
       role: i % 2 === 0 ? "user" : "assistant",

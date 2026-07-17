@@ -34,6 +34,12 @@ def make_person(
     )
 
 
+# The canonical test couple with fixed IDs, shared across suites. Person is
+# frozen, so module-level sharing is safe.
+ALICE = make_person(name="Alice", id=uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
+BOB = make_person(name="Bob", id=uuid.UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"))
+
+
 def make_transaction(
     *,
     id: uuid.UUID | None = None,

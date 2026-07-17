@@ -34,15 +34,13 @@ def _make_formatter(
     )
 
 
-def setup_logging() -> None:
-    settings = get_settings().logging
+def _configure_root(*handlers: logging.Handler, level: int | str) -> None:
+    """The shared wiring: structlog pipeline + root handler installation.
 
-    console_renderer: structlog.types.Processor = (
-        structlog.processors.JSONRenderer()
-        if settings.output == "json"
-        else structlog.dev.ConsoleRenderer()
-    )
-
+    Both entry points below differ only in which handlers they build —
+    the pipeline itself must stay identical or the MCP server's logs
+    silently diverge from the web app's.
+    """
     structlog.configure(
         processors=[
             *_native_processors,
@@ -53,6 +51,23 @@ def setup_logging() -> None:
         cache_logger_on_first_use=True,
     )
 
+    root = logging.getLogger()
+    root.handlers.clear()
+    for handler in handlers:
+        root.addHandler(handler)
+    root.setLevel(level)
+
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+
+
+def setup_logging() -> None:
+    settings = get_settings().logging
+
+    console_renderer: structlog.types.Processor = (
+        structlog.processors.JSONRenderer()
+        if settings.output == "json"
+        else structlog.dev.ConsoleRenderer()
+    )
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(_make_formatter(console_renderer))
 
@@ -65,14 +80,8 @@ def setup_logging() -> None:
     )
     file_handler.setFormatter(_make_formatter(structlog.processors.JSONRenderer()))
 
-    root = logging.getLogger()
-    root.handlers.clear()
-    root.addHandler(console_handler)
-    root.addHandler(file_handler)
-    root.setLevel(settings.level)
-
+    _configure_root(console_handler, file_handler, level=settings.level)
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
-    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 
 
 def setup_stderr_logging() -> None:
@@ -85,22 +94,7 @@ def setup_stderr_logging() -> None:
     """
     settings = get_settings().logging
 
-    structlog.configure(
-        processors=[
-            *_native_processors,
-            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
-        ],
-        wrapper_class=structlog.stdlib.BoundLogger,
-        logger_factory=structlog.stdlib.LoggerFactory(),
-        cache_logger_on_first_use=True,
-    )
-
     stderr_handler = logging.StreamHandler(sys.stderr)
     stderr_handler.setFormatter(_make_formatter(structlog.processors.JSONRenderer()))
 
-    root = logging.getLogger()
-    root.handlers.clear()
-    root.addHandler(stderr_handler)
-    root.setLevel(settings.level)
-
-    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+    _configure_root(stderr_handler, level=settings.level)
