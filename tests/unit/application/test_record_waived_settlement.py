@@ -268,3 +268,100 @@ async def test_waive_allowed_on_finalized_month() -> None:
     result = await RecordWaivedSettlementUseCase().execute(command, uow)
     assert result.settlement.is_waived is True
     uow.settlements.save.assert_called_once()
+
+
+class TestYearScopedWaive:
+    """``waive_year`` forgives one calendar year; omitting it keeps the
+    all-time behaviour the chat tool relies on."""
+
+    @staticmethod
+    def _debt(year: int, month: int, payer: Person, amount: str):
+        return make_transaction(
+            date=date(year, month, 15),
+            payer_person_id=payer.id,
+            amount=Decimal(amount),
+            payer_percentage=50,
+        )
+
+    async def test_waives_only_the_requested_year(self) -> None:
+        alice = make_person(name="Alice")
+        bob = make_person(name="Bob")
+        uow = _setup_uow(
+            alice,
+            bob,
+            transactions=[
+                self._debt(2025, 12, alice, "-100.00"),
+                self._debt(2026, 3, alice, "-400.00"),
+            ],
+            settlements=[
+                make_settlement(
+                    amount=Decimal("50.00"),
+                    from_person_id=bob.id,
+                    to_person_id=alice.id,
+                )
+            ],
+        )
+
+        # The $50 payment clears 2025 (FIFO), leaving 2026's $200.
+        command = RecordWaivedSettlementCommand(
+            from_person_id=bob.id, to_person_id=alice.id, waive_year=2026
+        )
+        result = await RecordWaivedSettlementUseCase().execute(command, uow)
+
+        assert result.settlement.amount == Decimal("200.00")
+        assert result.settlement.is_waived is True
+
+    async def test_refuses_while_an_older_year_is_open(self) -> None:
+        """A waiver relieves the oldest open month first, so waiving a newer
+        year over an older debt would forgive the wrong one."""
+        alice = make_person(name="Alice")
+        bob = make_person(name="Bob")
+        uow = _setup_uow(
+            alice,
+            bob,
+            transactions=[
+                self._debt(2025, 12, alice, "-100.00"),
+                self._debt(2026, 3, alice, "-400.00"),
+            ],
+        )
+
+        command = RecordWaivedSettlementCommand(
+            from_person_id=bob.id, to_person_id=alice.id, waive_year=2026
+        )
+        with pytest.raises(ValidationError, match="Settle or waive 2025 first"):
+            await RecordWaivedSettlementUseCase().execute(command, uow)
+
+    async def test_rejects_a_year_with_nothing_outstanding(self) -> None:
+        alice = make_person(name="Alice")
+        bob = make_person(name="Bob")
+        uow = _setup_uow(
+            alice,
+            bob,
+            transactions=[self._debt(2026, 3, alice, "-400.00")],
+            settlements=[
+                make_settlement(
+                    amount=Decimal("200.00"),
+                    from_person_id=bob.id,
+                    to_person_id=alice.id,
+                )
+            ],
+        )
+
+        command = RecordWaivedSettlementCommand(
+            from_person_id=bob.id, to_person_id=alice.id, waive_year=2026
+        )
+        with pytest.raises(ValidationError, match="2026 is already settled"):
+            await RecordWaivedSettlementUseCase().execute(command, uow)
+
+    async def test_rejects_a_direction_the_year_does_not_owe(self) -> None:
+        alice = make_person(name="Alice")
+        bob = make_person(name="Bob")
+        uow = _setup_uow(
+            alice, bob, transactions=[self._debt(2026, 3, alice, "-400.00")]
+        )
+
+        command = RecordWaivedSettlementCommand(
+            from_person_id=alice.id, to_person_id=bob.id, waive_year=2026
+        )
+        with pytest.raises(ValidationError, match="does not match"):
+            await RecordWaivedSettlementUseCase().execute(command, uow)

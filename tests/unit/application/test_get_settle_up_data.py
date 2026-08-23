@@ -487,7 +487,7 @@ class TestFinalizationWarnings:
         )
         assert any("No upload from Bob" in w for w in result.finalization_warnings)
 
-    async def test_warns_outstanding_balance_across_all_months(self) -> None:
+    async def test_warns_outstanding_balance_for_the_months_year(self) -> None:
         alice = make_person(name="Alice")
         bob = make_person(name="Bob")
         uow = self._setup_uow(
@@ -498,9 +498,23 @@ class TestFinalizationWarnings:
             GetSettleUpDataCommand(year=2026, month=1), uow
         )
         assert any(
-            "Outstanding balance of $50.00 across all months" in w
+            "Outstanding balance of $50.00 in 2026" in w
             for w in result.finalization_warnings
         )
+
+    async def test_ignores_a_balance_carried_by_another_year(self) -> None:
+        """Locking a 2027 month answers for 2027 — a 2026 debt is not its
+        problem, even though it still sits in the running ledger."""
+        alice = make_person(name="Alice")
+        bob = make_person(name="Bob")
+        uow = self._setup_uow(
+            alice, bob, uploads_for=[alice.id, bob.id], has_balance=True
+        )
+
+        result = await GetSettleUpDataUseCase().execute(
+            GetSettleUpDataCommand(year=2027, month=1), uow
+        )
+        assert not any("Outstanding balance" in w for w in result.finalization_warnings)
 
     async def test_warns_unmapped_categories(self) -> None:
         alice = make_person(name="Alice")

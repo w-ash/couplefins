@@ -92,6 +92,7 @@ async def waive_settlement(
     command = RecordWaivedSettlementCommand(
         year=body.year,
         month=body.month,
+        waive_year=body.waive_year,
         from_person_id=body.from_person_id,
         to_person_id=body.to_person_id,
         notes=body.notes,

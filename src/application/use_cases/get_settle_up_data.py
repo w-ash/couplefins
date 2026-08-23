@@ -25,7 +25,12 @@ from src.application.use_cases._shared.upload_status import UploadStatus
 from src.domain.entities.category import Category
 from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
-from src.domain.ledger import LedgerMonth, MonthKey, month_remaining_result
+from src.domain.ledger import (
+    LedgerMonth,
+    MonthKey,
+    month_remaining_result,
+    year_remaining_result,
+)
 from src.domain.reconciliation import (
     PayerGroupSummary,
     PayerSplitSummary,
@@ -82,6 +87,7 @@ def _compute_audit_splits(
 def _build_finalization_warnings(
     is_finalized: bool,
     upload_statuses: list[UploadStatus],
+    year: int,
     outstanding: SettlementResult | None,
     transactions: list[Transaction],
     categories: list[Category],
@@ -95,9 +101,7 @@ def _build_finalization_warnings(
         if not us.has_uploaded
     )
     if outstanding is not None:
-        warnings.append(
-            f"Outstanding balance of ${outstanding.amount:.2f} across all months"
-        )
+        warnings.append(f"Outstanding balance of ${outstanding.amount:.2f} in {year}")
     tx_categories = {tx.category for tx in transactions}
     unmapped = find_all_unmapped_categories(categories, tx_categories)
     if unmapped:
@@ -140,10 +144,15 @@ class GetSettleUpDataUseCase:
                 uow, command.year, command.month
             )
 
+            # Scoped to the month's own year — locking a month answers for
+            # that year's ledger, not the all-time balance.
             warnings = _build_finalization_warnings(
                 is_finalized,
                 snapshot.upload_statuses,
-                bundle.ledger.outstanding,
+                command.year,
+                year_remaining_result(
+                    bundle.ledger.months, command.year, ctx.person_ids
+                ),
                 snapshot.transactions,
                 ctx.categories,
             )

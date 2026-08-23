@@ -178,6 +178,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.9.2 | Three-block system prompt — cached primer, volatile context, current-view grounding ([spec](completed/v1.9.2-chat-prompt-blocks.md)) | Completed (2026-07-16) | S |
 | v1.9.3 | MCP server — registry tools for external agents with in-band two-phase confirmation ([spec](completed/v1.9.3-mcp-server.md)) | Completed (2026-07-16) | M |
 | v1.9.4 | MCP + routing review hardening — token↔tool binding in the store, null-tolerant confirmation, install/identity fixes, page-signal robustness ([spec](completed/v1.9.4-mcp-review-hardening.md)) | Completed (2026-07-17) | S |
+| v1.10.0 | Year-scoped Settle Up — year selector drives every figure, year-scoped waive, Settlement History, collapsed candidate search ([spec](completed/v1.10.x.md)) | Completed (2026-08-23) | M |
 
 ## Infrastructure Readiness
 

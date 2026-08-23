@@ -7,8 +7,13 @@ import {
   screen,
   userEvent,
   waitFor,
+  within,
 } from "../test/test-utils";
 import { SettleUpPage } from "./SettleUpPage";
+
+// Ledger fixtures ride the current year so the year-scoped hero card
+// resolves the same way every year the suite runs.
+const Y = new Date().getFullYear();
 
 const persons = [
   {
@@ -45,18 +50,18 @@ const uploadedStatuses = [
 // One carried-forward month, no payments: outstanding equals the month's
 // gross and the span is that single month.
 const settleUpResponse = {
-  year: 2026,
+  year: Y,
   month: 3,
   owed: { amount: 50.0, from_person_id: "p2", to_person_id: "p1" },
   recorded_settlements: [],
   outstanding: { amount: 50.0, from_person_id: "p2", to_person_id: "p1" },
   outstanding_span: {
-    start: { year: 2026, month: 3 },
-    end: { year: 2026, month: 3 },
+    start: { year: Y, month: 3 },
+    end: { year: Y, month: 3 },
   },
   ledger_months: [
     {
-      year: 2026,
+      year: Y,
       month: 3,
       gross: { amount: 50.0, from_person_id: "p2", to_person_id: "p1" },
       applied: 0.0,
@@ -75,7 +80,7 @@ const settleUpResponse = {
   is_finalized: false,
   finalized_at: null,
   transaction_count: 5,
-  latest_transaction_month: { year: 2026, month: 3 },
+  latest_transaction_month: { year: Y, month: 3 },
   finalization_warnings: [],
   payer_splits: [],
   payer_group_splits: [],
@@ -94,13 +99,13 @@ const catchUpPayment = {
   method: "venmo",
   is_waived: false,
   notes: "",
-  settled_at: "2026-04-02T12:00:00Z",
-  created_at: "2026-04-02T12:00:00Z",
+  settled_at: `${Y}-04-02T12:00:00Z`,
+  created_at: `${Y}-04-02T12:00:00Z`,
   linked_transaction_ids: [],
   linked_transactions: [],
   covered: [
-    { year: 2026, month: 3, amount: 142.0 },
-    { year: 2026, month: 4, amount: 58.0 },
+    { year: Y, month: 3, amount: 142.0 },
+    { year: Y, month: 4, amount: 58.0 },
   ],
   unapplied: 0.0,
 };
@@ -110,12 +115,12 @@ const multiMonthResponse = {
   owed: { amount: 142.0, from_person_id: "p2", to_person_id: "p1" },
   outstanding: { amount: 642.0, from_person_id: "p2", to_person_id: "p1" },
   outstanding_span: {
-    start: { year: 2026, month: 4 },
-    end: { year: 2026, month: 5 },
+    start: { year: Y, month: 4 },
+    end: { year: Y, month: 5 },
   },
   ledger_months: [
     {
-      year: 2026,
+      year: Y,
       month: 3,
       gross: { amount: 142.0, from_person_id: "p2", to_person_id: "p1" },
       applied: 142.0,
@@ -125,7 +130,7 @@ const multiMonthResponse = {
       is_offset: false,
     },
     {
-      year: 2026,
+      year: Y,
       month: 4,
       gross: { amount: 300.0, from_person_id: "p2", to_person_id: "p1" },
       applied: 58.0,
@@ -135,7 +140,7 @@ const multiMonthResponse = {
       is_offset: false,
     },
     {
-      year: 2026,
+      year: Y,
       month: 5,
       gross: { amount: 400.0, from_person_id: "p2", to_person_id: "p1" },
       applied: 0.0,
@@ -173,7 +178,7 @@ const allSettledResponse = {
   outstanding_span: null,
   ledger_months: [
     {
-      year: 2026,
+      year: Y,
       month: 3,
       gross: { amount: 50.0, from_person_id: "p2", to_person_id: "p1" },
       applied: 50.0,
@@ -188,8 +193,32 @@ const allSettledResponse = {
       ...catchUpPayment,
       id: "s2",
       amount: 50.0,
-      covered: [{ year: 2026, month: 3, amount: 50.0 }],
+      covered: [{ year: Y, month: 3, amount: 50.0 }],
     },
+  ],
+};
+
+// Last year's December still carries $80 alongside this year's $642 — the
+// hero scopes to one year while the all-time balance stays visible.
+const crossYearResponse = {
+  ...multiMonthResponse,
+  outstanding: { amount: 722.0, from_person_id: "p2", to_person_id: "p1" },
+  outstanding_span: {
+    start: { year: Y - 1, month: 12 },
+    end: { year: Y, month: 5 },
+  },
+  ledger_months: [
+    {
+      year: Y - 1,
+      month: 12,
+      gross: { amount: 80.0, from_person_id: "p2", to_person_id: "p1" },
+      applied: 0.0,
+      remaining: 80.0,
+      status: "carried_forward",
+      covering_settlement_ids: [],
+      is_offset: false,
+    },
+    ...multiMonthResponse.ledger_months,
   ],
 };
 
@@ -221,7 +250,7 @@ const emptyResponse = {
 
 const emptyWithPriorDataResponse = {
   ...emptyResponse,
-  latest_transaction_month: { year: 2026, month: 2 },
+  latest_transaction_month: { year: Y, month: 2 },
 };
 
 // Echo the requested year/month back so any drill-down month resolves as
@@ -243,6 +272,9 @@ describe("SettleUpPage", () => {
   beforeEach(() => {
     useIdentityStore.setState({ currentPersonId: "p1" });
     server.use(http.get("/api/v1/persons/", () => HttpResponse.json(persons)));
+    server.use(
+      http.get("/api/v1/settlements/candidates", () => HttpResponse.json([])),
+    );
     serveSettleUp(settleUpResponse);
   });
 
@@ -258,6 +290,130 @@ describe("SettleUpPage", () => {
     });
   });
 
+  it("defaults the hero to the current year and offers each ledger year", async () => {
+    serveSettleUp(crossYearResponse);
+
+    renderWithProviders(<SettleUpPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("radio", { name: String(Y) })).toBeChecked();
+    });
+
+    const hero = within(
+      screen.getByRole("region", { name: "Settlement summary" }),
+    );
+    // Only this year's remainders — last year's $80 is excluded.
+    expect(hero.getByText("$642.00")).toBeInTheDocument();
+    expect(
+      hero.getByRole("radio", { name: String(Y - 1) }),
+    ).toBeInTheDocument();
+    // The all-time balance ($722) is never shown — only the selected year's.
+    expect(hero.queryByText(/722/)).not.toBeInTheDocument();
+  });
+
+  it("rescopes the hero when another year is selected", async () => {
+    const user = userEvent.setup();
+    serveSettleUp(crossYearResponse);
+
+    renderWithProviders(<SettleUpPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("radio", { name: String(Y) })).toBeChecked();
+    });
+
+    await user.click(screen.getByRole("radio", { name: String(Y - 1) }));
+
+    const hero = within(
+      screen.getByRole("region", { name: "Settlement summary" }),
+    );
+    expect(hero.getByText("$80.00")).toBeInTheDocument();
+    expect(hero.getByText("covers December")).toBeInTheDocument();
+    expect(hero.queryByText("$642.00")).not.toBeInTheDocument();
+  });
+
+  it("scopes the Months card to the selected year, oldest first", async () => {
+    const user = userEvent.setup();
+    serveSettleUp(crossYearResponse);
+
+    renderWithProviders(<SettleUpPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("radio", { name: String(Y) })).toBeChecked();
+    });
+
+    // This year's rows only, March through May in calendar order.
+    const monthsCard = within(
+      screen
+        .getByRole("heading", { name: "Months" })
+        .closest("div") as HTMLElement,
+    );
+    expect(
+      monthsCard
+        .getAllByRole("button")
+        .map((el) => el.textContent?.match(/^[A-Z][a-z]+ \d{4}/)?.[0])
+        .filter(Boolean),
+    ).toEqual([`March ${Y}`, `April ${Y}`, `May ${Y}`]);
+
+    await user.click(screen.getByRole("radio", { name: String(Y - 1) }));
+
+    expect(
+      screen.getByRole("button", { name: new RegExp(`December ${Y - 1}`) }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: new RegExp(`May ${Y}`) }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("waives only the selected year", async () => {
+    const user = userEvent.setup();
+    let waived: Record<string, unknown> | null = null;
+    serveSettleUp(crossYearResponse);
+    server.use(
+      http.post("/api/v1/settlements/waive", async ({ request }) => {
+        waived = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json(
+          { settlement: {}, warnings: [] },
+          { status: 201 },
+        );
+      }),
+    );
+
+    renderWithProviders(<SettleUpPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("radio", { name: String(Y) })).toBeChecked();
+    });
+    // The copy names the year and its amount, never the all-time total.
+    expect(screen.getByText(`Waive Bob's ${Y} balance`)).toBeInTheDocument();
+    expect(
+      screen.getByText(new RegExp(`\\$642\\.00 from ${Y} will be forgiven`)),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByText("Waive Balance"));
+
+    await waitFor(() => {
+      expect(waived).not.toBeNull();
+    });
+    expect(waived).toMatchObject({ waive_year: Y });
+  });
+
+  it("shows only the settlements covering the selected year", async () => {
+    const user = userEvent.setup();
+    serveSettleUp(crossYearResponse);
+
+    renderWithProviders(<SettleUpPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Settlement History")).toBeInTheDocument();
+    });
+    // The catch-up payment covered March and April of this year.
+    expect(screen.getByText(/Covered Mar \+ Apr/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: String(Y - 1) }));
+
+    expect(screen.queryByText("Settlement History")).not.toBeInTheDocument();
+  });
+
   it("renders one row per ledger month with derived status", async () => {
     serveSettleUp(multiMonthResponse);
 
@@ -265,7 +421,7 @@ describe("SettleUpPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("button", { name: /March 2026/ }),
+        screen.getByRole("button", { name: new RegExp(`March ${Y}`) }),
       ).toBeInTheDocument();
     });
     expect(screen.getByText(/settled Apr 2/)).toBeInTheDocument();
@@ -277,16 +433,16 @@ describe("SettleUpPage", () => {
     serveSettleUp(multiMonthResponse);
 
     renderWithProviders(<SettleUpPage />, {
-      routerProps: { initialEntries: ["/settle?year=2026&month=4"] },
+      routerProps: { initialEntries: [`/settle?year=${Y}&month=4`] },
     });
 
     await waitFor(() => {
       expect(
-        screen.getByRole("button", { name: /April 2026/ }),
+        screen.getByRole("button", { name: new RegExp(`April ${Y}`) }),
       ).toHaveAttribute("aria-expanded", "true");
     });
     expect(screen.getByText("Lock Month")).toBeInTheDocument();
-    expect(screen.getByText("Showing the work")).toBeInTheDocument();
+    expect(screen.getByText("Summary")).toBeInTheDocument();
   });
 
   it("defaults to the newest month when the current month has no ledger row", async () => {
@@ -295,10 +451,9 @@ describe("SettleUpPage", () => {
     renderWithProviders(<SettleUpPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /May 2026/ })).toHaveAttribute(
-        "aria-expanded",
-        "true",
-      );
+      expect(
+        screen.getByRole("button", { name: new RegExp(`May ${Y}`) }),
+      ).toHaveAttribute("aria-expanded", "true");
     });
     // The drill-down waits for the month-scoped refetch before rendering.
     await waitFor(() => {
@@ -311,12 +466,12 @@ describe("SettleUpPage", () => {
     serveSettleUp(multiMonthResponse);
 
     renderWithProviders(<SettleUpPage />, {
-      routerProps: { initialEntries: ["/settle?year=2026&month=6"] },
+      routerProps: { initialEntries: [`/settle?year=${Y}&month=6`] },
     });
 
     await waitFor(() => {
       expect(
-        screen.getByText(/No settlement activity for June 2026/),
+        screen.getByText(new RegExp(`No settlement activity for June ${Y}`)),
       ).toBeInTheDocument();
     });
     // A settlement-free month is still lockable and exportable (US-CLOSE-1/2).
@@ -331,22 +486,23 @@ describe("SettleUpPage", () => {
     const user = userEvent.setup();
 
     renderWithProviders(<SettleUpPage />, {
-      routerProps: { initialEntries: ["/settle?year=2026&month=4"] },
+      routerProps: { initialEntries: [`/settle?year=${Y}&month=4`] },
     });
 
     await waitFor(() => {
       expect(screen.getByText("Lock Month")).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("button", { name: /April 2026/ }));
+    await user.click(
+      screen.getByRole("button", { name: new RegExp(`April ${Y}`) }),
+    );
 
     await waitFor(() => {
       expect(screen.queryByText("Lock Month")).not.toBeInTheDocument();
     });
-    expect(screen.getByRole("button", { name: /April 2026/ })).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
+    expect(
+      screen.getByRole("button", { name: new RegExp(`April ${Y}`) }),
+    ).toHaveAttribute("aria-expanded", "false");
   });
 
   it("shows payment history with FIFO coverage", async () => {
@@ -377,9 +533,9 @@ describe("SettleUpPage", () => {
           ...catchUpPayment,
           amount: 892.0,
           covered: [
-            { year: 2026, month: 3, amount: 142.0 },
-            { year: 2026, month: 4, amount: 300.0 },
-            { year: 2026, month: 5, amount: 400.0 },
+            { year: Y, month: 3, amount: 142.0 },
+            { year: Y, month: 4, amount: 300.0 },
+            { year: Y, month: 5, amount: 400.0 },
           ],
           unapplied: 50.0,
         },
@@ -396,13 +552,13 @@ describe("SettleUpPage", () => {
     });
   });
 
-  it("shows 'All settled!' and hides ledger actions when nothing is outstanding", async () => {
+  it("shows the year as settled and hides ledger actions when nothing is outstanding", async () => {
     serveSettleUp(allSettledResponse);
 
     renderWithProviders(<SettleUpPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("All settled!")).toBeInTheDocument();
+      expect(screen.getByText(`${Y} is settled`)).toBeInTheDocument();
     });
 
     // Payments apply to the running ledger — with nothing outstanding there
@@ -417,12 +573,18 @@ describe("SettleUpPage", () => {
   });
 
   it("offers link and waive actions while a balance is outstanding", async () => {
+    const user = userEvent.setup();
     renderWithProviders(<SettleUpPage />);
 
     await waitFor(() => {
       expect(screen.getByText("Link bank transactions")).toBeInTheDocument();
     });
     expect(screen.getByText("Waive Balance")).toBeInTheDocument();
+
+    // The candidate search starts collapsed — its month stepper appears once
+    // the user opens it.
+    expect(screen.queryByText("All months")).not.toBeInTheDocument();
+    await user.click(await screen.findByText("No matching transfers found"));
     expect(screen.getByText("All months")).toBeInTheDocument();
   });
 
@@ -438,7 +600,7 @@ describe("SettleUpPage", () => {
       expect(screen.getByText("Upload CSV")).toBeInTheDocument();
     });
 
-    expect(screen.queryByText("All settled!")).not.toBeInTheDocument();
+    expect(screen.queryByText(/is settled$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/View /)).not.toBeInTheDocument();
   });
 
@@ -452,7 +614,7 @@ describe("SettleUpPage", () => {
         screen.getByText(/No transactions to settle for/),
       ).toBeInTheDocument();
       expect(screen.getByText("Upload CSV")).toBeInTheDocument();
-      expect(screen.getByText("View February 2026")).toBeInTheDocument();
+      expect(screen.getByText(`View February ${Y}`)).toBeInTheDocument();
     });
   });
 

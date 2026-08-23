@@ -70,15 +70,19 @@ function StatusChip({
 
 export function LedgerMonthList({
   months,
+  year,
   settlements,
   expandedKey,
   onToggle,
   getPersonName,
   getPersonColor,
   renderExpanded,
+  emptyLabel,
 }: {
-  // Chronological ascending, as the API delivers them.
+  // Scoped to `year` by the caller; rendered oldest first regardless of
+  // the order they arrive in.
   months: LedgerMonthResponse[];
+  year: number;
   settlements: LedgerSettlementResponse[];
   expandedKey: string | null;
   onToggle: (month: LedgerMonthResponse) => void;
@@ -87,19 +91,25 @@ export function LedgerMonthList({
   // Month-scoped drill-down content — supplied by the page, which owns the
   // month-scoped data fetch.
   renderExpanded: (month: LedgerMonthResponse) => ReactNode;
+  // Shown in place of the list when the year holds no rows. Omit to render
+  // nothing at all.
+  emptyLabel?: string;
 }) {
-  if (months.length === 0) return null;
+  if (months.length === 0 && emptyLabel === undefined) return null;
 
-  const newestFirst = [...months].reverse();
+  const oldestFirst = [...months].sort((a, b) => a.month - b.month);
 
   return (
     <Card>
       <SectionHeader
         title="Months"
-        description="Each month's balance and how the ledger covered it"
+        description={`Each ${year} month's balance and how the ledger covered it`}
       />
+      {months.length === 0 && (
+        <p className="text-sm text-muted-foreground">{emptyLabel}</p>
+      )}
       <div className="divide-y divide-border-muted">
-        {newestFirst.map((m) => {
+        {oldestFirst.map((m) => {
           const key = ledgerMonthKey(m);
           const isExpanded = expandedKey === key;
           // A zero-amount gross carries an arbitrary direction — the API

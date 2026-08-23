@@ -5,6 +5,7 @@ import type {
   SettlementCandidateResponse,
 } from "@/api/generated/model";
 import { useGetSettlementCandidates } from "@/api/generated/settlements/settlements";
+import { ExpandChevron } from "@/components/ExpandChevron";
 import { InlineError } from "@/components/InlineError";
 import { monthAtOrAfter, stepMonth } from "@/lib/date-range";
 import { formatCurrency, formatDate, MONTHS } from "@/lib/format";
@@ -92,6 +93,7 @@ export function CandidateChecklist({
   selectedIds,
   onSelectionChange,
   latestTransactionMonth,
+  defaultExpanded = true,
 }: {
   amount: string;
   // Concrete → the stepper starts on that month (post-hoc linking).
@@ -104,6 +106,9 @@ export function CandidateChecklist({
   selectedIds: string[];
   onSelectionChange: (ids: string[], selected: SelectedCandidate[]) => void;
   latestTransactionMonth?: MonthReference | null;
+  // Collapsed start keeps the search out of the way until it is wanted —
+  // the dialog, which exists to pick a transfer, opens expanded.
+  defaultExpanded?: boolean;
 }) {
   const parsedAmount = Number.parseFloat(amount);
   const isValidAmount = !Number.isNaN(parsedAmount) && parsedAmount > 0;
@@ -157,6 +162,7 @@ export function CandidateChecklist({
   }, [amount, onSelectionChange, initialSearchMonth]);
 
   const [showAll, setShowAll] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
 
   const { paired, unpaired } = useMemo(() => {
     const sorted = [...candidates].sort(
@@ -178,6 +184,16 @@ export function CandidateChecklist({
 
   const visible = showAll ? [...paired, ...unpaired] : paired;
 
+  // One line that says what the collapsed body holds, so the disclosure is
+  // worth opening (or safe to leave shut).
+  const summary = isLoading
+    ? "Searching for matches..."
+    : paired.length > 0
+      ? `${paired.length} matching ${paired.length === 1 ? "transfer" : "transfers"}`
+      : unpaired.length > 0
+        ? `${unpaired.length} ${unpaired.length === 1 ? "transfer" : "transfers"} found`
+        : "No matching transfers found";
+
   if (!isValidAmount) return null;
 
   return (
@@ -190,140 +206,134 @@ export function CandidateChecklist({
         transaction. Link it here so it's counted as a settlement, not spending.
       </p>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-muted-foreground">Searching:</span>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            disabled={isAtFloor || (search === null && narrowTarget === null)}
-            onClick={() => {
-              if (search === null) {
-                if (narrowTarget) {
-                  setSearch(narrowTarget);
-                  setShowAll(false);
-                }
-                return;
-              }
-              const [ny, nm] = stepMonth(search.year, search.month, -1);
-              if (
-                floor === null ||
-                monthAtOrAfter(ny, nm, floor.year, floor.month)
-              ) {
-                setSearch({ year: ny, month: nm });
-                setShowAll(false);
-              }
-            }}
-            className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
-            aria-label="Previous month"
-          >
-            <ChevronLeft className="size-3.5" />
-          </button>
-          <span className="min-w-24 text-center text-xs font-medium text-foreground">
-            {search
-              ? `${MONTHS[search.month - 1]} ${search.year}`
-              : "All months"}
-          </span>
-          <button
-            type="button"
-            // Bounded when the latest transaction month is known; unbounded
-            // otherwise — the ceiling only covers household rows, so it can
-            // be null while later-dated settlement candidates still exist.
-            disabled={search === null || isAtCeiling}
-            onClick={() => {
-              if (search === null) return;
-              const [ny, nm] = stepMonth(search.year, search.month, 1);
-              if (
-                ceiling === null ||
-                monthAtOrAfter(ceiling.year, ceiling.month, ny, nm)
-              ) {
-                setSearch({ year: ny, month: nm });
-                setShowAll(false);
-              }
-            }}
-            className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
-            aria-label="Next month"
-          >
-            <ChevronRight className="size-3.5" />
-          </button>
-        </div>
-        {initialSearchMonth === null && search !== null && (
-          <button
-            type="button"
-            onClick={() => {
-              setSearch(null);
-              setShowAll(false);
-            }}
-            className="rounded text-xs text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            All months
-          </button>
-        )}
-      </div>
-
-      {isLoading && (
-        <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" />
-          Searching for matches...
-        </div>
-      )}
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
+        className="flex items-center gap-1.5 rounded text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <ExpandChevron expanded={expanded} className="size-3.5" />
+        {isLoading && <Loader2 className="size-3.5 animate-spin" />}
+        {summary}
+      </button>
 
       {isError && (
         <InlineError>Failed to load candidate transactions</InlineError>
       )}
 
-      {!isLoading &&
-        !isError &&
-        paired.length === 0 &&
-        unpaired.length === 0 && (
-          <p className="py-2 text-sm text-muted-foreground">
-            No matching transfers found
-          </p>
-        )}
-
-      {visible.length > 0 && (
-        <>
-          <p className="text-xs font-medium text-muted-foreground">
-            {paired.length > 0
-              ? `${paired.length} matching ${paired.length === 1 ? "transfer" : "transfers"}`
-              : `${unpaired.length} ${unpaired.length === 1 ? "transfer" : "transfers"} found`}
-          </p>
-          <div className="space-y-2">
-            {visible.map((c) => {
-              const isChecked = selectedIds.includes(c.id);
-              return (
-                <CandidateRow
-                  key={c.id}
-                  candidate={c}
-                  checked={isChecked}
-                  disabled={!isChecked && selectedIds.length >= MAX_LINKED}
-                  onToggle={() => {
-                    const nextIds = isChecked
-                      ? selectedIds.filter((id) => id !== c.id)
-                      : [...selectedIds, c.id];
-                    const nextCandidates = candidates.filter((cn) =>
-                      nextIds.includes(cn.id),
-                    );
-                    onSelectionChange(nextIds, nextCandidates);
-                  }}
-                  getPersonName={getPersonName}
-                />
-              );
-            })}
+      {expanded && (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">Searching:</span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                disabled={
+                  isAtFloor || (search === null && narrowTarget === null)
+                }
+                onClick={() => {
+                  if (search === null) {
+                    if (narrowTarget) {
+                      setSearch(narrowTarget);
+                      setShowAll(false);
+                    }
+                    return;
+                  }
+                  const [ny, nm] = stepMonth(search.year, search.month, -1);
+                  if (
+                    floor === null ||
+                    monthAtOrAfter(ny, nm, floor.year, floor.month)
+                  ) {
+                    setSearch({ year: ny, month: nm });
+                    setShowAll(false);
+                  }
+                }}
+                className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
+                aria-label="Previous month"
+              >
+                <ChevronLeft className="size-3.5" />
+              </button>
+              <span className="min-w-24 text-center text-xs font-medium text-foreground">
+                {search
+                  ? `${MONTHS[search.month - 1]} ${search.year}`
+                  : "All months"}
+              </span>
+              <button
+                type="button"
+                // Bounded when the latest transaction month is known; unbounded
+                // otherwise — the ceiling only covers household rows, so it can
+                // be null while later-dated settlement candidates still exist.
+                disabled={search === null || isAtCeiling}
+                onClick={() => {
+                  if (search === null) return;
+                  const [ny, nm] = stepMonth(search.year, search.month, 1);
+                  if (
+                    ceiling === null ||
+                    monthAtOrAfter(ceiling.year, ceiling.month, ny, nm)
+                  ) {
+                    setSearch({ year: ny, month: nm });
+                    setShowAll(false);
+                  }
+                }}
+                className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
+                aria-label="Next month"
+              >
+                <ChevronRight className="size-3.5" />
+              </button>
+            </div>
+            {initialSearchMonth === null && search !== null && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch(null);
+                  setShowAll(false);
+                }}
+                className="rounded text-xs text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                All months
+              </button>
+            )}
           </div>
-        </>
-      )}
 
-      {!showAll && unpaired.length > 0 && (
-        <button
-          type="button"
-          onClick={() => setShowAll(true)}
-          className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ChevronDown className="size-3.5" />
-          {paired.length > 0
-            ? `Show ${unpaired.length} more ${unpaired.length === 1 ? "transaction" : "transactions"}`
-            : `Show ${unpaired.length} unmatched ${unpaired.length === 1 ? "transaction" : "transactions"}`}
-        </button>
+          {visible.length > 0 && (
+            <div className="space-y-2">
+              {visible.map((c) => {
+                const isChecked = selectedIds.includes(c.id);
+                return (
+                  <CandidateRow
+                    key={c.id}
+                    candidate={c}
+                    checked={isChecked}
+                    disabled={!isChecked && selectedIds.length >= MAX_LINKED}
+                    onToggle={() => {
+                      const nextIds = isChecked
+                        ? selectedIds.filter((id) => id !== c.id)
+                        : [...selectedIds, c.id];
+                      const nextCandidates = candidates.filter((cn) =>
+                        nextIds.includes(cn.id),
+                      );
+                      onSelectionChange(nextIds, nextCandidates);
+                    }}
+                    getPersonName={getPersonName}
+                  />
+                );
+              })}
+            </div>
+          )}
+
+          {!showAll && unpaired.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowAll(true)}
+              className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ChevronDown className="size-3.5" />
+              {paired.length > 0
+                ? `Show ${unpaired.length} more ${unpaired.length === 1 ? "transaction" : "transactions"}`
+                : `Show ${unpaired.length} unmatched ${unpaired.length === 1 ? "transaction" : "transactions"}`}
+            </button>
+          )}
+        </div>
       )}
     </fieldset>
   );

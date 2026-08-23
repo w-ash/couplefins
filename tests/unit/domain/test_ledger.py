@@ -18,6 +18,7 @@ from src.domain.ledger import (
     MonthSettlementStatus,
     SettlementLedger,
     compute_ledger,
+    year_remaining_result,
 )
 from src.domain.reconciliation import (
     SettlementResult,
@@ -530,3 +531,60 @@ def test_invariant_violation_propagates(monkeypatch: pytest.MonkeyPatch) -> None
 
     with pytest.raises(InvariantViolationError):
         compute_ledger([month_debt(2026, 1, "50")], [], PERSONS)
+
+
+class TestYearRemainingResult:
+    """Year slices partition the ledger — their remainders must sum back to
+    the all-time outstanding balance."""
+
+    def test_sums_only_the_requested_years_months(self) -> None:
+        ledger = compute_ledger(
+            [
+                month_debt(2025, 11, "100"),
+                month_debt(2026, 1, "300"),
+                month_debt(2026, 3, "400"),
+            ],
+            [],
+            PERSONS,
+        )
+
+        result = year_remaining_result(ledger.months, 2026, PERSONS)
+
+        assert result is not None
+        assert result.amount == Decimal(700)
+        assert result.from_person_id == ALICE
+
+    def test_year_slices_sum_to_the_outstanding_balance(self) -> None:
+        # FIFO clears 2025 first, so the $150 payment leaves $50 in 2026.
+        ledger = compute_ledger(
+            [month_debt(2025, 12, "100"), month_debt(2026, 1, "100")],
+            [payment("150", settled=datetime(2026, 2, 1, tzinfo=UTC))],
+            PERSONS,
+        )
+
+        y2025 = year_remaining_result(ledger.months, 2025, PERSONS)
+        y2026 = year_remaining_result(ledger.months, 2026, PERSONS)
+
+        assert y2025 is None
+        assert y2026 is not None
+        assert y2026.amount == Decimal(50)
+        assert ledger.outstanding is not None
+        assert ledger.outstanding.amount == Decimal(50)
+
+    def test_nets_opposing_months_within_the_year(self) -> None:
+        ledger = compute_ledger(
+            [month_debt(2026, 1, "100"), month_debt(2026, 2, "-30")],
+            [],
+            PERSONS,
+        )
+
+        result = year_remaining_result(ledger.months, 2026, PERSONS)
+
+        assert result is not None
+        assert result.amount == Decimal(70)
+        assert result.from_person_id == ALICE
+
+    def test_year_without_ledger_months_is_none(self) -> None:
+        ledger = compute_ledger([month_debt(2026, 1, "100")], [], PERSONS)
+
+        assert year_remaining_result(ledger.months, 2027, PERSONS) is None

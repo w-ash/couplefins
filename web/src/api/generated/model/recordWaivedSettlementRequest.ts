@@ -10,5 +10,6 @@ export interface RecordWaivedSettlementRequest {
   month?: number | null;
   from_person_id: string;
   to_person_id: string;
+  waive_year?: number | null;
   notes?: string;
 }

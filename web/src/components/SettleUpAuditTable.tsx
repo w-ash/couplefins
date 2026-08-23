@@ -144,7 +144,7 @@ export function SettleUpAuditTable({ data, personNames }: Props) {
 
   return (
     <Card>
-      <SectionHeader title="Showing the work" />
+      <SectionHeader title="Summary" />
       <p className="mb-4 text-sm leading-relaxed text-foreground">
         {narrative}
       </p>

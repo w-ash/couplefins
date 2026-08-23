@@ -20,7 +20,13 @@ from src.application.use_cases._shared.settlement_records import (
 from src.application.use_cases._shared.upload_status import build_upload_statuses
 from src.domain.entities.settlement import Settlement
 from src.domain.exceptions import ValidationError
-from src.domain.ledger import MonthKey
+from src.domain.ledger import (
+    MonthKey,
+    SettlementLedger,
+    year_open_span,
+    year_remaining_result,
+)
+from src.domain.reconciliation import SettlementResult
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -28,6 +34,8 @@ from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 class RecordWaivedSettlementCommand:
     from_person_id: uuid.UUID
     to_person_id: uuid.UUID
+    # Calendar year whose balance is forgiven. None waives the whole ledger.
+    waive_year: int | None = field(default=None, validator=optional_positive_int)
     # Optional "recorded against" annotation — display only, never math.
     year: int | None = field(default=None, validator=optional_positive_int)
     month: int | None = field(default=None, validator=optional_month_range)
@@ -66,9 +74,32 @@ async def _missing_upload_warnings(
     ]
 
 
+def _year_outstanding(
+    ledger: SettlementLedger, waive_year: int, person_ids: list[uuid.UUID]
+) -> SettlementResult:
+    """The chosen year's unpaid balance, refused while an older year is open.
+
+    A waiver is a payment against the running ledger, and payments relieve
+    the oldest open month first — recorded over an older debt it would
+    forgive that year instead of the one the caller picked.
+    """
+    older_open = sorted({
+        m.year for m in ledger.months if m.year < waive_year and m.remaining != 0
+    })
+    if older_open:
+        raise ValidationError(
+            f"Settle or waive {older_open[0]} first — payments apply to the "
+            "oldest open months before newer ones"
+        )
+    outstanding = year_remaining_result(ledger.months, waive_year, person_ids)
+    if outstanding is None:
+        raise ValidationError(f"{waive_year} is already settled — nothing to waive")
+    return outstanding
+
+
 @define(slots=True)
 class RecordWaivedSettlementUseCase:
-    """Waive the total outstanding balance across all months.
+    """Waive one calendar year's outstanding balance, or the whole ledger.
 
     No period guard: Lock Month freezes transactions, and a waiver touches
     none — it only records a payment-equivalent against the ledger.
@@ -85,7 +116,14 @@ class RecordWaivedSettlementUseCase:
             ctx = await load_reconciliation_context(uow)
             ledger = (await load_ledger(uow, ctx)).ledger
 
-            outstanding = ledger.outstanding
+            if command.waive_year is not None:
+                outstanding = _year_outstanding(
+                    ledger, command.waive_year, ctx.person_ids
+                )
+                span = year_open_span(ledger.months, command.waive_year)
+            else:
+                outstanding = ledger.outstanding
+                span = ledger.span
             if outstanding is None:
                 raise ValidationError("Balance is already settled — nothing to waive")
             # A waiver recorded against the wrong direction would double the
@@ -98,7 +136,7 @@ class RecordWaivedSettlementUseCase:
                     "Waive direction does not match the outstanding balance"
                 )
 
-            warnings = await _missing_upload_warnings(uow, ctx, ledger.span)
+            warnings = await _missing_upload_warnings(uow, ctx, span)
 
             settlement = build_settlement(
                 year=command.year,

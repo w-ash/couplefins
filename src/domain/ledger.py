@@ -143,6 +143,32 @@ def month_remaining_result(month: LedgerMonth) -> SettlementResult | None:
     )
 
 
+def year_remaining_result(
+    months: Iterable[LedgerMonth], year: int, person_ids: list[UUID]
+) -> SettlementResult | None:
+    """The unpaid balance carried by one calendar year's months.
+
+    Years partition the ledger: their remainders sum back to the all-time
+    outstanding balance.
+    """
+    return sum_settlement_results(
+        (month_remaining_result(month) for month in months if month.year == year),
+        person_ids,
+    )
+
+
+def year_open_span(
+    months: Iterable[LedgerMonth], year: int
+) -> tuple[MonthKey, MonthKey] | None:
+    """(oldest, newest) month of ``year`` that still carries a balance."""
+    keys = [
+        (month.year, month.month)
+        for month in months
+        if month.year == year and month.remaining != _ZERO
+    ]
+    return (min(keys), max(keys)) if keys else None
+
+
 def compute_ledger(
     transactions: list[Transaction],
     settlements: Sequence[Settlement],

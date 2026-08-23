@@ -53,6 +53,8 @@ class RecordSettlementRequest(_MonthAnnotatedRequest):
 class RecordWaivedSettlementRequest(_MonthAnnotatedRequest):
     from_person_id: UUID
     to_person_id: UUID
+    # Calendar year whose balance is forgiven; omit to waive the whole ledger.
+    waive_year: int | None = None
     notes: str = ""
 
 
