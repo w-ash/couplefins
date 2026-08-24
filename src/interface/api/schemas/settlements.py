@@ -2,18 +2,19 @@ import datetime
 from typing import Self
 from uuid import UUID
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel
 
-from src.application.use_cases._shared.command_validators import (
-    assert_month_annotation_pair,
-)
 from src.application.use_cases._shared.settlement_math import LedgerSettlementRecord
 from src.application.use_cases._shared.settlement_records import SettlementRecord
 from src.application.use_cases.get_settle_up_data import GetSettleUpDataResult
 from src.domain.entities.settlement import Settlement
 from src.domain.entities.transaction import Transaction
-from src.domain.ledger import LedgerMonth
-from src.domain.reconciliation import PayerGroupSummary, PayerSplitSummary
+from src.domain.ledger import LedgerMonth, LedgerYear, MonthSettlementStatus
+from src.domain.reconciliation import (
+    PayerGroupSummary,
+    PayerSplitSummary,
+    SettlementResult,
+)
 from src.domain.settlement_matching import SettlementCandidate
 from src.interface.api.schemas.dashboard import DashboardPersonResponse
 from src.interface.api.schemas.reconciliation import (
@@ -25,35 +26,25 @@ from src.interface.api.schemas.reconciliation import (
 from src.interface.api.schemas.types import MoneyField
 
 
-class _MonthAnnotatedRequest(BaseModel):
-    """Requests carrying the optional (year, month) "recorded against"
-    annotation — display only, never math. Rejects a half-set pair at the
-    boundary (→ 422) rather than letting a bare ValueError from the command
-    or entity surface as a 500."""
-
-    year: int | None = None
-    month: int | None = None
-
-    @model_validator(mode="after")
-    def _validate_month_annotation(self) -> Self:
-        assert_month_annotation_pair(self.year, self.month)
-        return self
-
-
-class RecordSettlementRequest(_MonthAnnotatedRequest):
+class RecordSettlementRequest(BaseModel):
     amount: MoneyField
     from_person_id: UUID
     to_person_id: UUID
     method: str
     notes: str = ""
     settled_at: datetime.datetime | None = None
+    # Transfer legs (the Venmo rows themselves) — excluded from math.
     linked_transaction_ids: list[UUID] = []
+    # The months this payment covers; empty means the settled_at month.
+    # Per-month portions are allocated at record time and stored.
+    # Bounds live on MonthReference's fields (→ 422).
+    covered_months: list[MonthReference] = []
 
 
-class RecordWaivedSettlementRequest(_MonthAnnotatedRequest):
+class RecordWaivedSettlementRequest(BaseModel):
     from_person_id: UUID
     to_person_id: UUID
-    # Calendar year whose balance is forgiven; omit to waive the whole ledger.
+    # Calendar year whose balance is waived; omit to waive every open month.
     waive_year: int | None = None
     notes: str = ""
 
@@ -84,9 +75,6 @@ class LinkedTransactionResponse(BaseModel):
 
 class SettlementResponse(BaseModel):
     id: UUID
-    # Optional "recorded against" annotation — display metadata, never math.
-    year: int | None
-    month: int | None
     amount: MoneyField
     from_person_id: UUID
     to_person_id: UUID
@@ -99,31 +87,16 @@ class SettlementResponse(BaseModel):
     linked_transactions: list[LinkedTransactionResponse] = []
 
     @classmethod
-    def from_domain(
-        cls, settlement: Settlement, linked_tx_ids: list[UUID] | None = None
-    ) -> SettlementResponse:
-        return cls(
-            id=settlement.id,
-            year=settlement.year,
-            month=settlement.month,
-            amount=settlement.amount,
-            from_person_id=settlement.from_person_id,
-            to_person_id=settlement.to_person_id,
-            method=settlement.method,
-            is_waived=settlement.is_waived,
-            notes=settlement.notes,
-            settled_at=settlement.settled_at,
-            created_at=settlement.created_at,
-            linked_transaction_ids=linked_tx_ids or [],
+    def from_domain(cls, settlement: Settlement) -> Self:
+        return cls.from_record(
+            SettlementRecord(settlement=settlement, linked_transaction_ids=[])
         )
 
     @classmethod
-    def from_record(cls, record: SettlementRecord) -> SettlementResponse:
+    def from_record(cls, record: SettlementRecord) -> Self:
         s = record.settlement
         return cls(
             id=s.id,
-            year=s.year,
-            month=s.month,
             amount=s.amount,
             from_person_id=s.from_person_id,
             to_person_id=s.to_person_id,
@@ -140,8 +113,8 @@ class SettlementResponse(BaseModel):
         )
 
 
-class CoveredMonthResponse(BaseModel):
-    """One (month, amount) slice a payment covered, per FIFO."""
+class SettlementPortionResponse(BaseModel):
+    """One month's slice of a settlement payment."""
 
     year: int
     month: int
@@ -149,55 +122,70 @@ class CoveredMonthResponse(BaseModel):
 
 
 class LedgerSettlementResponse(SettlementResponse):
-    """Payment history entry enriched with its FIFO coverage."""
+    """History entry enriched with its per-month portions."""
 
-    covered: list[CoveredMonthResponse]
-    unapplied: MoneyField
+    portions: list[SettlementPortionResponse] = []
 
     @classmethod
     def from_ledger_record(
         cls, entry: LedgerSettlementRecord
     ) -> LedgerSettlementResponse:
-        base = SettlementResponse.from_record(entry.record)
-        return cls.model_validate({
-            **base.model_dump(),
-            "covered": [
-                {"year": year, "month": month, "amount": amount}
-                for year, month, amount in entry.coverage.covered
-            ],
-            "unapplied": entry.coverage.unapplied,
-        })
+        response = cls.from_record(entry.record)
+        response.portions = [
+            SettlementPortionResponse(year=p.year, month=p.month, amount=p.amount)
+            for p in entry.application.portions
+        ]
+        return response
 
 
 class LedgerMonthResponse(BaseModel):
-    """One month's ledger row: gross position, applied payments, status."""
+    """One month, fully precomputed: charged, paid, balance, status."""
 
     year: int
     month: int
-    gross: OwedAmountResponse | None
-    applied: MoneyField
-    remaining: MoneyField
-    status: str  # settled | partially_settled | carried_forward
-    covering_settlement_ids: list[UUID]
-    is_offset: bool
+    charged: OwedAmountResponse | None  # net of the month's charges' shares
+    paid: OwedAmountResponse | None  # payments applied to this month
+    balance: OwedAmountResponse | None  # charged - paid; None means settled
+    status: MonthSettlementStatus
+    # True when the balance direction differs from its year's — the UI names
+    # the person only on such rows.
+    runs_against_year: bool
 
     @classmethod
     def from_domain(cls, month: LedgerMonth) -> LedgerMonthResponse:
         return cls(
             year=month.year,
             month=month.month,
-            # A zero-amount gross carries an arbitrary direction — omit it.
-            gross=(
-                OwedAmountResponse.from_domain(month.gross)
-                if month.gross and month.gross.amount > 0
-                else None
-            ),
-            applied=month.applied,
-            remaining=month.remaining,
+            charged=_owed(month.charged),
+            paid=_owed(month.paid),
+            balance=_owed(month.balance),
             status=month.status,
-            covering_settlement_ids=list(month.covering_settlement_ids),
-            is_offset=month.is_offset,
+            runs_against_year=month.runs_against_year,
         )
+
+
+class LedgerYearResponse(BaseModel):
+    """One calendar year's totals — the Settle Up hero renders this as-is."""
+
+    year: int
+    charged: OwedAmountResponse | None
+    paid: OwedAmountResponse | None
+    balance: OwedAmountResponse | None
+    span: MonthSpanResponse | None  # (oldest, newest) charged month
+
+    @classmethod
+    def from_domain(cls, row: LedgerYear) -> LedgerYearResponse:
+        return cls(
+            year=row.year,
+            charged=_owed(row.charged),
+            paid=_owed(row.paid),
+            balance=_owed(row.balance),
+            span=MonthSpanResponse.from_optional_span(row.span),
+        )
+
+
+def _owed(result: SettlementResult | None) -> OwedAmountResponse | None:
+    return None if result is None else OwedAmountResponse.from_domain(result)
 
 
 class SettlementCandidateResponse(BaseModel):
@@ -272,14 +260,17 @@ class PayerGroupSplitSummaryResponse(BaseModel):
 
 
 class SettleUpDataResponse(BaseModel):
+    """Everything Settle Up renders, precomputed and direction-resolved.
+
+    The client scopes ``years``/``months``/``settlements`` to its selected
+    year by field equality — it never does arithmetic.
+    """
+
     year: int
     month: int
-    owed: OwedAmountResponse | None
-    recorded_settlements: list[SettlementResponse]
-    outstanding: OwedAmountResponse | None
-    outstanding_span: MonthSpanResponse | None
-    ledger_months: list[LedgerMonthResponse]
-    all_settlements: list[LedgerSettlementResponse]
+    years: list[LedgerYearResponse]
+    months: list[LedgerMonthResponse]
+    settlements: list[LedgerSettlementResponse]
     upload_statuses: list[UploadStatusResponse]
     persons: list[DashboardPersonResponse]
     is_finalized: bool
@@ -295,24 +286,11 @@ class SettleUpDataResponse(BaseModel):
         return cls(
             year=result.year,
             month=result.month,
-            owed=OwedAmountResponse.from_domain(result.owed) if result.owed else None,
-            recorded_settlements=[
-                SettlementResponse.from_record(r) for r in result.recorded_settlements
-            ],
-            outstanding=(
-                OwedAmountResponse.from_domain(result.outstanding)
-                if result.outstanding
-                else None
-            ),
-            outstanding_span=MonthSpanResponse.from_optional_span(
-                result.outstanding_span
-            ),
-            ledger_months=[
-                LedgerMonthResponse.from_domain(m) for m in result.ledger_months
-            ],
-            all_settlements=[
+            years=[LedgerYearResponse.from_domain(row) for row in result.years],
+            months=[LedgerMonthResponse.from_domain(m) for m in result.months],
+            settlements=[
                 LedgerSettlementResponse.from_ledger_record(entry)
-                for entry in result.all_settlements
+                for entry in result.settlements
             ],
             upload_statuses=[
                 UploadStatusResponse.from_domain(us) for us in result.upload_statuses

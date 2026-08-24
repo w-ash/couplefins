@@ -4,10 +4,9 @@
  * Couplefins
  * OpenAPI spec version: 0.1.0
  */
+import type { MonthReference } from './monthReference';
 
 export interface RecordSettlementRequest {
-  year?: number | null;
-  month?: number | null;
   amount: number;
   from_person_id: string;
   to_person_id: string;
@@ -15,4 +14,5 @@ export interface RecordSettlementRequest {
   notes?: string;
   settled_at?: string | null;
   linked_transaction_ids?: string[];
+  covered_months?: MonthReference[];
 }

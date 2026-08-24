@@ -1,6 +1,11 @@
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it } from "vitest";
+import type {
+  LedgerMonthResponse,
+  LedgerSettlementResponse,
+} from "@/api/generated/model";
 import { useIdentityStore } from "@/lib/identity";
+import { makeLedgerMonth, makeLedgerSettlement } from "@/test/ledger-fixtures";
 import { server } from "@/test/server";
 import {
   renderWithProviders,
@@ -11,21 +16,25 @@ import {
 } from "../test/test-utils";
 import { SettleUpPage } from "./SettleUpPage";
 
-// Ledger fixtures ride the current year so the year-scoped hero card
-// resolves the same way every year the suite runs.
+// Fixtures ride the current year so the year-scoped hero resolves the same
+// way every year the suite runs. The numbers mirror production 2026: rent
+// settled 1:1 each month, so every month swings to Ash's favor.
 const Y = new Date().getFullYear();
+
+const ASH = "p1";
+const KEW = "p2";
 
 const persons = [
   {
-    id: "p1",
-    name: "Alice",
+    id: ASH,
+    name: "Ash",
     adjustment_account: "",
     theme_preference: "system",
     chat_voice: "fiona",
   },
   {
-    id: "p2",
-    name: "Bob",
+    id: KEW,
+    name: "Kew",
     adjustment_account: "",
     theme_preference: "system",
     chat_voice: "fiona",
@@ -33,219 +42,188 @@ const persons = [
 ];
 
 const uploadedStatuses = [
-  {
-    person_id: "p1",
-    person_name: "Alice",
-    has_uploaded: true,
-    upload_count: 1,
-  },
-  {
-    person_id: "p2",
-    person_name: "Bob",
-    has_uploaded: true,
-    upload_count: 1,
-  },
+  { person_id: ASH, person_name: "Ash", has_uploaded: true, upload_count: 1 },
+  { person_id: KEW, person_name: "Kew", has_uploaded: true, upload_count: 1 },
 ];
 
-// One carried-forward month, no payments: outstanding equals the month's
-// gross and the span is that single month.
-const settleUpResponse = {
+const ashOwesKew = (amount: number) => ({
+  amount,
+  from_person_id: ASH,
+  to_person_id: KEW,
+});
+const kewOwesAsh = (amount: number) => ({
+  amount,
+  from_person_id: KEW,
+  to_person_id: ASH,
+});
+
+// One $1,981 rent settlement (Ash's half of the rent Check), one portion at
+// its rent month.
+function rentSettlement(
+  id: string,
+  month: number,
+  overrides: Partial<LedgerSettlementResponse> = {},
+): LedgerSettlementResponse {
+  return makeLedgerSettlement({
+    id,
+    amount: 1981.0,
+    from_person_id: ASH,
+    to_person_id: KEW,
+    method: "venmo",
+    settled_at: `${Y}-04-26T12:00:00Z`,
+    created_at: `${Y}-04-26T12:00:00Z`,
+    portions: [{ year: Y, month, amount: 1981.0 }],
+    ...overrides,
+  });
+}
+
+function makeMonth(
+  overrides: Partial<LedgerMonthResponse>,
+): LedgerMonthResponse {
+  return makeLedgerMonth({ year: Y, month: 1, ...overrides });
+}
+
+// The production acceptance numbers: Jan 24.11 / Feb 1,758.69 / Mar 175.90,
+// year 1,958.70 — every month's direction matches the year's, so no row
+// names a person.
+const productionResponse = {
   year: Y,
-  month: 3,
-  owed: { amount: 50.0, from_person_id: "p2", to_person_id: "p1" },
-  recorded_settlements: [],
-  outstanding: { amount: 50.0, from_person_id: "p2", to_person_id: "p1" },
-  outstanding_span: {
-    start: { year: Y, month: 3 },
-    end: { year: Y, month: 3 },
-  },
-  ledger_months: [
+  month: 1,
+  years: [
     {
       year: Y,
-      month: 3,
-      gross: { amount: 50.0, from_person_id: "p2", to_person_id: "p1" },
-      applied: 0.0,
-      remaining: 50.0,
-      status: "carried_forward",
-      covering_settlement_ids: [],
-      is_offset: false,
+      charged: ashOwesKew(3984.3),
+      paid: ashOwesKew(5943.0),
+      balance: kewOwesAsh(1958.7),
+      span: { start: { year: Y, month: 1 }, end: { year: Y, month: 3 } },
     },
   ],
-  all_settlements: [],
+  months: [
+    makeMonth({
+      month: 1,
+      charged: ashOwesKew(1956.89),
+      paid: ashOwesKew(1981.0),
+      balance: kewOwesAsh(24.11),
+      status: "partially_settled",
+    }),
+    makeMonth({
+      month: 2,
+      charged: ashOwesKew(222.31),
+      paid: ashOwesKew(1981.0),
+      balance: kewOwesAsh(1758.69),
+      status: "partially_settled",
+    }),
+    makeMonth({
+      month: 3,
+      charged: ashOwesKew(1805.1),
+      paid: ashOwesKew(1981.0),
+      balance: kewOwesAsh(175.9),
+      status: "partially_settled",
+    }),
+  ],
+  settlements: [
+    rentSettlement("r1", 1),
+    rentSettlement("r2", 2),
+    rentSettlement("r3", 3),
+  ],
   upload_statuses: uploadedStatuses,
   persons: [
-    { id: "p1", name: "Alice" },
-    { id: "p2", name: "Bob" },
+    { id: ASH, name: "Ash" },
+    { id: KEW, name: "Kew" },
   ],
   is_finalized: false,
   finalized_at: null,
-  transaction_count: 5,
+  transaction_count: 40,
   latest_transaction_month: { year: Y, month: 3 },
   finalization_warnings: [],
-  payer_splits: [],
-  payer_group_splits: [],
-};
-
-// Three months + one catch-up payment: Mar fully covered (settled), Apr
-// partially covered, May untouched. Sum of remainders = outstanding (642),
-// payment coverage slices (142 + 58) = payment amount (200), no unapplied.
-const catchUpPayment = {
-  id: "s1",
-  year: null,
-  month: null,
-  amount: 200.0,
-  from_person_id: "p2",
-  to_person_id: "p1",
-  method: "venmo",
-  is_waived: false,
-  notes: "",
-  settled_at: `${Y}-04-02T12:00:00Z`,
-  created_at: `${Y}-04-02T12:00:00Z`,
-  linked_transaction_ids: [],
-  linked_transactions: [],
-  covered: [
-    { year: Y, month: 3, amount: 142.0 },
-    { year: Y, month: 4, amount: 58.0 },
-  ],
-  unapplied: 0.0,
-};
-
-const multiMonthResponse = {
-  ...settleUpResponse,
-  owed: { amount: 142.0, from_person_id: "p2", to_person_id: "p1" },
-  outstanding: { amount: 642.0, from_person_id: "p2", to_person_id: "p1" },
-  outstanding_span: {
-    start: { year: Y, month: 4 },
-    end: { year: Y, month: 5 },
-  },
-  ledger_months: [
-    {
-      year: Y,
-      month: 3,
-      gross: { amount: 142.0, from_person_id: "p2", to_person_id: "p1" },
-      applied: 142.0,
-      remaining: 0.0,
-      status: "settled",
-      covering_settlement_ids: ["s1"],
-      is_offset: false,
-    },
-    {
-      year: Y,
-      month: 4,
-      gross: { amount: 300.0, from_person_id: "p2", to_person_id: "p1" },
-      applied: 58.0,
-      remaining: 242.0,
-      status: "partially_settled",
-      covering_settlement_ids: ["s1"],
-      is_offset: false,
-    },
-    {
-      year: Y,
-      month: 5,
-      gross: { amount: 400.0, from_person_id: "p2", to_person_id: "p1" },
-      applied: 0.0,
-      remaining: 400.0,
-      status: "carried_forward",
-      covering_settlement_ids: [],
-      is_offset: false,
-    },
-  ],
-  all_settlements: [catchUpPayment],
-  recorded_settlements: [],
   payer_splits: [
     {
-      payer_person_id: "p1",
-      fronted: 100,
-      their_share: 50,
-      partner_share: 50,
+      payer_person_id: KEW,
+      fronted: 3962.0,
+      their_share: 1981.0,
+      partner_share: 1981.0,
       transaction_count: 1,
     },
     {
-      payer_person_id: "p2",
-      fronted: 0,
-      their_share: 0,
-      partner_share: 0,
-      transaction_count: 0,
+      payer_person_id: ASH,
+      fronted: 48.22,
+      their_share: 24.11,
+      partner_share: 24.11,
+      transaction_count: 2,
     },
   ],
+  payer_group_splits: [],
 };
 
-// Everything paid off: the single month's gross is fully covered by one
-// payment, so nothing is outstanding and the span is null.
-const allSettledResponse = {
-  ...settleUpResponse,
-  outstanding: null,
-  outstanding_span: null,
-  ledger_months: [
-    {
-      year: Y,
-      month: 3,
-      gross: { amount: 50.0, from_person_id: "p2", to_person_id: "p1" },
-      applied: 50.0,
-      remaining: 0.0,
-      status: "settled",
-      covering_settlement_ids: ["s2"],
-      is_offset: false,
-    },
-  ],
-  all_settlements: [
-    {
-      ...catchUpPayment,
-      id: "s2",
-      amount: 50.0,
-      covered: [{ year: Y, month: 3, amount: 50.0 }],
-    },
-  ],
-};
-
-// Last year's December still carries $80 alongside this year's $642 — the
-// hero scopes to one year while the all-time balance stays visible.
+// Last year's December still carries $80 — scoped behind its own year tab.
 const crossYearResponse = {
-  ...multiMonthResponse,
-  outstanding: { amount: 722.0, from_person_id: "p2", to_person_id: "p1" },
-  outstanding_span: {
-    start: { year: Y - 1, month: 12 },
-    end: { year: Y, month: 5 },
-  },
-  ledger_months: [
+  ...productionResponse,
+  years: [
     {
       year: Y - 1,
-      month: 12,
-      gross: { amount: 80.0, from_person_id: "p2", to_person_id: "p1" },
-      applied: 0.0,
-      remaining: 80.0,
-      status: "carried_forward",
-      covering_settlement_ids: [],
-      is_offset: false,
+      charged: ashOwesKew(80.0),
+      paid: null,
+      balance: ashOwesKew(80.0),
+      span: {
+        start: { year: Y - 1, month: 12 },
+        end: { year: Y - 1, month: 12 },
+      },
     },
-    ...multiMonthResponse.ledger_months,
+    ...productionResponse.years,
   ],
+  months: [
+    makeMonth({
+      year: Y - 1,
+      month: 12,
+      charged: ashOwesKew(80.0),
+      balance: ashOwesKew(80.0),
+      status: "carried_forward",
+    }),
+    ...productionResponse.months,
+  ],
+};
+
+// Everything paid off: the year still shows its charges but owes nothing.
+const allSettledResponse = {
+  ...productionResponse,
+  years: [
+    {
+      year: Y,
+      charged: ashOwesKew(3984.3),
+      paid: ashOwesKew(3984.3),
+      balance: null,
+      span: { start: { year: Y, month: 1 }, end: { year: Y, month: 3 } },
+    },
+  ],
+  months: productionResponse.months.map((m) => ({
+    ...m,
+    balance: null,
+    status: "settled",
+  })),
 };
 
 const emptyResponse = {
-  ...settleUpResponse,
-  owed: null,
-  recorded_settlements: [],
-  outstanding: null,
-  outstanding_span: null,
-  ledger_months: [],
-  all_settlements: [],
+  ...productionResponse,
+  years: [],
+  months: [],
+  settlements: [],
   upload_statuses: [
     {
-      person_id: "p1",
-      person_name: "Alice",
+      person_id: ASH,
+      person_name: "Ash",
       has_uploaded: false,
       upload_count: 0,
     },
     {
-      person_id: "p2",
-      person_name: "Bob",
+      person_id: KEW,
+      person_name: "Kew",
       has_uploaded: false,
       upload_count: 0,
     },
   ],
   transaction_count: 0,
   latest_transaction_month: null,
+  payer_splits: [],
 };
 
 const emptyWithPriorDataResponse = {
@@ -268,31 +246,25 @@ function serveSettleUp(fixture: Record<string, unknown>) {
   );
 }
 
+function monthsCard() {
+  return within(
+    screen
+      .getByRole("heading", { name: "Months" })
+      .closest("div") as HTMLElement,
+  );
+}
+
 describe("SettleUpPage", () => {
   beforeEach(() => {
-    useIdentityStore.setState({ currentPersonId: "p1" });
+    useIdentityStore.setState({ currentPersonId: ASH });
     server.use(http.get("/api/v1/persons/", () => HttpResponse.json(persons)));
     server.use(
       http.get("/api/v1/settlements/candidates", () => HttpResponse.json([])),
     );
-    serveSettleUp(settleUpResponse);
+    serveSettleUp(productionResponse);
   });
 
-  it("shows the total outstanding balance with its covered span", async () => {
-    serveSettleUp(multiMonthResponse);
-
-    renderWithProviders(<SettleUpPage />);
-
-    await waitFor(() => {
-      expect(screen.getAllByText(/owes/).length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText("$642.00")).toBeInTheDocument();
-      expect(screen.getByText("covers Apr–May")).toBeInTheDocument();
-    });
-  });
-
-  it("defaults the hero to the current year and offers each ledger year", async () => {
-    serveSettleUp(crossYearResponse);
-
+  it("shows the year balance with its charged/paid working line", async () => {
     renderWithProviders(<SettleUpPage />);
 
     await waitFor(() => {
@@ -302,16 +274,138 @@ describe("SettleUpPage", () => {
     const hero = within(
       screen.getByRole("region", { name: "Settlement summary" }),
     );
-    // Only this year's remainders — last year's $80 is excluded.
-    expect(hero.getByText("$642.00")).toBeInTheDocument();
+    expect(hero.getByText("$1,958.70")).toBeInTheDocument();
+    expect(hero.getByText("Kew")).toBeInTheDocument();
+    expect(hero.getByText("Ash")).toBeInTheDocument();
+    expect(hero.getByText("covers Jan–Mar")).toBeInTheDocument();
     expect(
-      hero.getByRole("radio", { name: String(Y - 1) }),
+      hero.getByText(`$3,984.30 charged, $5,943.00 paid in ${Y}`),
     ).toBeInTheDocument();
-    // The all-time balance ($722) is never shown — only the selected year's.
-    expect(hero.queryByText(/722/)).not.toBeInTheDocument();
   });
 
-  it("rescopes the hero when another year is selected", async () => {
+  it("lists the year's months oldest first as bare amounts", async () => {
+    renderWithProviders(<SettleUpPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: new RegExp(`January ${Y}`) }),
+      ).toBeInTheDocument();
+    });
+
+    const rows = monthsCard()
+      .getAllByRole("button")
+      .filter((el) => /^[A-Z][a-z]+ \d{4}/.test(el.textContent ?? ""));
+    expect(
+      rows.map((el) => el.textContent?.match(/^[A-Z][a-z]+ \d{4}/)?.[0]),
+    ).toEqual([`January ${Y}`, `February ${Y}`, `March ${Y}`]);
+
+    // Every month runs with the year's direction — bare amounts, no names.
+    const january = rows[0];
+    expect(january.textContent).toContain("$24.11");
+    expect(january.textContent).not.toContain("owes");
+    expect(rows[1].textContent).toContain("$1,758.69");
+    expect(rows[2].textContent).toContain("$175.90");
+  });
+
+  it("names the person only on a month that runs against the year", async () => {
+    const withSwungMonth = {
+      ...productionResponse,
+      months: [
+        ...productionResponse.months,
+        makeMonth({
+          month: 4,
+          charged: ashOwesKew(120.0),
+          balance: ashOwesKew(120.0),
+          status: "carried_forward",
+          runs_against_year: true,
+        }),
+      ],
+    };
+    serveSettleUp(withSwungMonth);
+
+    renderWithProviders(<SettleUpPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: new RegExp(`April ${Y}`) }),
+      ).toBeInTheDocument();
+    });
+
+    const april = screen.getByRole("button", {
+      name: new RegExp(`April ${Y}`),
+    });
+    expect(april.textContent).toContain("Ash");
+    expect(april.textContent).toContain("owes");
+    expect(april.textContent).toContain("$120.00");
+    // The other rows stay bare.
+    const january = screen.getByRole("button", {
+      name: new RegExp(`January ${Y}`),
+    });
+    expect(january.textContent).not.toContain("owes");
+  });
+
+  it("states the same figure in the month row and its drill-down Summary", async () => {
+    renderWithProviders(<SettleUpPage />, {
+      routerProps: { initialEntries: [`/settle?year=${Y}&month=1`] },
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: new RegExp(`January ${Y}`) }),
+      ).toHaveAttribute("aria-expanded", "true");
+    });
+
+    const january = screen.getByRole("button", {
+      name: new RegExp(`January ${Y}`),
+    });
+    expect(january.textContent).toContain("$24.11");
+
+    // The Summary narrative reads the same months[] entry as the row.
+    await waitFor(() => {
+      expect(screen.getByText("Summary")).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Kew owes Ash \$24\.11/)).toBeInTheDocument();
+  });
+
+  it("shows each settlement with its recorded portions", async () => {
+    renderWithProviders(<SettleUpPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Settlement History")).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText(/Ash paid Kew/)).toHaveLength(3);
+    expect(screen.getByText("$1,981.00 → January")).toBeInTheDocument();
+    expect(screen.getByText("$1,981.00 → February")).toBeInTheDocument();
+    expect(screen.getByText("$1,981.00 → March")).toBeInTheDocument();
+  });
+
+  it("shows a catch-up lump's portions month by month", async () => {
+    const withLump = {
+      ...productionResponse,
+      settlements: [
+        ...productionResponse.settlements,
+        rentSettlement("lump", 1, {
+          amount: 800.0,
+          portions: [
+            { year: Y, month: 1, amount: 500.0 },
+            { year: Y, month: 2, amount: 300.0 },
+          ],
+        }),
+      ],
+    };
+    serveSettleUp(withLump);
+
+    renderWithProviders(<SettleUpPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("$500.00 → Jan + $300.00 → Feb"),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("rescopes the hero, months, and history when another year is selected", async () => {
     const user = userEvent.setup();
     serveSettleUp(crossYearResponse);
 
@@ -328,46 +422,22 @@ describe("SettleUpPage", () => {
     );
     expect(hero.getByText("$80.00")).toBeInTheDocument();
     expect(hero.getByText("covers December")).toBeInTheDocument();
-    expect(hero.queryByText("$642.00")).not.toBeInTheDocument();
-  });
-
-  it("scopes the Months card to the selected year, oldest first", async () => {
-    const user = userEvent.setup();
-    serveSettleUp(crossYearResponse);
-
-    renderWithProviders(<SettleUpPage />);
-
-    await waitFor(() => {
-      expect(screen.getByRole("radio", { name: String(Y) })).toBeChecked();
-    });
-
-    // This year's rows only, March through May in calendar order.
-    const monthsCard = within(
-      screen
-        .getByRole("heading", { name: "Months" })
-        .closest("div") as HTMLElement,
-    );
-    expect(
-      monthsCard
-        .getAllByRole("button")
-        .map((el) => el.textContent?.match(/^[A-Z][a-z]+ \d{4}/)?.[0])
-        .filter(Boolean),
-    ).toEqual([`March ${Y}`, `April ${Y}`, `May ${Y}`]);
-
-    await user.click(screen.getByRole("radio", { name: String(Y - 1) }));
+    expect(hero.queryByText("$1,958.70")).not.toBeInTheDocument();
 
     expect(
       screen.getByRole("button", { name: new RegExp(`December ${Y - 1}`) }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: new RegExp(`May ${Y}`) }),
+      screen.queryByRole("button", { name: new RegExp(`March ${Y}`) }),
     ).not.toBeInTheDocument();
+
+    // No settlement's portions touch the previous year.
+    expect(screen.queryByText("Settlement History")).not.toBeInTheDocument();
   });
 
-  it("waives only the selected year", async () => {
+  it("waives only after the dialog is confirmed", async () => {
     const user = userEvent.setup();
     let waived: Record<string, unknown> | null = null;
-    serveSettleUp(crossYearResponse);
     server.use(
       http.post("/api/v1/settlements/waive", async ({ request }) => {
         waived = (await request.json()) as Record<string, unknown>;
@@ -381,90 +451,192 @@ describe("SettleUpPage", () => {
     renderWithProviders(<SettleUpPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole("radio", { name: String(Y) })).toBeChecked();
+      expect(screen.getByText(`Waive Kew's ${Y} balance`)).toBeInTheDocument();
     });
-    // The copy names the year and its amount, never the all-time total.
-    expect(screen.getByText(`Waive Bob's ${Y} balance`)).toBeInTheDocument();
     expect(
-      screen.getByText(new RegExp(`\\$642\\.00 from ${Y} will be forgiven`)),
+      screen.getByText(
+        `Clears $1,958.70 from ${Y} only. Undo by deleting the waiver.`,
+      ),
     ).toBeInTheDocument();
+    // Rejected vocabulary never appears.
+    expect(screen.queryByText(/forgiven/i)).not.toBeInTheDocument();
 
-    await user.click(screen.getByText("Waive Balance"));
+    // Opening the dialog fires nothing.
+    await user.click(screen.getByRole("button", { name: "Waive Balance" }));
+    const dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog).getByText(
+        `Kew owes Ash $1,958.70 for ${Y}. Waiving clears it; other years stay open.`,
+      ),
+    ).toBeInTheDocument();
+    expect(waived).toBeNull();
+
+    // Cancel fires nothing.
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(waived).toBeNull();
+
+    // Confirming posts the selected year.
+    await user.click(screen.getByRole("button", { name: "Waive Balance" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Waive Balance",
+      }),
+    );
 
     await waitFor(() => {
       expect(waived).not.toBeNull();
     });
-    expect(waived).toMatchObject({ waive_year: Y });
+    expect(waived).toMatchObject({
+      waive_year: Y,
+      from_person_id: KEW,
+      to_person_id: ASH,
+    });
   });
 
-  it("shows only the settlements covering the selected year", async () => {
+  it("records the linked settlement's covered months", async () => {
     const user = userEvent.setup();
-    serveSettleUp(crossYearResponse);
+    let recorded: Record<string, unknown> | null = null;
+    server.use(
+      http.get("/api/v1/settlements/candidates", () =>
+        HttpResponse.json([
+          {
+            id: "t1",
+            date: `${Y}-04-26`,
+            merchant: "Venmo",
+            amount: -1958.7,
+            payer_person_id: KEW,
+            category: "Transfers",
+            score: 90,
+            match_reasons: ["amount match"],
+          },
+          {
+            id: "t2",
+            date: `${Y}-04-26`,
+            merchant: "Venmo",
+            amount: 1958.7,
+            payer_person_id: ASH,
+            category: "Transfers",
+            score: 90,
+            match_reasons: ["amount match"],
+          },
+        ]),
+      ),
+      http.post("/api/v1/settlements", async ({ request }) => {
+        recorded = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json(
+          { settlement: rentSettlement("new", 1), warnings: [] },
+          { status: 201 },
+        );
+      }),
+    );
 
-    renderWithProviders(<SettleUpPage />);
+    renderWithProviders(<SettleUpPage />, {
+      routerProps: { initialEntries: [`/settle?year=${Y}&month=1`] },
+    });
 
     await waitFor(() => {
-      expect(screen.getByText("Settlement History")).toBeInTheDocument();
+      expect(screen.getByText("2 matching transfers")).toBeInTheDocument();
     });
-    // The catch-up payment covered March and April of this year.
-    expect(screen.getByText(/Covered Mar \+ Apr/)).toBeInTheDocument();
+    await user.click(screen.getByText("2 matching transfers"));
+    await user.click(screen.getAllByRole("checkbox")[0]);
 
-    await user.click(screen.getByRole("radio", { name: String(Y - 1) }));
+    // The viewed month is the default portion; February joins for a lump.
+    expect(
+      screen.getByRole("button", { name: `Jan ${Y}`, pressed: true }),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: `Feb ${Y}`, pressed: false }),
+    );
 
-    expect(screen.queryByText("Settlement History")).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: /Mark as settlement/ }),
+    );
+
+    await waitFor(() => {
+      expect(recorded).not.toBeNull();
+    });
+    expect(recorded).toMatchObject({
+      from_person_id: KEW,
+      to_person_id: ASH,
+      covered_months: [
+        { year: Y, month: 1 },
+        { year: Y, month: 2 },
+      ],
+    });
   });
 
-  it("renders one row per ledger month with derived status", async () => {
-    serveSettleUp(multiMonthResponse);
+  it("shows the year as settled and hides link and waive actions", async () => {
+    serveSettleUp(allSettledResponse);
 
     renderWithProviders(<SettleUpPage />);
 
     await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: new RegExp(`March ${Y}`) }),
-      ).toBeInTheDocument();
+      expect(screen.getByText(`${Y} is settled`)).toBeInTheDocument();
     });
-    expect(screen.getByText(/settled Apr 2/)).toBeInTheDocument();
-    expect(screen.getByText(/partial — \$242\.00 left/)).toBeInTheDocument();
+
+    expect(
+      screen.queryByText("Link bank transactions"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Waive Balance")).not.toBeInTheDocument();
+  });
+
+  it("renders each month's status chip", async () => {
+    const mixed = {
+      ...productionResponse,
+      months: [
+        makeMonth({
+          month: 1,
+          balance: null,
+          status: "settled",
+        }),
+        productionResponse.months[1],
+        makeMonth({
+          month: 5,
+          charged: ashOwesKew(400.0),
+          balance: ashOwesKew(400.0),
+          status: "carried_forward",
+        }),
+      ],
+    };
+    serveSettleUp(mixed);
+
+    renderWithProviders(<SettleUpPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/settled Apr 26/)).toBeInTheDocument();
+    });
+    expect(screen.getByText("partially settled")).toBeInTheDocument();
     expect(screen.getByText("carried forward")).toBeInTheDocument();
   });
 
   it("opens the month from the URL with its drill-down expanded", async () => {
-    serveSettleUp(multiMonthResponse);
-
     renderWithProviders(<SettleUpPage />, {
-      routerProps: { initialEntries: [`/settle?year=${Y}&month=4`] },
+      routerProps: { initialEntries: [`/settle?year=${Y}&month=2`] },
     });
 
     await waitFor(() => {
       expect(
-        screen.getByRole("button", { name: new RegExp(`April ${Y}`) }),
+        screen.getByRole("button", { name: new RegExp(`February ${Y}`) }),
       ).toHaveAttribute("aria-expanded", "true");
     });
     expect(screen.getByText("Lock Month")).toBeInTheDocument();
     expect(screen.getByText("Summary")).toBeInTheDocument();
   });
 
-  it("defaults to the newest month when the current month has no ledger row", async () => {
-    serveSettleUp(multiMonthResponse);
-
+  it("defaults to the newest month when the current month has no activity row", async () => {
     renderWithProviders(<SettleUpPage />);
 
     await waitFor(() => {
       expect(
-        screen.getByRole("button", { name: new RegExp(`May ${Y}`) }),
+        screen.getByRole("button", { name: new RegExp(`March ${Y}`) }),
       ).toHaveAttribute("aria-expanded", "true");
     });
-    // The drill-down waits for the month-scoped refetch before rendering.
     await waitFor(() => {
       expect(screen.getByText("Lock Month")).toBeInTheDocument();
     });
   });
 
-  it("still offers lock and export for a selected month with no ledger row", async () => {
-    // Months 3–5 have settlement activity; deep-link to June (no ledger row).
-    serveSettleUp(multiMonthResponse);
-
+  it("still offers lock and export for a selected month with no activity", async () => {
     renderWithProviders(<SettleUpPage />, {
       routerProps: { initialEntries: [`/settle?year=${Y}&month=6`] },
     });
@@ -474,7 +646,6 @@ describe("SettleUpPage", () => {
         screen.getByText(new RegExp(`No settlement activity for June ${Y}`)),
       ).toBeInTheDocument();
     });
-    // A settlement-free month is still lockable and exportable (US-CLOSE-1/2).
     expect(screen.getByText("Lock Month")).toBeInTheDocument();
     expect(
       screen.getByText("Export adjustments to Monarch"),
@@ -482,11 +653,10 @@ describe("SettleUpPage", () => {
   });
 
   it("collapses the expanded month on click", async () => {
-    serveSettleUp(multiMonthResponse);
     const user = userEvent.setup();
 
     renderWithProviders(<SettleUpPage />, {
-      routerProps: { initialEntries: [`/settle?year=${Y}&month=4`] },
+      routerProps: { initialEntries: [`/settle?year=${Y}&month=2`] },
     });
 
     await waitFor(() => {
@@ -494,101 +664,18 @@ describe("SettleUpPage", () => {
     });
 
     await user.click(
-      screen.getByRole("button", { name: new RegExp(`April ${Y}`) }),
+      screen.getByRole("button", { name: new RegExp(`February ${Y}`) }),
     );
 
     await waitFor(() => {
       expect(screen.queryByText("Lock Month")).not.toBeInTheDocument();
     });
     expect(
-      screen.getByRole("button", { name: new RegExp(`April ${Y}`) }),
+      screen.getByRole("button", { name: new RegExp(`February ${Y}`) }),
     ).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("shows payment history with FIFO coverage", async () => {
-    serveSettleUp(multiMonthResponse);
-
-    renderWithProviders(<SettleUpPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Bob paid Alice/)).toBeInTheDocument();
-    });
-    expect(screen.getByText("Covered Mar + Apr")).toBeInTheDocument();
-  });
-
-  it("notes the unapplied part of an overpayment", async () => {
-    const overpaid = {
-      ...multiMonthResponse,
-      outstanding: null,
-      outstanding_span: null,
-      ledger_months: multiMonthResponse.ledger_months.map((m) => ({
-        ...m,
-        applied: m.gross.amount,
-        remaining: 0.0,
-        status: "settled",
-        covering_settlement_ids: ["s1"],
-      })),
-      all_settlements: [
-        {
-          ...catchUpPayment,
-          amount: 892.0,
-          covered: [
-            { year: Y, month: 3, amount: 142.0 },
-            { year: Y, month: 4, amount: 300.0 },
-            { year: Y, month: 5, amount: 400.0 },
-          ],
-          unapplied: 50.0,
-        },
-      ],
-    };
-    serveSettleUp(overpaid);
-
-    renderWithProviders(<SettleUpPage />);
-
-    await waitFor(() => {
-      expect(
-        screen.getByText(/\$50\.00 not applied — increases the balance/),
-      ).toBeInTheDocument();
-    });
-  });
-
-  it("shows the year as settled and hides ledger actions when nothing is outstanding", async () => {
-    serveSettleUp(allSettledResponse);
-
-    renderWithProviders(<SettleUpPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText(`${Y} is settled`)).toBeInTheDocument();
-    });
-
-    // Payments apply to the running ledger — with nothing outstanding there
-    // is nothing to link or waive.
-    expect(
-      screen.queryByText("Link bank transactions"),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByText("Waive Balance")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText(/No transactions to settle for/),
-    ).not.toBeInTheDocument();
-  });
-
-  it("offers link and waive actions while a balance is outstanding", async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<SettleUpPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Link bank transactions")).toBeInTheDocument();
-    });
-    expect(screen.getByText("Waive Balance")).toBeInTheDocument();
-
-    // The candidate search starts collapsed — its month stepper appears once
-    // the user opens it.
-    expect(screen.queryByText("All months")).not.toBeInTheDocument();
-    await user.click(await screen.findByText("No matching transfers found"));
-    expect(screen.getByText("All months")).toBeInTheDocument();
-  });
-
-  it("shows empty state when no transactions or ledger activity exist", async () => {
+  it("shows empty state when no transactions or settlement activity exist", async () => {
     serveSettleUp(emptyResponse);
 
     renderWithProviders(<SettleUpPage />);
@@ -601,7 +688,6 @@ describe("SettleUpPage", () => {
     });
 
     expect(screen.queryByText(/is settled$/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/View /)).not.toBeInTheDocument();
   });
 
   it("shows link to latest month when prior data exists", async () => {
@@ -613,7 +699,6 @@ describe("SettleUpPage", () => {
       expect(
         screen.getByText(/No transactions to settle for/),
       ).toBeInTheDocument();
-      expect(screen.getByText("Upload CSV")).toBeInTheDocument();
       expect(screen.getByText(`View February ${Y}`)).toBeInTheDocument();
     });
   });

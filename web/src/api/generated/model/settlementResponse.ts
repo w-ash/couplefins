@@ -8,8 +8,6 @@ import type { LinkedTransactionResponse } from './linkedTransactionResponse';
 
 export interface SettlementResponse {
   id: string;
-  year: number | null;
-  month: number | null;
   amount: number;
   from_person_id: string;
   to_person_id: string;

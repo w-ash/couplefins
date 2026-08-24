@@ -353,21 +353,14 @@ async def test_search_transactions_includes_id() -> None:
 def _settle_data(
     *, is_finalized: bool = False, warnings: list[str] | None = None
 ) -> object:
-    from decimal import Decimal
-
     from src.application.use_cases.get_settle_up_data import GetSettleUpDataResult
 
     return GetSettleUpDataResult(
         year=2026,
         month=3,
-        owed=None,
-        net_position=None,
-        recorded_settlements=[],
-        remaining_balance=Decimal(0),
-        outstanding=None,
-        outstanding_span=None,
-        ledger_months=[],
-        all_settlements=[],
+        years=[],
+        months=[],
+        settlements=[],
         upload_statuses=[],
         persons=PERSONS,
         is_finalized=is_finalized,
@@ -607,7 +600,7 @@ async def test_record_settlement_unknown_person_lists_couple() -> None:
 
 
 @pytest.mark.anyio
-async def test_record_settlement_returns_pending_with_annotation() -> None:
+async def test_record_settlement_returns_pending_with_covered_months() -> None:
     result = await execute_tool(
         "record_settlement",
         {
@@ -615,8 +608,7 @@ async def test_record_settlement_returns_pending_with_annotation() -> None:
             "to_person": "Bob",
             "amount": 147.5,
             "method": "Venmo",
-            "year": 2026,
-            "month": 3,
+            "covered_months": ["2026-03"],
         },
         CTX,
     )
@@ -625,22 +617,22 @@ async def test_record_settlement_returns_pending_with_annotation() -> None:
     details = result["details"]
     assert details["from_person_id"] == str(ALICE.id)
     assert details["to_person_id"] == str(BOB.id)
-    assert details["recorded_against"] == "2026-03"
+    assert details["covered_months"] == [{"year": 2026, "month": 3}]
     assert "$147.50 from Alice to Bob via Venmo" in str(result["description"])
+    assert "covering March 2026" in str(result["description"])
 
 
 @pytest.mark.anyio
 async def test_waive_settlement_nothing_outstanding_raises() -> None:
-    from decimal import Decimal
 
     from src.domain.ledger import SettlementLedger
 
     ledger = SettlementLedger(
         outstanding=None,
-        months=(),
-        payments=(),
-        unapplied_payment_total=Decimal(0),
         span=None,
+        months=(),
+        years=(),
+        settlements=(),
     )
     with (
         patch(
@@ -666,10 +658,10 @@ async def test_waive_settlement_captures_direction() -> None:
             from_person_id=BOB.id,
             to_person_id=ALICE.id,
         ),
-        months=(),
-        payments=(),
-        unapplied_payment_total=Decimal(0),
         span=((2026, 2), (2026, 3)),
+        months=(),
+        years=(),
+        settlements=(),
     )
     with patch(
         "src.application.chat.tool_executor.execute_use_case",

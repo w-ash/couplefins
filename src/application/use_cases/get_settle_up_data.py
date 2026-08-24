@@ -1,5 +1,4 @@
-from datetime import datetime
-from decimal import Decimal
+from datetime import UTC, datetime
 
 from attrs import define, field
 
@@ -16,7 +15,6 @@ from src.application.use_cases._shared.settlement_math import (
     load_month_audit_snapshot,
     load_settlement_ledger,
 )
-from src.application.use_cases._shared.settlement_records import SettlementRecord
 from src.application.use_cases._shared.transactions import (
     find_all_unmapped_categories,
     get_latest_transaction_month,
@@ -25,12 +23,7 @@ from src.application.use_cases._shared.upload_status import UploadStatus
 from src.domain.entities.category import Category
 from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
-from src.domain.ledger import (
-    LedgerMonth,
-    MonthKey,
-    month_remaining_result,
-    year_remaining_result,
-)
+from src.domain.ledger import LedgerMonth, LedgerYear, empty_ledger_year
 from src.domain.reconciliation import (
     PayerGroupSummary,
     PayerSplitSummary,
@@ -50,16 +43,17 @@ class GetSettleUpDataCommand:
 
 @define(frozen=True, slots=True)
 class GetSettleUpDataResult:
+    """Every Settle Up number, precomputed — the UI renders, never derives.
+
+    ``years``/``months`` carry the whole ledger; the client scopes them to
+    its selected year by the ``year`` field, no arithmetic involved.
+    """
+
     year: int
     month: int
-    owed: SettlementResult | None
-    net_position: SettlementResult | None
-    recorded_settlements: list[SettlementRecord]
-    remaining_balance: Decimal
-    outstanding: SettlementResult | None
-    outstanding_span: tuple[MonthKey, MonthKey] | None
-    ledger_months: list[LedgerMonth]
-    all_settlements: list[LedgerSettlementRecord]
+    years: list[LedgerYear]  # ascending; every activity year + current
+    months: list[LedgerMonth]  # chronological ascending, all years
+    settlements: list[LedgerSettlementRecord]  # chronological ascending
     upload_statuses: list[UploadStatus]
     persons: list[Person]
     is_finalized: bool
@@ -69,6 +63,13 @@ class GetSettleUpDataResult:
     finalization_warnings: list[str]
     payer_splits: list[PayerSplitSummary]
     payer_group_splits: list[PayerGroupSummary]
+
+
+def _pad_years(years: list[LedgerYear], ensure: set[int]) -> list[LedgerYear]:
+    """Engine years plus empty rows for years the page must offer anyway."""
+    missing = ensure - {row.year for row in years}
+    padded = years + [empty_ledger_year(year) for year in missing]
+    return sorted(padded, key=lambda row: row.year)
 
 
 def _compute_audit_splits(
@@ -88,7 +89,7 @@ def _build_finalization_warnings(
     is_finalized: bool,
     upload_statuses: list[UploadStatus],
     year: int,
-    outstanding: SettlementResult | None,
+    year_balance: SettlementResult | None,
     transactions: list[Transaction],
     categories: list[Category],
 ) -> list[str]:
@@ -100,8 +101,8 @@ def _build_finalization_warnings(
         for us in upload_statuses
         if not us.has_uploaded
     )
-    if outstanding is not None:
-        warnings.append(f"Outstanding balance of ${outstanding.amount:.2f} in {year}")
+    if year_balance is not None:
+        warnings.append(f"Outstanding balance of ${year_balance.amount:,.2f} in {year}")
     tx_categories = {tx.category for tx in transactions}
     unmapped = find_all_unmapped_categories(categories, tx_categories)
     if unmapped:
@@ -119,22 +120,14 @@ class GetSettleUpDataUseCase:
 
             bundle = await load_settlement_ledger(uow, ctx)
             snapshot = await load_month_audit_snapshot(
-                uow, command.year, command.month, ctx
+                uow, command.year, command.month, ctx, bundle.transactions
             )
 
-            # The selected month's ledger position — its gross minus what
-            # FIFO applied to it — not month-annotation netting.
-            month_row = next(
-                (
-                    m
-                    for m in bundle.ledger.months
-                    if (m.year, m.month) == (command.year, command.month)
-                ),
-                None,
+            years = _pad_years(
+                list(bundle.ledger.years),
+                {command.year, datetime.now(UTC).year},
             )
-            net_position = (
-                month_remaining_result(month_row) if month_row is not None else None
-            )
+            year_row = next((row for row in years if row.year == command.year), None)
 
             payer_splits, payer_group_splits = _compute_audit_splits(
                 snapshot.summary, ctx.persons
@@ -145,14 +138,12 @@ class GetSettleUpDataUseCase:
             )
 
             # Scoped to the month's own year — locking a month answers for
-            # that year's ledger, not the all-time balance.
+            # that year's balance, not an all-time figure.
             warnings = _build_finalization_warnings(
                 is_finalized,
                 snapshot.upload_statuses,
                 command.year,
-                year_remaining_result(
-                    bundle.ledger.months, command.year, ctx.person_ids
-                ),
+                year_row.balance if year_row else None,
                 snapshot.transactions,
                 ctx.categories,
             )
@@ -160,14 +151,9 @@ class GetSettleUpDataUseCase:
             return GetSettleUpDataResult(
                 year=command.year,
                 month=command.month,
-                owed=snapshot.summary.settlement,
-                net_position=net_position,
-                recorded_settlements=snapshot.records,
-                remaining_balance=(net_position.amount if net_position else Decimal(0)),
-                outstanding=bundle.ledger.outstanding,
-                outstanding_span=bundle.ledger.span,
-                ledger_months=list(bundle.ledger.months),
-                all_settlements=bundle.records,
+                years=years,
+                months=list(bundle.ledger.months),
+                settlements=bundle.records,
                 upload_statuses=snapshot.upload_statuses,
                 persons=ctx.persons,
                 is_finalized=is_finalized,

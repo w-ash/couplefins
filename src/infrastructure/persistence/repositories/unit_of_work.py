@@ -20,6 +20,9 @@ from src.infrastructure.persistence.repositories.reconciliation_period_repositor
 from src.infrastructure.persistence.repositories.settlement_merchant_repository import (
     SettlementMerchantRepository,
 )
+from src.infrastructure.persistence.repositories.settlement_portion_repository import (
+    SettlementPortionRepository,
+)
 from src.infrastructure.persistence.repositories.settlement_repository import (
     SettlementRepository,
 )
@@ -51,6 +54,7 @@ class UnitOfWork:
         self.settlement_merchants = SettlementMerchantRepository(session)
         self.settlements = SettlementRepository(session)
         self.settlement_transaction_links = SettlementTransactionLinkRepository(session)
+        self.settlement_portions = SettlementPortionRepository(session)
 
     async def __aenter__(self) -> Self:
         return self

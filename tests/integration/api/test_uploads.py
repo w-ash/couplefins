@@ -201,12 +201,11 @@ async def test_reupload_unlinks_settlement_on_removed_row(
     settlement = await client.post(
         "/api/v1/settlements",
         json={
-            "year": 2026,
-            "month": 1,
             "amount": 30.0,
             "from_person_id": bob_id,
             "to_person_id": alice_id,
             "method": "Venmo",
+            "covered_months": [{"year": 2026, "month": 1}],
         },
         auth=cookies,
     )
@@ -233,7 +232,7 @@ async def test_reupload_unlinks_settlement_on_removed_row(
         params={"year": 2026, "month": 1},
         auth=cookies,
     )
-    recorded = settle_up.json()["recorded_settlements"]
+    recorded = settle_up.json()["settlements"]
     assert len(recorded) == 1
     assert recorded[0]["linked_transaction_ids"] == []
 

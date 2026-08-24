@@ -1,20 +1,16 @@
-from sqlalchemy import Boolean, ForeignKey, Index, Integer, String
+from sqlalchemy import Boolean, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infrastructure.persistence.models.base import Base
 
 
 class SettlementModel(Base):
+    """A payment between the couple. What it covers lives in the
+    settlement_transaction_links / settlement_portions tables."""
+
     __tablename__ = "settlements"
-    __table_args__: tuple[Index, ...] = (
-        Index("ix_settlements_year_month", "year", "month"),
-    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    # Optional "recorded against" annotations since v1.7.5 — display metadata,
-    # never ledger math.
-    year: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    month: Mapped[int | None] = mapped_column(Integer, nullable=True)
     amount: Mapped[str] = mapped_column(String, nullable=False)
     from_person_id: Mapped[str] = mapped_column(
         String, ForeignKey("persons.id"), nullable=False

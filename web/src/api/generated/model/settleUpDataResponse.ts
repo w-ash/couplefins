@@ -7,23 +7,24 @@
 import type { DashboardPersonResponse } from './dashboardPersonResponse';
 import type { LedgerMonthResponse } from './ledgerMonthResponse';
 import type { LedgerSettlementResponse } from './ledgerSettlementResponse';
+import type { LedgerYearResponse } from './ledgerYearResponse';
 import type { MonthReference } from './monthReference';
-import type { MonthSpanResponse } from './monthSpanResponse';
-import type { OwedAmountResponse } from './owedAmountResponse';
 import type { PayerGroupSplitSummaryResponse } from './payerGroupSplitSummaryResponse';
 import type { PayerSplitSummaryResponse } from './payerSplitSummaryResponse';
-import type { SettlementResponse } from './settlementResponse';
 import type { UploadStatusResponse } from './uploadStatusResponse';
 
+/**
+ * Everything Settle Up renders, precomputed and direction-resolved.
+
+The client scopes ``years``/``months``/``settlements`` to its selected
+year by field equality — it never does arithmetic.
+ */
 export interface SettleUpDataResponse {
   year: number;
   month: number;
-  owed: OwedAmountResponse | null;
-  recorded_settlements: SettlementResponse[];
-  outstanding: OwedAmountResponse | null;
-  outstanding_span: MonthSpanResponse | null;
-  ledger_months: LedgerMonthResponse[];
-  all_settlements: LedgerSettlementResponse[];
+  years: LedgerYearResponse[];
+  months: LedgerMonthResponse[];
+  settlements: LedgerSettlementResponse[];
   upload_statuses: UploadStatusResponse[];
   persons: DashboardPersonResponse[];
   is_finalized: boolean;

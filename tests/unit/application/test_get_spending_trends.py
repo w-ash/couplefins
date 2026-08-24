@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
@@ -312,11 +312,10 @@ async def test_settlement_trend_marks_settled() -> None:
     # Settlement that covers the owed amount
     uow.settlements.get_all.return_value = [
         make_settlement(
-            year=2026,
-            month=1,
             amount=Decimal("50.00"),
             from_person_id=bob.id,
             to_person_id=alice.id,
+            settled_at=datetime(2026, 1, 31, tzinfo=UTC),
         ),
     ]
 
@@ -345,11 +344,10 @@ async def test_settlement_trend_reverse_direction_not_settled() -> None:
     # clearing it — must not be marked settled.
     uow.settlements.get_all.return_value = [
         make_settlement(
-            year=2026,
-            month=1,
             amount=Decimal("50.00"),
             from_person_id=alice.id,
             to_person_id=bob.id,
+            settled_at=datetime(2026, 1, 31, tzinfo=UTC),
         ),
     ]
 

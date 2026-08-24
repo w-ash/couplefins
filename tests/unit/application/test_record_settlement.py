@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 import uuid
 
@@ -31,8 +31,6 @@ class TestRecordSettlement:
         set_passthrough_save(uow)
 
         command = RecordSettlementCommand(
-            year=2026,
-            month=1,
             amount=Decimal("50.00"),
             from_person_id=alice.id,
             to_person_id=bob.id,
@@ -49,8 +47,6 @@ class TestRecordSettlement:
         alice = make_person(name="Alice")
         uow = make_mock_uow()
         command = RecordSettlementCommand(
-            year=2026,
-            month=1,
             amount=Decimal("50.00"),
             from_person_id=alice.id,
             to_person_id=alice.id,
@@ -66,8 +62,6 @@ class TestRecordSettlement:
         uow.persons.get_by_ids.return_value = []
 
         command = RecordSettlementCommand(
-            year=2026,
-            month=1,
             amount=Decimal("50.00"),
             from_person_id=alice.id,
             to_person_id=bob.id,
@@ -87,8 +81,6 @@ class TestRecordSettlement:
         uow.transactions.update_mutable_fields.return_value = tx
 
         command = RecordSettlementCommand(
-            year=2026,
-            month=1,
             amount=Decimal("50.00"),
             from_person_id=alice.id,
             to_person_id=bob.id,
@@ -107,8 +99,6 @@ class TestRecordSettlement:
         uow.transactions.get_by_ids.return_value = []
 
         command = RecordSettlementCommand(
-            year=2026,
-            month=1,
             amount=Decimal("50.00"),
             from_person_id=alice.id,
             to_person_id=bob.id,
@@ -125,15 +115,13 @@ class TestRecordSettlement:
         uow = make_mock_uow()
         uow.persons.get_by_ids.return_value = [alice, bob]
         uow.transactions.get_by_ids.return_value = [tx]
-        uow.settlement_transaction_links.get_by_transaction_id.return_value = [
+        uow.settlement_transaction_links.get_by_transaction_ids.return_value = [
             SettlementTransactionLink(
                 id=uuid.uuid4(), settlement_id=uuid.uuid4(), transaction_id=tx.id
             )
         ]
 
         command = RecordSettlementCommand(
-            year=2026,
-            month=1,
             amount=Decimal("50.00"),
             from_person_id=alice.id,
             to_person_id=bob.id,
@@ -153,8 +141,6 @@ class TestRecordSettlement:
         uow.transactions.get_by_ids.return_value = [tx1, tx2]
 
         command = RecordSettlementCommand(
-            year=2026,
-            month=1,
             amount=Decimal("50.00"),
             from_person_id=alice.id,
             to_person_id=bob.id,
@@ -176,8 +162,6 @@ class TestRecordSettlement:
         uow.transactions.update_mutable_fields.return_value = tx1
 
         command = RecordSettlementCommand(
-            year=2026,
-            month=1,
             amount=Decimal("50.00"),
             from_person_id=alice.id,
             to_person_id=bob.id,
@@ -188,7 +172,7 @@ class TestRecordSettlement:
         assert result.settlement.amount == Decimal("50.00")
 
 
-async def test_record_without_annotation() -> None:
+async def test_default_portion_covers_settled_at_month() -> None:
     alice = make_person(name="Alice")
     bob = make_person(name="Bob")
     uow = make_mock_uow()
@@ -200,28 +184,54 @@ async def test_record_without_annotation() -> None:
         from_person_id=alice.id,
         to_person_id=bob.id,
         method="Venmo",
+        settled_at=datetime(2026, 3, 9, tzinfo=UTC),
     )
-    result = await RecordSettlementUseCase().execute(command, uow)
-    assert result.settlement.year is None
-    assert result.settlement.month is None
+    await RecordSettlementUseCase().execute(command, uow)
+    portions = uow.settlement_portions.save_batch.call_args.args[0]
+    assert [(p.year, p.month, p.amount) for p in portions] == [
+        (2026, 3, Decimal("50.00"))
+    ]
 
 
-def test_annotation_requires_both_year_and_month() -> None:
+async def test_covered_months_become_stored_portions() -> None:
     alice = make_person(name="Alice")
     bob = make_person(name="Bob")
-    with pytest.raises(ValueError, match="together"):
+    uow = make_mock_uow()
+    uow.persons.get_by_ids.return_value = [alice, bob]
+    set_passthrough_save(uow)
+
+    command = RecordSettlementCommand(
+        amount=Decimal("90.00"),
+        from_person_id=alice.id,
+        to_person_id=bob.id,
+        method="Venmo",
+        covered_months=[(2026, 1), (2026, 2)],
+    )
+    await RecordSettlementUseCase().execute(command, uow)
+    portions = uow.settlement_portions.save_batch.call_args.args[0]
+    # No charges in the mock ledger, so the whole amount lands on the
+    # newest covered month.
+    assert [(p.year, p.month, p.amount) for p in portions] == [
+        (2026, 2, Decimal("90.00"))
+    ]
+
+
+def test_invalid_covered_month_raises() -> None:
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    with pytest.raises(ValueError, match="month must be 1-12"):
         RecordSettlementCommand(
-            month=1,
             amount=Decimal("50.00"),
             from_person_id=alice.id,
             to_person_id=bob.id,
             method="Venmo",
+            covered_months=[(2026, 13)],
         )
 
 
-async def test_record_allowed_on_finalized_annotated_month() -> None:
-    """Lock Month freezes transactions, not payments (v1.7.5): recording a
-    settlement annotated to a locked month succeeds when nothing is linked."""
+async def test_record_allowed_on_finalized_covered_month() -> None:
+    """Lock Month freezes transactions, not payments: recording a settlement
+    covering a locked month succeeds when nothing is linked."""
     alice = make_person(name="Alice")
     bob = make_person(name="Bob")
     uow = make_mock_uow()
@@ -232,12 +242,11 @@ async def test_record_allowed_on_finalized_annotated_month() -> None:
     set_passthrough_save(uow)
 
     command = RecordSettlementCommand(
-        year=2026,
-        month=1,
         amount=Decimal("50.00"),
         from_person_id=alice.id,
         to_person_id=bob.id,
         method="Venmo",
+        covered_months=[(2026, 1)],
     )
     result = await RecordSettlementUseCase().execute(command, uow)
     assert result.settlement.amount == Decimal("50.00")
@@ -257,8 +266,6 @@ async def test_finalized_linked_transaction_month_raises() -> None:
     ]
 
     command = RecordSettlementCommand(
-        year=2026,
-        month=2,
         amount=Decimal("50.00"),
         from_person_id=alice.id,
         to_person_id=bob.id,
@@ -279,8 +286,6 @@ async def test_amount_quantized_to_cents() -> None:
 
     # Float dust from a frontend float sum must not persist.
     command = RecordSettlementCommand(
-        year=2026,
-        month=1,
         amount=Decimal("20.369999999999997"),
         from_person_id=alice.id,
         to_person_id=bob.id,

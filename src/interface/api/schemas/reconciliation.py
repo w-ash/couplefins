@@ -1,7 +1,7 @@
 import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.application.use_cases._shared.upload_status import UploadStatus
 from src.application.use_cases.get_reconciliation import GetReconciliationResult
@@ -11,8 +11,8 @@ from src.interface.api.schemas.types import MoneyField
 
 
 class MonthReference(BaseModel):
-    year: int
-    month: int
+    year: int = Field(ge=1)
+    month: int = Field(ge=1, le=12)
 
     @classmethod
     def from_optional_tuple(cls, ym: tuple[int, int] | None) -> MonthReference | None:

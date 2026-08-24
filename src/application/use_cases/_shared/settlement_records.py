@@ -7,15 +7,15 @@ from uuid import UUID, uuid4
 from attrs import define, field
 
 from src.domain.entities.settlement import Settlement
+from src.domain.entities.settlement_portion import SettlementPortion
 from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import NotFoundError, ValidationError
+from src.domain.ledger import LedgerMonth, plan_portions
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
 def build_settlement(  # noqa: PLR0913
     *,
-    year: int | None,
-    month: int | None,
     from_person_id: UUID,
     to_person_id: UUID,
     amount: Decimal,
@@ -27,8 +27,6 @@ def build_settlement(  # noqa: PLR0913
     now = datetime.now(UTC)
     return Settlement(
         id=uuid4(),
-        year=year,
-        month=month,
         amount=amount,
         from_person_id=from_person_id,
         to_person_id=to_person_id,
@@ -89,12 +87,43 @@ async def assert_transactions_not_linked(
     A clean 422 instead of the IntegrityError 500 the unique index on
     settlement_transaction_links.transaction_id would raise.
     """
-    for tx_id in transaction_ids:
-        existing = await uow.settlement_transaction_links.get_by_transaction_id(tx_id)
-        if existing:
-            raise ValidationError(
-                f"Transaction {tx_id} is already linked to a settlement"
-            )
+    ids = list(transaction_ids)
+    if not ids:
+        return
+    existing = await uow.settlement_transaction_links.get_by_transaction_ids(ids)
+    if existing:
+        linked = min((link.transaction_id for link in existing), key=str)
+        raise ValidationError(f"Transaction {linked} is already linked to a settlement")
+
+
+async def allocate_and_save_portions(
+    uow: UnitOfWorkProtocol,
+    settlement: Settlement,
+    ledger_months: Iterable[LedgerMonth],
+    covered_months: list[tuple[int, int]],
+) -> None:
+    """Plan a saved settlement's per-month portions and persist them.
+
+    No covered months recorded defaults to the settled_at month. Pass a
+    ledger computed *before* the settlement was saved — the plan clears the
+    pre-payment balances.
+    """
+    covered = covered_months or [
+        (settlement.settled_at.year, settlement.settled_at.month)
+    ]
+    plans = plan_portions(
+        ledger_months, settlement.amount, settlement.from_person_id, covered
+    )
+    await uow.settlement_portions.save_batch([
+        SettlementPortion(
+            id=uuid4(),
+            settlement_id=settlement.id,
+            year=plan.year,
+            month=plan.month,
+            amount=plan.amount,
+        )
+        for plan in plans
+    ])
 
 
 async def validate_settlement_persons(

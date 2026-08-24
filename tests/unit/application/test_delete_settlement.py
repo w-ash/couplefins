@@ -44,7 +44,7 @@ class TestDeleteSettlement:
         """Lock Month freezes transactions, not payments (v1.7.5): deleting
         a settlement with no linked transactions succeeds even when its
         annotated month is locked."""
-        settlement = make_settlement(year=2026, month=1)
+        settlement = make_settlement()
         uow = make_mock_uow()
         uow.settlements.get_by_id.return_value = settlement
         uow.settlements.delete.return_value = True
@@ -60,7 +60,7 @@ class TestDeleteSettlement:
 
     async def test_finalized_linked_transaction_month_raises(self) -> None:
         # Feb settlement linked to a Jan transaction; Jan is locked.
-        settlement = make_settlement(year=2026, month=2)
+        settlement = make_settlement()
         tx = make_transaction(date=date(2026, 1, 30), is_settlement=True)
         link = make_settlement_transaction_link(
             settlement_id=settlement.id, transaction_id=tx.id

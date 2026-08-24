@@ -23,7 +23,7 @@ Each person uses their own laptop. Identity is set once during setup and rarely 
 
 Everything in the app supports a monthly cycle with two phases.
 
-Settlement itself doesn't follow a tidy monthly cadence: the couple always partially settles to cover rent on the 1st, sometimes skips full reconciliation for a month or two, then clears everything with one catch-up payment. The app keeps a single running outstanding balance (v1.7.5), so partial payments, skipped months, and multi-month catch-ups are all just payments against it — the ritual below is the ideal shape, not a constraint.
+Settlement itself doesn't follow a tidy monthly cadence: the couple always settles rent on the 1st, sometimes skips full reconciliation for a month or two, then clears everything with one catch-up payment. Every settlement records the months it covers as (year, month, amount) portions (v1.11.0) — one portion for the rent transfer, one per covered month for the catch-up lump — so mid-month payments, skipped months, and multi-month catch-ups all land where the couple meant them. The ritual below is the ideal shape, not a constraint.
 
 ### Solo prep (days before the together session)
 
@@ -41,9 +41,9 @@ Each person, on their own time:
 The couple sits down to:
 
 1. Open the dashboard — see the total outstanding balance, whether anything needs attention
-2. Settle up — link the settlement transactions (Venmo, Zelle, etc.) against the running balance; one catch-up transfer can cover several months
+2. Settle up — link the settlement transactions (Venmo, Zelle, etc.) and record what each covers; one catch-up transfer can cover several months
 3. Review budget — are we on track this month? This year?
-4. Finalize the months you've reviewed — lock them so nothing shifts (a skipped month can be locked too; its balance rides forward)
+4. Finalize the months you've reviewed — lock them so nothing shifts (a skipped month can be locked too; it stays unsettled until a settlement covers it)
 5. (Optional) Export adjustment CSVs to import back into Monarch for accurate personal spending
 
 **Success**: The outstanding balance is settled, budget is reviewed, months are locked. The whole thing took fifteen minutes.
@@ -237,22 +237,24 @@ The dashboard is the landing page. It answers "what's going on and what do I nee
 
 ### Settling Up
 
-Linking bank transactions to show that the balance has been paid. The payment itself happens outside the app (Venmo, Zelle, cash). Both sides of the transfer appear in each person's uploaded CSV. The couple identifies the matching transactions and marks them as the settlement. Settlement runs on a running ledger (v1.7.5): payments are not bound to a month — they relieve the oldest outstanding months first.
+Linking bank transactions to show that the balance has been paid. The payment itself happens outside the app (Venmo, Zelle, cash). Both sides of the transfer appear in each person's uploaded CSV. The couple identifies the matching transactions and marks them as the settlement. Every settlement explicitly records the months it covers as (year, month, amount) portions summing to the settlement amount (v1.11.0) — one portion for the monthly rent transfer, several for a catch-up lump. Coverage is never inferred; a month's balance is its charges' shares net minus the portions allocated to it, and a year is the sum of its months.
 
-**Goal**: The outstanding balance is settled, both people agree on the number, and the transfer transactions are excluded from spending.
+**Goal**: The selected year's balance is settled, both people agree on the number, and the transfer transactions are excluded from spending.
 
 **US-SETTLE-1**: As a partner, I want to see who owes whom and link matching bank transactions as the settlement.
 
-- Given the Settle Up page, then I see a hero card with the total outstanding balance and the months it covers ("Alice owes Bob $842 · covers Mar–May")
-- Given both partners have uploaded, then I see matching transfer pairs (e.g., Venmo debit + credit) sorted by amount, searched across the outstanding span
-- Given I select a matching pair, when I click "Mark as settlement", then both transactions are linked, excluded from spending, and the outstanding balance updates
+- Given the Settle Up page, then I see a hero card with the selected year's balance ("Alice owes Bob $842") (v1.11.0)
+- Given both partners have uploaded, then I see matching transfer pairs (e.g., Venmo debit + credit) sorted by amount, searched within the selected year (v1.11.0)
+- Given I select a matching pair, when I click "Mark as settlement", then both transactions are linked, excluded from spending, and the selected year's balance updates (v1.11.0)
 - Given the app has configurable settlement merchants (Venmo, Zelle, etc. — set in Settings), then candidates are scored by merchant match, amount match, and category
 - Given I tag a transaction `settlement` in Monarch before export, then it is automatically excluded on import
 
 **US-SETTLE-2**: As a partner, I want to waive a small balance instead of transferring money.
 
-- Given a small outstanding balance, then I can waive it (forgive the debt) with a note — the waiver applies to the total outstanding, not a single month
-- Given a waived balance, then the covered months show as settled
+- Given a remaining balance for the selected year, then I can waive it with a note — the waiver is a month settlement covering that year's months (v1.11.0)
+- Given I click waive, then a confirmation dialog states the year and amount before anything is recorded (v1.11.0)
+- Given a waived year, then its covered months show as settled (v1.11.0)
+- Given the Settle Up page, then the waive card sits at the bottom of the page (v1.11.0)
 
 **US-SETTLE-3**: As a partner, I want to link transactions to an existing settlement after the fact.
 
@@ -261,17 +263,22 @@ Linking bank transactions to show that the balance has been paid. The payment it
 
 **US-SETTLE-4**: As a partner, I want to see all past settlements.
 
-- Given the Settle Up page, then I see one all-time chronological history of payments and waivers with amounts, dates, and the months each payment covered
-- Given a payment with a "recorded against" month annotation, then the annotation is shown as a label — it never changes the math
+- Given the Settle Up page, then Settlement History lists the selected year's payments and waivers chronologically with amounts and dates (v1.11.0)
+- Given a settlement in history, then its row shows the months its portions cover (v1.11.0)
+- Given a settlement, then its portions determine which year lists it — a January transfer portioned to the previous December appears under the old year (v1.11.0)
 - Given a mistake, then I can delete a settlement (which unlinks the transactions) — deletion works regardless of month locks
 
 **US-SETTLE-5** (v1.7.5): As a partner, I want to record a partial payment mid-month (like my rent share on the 1st) against the running balance.
+
+> **Superseded (v1.11.0)**: the running balance and FIFO application are gone. A mid-month rent payment is now a settlement with one portion covering the rent month — see US-SETTLE-8 and US-SETTLE-9. Original criteria preserved below for history.
 
 - Given an outstanding balance, when I record a payment of any amount, then it reduces the running balance — no month selection required
 - Given a partial payment, then the oldest covered month shows as "partially settled" with the amount still left
 - Given a locked month, then I can still record payments — locks freeze a month's transactions, not the ledger
 
 **US-SETTLE-6** (v1.7.5): As a partner, I want one catch-up payment to cover several months.
+
+> **Superseded (v1.11.0)**: a catch-up payment no longer applies FIFO to the oldest open month — it records a portion per covered month at record time. See US-SETTLE-10. Original criteria preserved below for history.
 
 - Given several months carried forward, when I record one payment for the total, then it applies to the oldest month first (FIFO) and each fully covered month shows as settled
 - Given a month row on Settle Up, then I can see which payment(s) covered it and when
@@ -280,10 +287,38 @@ Linking bank transactions to show that the balance has been paid. The payment it
 
 **US-SETTLE-7** (v1.7.5): As a partner, I want the total outstanding view with months as drill-downs.
 
+> **Superseded (v1.11.0)**: the all-time outstanding view is gone from Settle Up — the page answers for one year at a time. The month drill-down survives; see US-SETTLE-11. Original criteria preserved below for history.
+
 - Given the Settle Up page, then the hero shows the cumulative balance across all months with its covered span, and the Dashboard settlement card shows the same total
 - Given the Months section, then each month row shows its gross amount and derived status: settled (with the covering payment date), partially settled (with the remainder), or carried forward
 - Given a month row, when I click it, then it expands inline to that month's drill-down — audit table, upload status, lock controls, adjustment export — and the URL reflects the month for deep links
 - Given nothing outstanding, then I see "All settled!" and the record/waive actions are hidden
+
+**US-SETTLE-8** (v1.11.0): As a partner, I want every settlement to record the months it covers, so payments land where we meant them.
+
+- Given the link-settlement flow, when I mark a transfer as a settlement, then it records a list of (year, month, amount) portions summing to the settlement amount
+- Given the link flow, then coverage defaults to one portion at the currently selected month, with a multi-select for catch-ups spanning several months
+- Given a settlement recorded without coverage, then it defaults to one portion at its settled-at month
+- Given recorded portions, then they are stored at record time and never reallocated — display math is purely additive
+
+**US-SETTLE-9** (v1.11.0): As a partner, I want my monthly rent transfer to settle its rent month directly.
+
+- Given the rent charge (one Check of −$3,962, split 50/50) and both Venmo transfer legs (−$1,981 out, +$1,981 in), when I record the settlement, then both legs are linked and excluded from spending, and the settlement carries one portion: $1,981 covering the rent month
+- Given the recorded portion, then the rent month's balance drops by $1,981 — the counterparty's exact half of the rent charge
+- Given rent is settled this way, then the month's remaining balance reflects only its other charges — even when that residual runs in the payer's favor, which is the normal state
+
+**US-SETTLE-10** (v1.11.0): As a partner, I want one catch-up lump to settle the months we're behind on.
+
+- Given several unsettled months, when I record one payment covering Jan/Feb/Mar, then it is split into one portion per covered month at record time — oldest covered month first, remainder on the last covered month — and the portions are stored
+- Given covered months whose residuals have swung toward the payer (rent already settled directly), then the lump's portions settle each covered month's net, whichever direction it runs
+- Given a January payment with a portion covering the previous December, then that portion counts toward the old year
+
+**US-SETTLE-11** (v1.11.0): As a partner, I want the Settle Up page to answer for one year at a time.
+
+- Given the Settle Up page, then a year selector drives every figure — the hero shows the selected year's balance plus what the year charged and what was paid, and no all-time figure appears anywhere on the page
+- Given the Months list, then each row shows its balance as a bare amount — the person is named only when a month runs against the year's direction
+- Given a month row and its drill-down Summary, then both state the same figure
+- Given every number on the page, then it arrives precomputed and direction-resolved from the backend — the UI does no arithmetic
 
 ---
 
@@ -371,10 +406,10 @@ Finalization and export happen together at the end of the together session. Once
 **US-CLOSE-1**: As a partner, I want to finalize a month once we agree the numbers are right.
 
 - Given a month's drill-down on the Settle Up page, then I see a "Lock Month" button
-- Given missing uploads, an outstanding ledger balance, or unmapped categories, then I see inline warnings on the finalization banner — advisory, not blocking (v1.3.3; the balance warning shows the total outstanding across all months since v1.7.5)
+- Given missing uploads, an unsettled balance, or unmapped categories, then I see inline warnings on the finalization banner — advisory, not blocking (v1.3.3; the balance warning shows the locked month's year balance since v1.10.0)
 - Given all pre-finalization checks pass, then no warnings are shown
-- Given I finalize, then the month is locked — uploads and edits for that month are rejected; its balance contribution is frozen and rides forward on the ledger
-- Given a skipped month with a carried-forward balance, then I can still lock it — locking freezes transactions, not the balance
+- Given I finalize, then the month is locked — uploads and edits for that month are rejected; settlements covering the month can still be recorded (v1.11.0)
+- Given a skipped month with an unsettled balance, then I can still lock it — locking freezes transactions, not the balance
 - Given a finalized month, then I can un-finalize with confirmation if we discover a mistake
 
 **US-CLOSE-2**: As a partner, I want to export adjustment CSVs so each person's Monarch account reflects their true share.
@@ -548,7 +583,7 @@ A natural language assistant for quick answers without page-hopping. Optional �
 
 - Given an open month, when I ask to finalize it, then the assistant proposes the lock with the same advisory warnings the app shows (missing uploads, outstanding balance, unmapped categories), and only confirming locks the month
 - Given a finalized month, when I ask to unlock it, then the assistant proposes the unlock and confirming reopens the month
-- Given I tell the assistant "I paid Kew back $500 via Venmo", then it proposes recording the settlement (amount, direction, method, optional recorded-against annotation), and confirming records it against the running ledger (FIFO), identically to the Settle Up page
+- Given I tell the assistant "I paid Kew back $500 via Venmo", then it proposes recording the settlement (amount, direction, method), and confirming records it identically to the Settle Up page — a settlement recorded without explicit coverage covers its settled-at month (v1.11.0)
 - Given an outstanding balance, when I say "let's call it even", then the assistant proposes waiving the total outstanding balance with its amount and direction on the card
 - Given a recorded settlement from get_settlement_activity, when I ask to delete it or to link/unlink its bank transaction, then the assistant proposes the change with the concrete transaction and settlement details, and confirming applies it with the same month-lock guards as the app
 - Given a settlement proposal I don't confirm, then nothing is recorded and the ledger is unchanged
@@ -601,8 +636,8 @@ A natural language assistant for quick answers without page-hopping. Optional �
 |---|---|---|---|
 | 1 | Dashboard | Both open app together in April | Settlement card: "Alice owes Bob $347.50 · covers Feb–Mar", both uploaded |
 | 2 | Dashboard | Click "Settle Up →" | Navigate to Settle Up page |
-| 3 | Settle Up | See hero: "Alice owes Bob $347.50 · covers Feb–Mar" | Month rows: February carried forward, March partially settled (rent share paid on the 1st) |
-| 4 | Settle Up | Select the matching Venmo catch-up transfer, click "Mark as settlement" | One payment covers February + March FIFO — outstanding $0.00, both months show as settled |
+| 3 | Settle Up | See hero for the selected year: "Alice owes Bob $347.50" with charged/paid totals | Month rows: February unsettled, March showing its residual after the rent transfer's portion landed on the 1st |
+| 4 | Settle Up | Select the matching Venmo catch-up transfer, mark it as a settlement covering February + March | One portion per covered month settles each month's net — year balance $0.00, both months show as settled |
 | 5 | Budget | Navigate to Budget for March, toggle to YTD | Food & Dining at 92% (amber), Travel at 40% (teal) |
 | 6 | Budget | Discuss — agree to eat out less next month | — |
 | 7 | Budget | See "Set up April budgets?" prompt, click it | Month picker advances to April |

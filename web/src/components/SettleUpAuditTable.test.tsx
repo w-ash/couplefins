@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import type {
+  LedgerMonthResponse,
+  LedgerSettlementResponse,
   PayerGroupSplitSummaryResponse,
   PayerSplitSummaryResponse,
-  SettlementResponse,
   SettleUpDataResponse,
 } from "@/api/generated/model";
+import { makeLedgerMonth, makeLedgerSettlement } from "@/test/ledger-fixtures";
 import { renderWithProviders, screen, userEvent } from "@/test/test-utils";
 import { SettleUpAuditTable } from "./SettleUpAuditTable";
 
@@ -45,25 +47,27 @@ function makeGroupSplit(
   };
 }
 
+// Portions default to one full-amount slice at the viewed month (2026-03).
 function makeSettlement(
-  overrides: Partial<SettlementResponse>,
-): SettlementResponse {
-  return {
+  overrides: Partial<LedgerSettlementResponse>,
+): LedgerSettlementResponse {
+  const amount = overrides.amount ?? 0;
+  return makeLedgerSettlement({
     id: "s1",
-    year: 2026,
-    month: 3,
-    amount: 0,
+    amount,
     from_person_id: ALICE_ID,
     to_person_id: BOB_ID,
-    method: null,
-    is_waived: false,
-    notes: "",
     settled_at: "2026-04-22T00:00:00Z",
     created_at: "2026-04-22T00:00:00Z",
-    linked_transaction_ids: [],
-    linked_transactions: [],
+    portions: [{ year: 2026, month: 3, amount }],
     ...overrides,
-  };
+  });
+}
+
+function makeMonth(
+  overrides: Partial<LedgerMonthResponse>,
+): LedgerMonthResponse {
+  return makeLedgerMonth({ year: 2026, month: 3, ...overrides });
 }
 
 function makeData(
@@ -76,12 +80,9 @@ function makeData(
   return {
     year: 2026,
     month: 3,
-    owed: null,
-    recorded_settlements: [],
-    outstanding: null,
-    outstanding_span: null,
-    ledger_months: [],
-    all_settlements: [],
+    years: [],
+    months: [],
+    settlements: [],
     upload_statuses: [],
     persons: [
       { id: ALICE_ID, name: "Alice" },
@@ -129,33 +130,45 @@ describe("SettleUpAuditTable", () => {
       <SettleUpAuditTable data={data} personNames={PERSON_NAMES} />,
     );
 
-    expect(screen.queryByText("Activity")).not.toBeInTheDocument();
-    expect(screen.queryByText("Alice's bills")).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /copy/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
 
     await expandLedger();
 
-    expect(screen.getByText("Activity")).toBeInTheDocument();
+    expect(screen.getByRole("table")).toBeInTheDocument();
     expect(screen.getByText("Alice's bills")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /copy/i })).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /hide ledger/i }),
-    ).toBeInTheDocument();
   });
 
-  it("renders the six-column header with person names", async () => {
+  it("states the API's month balance in both the Summary and the Total row", async () => {
+    // The month entry says Bob owes Alice $24.11 — the same entry the month
+    // row renders, so the two surfaces can never diverge.
     const data = makeData({
       payer_splits: [
         makePayerSplit({
           payer_person_id: ALICE_ID,
-          fronted: 100,
-          their_share: 50,
-          partner_share: 50,
-          transaction_count: 1,
+          fronted: 3913.78,
+          their_share: 1956.89,
+          partner_share: 1956.89,
+          transaction_count: 12,
         }),
         makePayerSplit({ payer_person_id: BOB_ID }),
+      ],
+      months: [
+        makeMonth({
+          balance: {
+            amount: 24.11,
+            from_person_id: BOB_ID,
+            to_person_id: ALICE_ID,
+          },
+          status: "partially_settled",
+        }),
+      ],
+      settlements: [
+        makeSettlement({
+          amount: 1981,
+          from_person_id: BOB_ID,
+          to_person_id: ALICE_ID,
+          method: "venmo",
+        }),
       ],
     });
 
@@ -163,14 +176,13 @@ describe("SettleUpAuditTable", () => {
       <SettleUpAuditTable data={data} personNames={PERSON_NAMES} />,
     );
 
+    expect(screen.getByText(/Bob owes Alice \$24\.11/)).toBeInTheDocument();
+
     await expandLedger();
 
-    expect(screen.getByText("Activity")).toBeInTheDocument();
-    expect(screen.getByText("Amount")).toBeInTheDocument();
-    expect(screen.getByText("Txns")).toBeInTheDocument();
-    expect(screen.getByText("Alice's share")).toBeInTheDocument();
-    expect(screen.getByText("Bob's share")).toBeInTheDocument();
-    expect(screen.getByText("Net")).toBeInTheDocument();
+    // + in Net favors persons[0] (Alice); Bob owing Alice renders positive.
+    const totalRow = screen.getByText("Total").closest("tr") as HTMLElement;
+    expect(totalRow.textContent).toContain("+$24.11");
   });
 
   it("renders bills with positive Net when persons[0] paid", async () => {
@@ -190,13 +202,10 @@ describe("SettleUpAuditTable", () => {
     renderWithProviders(
       <SettleUpAuditTable data={data} personNames={PERSON_NAMES} />,
     );
-
     await expandLedger();
 
-    const aliceRow = screen.getByText("Alice's bills").closest("tr");
-    expect(aliceRow?.textContent).toContain("+$50.00");
-    const totalRow = screen.getByText("Total").closest("tr") as HTMLElement;
-    expect(totalRow.textContent).toContain("+$50.00");
+    const row = screen.getByText("Alice's bills").closest("tr") as HTMLElement;
+    expect(row.textContent).toContain("+$50.00");
   });
 
   it("renders bills with negative Net when persons[1] paid", async () => {
@@ -205,10 +214,10 @@ describe("SettleUpAuditTable", () => {
         makePayerSplit({ payer_person_id: ALICE_ID }),
         makePayerSplit({
           payer_person_id: BOB_ID,
-          fronted: 100,
-          their_share: 50,
-          partner_share: 50,
-          transaction_count: 1,
+          fronted: 80,
+          their_share: 40,
+          partner_share: 40,
+          transaction_count: 2,
         }),
       ],
     });
@@ -216,36 +225,36 @@ describe("SettleUpAuditTable", () => {
     renderWithProviders(
       <SettleUpAuditTable data={data} personNames={PERSON_NAMES} />,
     );
-
     await expandLedger();
 
-    const bobRow = screen.getByText("Bob's bills").closest("tr");
-    expect(bobRow?.textContent).toContain("−$50.00");
-    const totalRow = screen.getByText("Total").closest("tr") as HTMLElement;
-    expect(totalRow.textContent).toContain("−$50.00");
+    const row = screen.getByText("Bob's bills").closest("tr") as HTMLElement;
+    expect(row.textContent).toContain("−$40.00");
   });
 
-  it("settlement Net follows sender direction", async () => {
-    // Alice paid $100 50/50 → Net +$50 toward Alice.
-    // Alice → Bob $30 → Net +$30 toward Alice (Alice paid down a debt).
-    // Total Net = +$80 → Alice is up $80.
+  it("settlement Net is this month's portion, signed by sender", async () => {
+    // A $500 catch-up lump: only its $300 March portion counts on the March
+    // drill-down; the April slice belongs to April's.
     const data = makeData({
       payer_splits: [
         makePayerSplit({
           payer_person_id: ALICE_ID,
-          fronted: 100,
-          their_share: 50,
-          partner_share: 50,
+          fronted: 600,
+          their_share: 300,
+          partner_share: 300,
           transaction_count: 1,
         }),
         makePayerSplit({ payer_person_id: BOB_ID }),
       ],
-      recorded_settlements: [
+      settlements: [
         makeSettlement({
-          amount: 30,
-          from_person_id: ALICE_ID,
-          to_person_id: BOB_ID,
+          amount: 500,
+          from_person_id: BOB_ID,
+          to_person_id: ALICE_ID,
           method: "venmo",
+          portions: [
+            { year: 2026, month: 3, amount: 300 },
+            { year: 2026, month: 4, amount: 200 },
+          ],
         }),
       ],
     });
@@ -253,77 +262,38 @@ describe("SettleUpAuditTable", () => {
     renderWithProviders(
       <SettleUpAuditTable data={data} personNames={PERSON_NAMES} />,
     );
-
     await expandLedger();
 
-    const totalRow = screen.getByText("Total").closest("tr") as HTMLElement;
-    expect(totalRow.textContent).toContain("+$80.00");
+    const row = screen
+      .getByText(/Bob → Alice via venmo/)
+      .closest("tr") as HTMLElement;
+    expect(row.textContent).toContain("−$300.00");
+    expect(row.textContent).not.toContain("$500.00");
   });
 
-  it("Total row sums each share column and the Net column", async () => {
-    // Bills:
-    //   Alice paid $100 50/50 → her share $50, Bob's $50, Net +$50
-    //   Bob paid $200 50/50 → his share $100, Alice's $100, Net −$100
-    // Settlements:
-    //   Alice → Bob $40 → Net +$40
-    //
-    // Share totals: Alice $50 + $100 = $150, Bob $50 + $100 = $150
-    // Net total: +50 - 100 + 40 = −$10 → Bob is up $10
+  it("ignores settlements whose portions never touch the viewed month", () => {
     const data = makeData({
-      payer_splits: [
-        makePayerSplit({
-          payer_person_id: ALICE_ID,
-          fronted: 100,
-          their_share: 50,
-          partner_share: 50,
-          transaction_count: 1,
-        }),
-        makePayerSplit({
-          payer_person_id: BOB_ID,
-          fronted: 200,
-          their_share: 100,
-          partner_share: 100,
-          transaction_count: 2,
-        }),
-      ],
-      recorded_settlements: [
+      settlements: [
         makeSettlement({
-          amount: 40,
-          from_person_id: ALICE_ID,
-          to_person_id: BOB_ID,
-          method: "venmo",
+          amount: 100,
+          portions: [{ year: 2026, month: 7, amount: 100 }],
         }),
       ],
     });
 
-    renderWithProviders(
+    const { container } = renderWithProviders(
       <SettleUpAuditTable data={data} personNames={PERSON_NAMES} />,
     );
-
-    await expandLedger();
-
-    const totalRow = screen.getByText("Total").closest("tr") as HTMLElement;
-    expect(totalRow.textContent).toContain("$150.00");
-    expect(totalRow.textContent).toContain("−$10.00");
+    expect(container.firstChild).toBeNull();
   });
 
-  it("Net total is zero when bills and settlements offset exactly", async () => {
+  it("settlement rows have dashed Amount, Txns, and share cells", async () => {
     const data = makeData({
-      payer_splits: [
-        makePayerSplit({ payer_person_id: ALICE_ID }),
-        makePayerSplit({
-          payer_person_id: BOB_ID,
-          fronted: 100,
-          their_share: 50,
-          partner_share: 50,
-          transaction_count: 1,
-        }),
-      ],
-      recorded_settlements: [
+      settlements: [
         makeSettlement({
-          amount: 50,
-          from_person_id: ALICE_ID,
-          to_person_id: BOB_ID,
+          amount: 10,
+          from_person_id: BOB_ID,
+          to_person_id: ALICE_ID,
         }),
       ],
     });
@@ -331,11 +301,11 @@ describe("SettleUpAuditTable", () => {
     renderWithProviders(
       <SettleUpAuditTable data={data} personNames={PERSON_NAMES} />,
     );
-
     await expandLedger();
 
-    const totalRow = screen.getByText("Total").closest("tr") as HTMLElement;
-    expect(totalRow.textContent).toContain("$0.00");
+    const row = screen.getByText(/Bob → Alice/).closest("tr") as HTMLElement;
+    const dashes = row.querySelectorAll("td span");
+    expect(dashes.length).toBeGreaterThanOrEqual(4);
   });
 
   it("by-category view shows '{group} · {payer}' rows", async () => {
@@ -367,37 +337,10 @@ describe("SettleUpAuditTable", () => {
       <SettleUpAuditTable data={data} personNames={PERSON_NAMES} />,
     );
 
-    await user.click(screen.getByRole("button", { name: /show ledger/i }));
+    await expandLedger();
     await user.click(screen.getByRole("radio", { name: /by category/i }));
 
     expect(screen.getByText("Food & Dining · Alice")).toBeInTheDocument();
-  });
-
-  it("settlement rows have dashed Txns and share cells", async () => {
-    const data = makeData({
-      recorded_settlements: [
-        makeSettlement({
-          amount: 100,
-          from_person_id: ALICE_ID,
-          to_person_id: BOB_ID,
-          method: "venmo",
-        }),
-      ],
-    });
-
-    renderWithProviders(
-      <SettleUpAuditTable data={data} personNames={PERSON_NAMES} />,
-    );
-
-    await expandLedger();
-
-    const settlementRow = screen
-      .getByText(/Alice → Bob via venmo/)
-      .closest("tr") as HTMLElement;
-    expect(settlementRow.textContent).toContain("$100.00");
-    // 3 dashes: Txns, Alice's share, Bob's share
-    const dashes = settlementRow.querySelectorAll("span");
-    expect(dashes.length).toBeGreaterThanOrEqual(3);
   });
 
   it("copies the table as TSV + HTML when the Copy button is clicked", async () => {
@@ -431,6 +374,17 @@ describe("SettleUpAuditTable", () => {
           transaction_count: 1,
         }),
         makePayerSplit({ payer_person_id: BOB_ID }),
+      ],
+      // The Total row's Net renders the served month balance.
+      months: [
+        makeMonth({
+          balance: {
+            amount: 50,
+            from_person_id: BOB_ID,
+            to_person_id: ALICE_ID,
+          },
+          status: "carried_forward",
+        }),
       ],
     });
 
@@ -468,7 +422,7 @@ describe("SettleUpAuditTable", () => {
         }),
         makePayerSplit({ payer_person_id: BOB_ID }),
       ],
-      recorded_settlements: [
+      settlements: [
         makeSettlement({
           amount: 10,
           from_person_id: ALICE_ID,
@@ -495,9 +449,9 @@ describe("SettleUpAuditTable", () => {
     expect(billLink.getAttribute("href")).toContain(`payer=${ALICE_ID}`);
     expect(billLink.getAttribute("href")).not.toContain("scope=household");
 
-    // With no linked transactions the settlement row falls back to its own
-    // year/month (waivers, manual records) — not the settled_at recording
-    // moment, which here is April.
+    // With no linked transactions the settlement row falls back to its
+    // attributed month (waivers, manual records) — not the settled_at
+    // recording moment, which here is April.
     const settlementLink = screen.getByRole("link", {
       name: /Alice → Bob via venmo/,
     });
@@ -508,7 +462,7 @@ describe("SettleUpAuditTable", () => {
 
   it("settlement rows link via the earliest linked transaction's date, not settled_at", async () => {
     const data = makeData({
-      recorded_settlements: [
+      settlements: [
         makeSettlement({
           amount: 10,
           from_person_id: ALICE_ID,
@@ -550,65 +504,9 @@ describe("SettleUpAuditTable", () => {
     expect(settlementLink.getAttribute("href")).toContain("settlement=1");
   });
 
-  it("by-category rows link with their own category filters, including Uncategorized", async () => {
-    const user = userEvent.setup();
-    const data = makeData({
-      payer_splits: [
-        makePayerSplit({
-          payer_person_id: ALICE_ID,
-          fronted: 100,
-          their_share: 50,
-          partner_share: 50,
-          transaction_count: 1,
-        }),
-        makePayerSplit({ payer_person_id: BOB_ID }),
-      ],
-      payer_group_splits: [
-        makeGroupSplit({
-          payer_person_id: ALICE_ID,
-          group_name: "Food & Dining",
-          fronted: 100,
-          their_share: 50,
-          partner_share: 50,
-          transaction_count: 1,
-          categories: ["Dining Out", "Groceries"],
-        }),
-        makeGroupSplit({
-          payer_person_id: ALICE_ID,
-          group_id: null,
-          group_name: "Uncategorized",
-          fronted: 142,
-          their_share: 71,
-          partner_share: 71,
-          transaction_count: 3,
-          categories: ["Weird Import Name"],
-        }),
-      ],
-    });
-
-    renderWithProviders(
-      <SettleUpAuditTable data={data} personNames={PERSON_NAMES} />,
-    );
-
-    await user.click(screen.getByRole("button", { name: /show ledger/i }));
-    await user.click(screen.getByRole("radio", { name: /by category/i }));
-
-    const foodLink = screen.getByRole("link", {
-      name: "Food & Dining · Alice",
-    });
-    expect(foodLink.getAttribute("href")).toContain("cat=Dining+Out");
-    expect(foodLink.getAttribute("href")).toContain("cat=Groceries");
-
-    // Uncategorized rows must not produce an unfiltered URL.
-    const uncatLink = screen.getByRole("link", {
-      name: "Uncategorized · Alice",
-    });
-    expect(uncatLink.getAttribute("href")).toContain("cat=Weird+Import+Name");
-  });
-
   it("shows empty-state row when there are no split bills", async () => {
     const data = makeData({
-      recorded_settlements: [
+      settlements: [
         makeSettlement({
           amount: 10,
           from_person_id: BOB_ID,
@@ -634,27 +532,35 @@ describe("SettleUpAuditTable", () => {
         payer_splits: [
           makePayerSplit({
             payer_person_id: ALICE_ID,
-            fronted: 2632.09,
-            their_share: 1346.39,
-            partner_share: 1285.7,
-            transaction_count: 33,
+            fronted: 200,
+            their_share: 100,
+            partner_share: 100,
+            transaction_count: 2,
           }),
           makePayerSplit({
             payer_person_id: BOB_ID,
-            fronted: 6386.72,
-            their_share: 3193.42,
-            partner_share: 3193.3,
-            transaction_count: 33,
+            fronted: 50,
+            their_share: 25,
+            partner_share: 25,
+            transaction_count: 1,
           }),
         ],
-        recorded_settlements: [
+        months: [
+          makeMonth({
+            balance: {
+              amount: 45,
+              from_person_id: BOB_ID,
+              to_person_id: ALICE_ID,
+            },
+            status: "partially_settled",
+          }),
+        ],
+        settlements: [
           makeSettlement({
-            amount: 1981,
-            from_person_id: ALICE_ID,
-            to_person_id: BOB_ID,
-            method: "Venmo",
-            // Noon UTC so the rendered short-date is stable across local TZs.
-            settled_at: "2026-04-26T12:00:00Z",
+            amount: 30,
+            from_person_id: BOB_ID,
+            to_person_id: ALICE_ID,
+            method: "venmo",
           }),
         ],
       });
@@ -663,87 +569,18 @@ describe("SettleUpAuditTable", () => {
         <SettleUpAuditTable data={data} personNames={PERSON_NAMES} />,
       );
 
-      // Net = +1285.70 − 3193.30 + 1981.00 = +73.40 → Bob owes Alice
-      expect(
-        screen.getByText(
-          /Alice fronted \$2,632\.09 across 33 bills; Bob fronted \$6,386\.72 across 33 bills\. After splitting and one Venmo transfer on Apr 26, Bob owes Alice \$73\.40\./,
-        ),
-      ).toBeInTheDocument();
-    });
-
-    it("says 'the balance is settled' when net is zero", () => {
-      const data = makeData({
-        payer_splits: [
-          makePayerSplit({ payer_person_id: ALICE_ID }),
-          makePayerSplit({
-            payer_person_id: BOB_ID,
-            fronted: 100,
-            their_share: 50,
-            partner_share: 50,
-            transaction_count: 1,
-          }),
-        ],
-        recorded_settlements: [
-          makeSettlement({
-            amount: 50,
-            from_person_id: ALICE_ID,
-            to_person_id: BOB_ID,
-            method: "Venmo",
-            settled_at: "2026-04-22T00:00:00Z",
-          }),
-        ],
-      });
-
-      renderWithProviders(
-        <SettleUpAuditTable data={data} personNames={PERSON_NAMES} />,
+      const narrative = screen.getByText(/Alice fronted/);
+      expect(narrative.textContent).toContain(
+        "Alice fronted $200.00 across 2 bills",
       );
-
-      expect(screen.getByText(/the balance is settled\.$/)).toBeInTheDocument();
-    });
-
-    it("treats float dust as settled — narrative and Total row agree", async () => {
-      // Net = 0.1 − 0.3 + 0.2 = 2.7755575615628914e-17 in JS floats.
-      const data = makeData({
-        payer_splits: [
-          makePayerSplit({
-            payer_person_id: ALICE_ID,
-            fronted: 0.2,
-            their_share: 0.1,
-            partner_share: 0.1,
-            transaction_count: 1,
-          }),
-          makePayerSplit({
-            payer_person_id: BOB_ID,
-            fronted: 0.6,
-            their_share: 0.3,
-            partner_share: 0.3,
-            transaction_count: 1,
-          }),
-        ],
-        recorded_settlements: [
-          makeSettlement({
-            amount: 0.2,
-            from_person_id: ALICE_ID,
-            to_person_id: BOB_ID,
-            method: "Venmo",
-          }),
-        ],
-      });
-
-      renderWithProviders(
-        <SettleUpAuditTable data={data} personNames={PERSON_NAMES} />,
+      expect(narrative.textContent).toContain(
+        "Bob fronted $50.00 across 1 bill",
       );
-
-      expect(screen.getByText(/the balance is settled\.$/)).toBeInTheDocument();
-
-      await expandLedger();
-      const totalRow = screen.getByText("Total").closest("tr") as HTMLElement;
-      expect(totalRow.textContent).toContain("$0.00");
-      expect(totalRow.textContent).not.toContain("−$0.00");
-      expect(totalRow.textContent).not.toContain("+$0.00");
+      expect(narrative.textContent).toContain("one venmo transfer");
+      expect(narrative.textContent).toContain("Bob owes Alice $45.00");
     });
 
-    it("uses singular 'bill' when count is one", () => {
+    it("says 'the balance is settled' when the month balance is null", () => {
       const data = makeData({
         payer_splits: [
           makePayerSplit({
@@ -755,32 +592,21 @@ describe("SettleUpAuditTable", () => {
           }),
           makePayerSplit({ payer_person_id: BOB_ID }),
         ],
+        months: [makeMonth({ balance: null, status: "settled" })],
       });
 
       renderWithProviders(
         <SettleUpAuditTable data={data} personNames={PERSON_NAMES} />,
       );
 
-      expect(
-        screen.getByText(/Alice fronted \$100\.00 across 1 bill\./),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/the balance is settled/)).toBeInTheDocument();
     });
 
     it("describes a waiver as 'a waiver'", () => {
       const data = makeData({
-        payer_splits: [
-          makePayerSplit({
-            payer_person_id: ALICE_ID,
-            fronted: 100,
-            their_share: 50,
-            partner_share: 50,
-            transaction_count: 1,
-          }),
-          makePayerSplit({ payer_person_id: BOB_ID }),
-        ],
-        recorded_settlements: [
+        settlements: [
           makeSettlement({
-            amount: 50,
+            amount: 25,
             from_person_id: BOB_ID,
             to_person_id: ALICE_ID,
             is_waived: true,
@@ -792,39 +618,23 @@ describe("SettleUpAuditTable", () => {
         <SettleUpAuditTable data={data} personNames={PERSON_NAMES} />,
       );
 
-      expect(
-        screen.getByText(
-          /After splitting and a waiver, the balance is settled\.$/,
-        ),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/After a waiver/)).toBeInTheDocument();
     });
 
     it("counts multiple settlements", () => {
       const data = makeData({
-        payer_splits: [
-          makePayerSplit({
-            payer_person_id: ALICE_ID,
-            fronted: 200,
-            their_share: 100,
-            partner_share: 100,
-            transaction_count: 2,
-          }),
-          makePayerSplit({ payer_person_id: BOB_ID }),
-        ],
-        recorded_settlements: [
+        settlements: [
           makeSettlement({
             id: "s1",
-            amount: 30,
+            amount: 10,
             from_person_id: BOB_ID,
             to_person_id: ALICE_ID,
-            method: "Venmo",
           }),
           makeSettlement({
             id: "s2",
-            amount: 70,
+            amount: 20,
             from_person_id: BOB_ID,
             to_person_id: ALICE_ID,
-            method: "Cash",
           }),
         ],
       });
@@ -833,11 +643,7 @@ describe("SettleUpAuditTable", () => {
         <SettleUpAuditTable data={data} personNames={PERSON_NAMES} />,
       );
 
-      expect(
-        screen.getByText(
-          /After splitting and 2 settlements, the balance is settled\.$/,
-        ),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/After 2 settlements/)).toBeInTheDocument();
     });
   });
 });

@@ -16,6 +16,9 @@ from src.domain.repositories.reconciliation_period_repository import (
 from src.domain.repositories.settlement_merchant_repository import (
     SettlementMerchantRepositoryProtocol,
 )
+from src.domain.repositories.settlement_portion_repository import (
+    SettlementPortionRepositoryProtocol,
+)
 from src.domain.repositories.settlement_repository import (
     SettlementRepositoryProtocol,
 )
@@ -64,6 +67,9 @@ class UnitOfWorkProtocol(Protocol):
     def settlement_transaction_links(
         self,
     ) -> SettlementTransactionLinkRepositoryProtocol: ...
+
+    @property
+    def settlement_portions(self) -> SettlementPortionRepositoryProtocol: ...
 
     async def __aenter__(self) -> Self: ...
 

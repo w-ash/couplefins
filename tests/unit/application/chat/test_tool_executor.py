@@ -27,7 +27,7 @@ from src.application.use_cases.search_transactions import (
 from src.domain.budget import BudgetOverview, CategoryGroupBudgetStatus
 from src.domain.categories import CategoryGroupBreakdown
 from src.domain.exceptions import ToolExecutionError
-from src.domain.ledger import LedgerMonth, MonthSettlementStatus
+from src.domain.ledger import LedgerMonth, LedgerYear, MonthSettlementStatus
 from src.domain.reconciliation import (
     PersonSummary,
     ReconciliationSummary,
@@ -52,25 +52,27 @@ def _settle_result(
     return GetSettleUpDataResult(
         year=2026,
         month=3,
-        owed=owed,
-        net_position=owed,
-        recorded_settlements=[],
-        remaining_balance=owed_amount,
-        outstanding=owed,
-        outstanding_span=((2026, 3), (2026, 3)),
-        ledger_months=[
+        years=[
+            LedgerYear(
+                year=2026,
+                charged=owed,
+                paid=None,
+                balance=owed,
+                span=((2026, 3), (2026, 3)),
+            )
+        ],
+        months=[
             LedgerMonth(
                 year=2026,
                 month=3,
-                gross=owed,
-                applied=Decimal(0),
-                remaining=owed_amount,
+                charged=owed,
+                paid=None,
+                balance=owed,
                 status=MonthSettlementStatus.CARRIED_FORWARD,
-                covering_settlement_ids=(),
-                is_offset=False,
+                runs_against_year=False,
             )
         ],
-        all_settlements=[],
+        settlements=[],
         upload_statuses=[
             UploadStatus(
                 person_id=ALICE.id,
@@ -106,32 +108,46 @@ async def test_settlement_balance_happy_path() -> None:
             CTX,
         )
 
-    assert result["from"] == "Alice"
-    assert result["to"] == "Bob"
-    assert result["gross_amount"] == pytest.approx(147.50)
+    assert result["charged"] == {
+        "amount": pytest.approx(147.50),
+        "from": "Alice",
+        "to": "Bob",
+    }
+    assert result["balance"] == {
+        "amount": pytest.approx(147.50),
+        "from": "Alice",
+        "to": "Bob",
+    }
     assert result["is_finalized"] is False
     assert len(result["uploads"]) == 2
 
 
 @pytest.mark.asyncio
-async def test_settlement_balance_overpayment_names_reversed_debtor() -> None:
-    # Gross: Alice owes Bob $50; Alice paid $60 → net: Bob owes Alice $10.
+async def test_settlement_balance_swung_month_names_reversed_debtor() -> None:
+    # Gross: Alice owes Bob $50; Alice paid $60 → balance: Bob owes Alice $10.
     from attrs import evolve
 
-    overpaid = evolve(
-        _settle_result(owed_amount=Decimal("50.00")),
-        net_position=SettlementResult(
-            amount=Decimal("10.00"),
-            from_person_id=BOB.id,
-            to_person_id=ALICE.id,
-        ),
-        remaining_balance=Decimal("10.00"),
+    base = _settle_result(owed_amount=Decimal("50.00"))
+    swung_balance = SettlementResult(
+        amount=Decimal("10.00"),
+        from_person_id=BOB.id,
+        to_person_id=ALICE.id,
+    )
+    swung = evolve(
+        base,
+        months=[
+            evolve(
+                base.months[0],
+                balance=swung_balance,
+                status=MonthSettlementStatus.PARTIALLY_SETTLED,
+            )
+        ],
     )
 
     with patch(
         "src.application.chat.tool_executor.execute_use_case",
         new_callable=AsyncMock,
-        return_value=overpaid,
+        return_value=swung,
     ):
         result = await execute_tool(
             "get_settlement_balance",
@@ -139,15 +155,16 @@ async def test_settlement_balance_overpayment_names_reversed_debtor() -> None:
             CTX,
         )
 
-    assert result["from"] == "Alice"
-    assert result["to"] == "Bob"
-    assert result["net_from"] == "Bob"
-    assert result["net_to"] == "Alice"
-    assert result["remaining_balance"] == pytest.approx(10.0)
+    assert result["charged"]["from"] == "Alice"
+    assert result["balance"] == {
+        "amount": pytest.approx(10.0),
+        "from": "Bob",
+        "to": "Alice",
+    }
 
 
 @pytest.mark.asyncio
-async def test_settlement_balance_month_includes_ledger_row() -> None:
+async def test_settlement_balance_month_includes_status_and_year() -> None:
     with patch(
         "src.application.chat.tool_executor.execute_use_case",
         new_callable=AsyncMock,
@@ -159,18 +176,13 @@ async def test_settlement_balance_month_includes_ledger_row() -> None:
             CTX,
         )
 
-    assert result["month_ledger"] == {
-        "gross": pytest.approx(147.50),
-        "applied": 0.0,
-        "remaining": pytest.approx(147.50),
-        "status": "carried_forward",
-    }
-    assert result["outstanding"] == {
+    assert result["status"] == "carried_forward"
+    assert result["paid"] is None
+    assert result["year_balance"] == {
         "amount": pytest.approx(147.50),
         "from": "Alice",
         "to": "Bob",
     }
-    assert result["outstanding_span"] == {"start": "2026-03", "end": "2026-03"}
 
 
 @pytest.mark.asyncio
@@ -183,10 +195,10 @@ async def test_settlement_balance_without_month_returns_outstanding() -> None:
             from_person_id=ALICE.id,
             to_person_id=BOB.id,
         ),
-        months=(),
-        payments=(),
-        unapplied_payment_total=Decimal(0),
         span=((2026, 3), (2026, 5)),
+        months=(),
+        years=(),
+        settlements=(),
     )
 
     # _outstanding_balance_summary's inner loader returns the ledger directly.
@@ -215,10 +227,10 @@ async def test_settlement_balance_without_month_all_settled() -> None:
 
     ledger = SettlementLedger(
         outstanding=None,
-        months=(),
-        payments=(),
-        unapplied_payment_total=Decimal(0),
         span=None,
+        months=(),
+        years=(),
+        settlements=(),
     )
 
     with patch(
@@ -247,17 +259,15 @@ async def test_settlement_balance_partial_period_raises(
 
 
 @pytest.mark.asyncio
-async def test_settlement_balance_no_owed() -> None:
-    no_owed = _settle_result()
-    # Create a new result with owed=None
+async def test_settlement_balance_no_charges() -> None:
     from attrs import evolve
 
-    result_no_owed = evolve(no_owed, owed=None)
+    result_no_charges = evolve(_settle_result(), months=[], years=[])
 
     with patch(
         "src.application.chat.tool_executor.execute_use_case",
         new_callable=AsyncMock,
-        return_value=result_no_owed,
+        return_value=result_no_charges,
     ):
         result = await execute_tool(
             "get_settlement_balance",
@@ -265,8 +275,9 @@ async def test_settlement_balance_no_owed() -> None:
             CTX,
         )
 
-    assert result["gross_amount"] == pytest.approx(0.0)
-    assert result["status"] == "No settlement needed this month"
+    assert result["charged"] is None
+    assert result["balance"] is None
+    assert result["note"] == "No settlement-relevant charges this month"
 
 
 @pytest.mark.asyncio
@@ -901,7 +912,7 @@ def _ledger_settlement_record() -> object:
         LedgerSettlementRecord,
     )
     from src.application.use_cases._shared.settlement_records import SettlementRecord
-    from src.domain.ledger import PaymentCoverage
+    from src.domain.ledger import LedgerSettlement, PortionPlan
     from tests.fixtures.factories import make_settlement
 
     linked_tx = uuid.uuid4()
@@ -910,18 +921,15 @@ def _ledger_settlement_record() -> object:
         to_person_id=BOB.id,
         amount=Decimal("147.50"),
         notes="rent catch-up",
-        year=2026,
-        month=3,
     )
     return LedgerSettlementRecord(
         record=SettlementRecord(
             settlement=settlement,
             linked_transaction_ids=[linked_tx],
         ),
-        coverage=PaymentCoverage(
+        application=LedgerSettlement(
             settlement_id=settlement.id,
-            covered=((2026, 3, Decimal("147.50")),),
-            unapplied=Decimal(0),
+            portions=(PortionPlan(year=2026, month=3, amount=Decimal("147.50")),),
         ),
     )
 
@@ -939,7 +947,7 @@ async def test_get_settlement_activity_with_outstanding_fetches_candidates() -> 
     from src.domain.settlement_matching import SettlementCandidate
     from tests.fixtures.factories import make_settlement_merchant
 
-    settle = evolve(_settle_result(), all_settlements=[_ledger_settlement_record()])
+    settle = evolve(_settle_result(), settlements=[_ledger_settlement_record()])
     merchants = ListSettlementMerchantsResult(
         merchants=[make_settlement_merchant(name="Venmo", merchant_pattern="venmo")]
     )
@@ -966,10 +974,7 @@ async def test_get_settlement_activity_with_outstanding_fetches_candidates() -> 
     payment = result["settlements"][0]
     assert payment["from"] == "Alice"
     assert payment["notes"] == "rent catch-up"
-    assert payment["recorded_against"] == "2026-03"
-    assert payment["covered_months"] == [
-        {"month": "2026-03", "amount": pytest.approx(147.5)}
-    ]
+    assert payment["portions"] == [{"month": "2026-03", "amount": pytest.approx(147.5)}]
     assert len(payment["linked_transaction_ids"]) == 1
     cand = result["candidate_transactions"][0]
     assert cand["merchant"] == "Venmo Payment"
@@ -990,11 +995,7 @@ async def test_get_settlement_activity_settled_skips_candidates() -> None:
         ListSettlementMerchantsResult,
     )
 
-    settle = evolve(
-        _settle_result(),
-        outstanding=None,
-        outstanding_span=None,
-    )
+    settle = evolve(_settle_result(), years=[], months=[])
     with patch(
         "src.application.chat.tool_executor.execute_use_case",
         new_callable=AsyncMock,
@@ -1005,7 +1006,7 @@ async def test_get_settlement_activity_settled_skips_candidates() -> None:
         )
 
     assert mock_execute.call_count == 2
-    assert result["outstanding"] is None
+    assert result["year_balance"] is None
     assert result["candidate_transactions"] == []
 
 

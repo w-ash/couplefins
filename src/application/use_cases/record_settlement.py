@@ -6,16 +6,19 @@ import attrs
 from attrs import Factory, define, field
 
 from src.application.use_cases._shared.command_validators import (
-    assert_month_annotation_pair,
-    optional_month_range,
-    optional_positive_int,
+    month_keys,
     positive_decimal,
     quantize_cents,
 )
 from src.application.use_cases._shared.finalization import (
     assert_periods_not_finalized,
 )
+from src.application.use_cases._shared.reconciliation_context import (
+    load_reconciliation_context,
+)
+from src.application.use_cases._shared.settlement_math import load_ledger
 from src.application.use_cases._shared.settlement_records import (
+    allocate_and_save_portions,
     assert_transactions_not_linked,
     build_settlement,
     validate_settlement_persons,
@@ -34,15 +37,13 @@ class RecordSettlementCommand:
     from_person_id: uuid.UUID
     to_person_id: uuid.UUID
     method: str
-    # Optional "recorded against" annotation — display only, never math.
-    year: int | None = field(default=None, validator=optional_positive_int)
-    month: int | None = field(default=None, validator=optional_month_range)
     notes: str = ""
     settled_at: datetime | None = None
+    # Transfer legs (the Venmo rows themselves) — excluded from math.
     linked_transaction_ids: list[uuid.UUID] = field(factory=list)
-
-    def __attrs_post_init__(self) -> None:
-        assert_month_annotation_pair(self.year, self.month)
+    # The months this payment covers; empty means the settled_at month.
+    # Per-month portions are allocated at record time and stored.
+    covered_months: list[tuple[int, int]] = field(factory=list, validator=month_keys)
 
 
 _AMOUNT_MISMATCH_THRESHOLD = Decimal("0.20")
@@ -103,12 +104,15 @@ class RecordSettlementUseCase:
                 if best_match > command.amount * _AMOUNT_MISMATCH_THRESHOLD:
                     warnings.append(
                         f"No linked transaction amount is close to "
-                        f"settlement amount ${command.amount}"
+                        f"settlement amount ${command.amount:,.2f}"
                     )
 
+            # Pre-payment balances — the portion plan clears these, so the
+            # ledger must be computed before the new settlement is saved.
+            ctx = await load_reconciliation_context(uow)
+            ledger = (await load_ledger(uow, ctx)).ledger
+
             settlement = build_settlement(
-                year=command.year,
-                month=command.month,
                 from_person_id=command.from_person_id,
                 to_person_id=command.to_person_id,
                 amount=command.amount,
@@ -118,6 +122,9 @@ class RecordSettlementUseCase:
                 settled_at=command.settled_at,
             )
             saved = await uow.settlements.save(settlement)
+            await allocate_and_save_portions(
+                uow, saved, ledger.months, command.covered_months
+            )
 
             if linked_txs:
                 links = [

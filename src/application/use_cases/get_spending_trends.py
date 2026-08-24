@@ -78,16 +78,14 @@ def _build_settlement_trend(
         MonthlySettlement(
             year=year,
             month=row.month,
-            amount=row.gross.amount,
-            from_person_id=row.gross.from_person_id,
-            to_person_id=row.gross.to_person_id,
-            # Ledger-derived — subsumes the old overpaid special case: an
-            # overpaid month has zero remaining, so it reads as settled.
+            amount=row.charged.amount,
+            from_person_id=row.charged.from_person_id,
+            to_person_id=row.charged.to_person_id,
             is_settled=row.status is MonthSettlementStatus.SETTLED,
             status=row.status,
         )
         for row in ledger.months
-        if row.year == year and row.gross is not None
+        if row.year == year and row.charged is not None
     ]
 
 

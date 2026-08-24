@@ -2,8 +2,9 @@ import { Check, Copy } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router";
 import type {
+  LedgerSettlementResponse,
+  OwedAmountResponse,
   PayerSplitSummaryResponse,
-  SettlementResponse,
   SettleUpDataResponse,
 } from "@/api/generated/model";
 import { Card } from "@/components/Card";
@@ -12,16 +13,15 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { useCopyFeedback } from "@/hooks/useCopyFeedback";
 import { cn } from "@/lib/cn";
-import { settlementAnnotationMonth } from "@/lib/date-range";
 import {
   buildSettlementLabel,
   formatCurrency,
   formatShortDate,
   formatSignedCurrency,
-  isZeroCurrency,
   plural,
 } from "@/lib/format";
 import { tableHeaderRowClass } from "@/lib/layout";
+import { attributedMonth, findMonth, settlementsTouching } from "@/lib/ledger";
 import {
   type TransactionScope,
   TX_FILTER_PARAMS,
@@ -66,8 +66,17 @@ export function SettleUpAuditTable({ data, personNames }: Props) {
   const [showLedger, setShowLedger] = useState(false);
   const { copied, markCopied } = useCopyFeedback();
 
+  // The viewed month's precomputed ledger entry — the single source for this
+  // month's balance, so the Summary can never disagree with the month row.
+  const monthEntry = findMonth(data.months, data.year, data.month);
+  // The settlements whose recorded portions touch the viewed month.
+  const monthSettlements = useMemo(
+    () => settlementsTouching(data.settlements, data.year, data.month),
+    [data.settlements, data.year, data.month],
+  );
+
   const hasSplits = data.payer_splits.some((p) => p.transaction_count > 0);
-  const hasSettlements = data.recorded_settlements.length > 0;
+  const hasSettlements = monthSettlements.length > 0;
 
   const p0 = data.persons[0] ?? null;
   const p1 = data.persons[1] ?? null;
@@ -79,17 +88,18 @@ export function SettleUpAuditTable({ data, personNames }: Props) {
       p0
         ? buildLedgerRows({
             data,
+            monthSettlements,
             view,
             p0Id: p0.id,
             personNames,
           })
         : EMPTY_ROWS,
-    [data, view, p0, personNames],
+    [data, monthSettlements, view, p0, personNames],
   );
 
   const totals = useMemo(
-    () => computeTotals(rows, p0?.id ?? null, p1?.id ?? null),
-    [rows, p0, p1],
+    () => computeTotals(rows, monthEntry?.balance ?? null, p0?.id ?? null),
+    [rows, monthEntry, p0],
   );
 
   const handleCopy = useCallback(async () => {
@@ -137,8 +147,8 @@ export function SettleUpAuditTable({ data, personNames }: Props) {
   const narrative = buildBalanceNarrative({
     p0: { name: p0Name, split: p0Split },
     p1: { name: p1Name, split: p1Split },
-    settlements: data.recorded_settlements,
-    direction: totals.direction,
+    settlements: monthSettlements,
+    balance: monthEntry?.balance ?? null,
     personNames,
   });
 
@@ -273,45 +283,38 @@ interface AuditTotals {
   p0Share: number;
   p1Share: number;
   net: number;
-  // Single source of truth for who-owes-whom: both the Total row's Net cell
-  // and the narrative derive from the same row-summed net, gated by the same
-  // isZeroCurrency guard — so they can never disagree in float-dust cases.
-  direction: {
-    amount: number;
-    from_person_id: string;
-    to_person_id: string;
-  } | null;
 }
 
-// Totals sum the rendered rows, so the Total line always ties to the table
-// body — in either view, and including settlement rows' Net contributions.
+// Column footers over the rendered rows — except Net, which renders the
+// API's precomputed month balance so the Total line, the narrative, and the
+// month row all state the same figure.
 function computeTotals(
   rows: LedgerRows,
+  balance: OwedAmountResponse | null,
   p0Id: string | null,
-  p1Id: string | null,
 ): AuditTotals {
   let amount = 0;
   let txns = 0;
   let p0Share = 0;
   let p1Share = 0;
-  let net = 0;
   for (const r of [...rows.splits, ...rows.settlements]) {
     amount += r.amount ?? 0;
     txns += r.txns ?? 0;
     p0Share += r.p0Share ?? 0;
     p1Share += r.p1Share ?? 0;
-    net += r.net;
   }
-  // + in Net favors p0, so a positive net means p1 owes p0.
-  const direction =
-    p0Id === null || p1Id === null || isZeroCurrency(net)
-      ? null
-      : {
-          amount: Math.abs(net),
-          from_person_id: net > 0 ? p1Id : p0Id,
-          to_person_id: net > 0 ? p0Id : p1Id,
-        };
-  return { amount, txns, p0Share, p1Share, net, direction };
+  const net =
+    balance === null || p0Id === null
+      ? 0
+      : signedForP0(balance.amount, balance.to_person_id, p0Id);
+  return { amount, txns, p0Share, p1Share, net };
+}
+
+// + favors p0; − favors p1 — the ledger's one display sign convention: a
+// balance favors the person it is owed to, a payment the person who sent
+// it. Pure sign selection on a served amount — no arithmetic beyond negation.
+function signedForP0(amount: number, favoredId: string, p0Id: string): number {
+  return favoredId === p0Id ? amount : -amount;
 }
 
 function LedgerRowTr({ row }: { row: LedgerRow }) {
@@ -399,20 +402,21 @@ type Party = {
 
 // Plain-English summary of how the balance was reached.
 // Reaches the reader before the ledger does — the ledger is opt-in details.
+// The figure is the API's month balance, the same one the month row shows.
 function buildBalanceNarrative({
   p0,
   p1,
   settlements,
-  direction,
+  balance,
   personNames,
 }: {
   p0: Party;
   p1: Party;
-  settlements: SettlementResponse[];
-  direction: AuditTotals["direction"];
+  settlements: LedgerSettlementResponse[];
+  balance: OwedAmountResponse | null;
   personNames: Map<string, string>;
 }): string {
-  const result = buildSettlementLabel(direction, personNames, {
+  const result = buildSettlementLabel(balance, personNames, {
     includeToName: true,
     settledLabel: "the balance is settled",
   });
@@ -435,7 +439,7 @@ function buildBalanceNarrative({
   return `${[lead.join("; "), afterClause].filter(Boolean).join(". ")}.`;
 }
 
-function describeSettlements(settlements: SettlementResponse[]): string {
+function describeSettlements(settlements: LedgerSettlementResponse[]): string {
   const [first, ...rest] = settlements;
   if (!first) return "";
   if (rest.length > 0) return `${settlements.length} settlements`;
@@ -447,11 +451,13 @@ function describeSettlements(settlements: SettlementResponse[]): string {
 
 function buildLedgerRows({
   data,
+  monthSettlements,
   view,
   p0Id,
   personNames,
 }: {
   data: SettleUpDataResponse;
+  monthSettlements: LedgerSettlementResponse[];
   view: ViewMode;
   p0Id: string;
   personNames: Map<string, string>;
@@ -500,8 +506,8 @@ function buildLedgerRows({
     }
   }
 
-  const settlements = data.recorded_settlements.map((s) =>
-    settlementRow(s, p0Id, personNames),
+  const settlements = monthSettlements.map((s) =>
+    settlementRow(s, { year: data.year, month: data.month }, p0Id, personNames),
   );
 
   return { splits, settlements };
@@ -529,7 +535,7 @@ function splitRow(
 // settlement actually settles — not settled_at, which is the recording moment
 // (a March settlement is often recorded during the April together session).
 // ISO "YYYY-MM-DD" strings compare lexically; no Date() means no TZ shifts.
-function settlementLinkMonth(s: SettlementResponse): {
+function settlementLinkMonth(s: LedgerSettlementResponse): {
   year: number;
   month: number;
 } {
@@ -537,14 +543,18 @@ function settlementLinkMonth(s: SettlementResponse): {
   for (const t of s.linked_transactions ?? []) {
     if (earliest === null || t.date < earliest) earliest = t.date;
   }
-  const fallback = settlementAnnotationMonth(s);
-  if (earliest === null) return fallback;
+  const attributed = attributedMonth(s);
+  if (earliest === null) return attributed;
   const [y, m] = earliest.split("-").map(Number);
-  return { year: y ?? fallback.year, month: m ?? fallback.month };
+  return {
+    year: y ?? attributed.year,
+    month: m ?? attributed.month,
+  };
 }
 
 function settlementRow(
-  s: SettlementResponse,
+  s: LedgerSettlementResponse,
+  viewed: { year: number; month: number },
   p0Id: string,
   personNames: Map<string, string>,
 ): LedgerRow {
@@ -554,6 +564,12 @@ function settlementRow(
   const activity = s.is_waived
     ? `${settledDate} · Balance waived`
     : `${settledDate} · ${fromName} → ${toName}${s.method ? ` via ${s.method}` : ""}`;
+  // Only this month's recorded portion counts here — a catch-up lump shows
+  // its other months' slices on their own drill-downs.
+  const portion =
+    s.portions?.find(
+      (p) => p.year === viewed.year && p.month === viewed.month,
+    ) ?? null;
   return {
     key: `settlement-${s.id}`,
     activity,
@@ -565,7 +581,7 @@ function settlementRow(
     txns: null,
     p0Share: null,
     p1Share: null,
-    net: s.from_person_id === p0Id ? s.amount : -s.amount,
+    net: signedForP0(portion?.amount ?? 0, s.from_person_id, p0Id),
   };
 }
 

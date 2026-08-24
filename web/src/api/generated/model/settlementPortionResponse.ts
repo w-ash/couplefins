@@ -6,9 +6,9 @@
  */
 
 /**
- * One (month, amount) slice a payment covered, per FIFO.
+ * One month's slice of a settlement payment.
  */
-export interface CoveredMonthResponse {
+export interface SettlementPortionResponse {
   year: number;
   month: number;
   amount: number;

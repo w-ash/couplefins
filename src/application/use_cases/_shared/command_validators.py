@@ -3,9 +3,9 @@ from typing import Literal
 
 from attrs import Attribute
 
-Scope = Literal["household", "personal", "all"]
+from src.domain.month_key import MAX_MONTH, assert_month_key
 
-_MAX_MONTH = 12
+Scope = Literal["household", "personal", "all"]
 
 
 def quantize_cents(value: Decimal) -> Decimal:
@@ -41,7 +41,7 @@ def positive_decimal(
 
 
 def month_range(_instance: object, attribute: Attribute[int], value: int) -> None:
-    if not 1 <= value <= _MAX_MONTH:
+    if not 1 <= value <= MAX_MONTH:
         raise ValueError(f"{attribute.name} must be 1-12, got {value}")
 
 
@@ -59,7 +59,13 @@ def optional_positive_int(
         positive_int(_instance, attribute, value)  # type: ignore[arg-type]
 
 
-def assert_month_annotation_pair(year: int | None, month: int | None) -> None:
-    """Both-or-neither guard for an optional (year, month) annotation."""
-    if (year is None) != (month is None):
-        raise ValueError("year and month must be provided together")
+def month_keys(
+    _instance: object,
+    attribute: Attribute[list[tuple[int, int]]],
+    value: list[tuple[int, int]],
+) -> None:
+    for year, month in value:
+        try:
+            assert_month_key(year, month)
+        except ValueError as e:
+            raise ValueError(f"{attribute.name}: {e}") from e

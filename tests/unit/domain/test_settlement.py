@@ -3,7 +3,7 @@ import uuid
 
 import pytest
 
-from tests.fixtures.factories import make_settlement
+from tests.fixtures.factories import make_settlement, make_settlement_portion
 
 
 class TestSettlementEntity:
@@ -25,34 +25,30 @@ class TestSettlementEntity:
         with pytest.raises(ValueError, match="must differ"):
             make_settlement(from_person_id=person_id, to_person_id=person_id)
 
-    def test_invalid_month_raises(self) -> None:
-        with pytest.raises(ValueError, match="month must be 1-12"):
-            make_settlement(month=0)
-
-        with pytest.raises(ValueError, match="month must be 1-12"):
-            make_settlement(month=13)
-
-    def test_month_boundaries(self) -> None:
-        s1 = make_settlement(month=1)
-        assert s1.month == 1
-        s12 = make_settlement(month=12)
-        assert s12.month == 12
-
-    def test_annotation_can_be_absent(self) -> None:
-        s = make_settlement(year=None, month=None)
-        assert s.year is None
-        assert s.month is None
-
-    def test_year_without_month_raises(self) -> None:
-        with pytest.raises(ValueError, match="set together"):
-            make_settlement(year=2026, month=None)
-
-    def test_month_without_year_raises(self) -> None:
-        with pytest.raises(ValueError, match="set together"):
-            make_settlement(year=None, month=1)
-
     def test_waived_settlement(self) -> None:
         s = make_settlement(amount=Decimal(0), is_waived=True, method=None)
         assert s.is_waived is True
         assert s.method is None
         assert s.amount == Decimal(0)
+
+
+class TestSettlementPortionEntity:
+    def test_valid_portion(self) -> None:
+        p = make_settlement_portion()
+        assert p.year == 2026
+        assert p.month == 1
+        assert p.amount == Decimal("50.00")
+
+    def test_invalid_month_raises(self) -> None:
+        with pytest.raises(ValueError, match="month must be 1-12"):
+            make_settlement_portion(month=0)
+        with pytest.raises(ValueError, match="month must be 1-12"):
+            make_settlement_portion(month=13)
+
+    def test_invalid_year_raises(self) -> None:
+        with pytest.raises(ValueError, match="year must be >= 1"):
+            make_settlement_portion(year=0)
+
+    def test_non_positive_amount_raises(self) -> None:
+        with pytest.raises(ValueError, match="amount must be positive"):
+            make_settlement_portion(amount=Decimal(0))

@@ -1,5 +1,3 @@
-from uuid import UUID
-
 from attrs import define
 
 from src.application.use_cases._shared.date_math import month_bounds
@@ -17,10 +15,9 @@ from src.application.use_cases._shared.upload_status import (
 from src.domain.entities.settlement import Settlement
 from src.domain.entities.transaction import Transaction
 from src.domain.ledger import (
-    PaymentCoverage,
+    LedgerSettlement,
     SettlementLedger,
     compute_ledger,
-    empty_payment_coverage,
 )
 from src.domain.reconciliation import ReconciliationSummary, reconcile
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
@@ -28,48 +25,54 @@ from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 @define(frozen=True, slots=True)
 class LedgerSettlementRecord:
-    """One payment enriched with its links and FIFO coverage."""
+    """One settlement enriched with its links and resolved portions."""
 
-    record: SettlementRecord
-    coverage: PaymentCoverage
+    record: SettlementRecord  # settlement + its transfer legs
+    application: LedgerSettlement  # resolved per-month portions
 
 
 @define(frozen=True, slots=True)
 class LedgerBundle:
-    """The all-time settlement ledger plus its enriched payment history.
+    """The settlement ledger plus its enriched settlement history.
 
     ``records`` is chronological by ``(settled_at, created_at, id)``,
-    matching the order of ``ledger.payments``.
+    matching the order of ``ledger.settlements``.
     """
 
     ledger: SettlementLedger
-    settlements: list[Settlement]
     records: list[LedgerSettlementRecord]
+    # All-time settlement-relevant transactions the ledger was computed
+    # from — reusable for month-scoped views without another query.
+    transactions: list[Transaction]
 
 
 @define(frozen=True, slots=True)
 class LoadedLedger:
-    """The running ledger plus the settlements it was computed from."""
+    """The settlement ledger plus the settlements it was computed from."""
 
     ledger: SettlementLedger
     settlements: list[Settlement]
+    # All-time settlement-relevant transactions the ledger was computed from.
+    transactions: list[Transaction]
 
 
 async def load_ledger(
     uow: UnitOfWorkProtocol,
     ctx: ReconciliationContext,
 ) -> LoadedLedger:
-    """Compute the running settlement ledger without link enrichment.
+    """Compute the settlement ledger without link enrichment.
 
     Callers that only read ``ledger`` (and the raw settlement list) should use
-    this — it skips the two ``enrich_with_links`` queries that
-    ``load_settlement_ledger`` pays for its ``records``.
+    this — it skips the enrichment queries ``load_settlement_ledger`` pays
+    for its ``records``.
     """
     transactions = await uow.transactions.get_all_settlement_relevant()
     settlements = await uow.settlements.get_all()
+    portions = await uow.settlement_portions.get_all()
     return LoadedLedger(
-        ledger=compute_ledger(transactions, settlements, ctx.person_ids),
+        ledger=compute_ledger(transactions, settlements, portions, ctx.person_ids),
         settlements=settlements,
+        transactions=transactions,
     )
 
 
@@ -77,7 +80,7 @@ async def load_settlement_ledger(
     uow: UnitOfWorkProtocol,
     ctx: ReconciliationContext,
 ) -> LedgerBundle:
-    """Compute the running settlement ledger plus its enriched payment history.
+    """Compute the settlement ledger plus its enriched settlement history.
 
     Only ``get_settle_up_data`` needs ``records``; ledger-only callers should
     use ``load_ledger`` to avoid the enrichment I/O.
@@ -86,21 +89,22 @@ async def load_settlement_ledger(
     ledger, settlements = loaded.ledger, loaded.settlements
 
     ordered = sorted(settlements, key=lambda s: (s.settled_at, s.created_at, s.id))
-    coverage_by_id: dict[UUID, PaymentCoverage] = {
-        c.settlement_id: c for c in ledger.payments
-    }
+    application_by_id = {a.settlement_id: a for a in ledger.settlements}
     records = [
         LedgerSettlementRecord(
             record=record,
-            # compute_ledger yields no coverages before couple setup is
-            # complete (person count != 2) — degrade to empty coverage.
-            coverage=coverage_by_id.get(
-                record.settlement.id, empty_payment_coverage(record.settlement.id)
+            # compute_ledger yields no applications before couple setup is
+            # complete (person count != 2) — degrade to an empty one.
+            application=application_by_id.get(
+                record.settlement.id,
+                LedgerSettlement(settlement_id=record.settlement.id, portions=()),
             ),
         )
         for record in await enrich_with_links(ordered, uow)
     ]
-    return LedgerBundle(ledger=ledger, settlements=settlements, records=records)
+    return LedgerBundle(
+        ledger=ledger, records=records, transactions=loaded.transactions
+    )
 
 
 @define(frozen=True, slots=True)
@@ -108,13 +112,12 @@ class MonthAuditSnapshot:
     """Month-scoped audit data for the Settle Up drill-down.
 
     Balances live on the ledger (see ``load_settlement_ledger``); this
-    snapshot carries the month's reconcile() summary (audit splits), its
-    month-annotated payment records, and upload statuses.
+    snapshot carries the month's reconcile() summary (audit splits) and
+    upload statuses.
     """
 
     transactions: list[Transaction]
     summary: ReconciliationSummary
-    records: list[SettlementRecord]
     upload_statuses: list[UploadStatus]
 
 
@@ -123,13 +126,12 @@ async def load_month_audit_snapshot(
     year: int,
     month: int,
     ctx: ReconciliationContext,
+    all_transactions: list[Transaction],
 ) -> MonthAuditSnapshot:
+    """``all_transactions`` is the all-time settlement-relevant list the
+    ledger was computed from — scoped to the month here, no re-query."""
     start, end = month_bounds(year, month)
-    # Settlement relevance is payer_percentage < 100, independent of the
-    # household flag — spotted and personal-split rows enter the math.
-    transactions = await uow.transactions.get_settlement_relevant_by_date_range(
-        start, end
-    )
+    transactions = [tx for tx in all_transactions if start <= tx.date <= end]
 
     summary = reconcile(
         transactions,
@@ -138,10 +140,6 @@ async def load_month_audit_snapshot(
         ctx.category_groups,
         start_date=start,
         end_date=end,
-    )
-
-    records = await enrich_with_links(
-        await uow.settlements.get_by_period(year, month), uow
     )
 
     upload_statuses = build_upload_statuses(
@@ -154,6 +152,5 @@ async def load_month_audit_snapshot(
     return MonthAuditSnapshot(
         transactions=transactions,
         summary=summary,
-        records=records,
         upload_statuses=upload_statuses,
     )

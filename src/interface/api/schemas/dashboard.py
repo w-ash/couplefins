@@ -25,7 +25,7 @@ class MonthHistoryEntryResponse(BaseModel):
     is_finalized: bool
     is_settled: bool
     settlement_status: str  # settled | partially_settled | carried_forward
-    settlement_remaining: MoneyField  # unpaid balance after FIFO payments
+    settlement_remaining: MoneyField  # unpaid balance after applied portions
     settled_at: datetime | None
     total_all_spending: MoneyField | None = None
 

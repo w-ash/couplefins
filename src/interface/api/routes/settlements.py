@@ -63,8 +63,6 @@ async def record_settlement(
 ) -> RecordSettlementResponse:
     _assert_participant(current_user, body.from_person_id, body.to_person_id)
     command = RecordSettlementCommand(
-        year=body.year,
-        month=body.month,
         amount=body.amount,
         from_person_id=body.from_person_id,
         to_person_id=body.to_person_id,
@@ -72,6 +70,7 @@ async def record_settlement(
         notes=body.notes,
         settled_at=body.settled_at,
         linked_transaction_ids=body.linked_transaction_ids,
+        covered_months=[(m.year, m.month) for m in body.covered_months],
     )
     result = await execute_use_case(
         lambda uow: RecordSettlementUseCase().execute(command, uow)
@@ -90,8 +89,6 @@ async def waive_settlement(
 ) -> RecordSettlementResponse:
     _assert_participant(current_user, body.from_person_id, body.to_person_id)
     command = RecordWaivedSettlementCommand(
-        year=body.year,
-        month=body.month,
         waive_year=body.waive_year,
         from_person_id=body.from_person_id,
         to_person_id=body.to_person_id,

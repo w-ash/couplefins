@@ -17,10 +17,22 @@ from tests.fixtures.factories import (
     make_person,
     make_reconciliation_period,
     make_settlement,
+    make_settlement_portion,
     make_transaction,
     make_upload,
 )
 from tests.fixtures.mocks import make_mock_uow, set_passthrough_save
+
+
+def _set_settlements(uow, *entries):
+    """Install settlements plus one full-amount portion per (year, month)."""
+    uow.settlements.get_all.return_value = [s for s, _, _ in entries]
+    uow.settlement_portions.get_all.return_value = [
+        make_settlement_portion(
+            settlement_id=s.id, year=year, month=month, amount=s.amount
+        )
+        for s, year, month in entries
+    ]
 
 
 def _make_command(
@@ -458,16 +470,19 @@ async def test_month_with_full_settlement_is_settled() -> None:
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
     settled_at = datetime(2026, 2, 1, 12, 0, tzinfo=UTC)
-    uow.settlements.get_all.return_value = [
-        make_settlement(
-            year=2026,
-            month=1,
-            amount=Decimal("50.00"),
-            from_person_id=bob.id,
-            to_person_id=alice.id,
-            settled_at=settled_at,
+    _set_settlements(
+        uow,
+        (
+            make_settlement(
+                amount=Decimal("50.00"),
+                from_person_id=bob.id,
+                to_person_id=alice.id,
+                settled_at=settled_at,
+            ),
+            2026,
+            1,
         ),
-    ]
+    )
 
     result = await GetDashboardUseCase().execute(_make_command(), uow)
 
@@ -495,16 +510,19 @@ async def test_month_with_partial_settlement_is_not_settled() -> None:
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
     partial_at = datetime(2026, 2, 1, 12, 0, tzinfo=UTC)
-    uow.settlements.get_all.return_value = [
-        make_settlement(
-            year=2026,
-            month=1,
-            amount=Decimal("30.00"),
-            from_person_id=bob.id,
-            to_person_id=alice.id,
-            settled_at=partial_at,
+    _set_settlements(
+        uow,
+        (
+            make_settlement(
+                amount=Decimal("30.00"),
+                from_person_id=bob.id,
+                to_person_id=alice.id,
+                settled_at=partial_at,
+            ),
+            2026,
+            1,
         ),
-    ]
+    )
 
     result = await GetDashboardUseCase().execute(_make_command(), uow)
 
@@ -537,24 +555,29 @@ async def test_multiple_settlements_summing_to_full() -> None:
 
     earlier = datetime(2026, 2, 1, 10, 0, tzinfo=UTC)
     later = datetime(2026, 2, 5, 14, 0, tzinfo=UTC)
-    uow.settlements.get_all.return_value = [
-        make_settlement(
-            year=2026,
-            month=1,
-            amount=Decimal("60.00"),
-            from_person_id=bob.id,
-            to_person_id=alice.id,
-            settled_at=earlier,
+    _set_settlements(
+        uow,
+        (
+            make_settlement(
+                amount=Decimal("60.00"),
+                from_person_id=bob.id,
+                to_person_id=alice.id,
+                settled_at=earlier,
+            ),
+            2026,
+            1,
         ),
-        make_settlement(
-            year=2026,
-            month=1,
-            amount=Decimal("40.00"),
-            from_person_id=bob.id,
-            to_person_id=alice.id,
-            settled_at=later,
+        (
+            make_settlement(
+                amount=Decimal("40.00"),
+                from_person_id=bob.id,
+                to_person_id=alice.id,
+                settled_at=later,
+            ),
+            2026,
+            1,
         ),
-    ]
+    )
 
     result = await GetDashboardUseCase().execute(_make_command(), uow)
 
@@ -585,12 +608,9 @@ async def test_waived_settlement_counts_as_settled() -> None:
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
     uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = []
     uow.persons.get_by_ids.return_value = [alice, bob]
-    uow.settlements.get_by_period.return_value = []
 
     waive_result = await RecordWaivedSettlementUseCase().execute(
-        RecordWaivedSettlementCommand(
-            year=2026, month=1, from_person_id=bob.id, to_person_id=alice.id
-        ),
+        RecordWaivedSettlementCommand(from_person_id=bob.id, to_person_id=alice.id),
         uow,
     )
     # Bob owes Alice 50% of $10 — the use case derives this from the same
@@ -598,6 +618,10 @@ async def test_waived_settlement_counts_as_settled() -> None:
     assert waive_result.settlement.amount == Decimal("5.00")
 
     uow.settlements.get_all.return_value = [waive_result.settlement]
+    # The waiver's portions were planned and saved at record time.
+    uow.settlement_portions.get_all.return_value = (
+        uow.settlement_portions.save_batch.call_args.args[0]
+    )
 
     result = await GetDashboardUseCase().execute(_make_command(), uow)
 
@@ -628,22 +652,29 @@ async def test_ytd_total_settled_accumulates_across_months() -> None:
     _set_transactions(uow, txs)
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
-    uow.settlements.get_all.return_value = [
-        make_settlement(
-            year=2026,
-            month=1,
-            amount=Decimal("50.00"),
-            from_person_id=bob.id,
-            to_person_id=alice.id,
+    _set_settlements(
+        uow,
+        (
+            make_settlement(
+                amount=Decimal("50.00"),
+                from_person_id=bob.id,
+                to_person_id=alice.id,
+                settled_at=datetime(2026, 2, 1, tzinfo=UTC),
+            ),
+            2026,
+            1,
         ),
-        make_settlement(
-            year=2026,
-            month=2,
-            amount=Decimal("40.00"),
-            from_person_id=bob.id,
-            to_person_id=alice.id,
+        (
+            make_settlement(
+                amount=Decimal("40.00"),
+                from_person_id=bob.id,
+                to_person_id=alice.id,
+                settled_at=datetime(2026, 3, 1, tzinfo=UTC),
+            ),
+            2026,
+            2,
         ),
-    ]
+    )
 
     result = await GetDashboardUseCase().execute(_make_command(), uow)
 
@@ -671,17 +702,14 @@ async def test_ytd_total_settled_scoped_by_settled_at_year() -> None:
 
     uow.settlements.get_all.return_value = [
         make_settlement(
-            year=2026,
-            month=1,
             amount=Decimal("50.00"),
             from_person_id=bob.id,
             to_person_id=alice.id,
             settled_at=datetime(2026, 2, 1, tzinfo=UTC),
         ),
-        # No annotation — still paid during 2026, still counts.
+        # No portions — falls back to its settled_at month; paid during
+        # 2026, still counts.
         make_settlement(
-            year=None,
-            month=None,
             amount=Decimal("80.00"),
             from_person_id=bob.id,
             to_person_id=alice.id,
@@ -689,8 +717,6 @@ async def test_ytd_total_settled_scoped_by_settled_at_year() -> None:
         ),
         # Paid in a different year — excluded.
         make_settlement(
-            year=None,
-            month=None,
             amount=Decimal("999.00"),
             from_person_id=bob.id,
             to_person_id=alice.id,
@@ -703,9 +729,8 @@ async def test_ytd_total_settled_scoped_by_settled_at_year() -> None:
     assert result.ytd_total_settled == Decimal("130.00")
 
 
-async def test_null_annotation_settlement_enters_month_math() -> None:
-    """Regression pin: a settlement without year/month must still settle the
-    month it covers — the old get_by_year fetch silently dropped it."""
+async def test_portion_decides_the_month_not_settled_at() -> None:
+    """A March payment whose portion covers January settles January."""
     uow = make_mock_uow()
     alice = make_person(name="Alice")
     bob = make_person(name="Bob")
@@ -723,16 +748,19 @@ async def test_null_annotation_settlement_enters_month_math() -> None:
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
     settled_at = datetime(2026, 3, 1, 9, 0, tzinfo=UTC)
-    uow.settlements.get_all.return_value = [
-        make_settlement(
-            year=None,
-            month=None,
-            amount=Decimal("50.00"),
-            from_person_id=bob.id,
-            to_person_id=alice.id,
-            settled_at=settled_at,
+    _set_settlements(
+        uow,
+        (
+            make_settlement(
+                amount=Decimal("50.00"),
+                from_person_id=bob.id,
+                to_person_id=alice.id,
+                settled_at=settled_at,
+            ),
+            2026,
+            1,
         ),
-    ]
+    )
 
     result = await GetDashboardUseCase().execute(_make_command(), uow)
 
@@ -777,9 +805,9 @@ async def test_zero_balance_month_is_trivially_settled() -> None:
     assert jan.settled_at is None
 
 
-async def test_overpayment_settles_month_and_reverses_outstanding() -> None:
-    """An overpayment fully covers the month (settled); the excess rides on
-    the ledger as a reversed outstanding balance."""
+async def test_month_paid_past_charges_swings_direction() -> None:
+    """A month paid past its charges simply shows its balance the other
+    way — the normal state, not a special case."""
     uow = make_mock_uow()
     alice = make_person(name="Alice")
     bob = make_person(name="Bob")
@@ -796,30 +824,36 @@ async def test_overpayment_settles_month_and_reverses_outstanding() -> None:
     _set_transactions(uow, txs)
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
-    # Bob owes Alice $50, but pays $200 (overpayment)
-    uow.settlements.get_all.return_value = [
-        make_settlement(
-            year=2026,
-            month=1,
-            amount=Decimal("200.00"),
-            from_person_id=bob.id,
-            to_person_id=alice.id,
+    # Bob owes Alice $50, but pays $200 covering January.
+    _set_settlements(
+        uow,
+        (
+            make_settlement(
+                amount=Decimal("200.00"),
+                from_person_id=bob.id,
+                to_person_id=alice.id,
+                settled_at=datetime(2026, 2, 1, tzinfo=UTC),
+            ),
+            2026,
+            1,
         ),
-    ]
+    )
 
     result = await GetDashboardUseCase().execute(_make_command(), uow)
 
-    # Month history: gross amount, ledger-derived status — covered is covered.
+    # Month history: gross charge, balance swung the other way.
     jan = result.month_history[-1]
-    assert jan.is_settled is True
-    assert jan.settlement_status == "settled"
+    assert jan.is_settled is False
+    assert jan.settlement_status == "partially_settled"
     assert jan.settlement_amount == Decimal("50.00")
-    assert jan.settlement_from_person_id == bob.id
-    assert jan.settlement_to_person_id == alice.id
+    assert jan.settlement_remaining == Decimal("150.00")
+    # Direction follows the swung balance: Alice now owes Bob.
+    assert jan.settlement_from_person_id == alice.id
+    assert jan.settlement_to_person_id == bob.id
 
-    # No month remainder → YTD net is clear...
-    assert result.ytd_net_settlement is None
-    # ...but the outstanding balance shows the reversed $150 credit.
+    # The swing rides through the year-to-date net and the balance alike.
+    assert result.ytd_net_settlement is not None
+    assert result.ytd_net_settlement.amount == Decimal("150.00")
     assert result.outstanding_balance is not None
     assert result.outstanding_balance.amount == Decimal("150.00")
     assert result.outstanding_balance.from_person_id == alice.id
@@ -843,15 +877,19 @@ async def test_net_settlement_partial_payment() -> None:
     _set_transactions(uow, txs)
     uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
 
-    uow.settlements.get_all.return_value = [
-        make_settlement(
-            year=2026,
-            month=3,
-            amount=Decimal("30.00"),
-            from_person_id=bob.id,
-            to_person_id=alice.id,
+    _set_settlements(
+        uow,
+        (
+            make_settlement(
+                amount=Decimal("30.00"),
+                from_person_id=bob.id,
+                to_person_id=alice.id,
+                settled_at=datetime(2026, 4, 1, tzinfo=UTC),
+            ),
+            2026,
+            3,
         ),
-    ]
+    )
 
     result = await GetDashboardUseCase().execute(_make_command(), uow)
 

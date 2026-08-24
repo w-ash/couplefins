@@ -286,9 +286,10 @@ async def test_settlement_relevant_rows_agree_across_surfaces(
         "/api/v1/settle-up", params={"year": 2026, "month": 1}, auth=cookies
     )
     data = settle_up.json()
-    assert data["owed"]["amount"] == pytest.approx(100.0)
-    assert data["owed"]["from_person_id"] == bob_id
-    assert data["owed"]["to_person_id"] == alice_id
+    jan = next(m for m in data["months"] if (m["year"], m["month"]) == (2026, 1))
+    assert jan["charged"]["amount"] == pytest.approx(100.0)
+    assert jan["charged"]["from_person_id"] == bob_id
+    assert jan["charged"]["to_person_id"] == alice_id
     splits_by_payer = {ps["payer_person_id"]: ps for ps in data["payer_splits"]}
     assert splits_by_payer[alice_id]["transaction_count"] == 3
     assert splits_by_payer[alice_id]["fronted"] == pytest.approx(200.0)

@@ -25,7 +25,6 @@ from src.application.chat.protocols import ToolContext
 from src.application.chat.user_data import UserData, wrap
 from src.application.runner import execute_use_case
 from src.application.use_cases._shared.command_validators import (
-    assert_month_annotation_pair,
     assert_positive_decimal,
 )
 from src.application.use_cases._shared.finalization import load_period_status
@@ -105,6 +104,7 @@ from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import ToolExecutionError
 from src.domain.ledger import MonthKey, SettlementLedger
+from src.domain.month_key import assert_month_key
 from src.domain.reconciliation import SettlementResult
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 from src.domain.splits import check_payer_percentage
@@ -213,36 +213,27 @@ async def _month_settlement_summary(
         lambda uow: GetSettleUpDataUseCase().execute(command, uow)
     )
 
+    row = next(
+        (m for m in result.months if (m.year, m.month) == (year, month)),
+        None,
+    )
+    charged = row.charged if row else None
+    balance = row.balance if row else None
     summary: dict[str, object] = {
         "month": f"{result.year}-{result.month:02d}",
         "is_finalized": result.is_finalized,
-        "remaining_balance": _fmt(result.remaining_balance),
+        "balance": _owed_dict(balance, persons),
+        "charged": _owed_dict(charged, persons),
+        "paid": _owed_dict(row.paid if row else None, persons),
+        "status": str(row.status) if row else "settled",
     }
-    if result.owed:
-        summary["from"] = _person_name(result.owed.from_person_id, persons)
-        summary["to"] = _person_name(result.owed.to_person_id, persons)
-        summary["gross_amount"] = _fmt(result.owed.amount)
-    else:
-        summary["gross_amount"] = 0.0
-        summary["status"] = "No settlement needed this month"
-    # What remains against this month on the ledger, in its gross direction.
-    if result.net_position:
-        summary["net_from"] = _person_name(result.net_position.from_person_id, persons)
-        summary["net_to"] = _person_name(result.net_position.to_person_id, persons)
+    if charged is None:
+        summary["note"] = "No settlement-relevant charges this month"
 
-    row = next(
-        (m for m in result.ledger_months if (m.year, m.month) == (year, month)),
-        None,
+    year_row = next((y for y in result.years if y.year == year), None)
+    summary["year_balance"] = _owed_dict(
+        year_row.balance if year_row else None, persons
     )
-    if row is not None:
-        summary["month_ledger"] = {
-            "gross": _fmt(row.gross.amount) if row.gross else 0.0,
-            "applied": _fmt(row.applied),
-            "remaining": _fmt(row.remaining),
-            "status": str(row.status),
-        }
-    summary["outstanding"] = _owed_dict(result.outstanding, persons)
-    summary["outstanding_span"] = _span_dict(result.outstanding_span)
 
     summary["uploads"] = [
         {"person": us.person_name, "uploaded": us.has_uploaded}
@@ -684,8 +675,8 @@ async def handle_get_settlement_activity(
         )
     )
 
-    # all_settlements is chronological ascending — newest first for chat.
-    newest_first = list(reversed(data.all_settlements))
+    # settlements is chronological ascending — newest first for chat.
+    newest_first = list(reversed(data.settlements))
     shown = newest_first[:_MAX_LIST_ROWS]
     settlements: list[dict[str, object]] = []
     for lr in shown:
@@ -699,11 +690,10 @@ async def handle_get_settlement_activity(
             "method": UserData(s.method) if s.method else None,
             "notes": UserData(s.notes) if s.notes else None,
             "is_waived": s.is_waived,
-            # Display-only annotation — coverage below is the math.
-            "recorded_against": f"{s.year}-{s.month:02d}" if s.year else None,
-            "covered_months": [
-                {"month": f"{y}-{m:02d}", "amount": _fmt(amount)}
-                for (y, m, amount) in lr.coverage.covered
+            # Stored per-month portions — the math, not an annotation.
+            "portions": [
+                {"month": f"{p.year}-{p.month:02d}", "amount": _fmt(p.amount)}
+                for p in lr.application.portions
             ],
             "linked_transaction_ids": [
                 str(tid) for tid in lr.record.linked_transaction_ids
@@ -711,10 +701,12 @@ async def handle_get_settlement_activity(
         })
 
     # Candidate transactions only make sense against an amount to settle —
-    # match the UI, which searches for the outstanding balance.
+    # match the UI, which searches for the selected year's balance.
+    year_row = next((row for row in data.years if row.year == year), None)
+    year_balance = year_row.balance if year_row else None
     candidates: list[dict[str, object]] = []
-    if data.outstanding is not None:
-        cand_command = FindSettlementCandidatesCommand(amount=data.outstanding.amount)
+    if year_balance is not None:
+        cand_command = FindSettlementCandidatesCommand(amount=year_balance.amount)
         cand: FindSettlementCandidatesResult = await execute_use_case(
             lambda uow: FindSettlementCandidatesUseCase().execute(cand_command, uow)
         )
@@ -732,9 +724,9 @@ async def handle_get_settlement_activity(
 
     return {
         "month": f"{year}-{month:02d}",
-        "outstanding": _owed_dict(data.outstanding, ctx.persons),
-        "outstanding_span": _span_dict(data.outstanding_span),
-        "settlements_total": len(data.all_settlements),
+        "year_balance": _owed_dict(year_balance, ctx.persons),
+        "year_span": _span_dict(year_row.span if year_row else None),
+        "settlements_total": len(data.settlements),
         "settlements_showing": len(shown),
         "settlements": settlements,
         "candidate_transactions": candidates,
@@ -833,6 +825,23 @@ async def handle_get_adjustments_preview(
 
 def _month_label(year: int, month: int) -> str:
     return f"{calendar.month_name[month]} {year}"
+
+
+def _parse_covered_months(tool_input: dict[str, object]) -> list[tuple[int, int]]:
+    """Parse the optional covered_months list of "YYYY-MM" strings."""
+    raw = cast(list[str], tool_input.get("covered_months") or [])
+    parsed: list[tuple[int, int]] = []
+    for value in raw:
+        try:
+            year_str, month_str = value.split("-")
+            year, month = int(year_str), int(month_str)
+            assert_month_key(year, month)
+        except ValueError as e:
+            raise ToolExecutionError(
+                f"Invalid covered month {value!r} — use YYYY-MM"
+            ) from e
+        parsed.append((year, month))
+    return parsed
 
 
 async def _assert_months_open(
@@ -1421,13 +1430,11 @@ async def handle_record_settlement(
         raise ToolExecutionError("from_person and to_person must differ")
 
     amount = Decimal(str(tool_input["amount"]))
-    year = cast(int | None, tool_input.get("year"))
-    month = cast(int | None, tool_input.get("month"))
     try:
         assert_positive_decimal(amount)
-        assert_month_annotation_pair(year, month)
     except ValueError as e:
         raise ToolExecutionError(str(e)) from e
+    covered_months = _parse_covered_months(tool_input)
 
     raw_linked = cast(list[str], tool_input.get("linked_transaction_ids") or [])
     try:
@@ -1448,9 +1455,9 @@ async def handle_record_settlement(
     method = cast(str, tool_input.get("method", ""))
     notes = cast(str, tool_input.get("notes", ""))
 
-    annotation = (
-        f" (recorded against {_month_label(year, month)})"
-        if year is not None and month is not None
+    coverage_note = (
+        " covering " + ", ".join(starmap(_month_label, covered_months))
+        if covered_months
         else ""
     )
     linked_note = (
@@ -1461,7 +1468,7 @@ async def handle_record_settlement(
     description = (
         f"Record ${amount:,.2f} from {from_person.name} to {to_person.name}"
         + (f" via {method}" if method else "")
-        + annotation
+        + coverage_note
         + linked_note
     )
     details: dict[str, object] = {
@@ -1472,9 +1479,7 @@ async def handle_record_settlement(
         "to_person_id": str(to_person.id),
         "method": method or None,
         "notes": UserData(notes) if notes else None,
-        "recorded_against": f"{year}-{month:02d}" if year and month else None,
-        "year": year,
-        "month": month,
+        "covered_months": [{"year": y, "month": m} for y, m in covered_months],
         "linked_transaction_ids": linked_ids,
     }
     return _propose_action(

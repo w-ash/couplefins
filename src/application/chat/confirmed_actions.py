@@ -391,15 +391,16 @@ async def exec_record_settlement(
 ) -> dict[str, object]:
     details = action.details
     linked = cast(list[str], details.get("linked_transaction_ids") or [])
+    # Stored as parsed {year, month} pairs at propose time (_parse_covered_months).
+    covered = cast(list[dict[str, int]], details.get("covered_months") or [])
     command = RecordSettlementCommand(
         amount=Decimal(str(details["amount"])),
         from_person_id=UUID(cast(str, details["from_person_id"])),
         to_person_id=UUID(cast(str, details["to_person_id"])),
         method=cast(str, details.get("method") or ""),
-        year=cast(int | None, details.get("year")),
-        month=cast(int | None, details.get("month")),
         notes=cast(str, details.get("notes") or ""),
         linked_transaction_ids=[UUID(tid) for tid in linked],
+        covered_months=[(m["year"], m["month"]) for m in covered],
     )
     # The use case re-validates persons, linked transactions (existence,
     # not-already-linked, same-payer), and month locks for linked months.

@@ -1,37 +1,37 @@
-"""Settlement ledger — balance-forward accounting across months (v1.7.5).
+"""Settlement ledger — explicit per-month portions (v1.11.0).
 
-Outstanding balance = all-time gross positions - all-time payments. Per-month
-status is derived by processing months and payments as one chronological
-stream through a FIFO queue of open items: a payment (or an opposite-direction
-month balance) always relieves the oldest open balance first. Settlement
-``year``/``month`` values are display annotations and never enter the math.
+Every settlement records exactly which months it covers and with how much:
+portions of (year, month, amount) summing to the settlement amount. They
+are allocated once, at record time (see ``plan_portions``); display math
+only ever adds them up:
+
+- Month balance = net of its charges' shares - portions applied to it.
+- Year = sum of its months. Outstanding = sum of all months.
+
+A month paid past its charges simply shows its balance in the other
+direction — the normal state (a month settled in full routinely swings).
 
 All computation happens in a signed space anchored to the UUID-sorted person
 pair: positive means "person A (lower UUID) owes person B".
 """
 
-from collections import deque
 from collections.abc import Iterable, Sequence
-from datetime import date
 from decimal import Decimal
 from enum import StrEnum
-from operator import itemgetter
 from uuid import UUID
 
-from attrs import define
+from attrs import define, field
 
 from src.domain.constants import CoupleDefaults
 from src.domain.entities.settlement import Settlement
+from src.domain.entities.settlement_portion import SettlementPortion
 from src.domain.entities.transaction import Transaction
-from src.domain.reconciliation import SettlementResult, compute_gross_settlement
-
-type MonthKey = tuple[int, int]
+from src.domain.filters import is_split_relevant
+from src.domain.month_key import MonthKey
+from src.domain.reconciliation import SettlementResult
+from src.domain.splits import compute_shares
 
 _ZERO = Decimal(0)
-
-# Month events sort before payment events on the same date.
-_MONTH_RANK = 0
-_PAYMENT_RANK = 1
 
 
 class MonthSettlementStatus(StrEnum):
@@ -41,76 +41,60 @@ class MonthSettlementStatus(StrEnum):
 
 
 @define(frozen=True, slots=True)
-class LedgerMonth:
+class PortionPlan:
+    """One planned (month, amount) slice of a settlement payment."""
+
     year: int
     month: int
-    gross: (
-        SettlementResult | None
-    )  # this month's gross position (None/zero-amount => no net debt)
-    applied: Decimal  # |gross| already covered (by payments or offsetting months)
-    remaining: Decimal  # |gross| - applied
-    status: MonthSettlementStatus
-    # Payments FIFO says covered this month (any amount), in coverage order.
-    covering_settlement_ids: tuple[UUID, ...]
-    # True when this month's balance acted as a credit consuming other months.
-    is_offset: bool
+    amount: Decimal
 
 
 @define(frozen=True, slots=True)
-class PaymentCoverage:
+class LedgerSettlement:
+    """One settlement's stored portions, resolved for display."""
+
     settlement_id: UUID
-    # (year, month, amount) this payment covered, FIFO order.
-    covered: tuple[tuple[int, int, Decimal], ...]
-    # Portion not matched to any month (reverse payment or overpayment credit).
-    unapplied: Decimal
+    portions: tuple[PortionPlan, ...]  # ascending by month
+
+
+@define(frozen=True, slots=True)
+class LedgerMonth:
+    """One month's balances, all direction-resolved (None means zero)."""
+
+    year: int
+    month: int
+    charged: SettlementResult | None  # net of the month's charges' shares
+    paid: SettlementResult | None  # net portions applied to this month
+    balance: SettlementResult | None  # charged - paid
+    status: MonthSettlementStatus
+    # True when the balance direction differs from its year's — the UI names
+    # the person only on such rows.
+    runs_against_year: bool
+
+
+@define(frozen=True, slots=True)
+class LedgerYear:
+    """One calendar year's totals — the sum of its months."""
+
+    year: int
+    charged: SettlementResult | None
+    paid: SettlementResult | None
+    balance: SettlementResult | None
+    span: tuple[MonthKey, MonthKey] | None  # (oldest, newest) charged month
 
 
 @define(frozen=True, slots=True)
 class SettlementLedger:
-    outstanding: SettlementResult | None  # None when fully settled
-    # Chronological ascending; only months with ≥1 input transaction.
-    months: tuple[LedgerMonth, ...]
-    payments: tuple[PaymentCoverage, ...]  # chronological by settled_at
-    # Σ unapplied across payments (0 when everything matched).
-    unapplied_payment_total: Decimal
-    # (oldest, newest) non-settled month; None when settled/overpaid.
-    span: tuple[MonthKey, MonthKey] | None
+    outstanding: SettlementResult | None  # sum of all month balances
+    span: tuple[MonthKey, MonthKey] | None  # (oldest, newest) open month
+    months: tuple[LedgerMonth, ...]  # chronological ascending
+    years: tuple[LedgerYear, ...]  # ascending
+    settlements: tuple[LedgerSettlement, ...]  # chronological by settled_at
 
 
-@define(frozen=True, slots=True)
-class _Event:
-    """One chronological ledger event — a month's gross or a payment."""
-
-    month_key: MonthKey | None
-    settlement_id: UUID | None
-    value: Decimal  # signed; payments carry the negation of their signed value
-
-
-@define(slots=True)
-class _Lot:
-    """An open item in the FIFO queue: the unconsumed part of one event."""
-
-    month_key: MonthKey | None
-    settlement_id: UUID | None
-    sign: int
-    remaining: Decimal
-
-
-@define(frozen=True, slots=True)
-class _Allocation:
-    """One consumption: an incoming event relieved part of an open lot."""
-
-    consumer_month_key: MonthKey | None
-    consumer_settlement_id: UUID | None
-    consumed_month_key: MonthKey | None
-    consumed_settlement_id: UUID | None
-    consumed_sign: int  # the queue lot's sign; the consumer's sign is its negation
-    amount: Decimal
-
-
-def empty_payment_coverage(settlement_id: UUID) -> PaymentCoverage:
-    """A coverage that matched nothing — for payments outside any ledger."""
-    return PaymentCoverage(settlement_id=settlement_id, covered=(), unapplied=_ZERO)
+def empty_ledger_year(year: int) -> LedgerYear:
+    """A year with no activity — for padding the current calendar year in."""
+    return LedgerYear(year=year, charged=None, paid=None, balance=None, span=None)
 
 
 def sum_settlement_results(
@@ -124,349 +108,219 @@ def sum_settlement_results(
     if len(person_ids) != CoupleDefaults.EXPECTED_PERSON_COUNT:
         return None
     person_a, person_b = sorted(person_ids)
-    signed = sum((_signed_gross(result, person_a) for result in results), _ZERO)
+    signed = sum((_signed_result(result, person_a) for result in results), _ZERO)
     return _result_from_signed(signed, person_a, person_b)
 
 
-def month_remaining_result(month: LedgerMonth) -> SettlementResult | None:
-    """The month's remaining balance in its gross direction; None when settled.
+def plan_portions(
+    months: Iterable[LedgerMonth],
+    amount: Decimal,
+    from_person_id: UUID,
+    covered_months: Sequence[MonthKey],
+) -> tuple[PortionPlan, ...]:
+    """Split a payment across its covered months, at record time.
 
-    ``remaining > 0`` implies a non-zero gross, so the direction is
-    meaningful (a zero-amount gross carries an arbitrary direction).
+    Clears each covered month's balance oldest first (only months where the
+    payer is the one owing); the remainder lands on the newest covered
+    month, swinging it if need be. The portions sum to ``amount`` exactly.
     """
-    if month.gross is None or month.remaining == _ZERO:
-        return None
-    return SettlementResult(
-        amount=month.remaining,
-        from_person_id=month.gross.from_person_id,
-        to_person_id=month.gross.to_person_id,
+    if not covered_months or amount <= _ZERO:
+        return ()
+    balance_by_key = {(m.year, m.month): m.balance for m in months}
+    covered = sorted(set(covered_months))
+    remaining = amount
+    portions: dict[MonthKey, Decimal] = {}
+    for key in covered:
+        if remaining == _ZERO:
+            break
+        balance = balance_by_key.get(key)
+        if balance is None or balance.from_person_id != from_person_id:
+            continue
+        take = min(remaining, balance.amount)
+        portions[key] = take
+        remaining -= take
+    if remaining > _ZERO:
+        newest = covered[-1]
+        portions[newest] = portions.get(newest, _ZERO) + remaining
+    return tuple(
+        PortionPlan(year=year, month=month, amount=portions[year, month])
+        for year, month in sorted(portions)
     )
-
-
-def year_remaining_result(
-    months: Iterable[LedgerMonth], year: int, person_ids: list[UUID]
-) -> SettlementResult | None:
-    """The unpaid balance carried by one calendar year's months.
-
-    Years partition the ledger: their remainders sum back to the all-time
-    outstanding balance.
-    """
-    return sum_settlement_results(
-        (month_remaining_result(month) for month in months if month.year == year),
-        person_ids,
-    )
-
-
-def year_open_span(
-    months: Iterable[LedgerMonth], year: int
-) -> tuple[MonthKey, MonthKey] | None:
-    """(oldest, newest) month of ``year`` that still carries a balance."""
-    keys = [
-        (month.year, month.month)
-        for month in months
-        if month.year == year and month.remaining != _ZERO
-    ]
-    return (min(keys), max(keys)) if keys else None
 
 
 def compute_ledger(
     transactions: list[Transaction],
     settlements: Sequence[Settlement],
+    portions: Sequence[SettlementPortion],
     person_ids: list[UUID],
 ) -> SettlementLedger:
-    """Compute the running settlement ledger over all-time data.
+    """Compute the settlement ledger over all-time data.
 
-    Caller passes settlement-relevant transactions (any date range — grouped
-    into months internally) and all settlements. Requires exactly two person
-    ids; anything else yields an empty ledger.
+    Caller passes settlement-relevant transactions (any date range), all
+    settlements, and all stored portions. Requires exactly two person ids;
+    anything else yields an empty ledger.
     """
     if len(person_ids) != CoupleDefaults.EXPECTED_PERSON_COUNT:
         return _empty_ledger()
-
     person_a, person_b = sorted(person_ids)
-    month_gross = {
-        key: compute_gross_settlement(txs, person_ids)
-        for key, txs in _group_by_month(transactions).items()
-    }
-    month_signed = {
-        key: _signed_gross(gross, person_a) for key, gross in month_gross.items()
-    }
-    payments = _sorted_payments(settlements)
-    queue, allocations = _process_events(
-        _build_events(month_signed, payments, person_a)
-    )
 
-    outstanding_signed = sum((lot.sign * lot.remaining for lot in queue), _ZERO)
-    applied, covering, offset = _allocation_month_effects(
-        allocations, _sign(outstanding_signed)
-    )
-    months = _build_months(month_gross, month_signed, applied, covering, offset)
-    coverages, unapplied_total = _build_payment_coverages(payments, allocations, queue)
+    charged: dict[MonthKey, Decimal] = {}
+    for tx in transactions:
+        key = (tx.date.year, tx.date.month)
+        charged[key] = charged.get(key, _ZERO) + _signed_share(tx, person_a)
 
+    ordered = sorted(settlements, key=lambda s: (s.settled_at, s.created_at, s.id))
+    portions_by_settlement: dict[UUID, list[SettlementPortion]] = {}
+    for portion in portions:
+        portions_by_settlement.setdefault(portion.settlement_id, []).append(portion)
+
+    books = _Books(person_a=person_a, person_b=person_b, charged=charged)
+    ledger_settlements: list[LedgerSettlement] = []
+    for settlement in ordered:
+        resolved = _resolved_portions(settlement, portions_by_settlement)
+        books.apply(settlement, resolved)
+        ledger_settlements.append(
+            LedgerSettlement(settlement_id=settlement.id, portions=resolved)
+        )
+
+    keys = books.month_keys()
+    open_keys = [key for key in keys if books.balance(key) != _ZERO]
     return SettlementLedger(
-        outstanding=_result_from_signed(outstanding_signed, person_a, person_b),
-        months=months,
-        payments=coverages,
-        unapplied_payment_total=unapplied_total,
-        span=_compute_span(months),
+        outstanding=books.result(sum((books.balance(k) for k in keys), _ZERO)),
+        span=(min(open_keys), max(open_keys)) if open_keys else None,
+        months=books.build_months(keys),
+        years=books.build_years(keys),
+        settlements=tuple(ledger_settlements),
     )
 
 
 def _empty_ledger() -> SettlementLedger:
     return SettlementLedger(
-        outstanding=None,
-        months=(),
-        payments=(),
-        unapplied_payment_total=_ZERO,
-        span=None,
+        outstanding=None, span=None, months=(), years=(), settlements=()
     )
 
 
-def _group_by_month(
-    transactions: list[Transaction],
-) -> dict[MonthKey, list[Transaction]]:
-    by_month: dict[MonthKey, list[Transaction]] = {}
-    for tx in transactions:
-        by_month.setdefault((tx.date.year, tx.date.month), []).append(tx)
-    return by_month
+def _signed_share(tx: Transaction, person_a: UUID) -> Decimal:
+    """The counterparty's share of one charge, signed (+ = A owes B).
 
-
-def _signed_gross(gross: SettlementResult | None, person_a: UUID) -> Decimal:
-    """Signed amount: positive when person A owes person B."""
-    if gross is None or gross.amount == _ZERO:
+    Linear per transaction: summing these over a month reproduces
+    ``compute_gross_settlement`` for that month exactly.
+    """
+    if not is_split_relevant(tx):
         return _ZERO
-    return gross.amount if gross.from_person_id == person_a else -gross.amount
+    _, other_share = compute_shares(tx.amount, tx.payer_percentage)
+    # Expense: the other person owes the payer. Refund: the reverse.
+    owed_to_payer = other_share if tx.amount < 0 else -other_share
+    return -owed_to_payer if tx.payer_person_id == person_a else owed_to_payer
 
 
-def _signed_payment(settlement: Settlement, person_a: UUID) -> Decimal:
-    return (
-        settlement.amount
-        if settlement.from_person_id == person_a
-        else -settlement.amount
+def _signed_result(result: SettlementResult | None, person_a: UUID) -> Decimal:
+    if result is None or result.amount == _ZERO:
+        return _ZERO
+    return result.amount if result.from_person_id == person_a else -result.amount
+
+
+def _resolved_portions(
+    settlement: Settlement,
+    portions_by_settlement: dict[UUID, list[SettlementPortion]],
+) -> tuple[PortionPlan, ...]:
+    """Stored portions, ascending; a portion-less settlement (pre-migration
+    data, defensive) covers its settled_at month in full."""
+    stored = portions_by_settlement.get(settlement.id)
+    if not stored:
+        if settlement.amount == _ZERO:
+            return ()
+        return (
+            PortionPlan(
+                year=settlement.settled_at.year,
+                month=settlement.settled_at.month,
+                amount=settlement.amount,
+            ),
+        )
+    return tuple(
+        PortionPlan(year=p.year, month=p.month, amount=p.amount)
+        for p in sorted(stored, key=lambda p: (p.year, p.month))
     )
 
 
-def _sign(value: Decimal) -> int:
-    if value == _ZERO:
-        return 0
-    return 1 if value > _ZERO else -1
+@define(slots=True)
+class _Books:
+    """Signed per-month running totals while portions apply."""
 
+    person_a: UUID
+    person_b: UUID
+    charged: dict[MonthKey, Decimal]
+    paid: dict[MonthKey, Decimal] = field(factory=dict)
 
-def _sorted_payments(settlements: Sequence[Settlement]) -> list[Settlement]:
-    return sorted(settlements, key=lambda s: (s.settled_at, s.created_at, s.id))
+    def apply(self, settlement: Settlement, resolved: tuple[PortionPlan, ...]) -> None:
+        sign = 1 if settlement.from_person_id == self.person_a else -1
+        for plan in resolved:
+            key = (plan.year, plan.month)
+            self.paid[key] = self.paid.get(key, _ZERO) + sign * plan.amount
 
+    def month_keys(self) -> list[MonthKey]:
+        return sorted(set(self.charged) | set(self.paid))
 
-def _build_events(
-    month_signed: dict[MonthKey, Decimal],
-    payments: list[Settlement],
-    person_a: UUID,
-) -> list[_Event]:
-    """Merge month and payment events into one chronological stream.
+    def balance(self, key: MonthKey) -> Decimal:
+        return self.charged.get(key, _ZERO) - self.paid.get(key, _ZERO)
 
-    Month events are dated the 1st and sort before payments on the same
-    date; payments keep their (settled_at, created_at, id) order via a
-    pre-sorted sequence number.
-    """
-    keyed: list[tuple[tuple[date, int, int], _Event]] = []
-    for month_key, signed_gross in month_signed.items():
-        if signed_gross == _ZERO:
-            continue
-        event_date = date(month_key[0], month_key[1], 1)
-        keyed.append((
-            (event_date, _MONTH_RANK, 0),
-            _Event(month_key=month_key, settlement_id=None, value=signed_gross),
-        ))
-    for seq, settlement in enumerate(payments):
-        # A payment from A offsets A-owes-B debt: negate its signed value.
-        value = -_signed_payment(settlement, person_a)
-        keyed.append((
-            (settlement.settled_at.date(), _PAYMENT_RANK, seq),
-            _Event(month_key=None, settlement_id=settlement.id, value=value),
-        ))
-    keyed.sort(key=itemgetter(0))
-    return [event for _, event in keyed]
+    def result(self, signed: Decimal) -> SettlementResult | None:
+        return _result_from_signed(signed, self.person_a, self.person_b)
 
+    def build_months(self, keys: list[MonthKey]) -> tuple[LedgerMonth, ...]:
+        year_signed: dict[int, Decimal] = {}
+        for key in keys:
+            year_signed[key[0]] = year_signed.get(key[0], _ZERO) + self.balance(key)
+        return tuple(self._build_month(key, year_signed[key[0]]) for key in keys)
 
-def _process_events(events: list[_Event]) -> tuple[deque[_Lot], list[_Allocation]]:
-    """Run the chronological open-item queue.
+    def _build_month(self, key: MonthKey, year_balance: Decimal) -> LedgerMonth:
+        paid_signed = self.paid.get(key, _ZERO)
+        balance_signed = self.balance(key)
+        if balance_signed == _ZERO:
+            status = MonthSettlementStatus.SETTLED
+        elif paid_signed == _ZERO:
+            status = MonthSettlementStatus.CARRIED_FORWARD
+        else:
+            status = MonthSettlementStatus.PARTIALLY_SETTLED
+        return LedgerMonth(
+            year=key[0],
+            month=key[1],
+            charged=self.result(self.charged.get(key, _ZERO)),
+            paid=self.result(paid_signed),
+            balance=self.result(balance_signed),
+            status=status,
+            runs_against_year=(
+                balance_signed != _ZERO
+                and (
+                    year_balance == _ZERO
+                    or (balance_signed > _ZERO) != (year_balance > _ZERO)
+                )
+            ),
+        )
 
-    Each event consumes opposite-sign lots FIFO; any leftover joins the queue
-    as a new lot. All queued lots always share one sign.
-    """
-    queue: deque[_Lot] = deque()
-    allocations: list[_Allocation] = []
-    for event in events:
-        if event.value == _ZERO:
-            continue
-        sign = _sign(event.value)
-        magnitude = abs(event.value)
-        while magnitude > _ZERO and queue and queue[0].sign != sign:
-            front = queue[0]
-            take = min(magnitude, front.remaining)
-            allocations.append(
-                _Allocation(
-                    consumer_month_key=event.month_key,
-                    consumer_settlement_id=event.settlement_id,
-                    consumed_month_key=front.month_key,
-                    consumed_settlement_id=front.settlement_id,
-                    consumed_sign=front.sign,
-                    amount=take,
+    def build_years(self, keys: list[MonthKey]) -> tuple[LedgerYear, ...]:
+        rows: list[LedgerYear] = []
+        for year in sorted({key[0] for key in keys}):
+            year_keys = [key for key in keys if key[0] == year]
+            charged_keys = [k for k in year_keys if self.charged.get(k, _ZERO) != _ZERO]
+            rows.append(
+                LedgerYear(
+                    year=year,
+                    charged=self.result(
+                        sum((self.charged.get(k, _ZERO) for k in year_keys), _ZERO)
+                    ),
+                    paid=self.result(
+                        sum((self.paid.get(k, _ZERO) for k in year_keys), _ZERO)
+                    ),
+                    balance=self.result(
+                        sum((self.balance(k) for k in year_keys), _ZERO)
+                    ),
+                    span=(
+                        (min(charged_keys), max(charged_keys)) if charged_keys else None
+                    ),
                 )
             )
-            front.remaining -= take
-            magnitude -= take
-            if front.remaining == _ZERO:
-                queue.popleft()
-        if magnitude > _ZERO:
-            queue.append(
-                _Lot(
-                    month_key=event.month_key,
-                    settlement_id=event.settlement_id,
-                    sign=sign,
-                    remaining=magnitude,
-                )
-            )
-    return queue, allocations
-
-
-def _allocation_month_effects(
-    allocations: list[_Allocation],
-    outstanding_sign: int,
-) -> tuple[dict[MonthKey, Decimal], dict[MonthKey, list[UUID]], set[MonthKey]]:
-    """Fold allocations into per-month applied totals, covering payments,
-    and the set of months that acted as offsetting credits."""
-    applied: dict[MonthKey, Decimal] = {}
-    covering: dict[MonthKey, list[UUID]] = {}
-    offset: set[MonthKey] = set()
-    for allocation in allocations:
-        _apply_allocation(allocation, applied, covering, offset, outstanding_sign)
-    return applied, covering, offset
-
-
-def _apply_allocation(
-    allocation: _Allocation,
-    applied: dict[MonthKey, Decimal],
-    covering: dict[MonthKey, list[UUID]],
-    offset: set[MonthKey],
-    outstanding_sign: int,
-) -> None:
-    consumer_month = allocation.consumer_month_key
-    consumed_month = allocation.consumed_month_key
-
-    if consumer_month is not None:
-        applied[consumer_month] = applied.get(consumer_month, _ZERO) + allocation.amount
-        if allocation.consumed_settlement_id is not None:
-            _append_covering(
-                covering, consumer_month, allocation.consumed_settlement_id
-            )
-    if consumed_month is not None:
-        applied[consumed_month] = applied.get(consumed_month, _ZERO) + allocation.amount
-        if allocation.consumer_settlement_id is not None:
-            _append_covering(
-                covering, consumed_month, allocation.consumer_settlement_id
-            )
-    if consumer_month is not None and consumed_month is not None:
-        # The month whose gross direction opposes the eventual outstanding
-        # direction acted as the credit. With zero outstanding, fall back to
-        # the consumed lot as the debit (the consumer offset it).
-        debit_sign = (
-            outstanding_sign if outstanding_sign != 0 else allocation.consumed_sign
-        )
-        offset.add(
-            consumed_month if allocation.consumed_sign != debit_sign else consumer_month
-        )
-
-
-def _append_covering(
-    covering: dict[MonthKey, list[UUID]], month_key: MonthKey, settlement_id: UUID
-) -> None:
-    ids = covering.setdefault(month_key, [])
-    if settlement_id not in ids:
-        ids.append(settlement_id)
-
-
-def _month_status(magnitude: Decimal, remaining: Decimal) -> MonthSettlementStatus:
-    if remaining == _ZERO:
-        return MonthSettlementStatus.SETTLED
-    if remaining == magnitude:
-        return MonthSettlementStatus.CARRIED_FORWARD
-    return MonthSettlementStatus.PARTIALLY_SETTLED
-
-
-def _build_months(
-    month_gross: dict[MonthKey, SettlementResult | None],
-    month_signed: dict[MonthKey, Decimal],
-    applied: dict[MonthKey, Decimal],
-    covering: dict[MonthKey, list[UUID]],
-    offset: set[MonthKey],
-) -> tuple[LedgerMonth, ...]:
-    rows: list[LedgerMonth] = []
-    for key in sorted(month_gross):
-        magnitude = abs(month_signed[key])
-        month_applied = applied.get(key, _ZERO)
-        remaining = magnitude - month_applied
-        rows.append(
-            LedgerMonth(
-                year=key[0],
-                month=key[1],
-                gross=month_gross[key],
-                applied=month_applied,
-                remaining=remaining,
-                status=_month_status(magnitude, remaining),
-                covering_settlement_ids=tuple(covering.get(key, [])),
-                is_offset=key in offset,
-            )
-        )
-    return tuple(rows)
-
-
-def _build_payment_coverages(
-    payments: list[Settlement],
-    allocations: list[_Allocation],
-    queue: deque[_Lot],
-) -> tuple[tuple[PaymentCoverage, ...], Decimal]:
-    covered: dict[UUID, list[tuple[int, int, Decimal]]] = {}
-    for allocation in allocations:
-        pair = _payment_month_pair(allocation)
-        if pair is None:
-            continue
-        settlement_id, month_key = pair
-        covered.setdefault(settlement_id, []).append((
-            month_key[0],
-            month_key[1],
-            allocation.amount,
-        ))
-    unapplied = {
-        lot.settlement_id: lot.remaining
-        for lot in queue
-        if lot.settlement_id is not None
-    }
-    coverages = tuple(
-        PaymentCoverage(
-            settlement_id=settlement.id,
-            covered=tuple(covered.get(settlement.id, [])),
-            unapplied=unapplied.get(settlement.id, _ZERO),
-        )
-        for settlement in payments
-    )
-    total = sum((coverage.unapplied for coverage in coverages), _ZERO)
-    return coverages, total
-
-
-def _payment_month_pair(allocation: _Allocation) -> tuple[UUID, MonthKey] | None:
-    """The (settlement, month) sides of a payment↔month allocation, either
-    direction; None for month↔month and payment↔payment allocations."""
-    if (
-        allocation.consumer_settlement_id is not None
-        and allocation.consumed_month_key is not None
-    ):
-        return allocation.consumer_settlement_id, allocation.consumed_month_key
-    if (
-        allocation.consumed_settlement_id is not None
-        and allocation.consumer_month_key is not None
-    ):
-        return allocation.consumed_settlement_id, allocation.consumer_month_key
-    return None
+        return tuple(rows)
 
 
 def _result_from_signed(
@@ -481,16 +335,3 @@ def _result_from_signed(
     return SettlementResult(
         amount=-signed, from_person_id=person_b, to_person_id=person_a
     )
-
-
-def _compute_span(
-    months: tuple[LedgerMonth, ...],
-) -> tuple[MonthKey, MonthKey] | None:
-    open_keys = [
-        (m.year, m.month)
-        for m in months
-        if m.status is not MonthSettlementStatus.SETTLED
-    ]
-    if not open_keys:
-        return None
-    return min(open_keys), max(open_keys)

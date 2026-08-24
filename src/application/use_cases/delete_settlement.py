@@ -57,6 +57,7 @@ class DeleteSettlementUseCase:
             await uow.settlement_transaction_links.delete_by_settlement_id(
                 settlement.id
             )
+            await uow.settlement_portions.delete_by_settlement_id(settlement.id)
             await uow.settlements.delete(settlement.id)
 
             await uow.commit()

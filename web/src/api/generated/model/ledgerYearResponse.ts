@@ -4,18 +4,16 @@
  * Couplefins
  * OpenAPI spec version: 0.1.0
  */
-import type { MonthSettlementStatus } from './monthSettlementStatus';
+import type { MonthSpanResponse } from './monthSpanResponse';
 import type { OwedAmountResponse } from './owedAmountResponse';
 
 /**
- * One month, fully precomputed: charged, paid, balance, status.
+ * One calendar year's totals — the Settle Up hero renders this as-is.
  */
-export interface LedgerMonthResponse {
+export interface LedgerYearResponse {
   year: number;
-  month: number;
   charged: OwedAmountResponse | null;
   paid: OwedAmountResponse | null;
   balance: OwedAmountResponse | null;
-  status: MonthSettlementStatus;
-  runs_against_year: boolean;
+  span: MonthSpanResponse | null;
 }

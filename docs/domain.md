@@ -57,12 +57,19 @@ For each transaction where `payer_percentage < 100`:
 
 Sum across all settlement-relevant transactions for a period (a single month or an arbitrary date range) → net result: "Person A owes Person B $X"
 
-That per-period sum is a month's **gross position**. Actual settlement runs on a **running ledger** (v1.7.5, balance-forward accounting):
+That per-period sum is a month's **gross position**. Actual settlement runs on **explicit coverage** (v1.11.0): every settlement records the exact months it covers as a list of **(year, month, amount) portions** summing to the settlement amount. Coverage is never inferred, and portions are the only mechanism:
 
-- **Outstanding balance** = all-time gross positions − all-time payments, direction-aware. This is the number the Settle Up hero and Dashboard show, together with the span of months it covers.
-- **Per-month status** is derived by applying payments to the oldest open month first (FIFO): each month with settlement-relevant activity reads as `settled`, `partially settled`, or `carried forward`, along with which payment(s) covered it.
-- Settlements carry an optional `year`/`month` **annotation** ("recorded against April") — display only, never math. A payment relieves whatever the ledger owed, oldest first, regardless of its annotation.
-- Payments are not month-bound: a partial rent payment on the 1st, a skipped month, and one catch-up transfer covering three months are all just entries against the same balance. Multiple payments per month are first-class (the former per-period settlement unique constraint was dropped with the ledger).
+- **Monthly rent transfer** — one portion: $1,981 covering its rent month. (In real life this is three transactions — the rent Check of −$3,962 split 50/50 plus both Venmo transfer legs of $1,981 — the legs are linked to the settlement and excluded from reconciliation; the portion records which month the payment covers.)
+- **Catch-up lump** — several portions, one per covered month, allocated at record time in Python (oldest covered month first, remainder on the last covered month) and stored. Because rent in the covered months is usually already settled, their residuals may run toward the payer — the lump's portions settle that net, whichever direction it runs.
+- A **waiver** is a settlement portioned across the waived year's months.
+- A payment recorded with no coverage defaults to one portion at its `settled_at` month.
+
+Derived numbers, all computed in Python and served precomputed and direction-resolved (the UI does no arithmetic):
+
+- **Month balance** = net of its charges' shares − portions allocated to it.
+- **Year balance** = sum of its month balances. The Settle Up page shows one year at a time; no all-time figure appears anywhere on it. A January transfer whose portions cover the previous December counts toward the old year.
+- Display math is purely additive: every dollar is allocated to a month when the settlement is recorded, and portions are never reallocated afterward.
+- Multiple payments per month are first-class, and payments are not bound to when they were sent: a rent transfer on the 1st, a skipped month, and one catch-up lump all take their meaning from the portions they record.
 
 **Examples**:
 - Alice pays $100 dinner, tagged `shared` (no sXX → 50/50): Alice's share $50, Bob's share $50. Bob owes Alice $50.
@@ -141,15 +148,15 @@ Couplefins vocabulary mapped to standard accounting terms:
 | Transaction | Source Document / Bank Statement Line | Imported from Monarch CSV |
 | Person | Account Holder | Implicit account — each person accumulates a running balance |
 | Upload | Batch Import / Document Provenance | Audit trail for data ingestion |
-| ReconciliationPeriod | Transaction Lock | Freezes a month's data (uploads/edits rejected) — not a balance scope; the month's contribution to the ledger rides forward |
+| ReconciliationPeriod | Transaction Lock | Freezes a month's data (uploads/edits rejected) — not a balance scope; settlements covering the month can still be recorded |
 | CategoryGroup | Chart of Accounts (level 1) | Reporting hierarchy |
 | CategoryMapping | Posting Rule | Routes categories to groups |
 | Adjustment (v0.3.x) | Correcting Entry (Reversal pattern) | Offsetting entries for accurate per-person spend |
-| Settlement | Payment against the running ledger (balance-forward accounting) | Records that Person A paid Person B (amount, method, notes). Applied FIFO to the oldest open months; optional year/month "recorded against" annotation is display-only. Linked transactions excluded from reconciliation. |
+| Settlement | Payment with recorded coverage | Records that Person A paid Person B (amount, method, notes) plus a list of (year, month, amount) portions summing to the amount — the exact months the payment covers, allocated at record time and stored. Linked transfer transactions excluded from reconciliation. |
 | `payer_percentage` | Allocation Rule / Split Ratio | Determines each person's share (0-100, always set). Settlement: any transaction where `payer_percentage < 100` |
 | `household` | Expense Classification | Per-transaction flag — "relevant to the couple's shared life." Set by `shared`, `split`, or `household` tags (person-name tags do NOT set it — spotted is the beneficiary's personal spending) |
 | `include_personal` | Budget Scope Flag | Per-category toggle to also include personal (non-household) transactions in budget totals |
-| `is_finalized` | Period Close | Prevents modification of a month's transactions after agreement; payments against the ledger stay possible |
+| `is_finalized` | Period Close | Prevents modification of a month's transactions after agreement; settlements covering the month stay possible |
 | TransactionEdit | Audit Log Entry | Records post-upload changes to a transaction (field, old value, new value, timestamp) |
 
 ### Signed-amount convention

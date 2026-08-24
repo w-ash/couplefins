@@ -83,7 +83,7 @@ class TestUnlinkSettlementTransaction:
 
 
 async def test_finalized_period_raises() -> None:
-    settlement = make_settlement(year=2026, month=1)
+    settlement = make_settlement()
     tx = make_transaction(date=date(2026, 1, 20), is_settlement=True)
     uow = make_mock_uow()
     uow.settlements.get_by_id.return_value = settlement

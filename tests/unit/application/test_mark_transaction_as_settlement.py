@@ -145,7 +145,7 @@ class TestMarkTransactionAsSettlement:
         uow = make_mock_uow()
         uow.transactions.get_by_id.return_value = tx
         uow.settlements.get_by_id.return_value = settlement
-        uow.settlement_transaction_links.get_by_transaction_id.return_value = [
+        uow.settlement_transaction_links.get_by_transaction_ids.return_value = [
             make_settlement_transaction_link(
                 settlement_id=other.id, transaction_id=tx.id
             )
@@ -177,7 +177,7 @@ async def test_finalized_transaction_month_raises() -> None:
 async def test_finalized_settlement_month_raises_on_link() -> None:
     # Feb transaction linking into a Jan settlement while Jan is locked.
     tx = make_transaction(date=date(2026, 2, 10), is_settlement=False)
-    settlement = make_settlement(year=2026, month=1)
+    settlement = make_settlement()
     uow = make_mock_uow()
     uow.transactions.get_by_id.return_value = tx
     uow.settlements.get_by_id.return_value = settlement

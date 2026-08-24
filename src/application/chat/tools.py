@@ -42,12 +42,12 @@ GET_SETTLEMENT_BALANCE_SCHEMA: dict[str, object] = {
         "Omit year and month to get the total outstanding balance across "
         "all months (outstanding: who owes whom in total, plus the span "
         "of months it covers) — this answers 'what do we owe each other?'. "
-        "Provide year and month to inspect one month: its gross amount "
-        "(who owed whom before payments), the month's ledger row "
-        "(applied, remaining, status: settled / partially_settled / "
-        "carried_forward), the remaining balance with its direction "
-        "(net_from/net_to), upload status for each person, and whether "
-        "the month is finalized."
+        "Provide year and month to inspect one month: what it charged "
+        "(who owed whom before payments), what was paid against it, its "
+        "balance with direction (a month paid past its charges simply "
+        "swings the other way), its status (settled / partially_settled / "
+        "carried_forward), the year's balance, upload status for each "
+        "person, and whether the month is finalized."
     ),
     "input_schema": {
         "type": "object",
@@ -393,9 +393,10 @@ GET_SETTLEMENT_ACTIVITY_SCHEMA: dict[str, object] = {
         "mutation — it surfaces the settlement and transaction IDs those "
         "mutations need. "
         "Returns for the given month context: recorded payments with their "
-        "FIFO coverage and linked transactions, transactions that look like "
-        "the outstanding settlement transfer (candidates, scored), and the "
-        "configured settlement merchant patterns."
+        "stored per-month portions and linked transactions, transactions "
+        "that look like the settlement transfer for the year's balance "
+        "(candidates, scored), and the configured settlement merchant "
+        "patterns."
     ),
     "input_schema": {
         "type": "object",
@@ -864,10 +865,10 @@ RECORD_SETTLEMENT_SCHEMA: dict[str, object] = {
     "description": (
         "Call this when the user says a settlement payment happened — 'I "
         "paid Bob back', 'record the $500 Venmo'. Proposes recording the "
-        "payment against the running ledger; nothing is applied until the "
-        "user confirms. Payments apply to the oldest open months first "
-        "(FIFO) — year/month is only a display annotation ('recorded "
-        "against April'), never math. Optionally link the matching bank "
+        "payment; nothing is applied until the user confirms. The payment "
+        "covers the months in covered_months (omit to cover the month it "
+        "was paid in): per-month portions are allocated oldest-first and "
+        "stored — they are the math. Optionally link the matching bank "
         "transaction(s) using IDs from get_settlement_activity's "
         "candidates, which excludes them from settlement math."
     ),
@@ -895,18 +896,13 @@ RECORD_SETTLEMENT_SCHEMA: dict[str, object] = {
                 "type": "string",
                 "description": "Optional note stored on the settlement.",
             },
-            "year": {
-                "type": "integer",
+            "covered_months": {
+                "type": "array",
+                "items": {"type": "string"},
                 "description": (
-                    "Optional 'recorded against' annotation year — display "
-                    "only, set together with month."
-                ),
-            },
-            "month": {
-                "type": "integer",
-                "description": (
-                    "Optional 'recorded against' annotation month (1-12) — "
-                    "display only, set together with year."
+                    "Months this payment covers, as 'YYYY-MM' strings (e.g. "
+                    "['2026-01', '2026-02'] for a catch-up lump). Omit to "
+                    "cover the month the payment was made in."
                 ),
             },
             "linked_transaction_ids": {

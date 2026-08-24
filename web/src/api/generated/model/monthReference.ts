@@ -6,6 +6,11 @@
  */
 
 export interface MonthReference {
+  /** @minimum 1 */
   year: number;
+  /**
+     * @minimum 1
+     * @maximum 12
+     */
   month: number;
 }

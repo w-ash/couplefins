@@ -6,8 +6,6 @@
  */
 
 export interface RecordWaivedSettlementRequest {
-  year?: number | null;
-  month?: number | null;
   from_person_id: string;
   to_person_id: string;
   waive_year?: number | null;

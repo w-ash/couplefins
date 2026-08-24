@@ -9,6 +9,7 @@ from src.domain.entities.person import Person
 from src.domain.entities.reconciliation_period import ReconciliationPeriod
 from src.domain.entities.settlement import Settlement
 from src.domain.entities.settlement_merchant import SettlementMerchant
+from src.domain.entities.settlement_portion import SettlementPortion
 from src.domain.entities.settlement_transaction_link import SettlementTransactionLink
 from src.domain.entities.transaction import Transaction
 from src.domain.entities.transaction_edit import TransactionEdit
@@ -189,8 +190,6 @@ def make_transaction_edit(
 def make_settlement(
     *,
     id: uuid.UUID | None = None,
-    year: int | None = 2026,
-    month: int | None = 1,
     amount: Decimal = Decimal("50.00"),
     from_person_id: uuid.UUID | None = None,
     to_person_id: uuid.UUID | None = None,
@@ -202,8 +201,6 @@ def make_settlement(
 ) -> Settlement:
     return Settlement(
         id=id or uuid.uuid4(),
-        year=year,
-        month=month,
         amount=amount,
         from_person_id=from_person_id or uuid.uuid4(),
         to_person_id=to_person_id or uuid.uuid4(),
@@ -212,6 +209,23 @@ def make_settlement(
         notes=notes,
         settled_at=settled_at or datetime.now(UTC),
         created_at=created_at or datetime.now(UTC),
+    )
+
+
+def make_settlement_portion(
+    *,
+    id: uuid.UUID | None = None,
+    settlement_id: uuid.UUID | None = None,
+    year: int = 2026,
+    month: int = 1,
+    amount: Decimal = Decimal("50.00"),
+) -> SettlementPortion:
+    return SettlementPortion(
+        id=id or uuid.uuid4(),
+        settlement_id=settlement_id or uuid.uuid4(),
+        year=year,
+        month=month,
+        amount=amount,
     )
 
 

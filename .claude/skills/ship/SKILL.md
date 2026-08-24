@@ -102,6 +102,5 @@ Do not proceed to commit until every gate is clean.
 
 - List the files that will be staged (backlog files, pyproject.toml, uv.lock if changed, plus any unstaged implementation files).
 - Stage files by explicit name — never `git add -A` or `git add .`.
-- Commit following the conventions from the git log. Format: `Add vX.Y.Z: concise summary of what shipped`.
-- Include the `Co-Authored-By` trailer.
+- Read the `git-conventions` skill before composing the message, then follow the conventions from the git log. Current format: `type(scope): concise summary (vX.Y.Z)`.
 - If the commit fails due to a pre-commit hook, fix and re-stage. Do NOT use `--no-verify`.

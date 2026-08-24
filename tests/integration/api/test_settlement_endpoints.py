@@ -9,6 +9,14 @@ SPLIT_CSV = (
 )
 
 
+def _month(data: dict, year: int, month: int) -> dict:
+    return next(m for m in data["months"] if (m["year"], m["month"]) == (year, month))
+
+
+def _year(data: dict, year: int) -> dict:
+    return next(y for y in data["years"] if y["year"] == year)
+
+
 async def test_waive_persists_remaining_balance(client: AsyncClient) -> None:
     persons, cookies = await setup_and_login(client)
     alice_id = persons[0]["id"]
@@ -19,11 +27,9 @@ async def test_waive_persists_remaining_balance(client: AsyncClient) -> None:
     response = await client.post(
         "/api/v1/settlements/waive",
         json={
-            "year": 2026,
-            "month": 1,
             "from_person_id": bob_id,
             "to_person_id": alice_id,
-            "notes": "Forgiven",
+            "notes": "Waived",
         },
         auth=cookies,
     )
@@ -40,47 +46,27 @@ async def test_waive_persists_remaining_balance(client: AsyncClient) -> None:
         auth=cookies,
     )
     data = settle_up.json()
-    assert data["outstanding"] is None
-    assert data["ledger_months"][0]["status"] == "settled"
-    assert data["ledger_months"][0]["remaining"] == pytest.approx(0.0)
-    waiver = data["recorded_settlements"][0]
+    jan = _month(data, 2026, 1)
+    assert jan["status"] == "settled"
+    assert jan["balance"] is None
+    assert _year(data, 2026)["balance"] is None
+    waiver = data["settlements"][0]
     assert waiver["is_waived"] is True
     assert waiver["amount"] == pytest.approx(50.0)
+    # The waiver's portion pins it to the month it relieved.
+    assert waiver["portions"] == [{"year": 2026, "month": 1, "amount": 50.0}]
 
-    # The balance is settled now — a second waive has nothing to forgive.
+    # The balance is settled now — a second waive has nothing to relieve.
     second = await client.post(
         "/api/v1/settlements/waive",
-        json={
-            "year": 2026,
-            "month": 1,
-            "from_person_id": bob_id,
-            "to_person_id": alice_id,
-        },
+        json={"from_person_id": bob_id, "to_person_id": alice_id},
         auth=cookies,
     )
     assert second.status_code == 422
 
 
-async def test_waive_without_annotation(client: AsyncClient) -> None:
-    persons, cookies = await setup_and_login(client)
-    alice_id = persons[0]["id"]
-    bob_id = persons[1]["id"]
-    await upload_csv(client, alice_id, SPLIT_CSV, auth=cookies)
-
-    response = await client.post(
-        "/api/v1/settlements/waive",
-        json={"from_person_id": bob_id, "to_person_id": alice_id},
-        auth=cookies,
-    )
-    assert response.status_code == 201
-    body = response.json()
-    assert body["settlement"]["amount"] == pytest.approx(50.0)
-    assert body["settlement"]["year"] is None
-    assert body["settlement"]["month"] is None
-
-
 async def test_multi_month_catch_up_settles_both_months(client: AsyncClient) -> None:
-    """One payment without a month annotation clears two open months FIFO."""
+    """One payment covering two months stores one portion per month."""
     persons, cookies = await setup_and_login(client)
     alice_id = persons[0]["id"]
     bob_id = persons[1]["id"]
@@ -91,7 +77,7 @@ async def test_multi_month_catch_up_settles_both_months(client: AsyncClient) -> 
     )
     await upload_csv(client, alice_id, csv, auth=cookies)
 
-    # Bob owes Alice $50 (Jan) + $30 (Feb) — one catch-up payment, no month.
+    # Bob owes Alice $50 (Jan) + $30 (Feb) — one catch-up lump.
     record = await client.post(
         "/api/v1/settlements",
         json={
@@ -99,11 +85,14 @@ async def test_multi_month_catch_up_settles_both_months(client: AsyncClient) -> 
             "from_person_id": bob_id,
             "to_person_id": alice_id,
             "method": "Venmo",
+            "covered_months": [
+                {"year": 2026, "month": 1},
+                {"year": 2026, "month": 2},
+            ],
         },
         auth=cookies,
     )
     assert record.status_code == 201
-    assert record.json()["settlement"]["year"] is None
 
     settle_up = await client.get(
         "/api/v1/settle-up",
@@ -111,23 +100,73 @@ async def test_multi_month_catch_up_settles_both_months(client: AsyncClient) -> 
         auth=cookies,
     )
     data = settle_up.json()
-    assert data["outstanding"] is None
-    assert data["outstanding_span"] is None
-    statuses = {(m["year"], m["month"]): m["status"] for m in data["ledger_months"]}
+    statuses = {(m["year"], m["month"]): m["status"] for m in data["months"]}
     assert statuses == {(2026, 1): "settled", (2026, 2): "settled"}
-    payment = data["all_settlements"][0]
-    assert payment["covered"] == [
+    assert _year(data, 2026)["balance"] is None
+    payment = data["settlements"][0]
+    assert payment["portions"] == [
         {"year": 2026, "month": 1, "amount": 50.0},
         {"year": 2026, "month": 2, "amount": 30.0},
     ]
-    assert payment["unapplied"] == pytest.approx(0.0)
 
 
-async def test_record_half_set_annotation_is_422_not_500(
+async def test_month_paid_past_charges_swings_and_flags_direction(
     client: AsyncClient,
 ) -> None:
-    """A year without its month is bad input — reject at the boundary (422),
-    not a bare ValueError surfacing as a 500."""
+    """A month paid past its charges shows its balance the other way, and
+    the row is flagged as running against the year's direction."""
+    persons, cookies = await setup_and_login(client)
+    alice_id = persons[0]["id"]
+    bob_id = persons[1]["id"]
+    csv = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        '2026-01-15,Grocery Store,Groceries,Chase,GROCERY STORE,,"-100.00",shared\n'
+        '2026-02-10,Restaurant,Dining Out,Chase,RESTAURANT,,"-300.00",shared\n'
+    )
+    await upload_csv(client, alice_id, csv, auth=cookies)
+
+    # Bob owes Alice $50 (Jan) + $150 (Feb). He pays $80 covering January
+    # only — January swings to Alice-owes-Bob $30 while the year still runs
+    # Bob-owes-Alice $120.
+    record = await client.post(
+        "/api/v1/settlements",
+        json={
+            "amount": 80.0,
+            "from_person_id": bob_id,
+            "to_person_id": alice_id,
+            "method": "Venmo",
+            "covered_months": [{"year": 2026, "month": 1}],
+        },
+        auth=cookies,
+    )
+    assert record.status_code == 201
+
+    settle_up = await client.get(
+        "/api/v1/settle-up",
+        params={"year": 2026, "month": 1},
+        auth=cookies,
+    )
+    data = settle_up.json()
+    jan = _month(data, 2026, 1)
+    assert jan["status"] == "partially_settled"
+    assert jan["balance"]["amount"] == pytest.approx(30.0)
+    assert jan["balance"]["from_person_id"] == alice_id
+    assert jan["runs_against_year"] is True
+    feb = _month(data, 2026, 2)
+    assert feb["balance"]["amount"] == pytest.approx(150.0)
+    assert feb["runs_against_year"] is False
+    year = _year(data, 2026)
+    assert year["balance"]["amount"] == pytest.approx(120.0)
+    assert year["balance"]["from_person_id"] == bob_id
+    assert year["charged"]["amount"] == pytest.approx(200.0)
+    assert year["paid"]["amount"] == pytest.approx(80.0)
+
+
+async def test_record_invalid_covered_month_is_422_not_500(
+    client: AsyncClient,
+) -> None:
+    """An out-of-range covered month is bad input — reject at the boundary
+    (422), not a bare ValueError surfacing as a 500."""
     persons, cookies = await setup_and_login(client)
     response = await client.post(
         "/api/v1/settlements",
@@ -136,7 +175,7 @@ async def test_record_half_set_annotation_is_422_not_500(
             "from_person_id": persons[1]["id"],
             "to_person_id": persons[0]["id"],
             "method": "Venmo",
-            "year": 2026,
+            "covered_months": [{"year": 2026, "month": 13}],
         },
         auth=cookies,
     )
@@ -181,12 +220,11 @@ async def test_recording_the_gross_nets_month_to_exactly_zero(
     record = await client.post(
         "/api/v1/settlements",
         json={
-            "year": 2026,
-            "month": 1,
             "amount": 49.999999999999996,
             "from_person_id": bob_id,
             "to_person_id": alice_id,
             "method": "Venmo",
+            "covered_months": [{"year": 2026, "month": 1}],
         },
         auth=cookies,
     )
@@ -199,8 +237,46 @@ async def test_recording_the_gross_nets_month_to_exactly_zero(
         auth=cookies,
     )
     data = settle_up.json()
-    assert data["outstanding"] is None
-    assert data["ledger_months"][0]["remaining"] == pytest.approx(0.0)
+    jan = _month(data, 2026, 1)
+    assert jan["balance"] is None
+    assert jan["status"] == "settled"
+    assert _year(data, 2026)["balance"] is None
+
+
+async def test_deleting_a_settlement_removes_its_portions(
+    client: AsyncClient,
+) -> None:
+    persons, cookies = await setup_and_login(client)
+    alice_id = persons[0]["id"]
+    bob_id = persons[1]["id"]
+    await upload_csv(client, alice_id, SPLIT_CSV, auth=cookies)
+
+    record = await client.post(
+        "/api/v1/settlements",
+        json={
+            "amount": 50.0,
+            "from_person_id": bob_id,
+            "to_person_id": alice_id,
+            "method": "Venmo",
+            "covered_months": [{"year": 2026, "month": 1}],
+        },
+        auth=cookies,
+    )
+    settlement_id = record.json()["settlement"]["id"]
+
+    delete = await client.delete(f"/api/v1/settlements/{settlement_id}", auth=cookies)
+    assert delete.status_code == 200
+
+    settle_up = await client.get(
+        "/api/v1/settle-up",
+        params={"year": 2026, "month": 1},
+        auth=cookies,
+    )
+    data = settle_up.json()
+    assert data["settlements"] == []
+    jan = _month(data, 2026, 1)
+    assert jan["balance"]["amount"] == pytest.approx(50.0)
+    assert jan["status"] == "carried_forward"
 
 
 async def test_mark_transaction_link_hygiene(client: AsyncClient) -> None:
@@ -217,12 +293,11 @@ async def test_mark_transaction_link_hygiene(client: AsyncClient) -> None:
     settlement = await client.post(
         "/api/v1/settlements",
         json={
-            "year": 2026,
-            "month": 1,
             "amount": 50.0,
             "from_person_id": bob_id,
             "to_person_id": alice_id,
             "method": "Venmo",
+            "covered_months": [{"year": 2026, "month": 1}],
         },
         auth=cookies,
     )

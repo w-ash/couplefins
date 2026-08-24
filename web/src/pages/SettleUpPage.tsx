@@ -15,6 +15,7 @@ import { getGetDashboardQueryKey } from "@/api/generated/dashboard/dashboard";
 import type {
   LedgerMonthResponse,
   LedgerSettlementResponse,
+  LedgerYearResponse,
   MonthReference,
   SettleUpDataResponse,
 } from "@/api/generated/model";
@@ -39,6 +40,7 @@ import {
   type SelectedCandidate,
 } from "@/components/CandidateChecklist";
 import { Card } from "@/components/Card";
+import { Dialog, DialogFooter, DialogHeader } from "@/components/Dialog";
 import { FinalizationBanner } from "@/components/FinalizationBanner";
 import { InlineError } from "@/components/InlineError";
 import { InlineSuccess } from "@/components/InlineSuccess";
@@ -63,7 +65,6 @@ import {
   formatCurrency,
   formatMonthSpan,
   formatShortDate,
-  isZeroCurrency,
   MONTHS,
   SHORT_MONTHS,
   useMonthYear,
@@ -71,39 +72,30 @@ import {
 import { heroCardClass, PAGE_PADDING } from "@/lib/layout";
 import {
   defaultLedgerYear,
-  type LedgerYearSummary,
+  findMonth,
   ledgerYears,
-  settlementsForYear,
-  summarizeLedgerYear,
+  settlementsTouching,
 } from "@/lib/ledger";
 import { usePersonMaps } from "@/lib/persons";
 
 function HeroCard({
-  data,
-  summary,
+  years,
+  yearRow,
+  selectedYear,
   onYearChange,
   getPersonName,
   getPersonColor,
 }: {
-  data: SettleUpDataResponse;
-  summary: LedgerYearSummary;
+  years: number[];
+  yearRow: LedgerYearResponse | null;
+  selectedYear: number;
   onYearChange: (year: number) => void;
   getPersonName: (id: string) => string;
   getPersonColor: (id: string) => string;
 }) {
-  const year = summary.year;
-  const years = ledgerYears(data.ledger_months);
-  const outstanding = summary.outstanding;
-
-  // Payments (and offsetting months) explain any gap between the year's
-  // gross position and what it still owes.
-  const gross = summary.gross;
-  const hasPayments =
-    gross !== null &&
-    settlementsForYear(data.all_settlements, year).length > 0 &&
-    (outstanding === null ||
-      gross.from_person_id !== outstanding.from_person_id ||
-      !isZeroCurrency(gross.amount - outstanding.amount));
+  const balance = yearRow?.balance ?? null;
+  const charged = yearRow?.charged ?? null;
+  const paid = yearRow?.paid ?? null;
 
   return (
     <section
@@ -113,69 +105,132 @@ function HeroCard({
       <div className="mb-4 flex justify-center">
         <SegmentedControl
           options={years.map((y) => ({ value: String(y), label: String(y) }))}
-          value={String(year)}
+          value={String(selectedYear)}
           onChange={(value) => onYearChange(Number(value))}
           size="sm"
           shape="pill"
         />
       </div>
 
-      {outstanding ? (
+      {balance ? (
         <p className="text-center text-xl font-semibold text-foreground sm:text-2xl">
           <PersonBadge
-            name={getPersonName(outstanding.from_person_id)}
-            accentColor={getPersonColor(outstanding.from_person_id)}
+            name={getPersonName(balance.from_person_id)}
+            accentColor={getPersonColor(balance.from_person_id)}
             size="lg"
           />{" "}
           owes{" "}
           <PersonBadge
-            name={getPersonName(outstanding.to_person_id)}
-            accentColor={getPersonColor(outstanding.to_person_id)}
+            name={getPersonName(balance.to_person_id)}
+            accentColor={getPersonColor(balance.to_person_id)}
             size="lg"
           />{" "}
-          <span className="tabular-nums">
-            {formatCurrency(outstanding.amount)}
-          </span>
+          <span className="tabular-nums">{formatCurrency(balance.amount)}</span>
         </p>
       ) : (
         <p className="text-center text-xl font-semibold text-primary sm:text-2xl">
           <span className="inline-flex items-center gap-2">
             <CheckCircle2 className="size-6" />
-            {gross ? `${year} is settled` : `Nothing to settle in ${year}`}
+            {charged
+              ? `${selectedYear} is settled`
+              : `Nothing to settle in ${selectedYear}`}
           </span>
         </p>
       )}
 
-      {summary.span && (
+      {yearRow?.span && (
         <p className="mt-2 text-center text-sm text-muted-foreground">
-          covers {formatMonthSpan(summary.span)}
+          covers {formatMonthSpan(yearRow.span)}
         </p>
       )}
-      {hasPayments && (
-        <p className="mt-1 text-center text-sm text-muted-foreground">
-          {formatCurrency(gross.amount)} gross, after payments
+      {/* The working line — the headline is never a bare number the couple
+          has to take on trust. */}
+      {paid && (
+        <p className="mt-1 text-center text-sm text-muted-foreground tabular-nums">
+          {formatCurrency(charged?.amount ?? 0)} charged,{" "}
+          {formatCurrency(paid.amount)} paid in {selectedYear}
         </p>
       )}
     </section>
   );
 }
 
+function CoveredMonthsPicker({
+  options,
+  selectedKeys,
+  onToggle,
+}: {
+  // The selected year's months, oldest first.
+  options: LedgerMonthResponse[];
+  selectedKeys: string[];
+  onToggle: (key: string) => void;
+}) {
+  if (options.length === 0) return null;
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium text-muted-foreground">
+        Covers — pick every month this payment settles
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((m) => {
+          const key = ledgerMonthKey(m);
+          const isSelected = selectedKeys.includes(key);
+          return (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={isSelected}
+              onClick={() => onToggle(key)}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                isSelected
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+            >
+              {SHORT_MONTHS[m.month - 1]} {m.year}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function LinkSettlementSection({
   data,
-  summary,
+  yearRow,
+  monthsForYear,
+  defaultMonth,
   getPersonName,
   onSuccess,
 }: {
   data: SettleUpDataResponse;
-  summary: LedgerYearSummary;
+  yearRow: LedgerYearResponse | null;
+  monthsForYear: LedgerMonthResponse[];
+  // The month the reader is drilled into — the 1:1 default coverage.
+  defaultMonth: MonthReference;
   getPersonName: (id: string) => string;
   onSuccess: () => void;
 }) {
   // Scoped to the selected year, so the amount searched for is the one the
-  // hero shows. The payment itself still lands on the running ledger.
-  const direction = summary.outstanding;
+  // hero shows.
+  const direction = yearRow?.balance ?? null;
+
+  const options = [...monthsForYear].sort((a, b) => a.month - b.month);
+  // Default one portion at the currently viewed month; fall back to the
+  // oldest month still carrying a balance.
+  const defaultOption =
+    options.find(
+      (m) => m.year === defaultMonth.year && m.month === defaultMonth.month,
+    ) ??
+    options.find((m) => m.balance !== null) ??
+    options[0];
 
   const [selected, setSelected] = useState<SelectedCandidate[]>([]);
+  const [coveredKeys, setCoveredKeys] = useState<string[]>(
+    defaultOption ? [ledgerMonthKey(defaultOption)] : [],
+  );
   const [successMessage, setSuccessMessage] = useTemporary<string | null>(
     null,
     4000,
@@ -198,21 +253,23 @@ function LinkSettlementSection({
     },
   });
 
-  // Payments are recorded against the running ledger — nothing to record
-  // when nothing is outstanding.
+  // Nothing to record when the year holds no balance.
   if (!direction) return null;
 
   const searchAmount = direction.amount.toFixed(2);
   const selectedIds = selected.map((c) => c.id);
   const amount = computeSettlementAmount(selected);
   const method = selected.length > 0 ? selected[0].merchant : "";
+  const coveredMonths: MonthReference[] = options
+    .filter((m) => coveredKeys.includes(ledgerMonthKey(m)))
+    .map((m) => ({ year: m.year, month: m.month }));
 
   return (
     <Card>
       <CandidateChecklist
         amount={searchAmount}
         initialSearchMonth={null}
-        searchFloor={summary.span?.start ?? null}
+        searchFloor={yearRow?.span?.start ?? null}
         persons={data.persons}
         selectedIds={selectedIds}
         onSelectionChange={(_ids, candidates) => setSelected(candidates)}
@@ -220,28 +277,42 @@ function LinkSettlementSection({
         defaultExpanded={false}
       />
       {selected.length > 0 && (
-        <div className="mt-4 flex items-center gap-3">
-          <Button
-            icon={<Link2 className="size-4" />}
-            onClick={() => {
-              mutation.mutate({
-                data: {
-                  // Ledger-level payments carry no "recorded against" month.
-                  year: null,
-                  month: null,
-                  amount,
-                  from_person_id: direction.from_person_id,
-                  to_person_id: direction.to_person_id,
-                  method,
-                  linked_transaction_ids: selectedIds,
-                },
-              });
-            }}
-            loading={mutation.isPending}
-            loadingText="Linking..."
-          >
-            Mark as settlement ({formatCurrency(amount)})
-          </Button>
+        <div className="mt-4 space-y-4">
+          <CoveredMonthsPicker
+            options={options}
+            selectedKeys={coveredKeys}
+            onToggle={(key) =>
+              setCoveredKeys((prev) =>
+                prev.includes(key)
+                  ? prev.filter((k) => k !== key)
+                  : [...prev, key],
+              )
+            }
+          />
+          <div className="flex items-center gap-3">
+            <Button
+              icon={<Link2 className="size-4" />}
+              onClick={() => {
+                mutation.mutate({
+                  data: {
+                    amount,
+                    from_person_id: direction.from_person_id,
+                    to_person_id: direction.to_person_id,
+                    method,
+                    linked_transaction_ids: selectedIds,
+                    // The backend allocates the amount across these months
+                    // oldest-first and stores the portions.
+                    covered_months: coveredMonths,
+                  },
+                });
+              }}
+              disabled={coveredMonths.length === 0}
+              loading={mutation.isPending}
+              loadingText="Linking..."
+            >
+              Mark as settlement ({formatCurrency(amount)})
+            </Button>
+          </div>
         </div>
       )}
       {successMessage && (
@@ -263,54 +334,48 @@ function LinkSettlementSection({
 }
 
 function WaiveAction({
-  summary,
+  yearRow,
   getPersonName,
   onSuccess,
 }: {
-  summary: LedgerYearSummary;
+  yearRow: LedgerYearResponse | null;
   getPersonName: (id: string) => string;
   onSuccess: (warnings: string[]) => void;
 }) {
-  const year = summary.year;
-  const outstanding = summary.outstanding;
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const mutation = useWaiveSettlement({
     mutation: {
       onSuccess: (response) => {
+        setConfirmOpen(false);
         onSuccess(response.status === 201 ? response.data.warnings : []);
       },
     },
   });
 
-  if (!outstanding) return null;
+  const balance = yearRow?.balance ?? null;
+  if (!yearRow || !balance) return null;
+
+  const year = yearRow.year;
+  const fromName = getPersonName(balance.from_person_id);
+  const toName = getPersonName(balance.to_person_id);
+  const amount = formatCurrency(balance.amount);
 
   return (
     <div className="rounded-lg border border-border-muted px-4 py-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">
-            Waive {getPersonName(outstanding.from_person_id)}'s {year} balance
+            Waive {fromName}'s {year} balance
           </p>
           <p className="text-xs text-muted-foreground/70">
-            {formatCurrency(outstanding.amount)} from {year} will be forgiven.
-            Other years are untouched, and this can be undone by deleting the
-            waiver.
+            Clears {amount} from {year} only. Undo by deleting the waiver.
           </p>
         </div>
         <Button
           variant="secondary"
           size="sm"
-          onClick={() => {
-            mutation.mutate({
-              data: {
-                waive_year: year,
-                from_person_id: outstanding.from_person_id,
-                to_person_id: outstanding.to_person_id,
-                notes: `${year} balance waived`,
-              },
-            });
-          }}
-          loading={mutation.isPending}
+          onClick={() => setConfirmOpen(true)}
         >
           Waive Balance
         </Button>
@@ -324,18 +389,62 @@ function WaiveAction({
           </InlineError>
         </div>
       )}
+      {confirmOpen && (
+        <Dialog size="sm" open onClose={() => setConfirmOpen(false)}>
+          <DialogHeader
+            title={`Waive the ${year} balance?`}
+            onClose={() => setConfirmOpen(false)}
+          />
+          <p className="mt-3 text-sm text-muted-foreground">
+            {fromName} owes {toName} {amount} for {year}. Waiving clears it;
+            other years stay open.
+          </p>
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setConfirmOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                mutation.mutate({
+                  data: {
+                    waive_year: year,
+                    from_person_id: balance.from_person_id,
+                    to_person_id: balance.to_person_id,
+                    notes: `${year} balance waived`,
+                  },
+                });
+              }}
+              loading={mutation.isPending}
+              loadingText="Waiving..."
+            >
+              Waive Balance
+            </Button>
+          </DialogFooter>
+        </Dialog>
+      )}
     </div>
   );
 }
 
-// "Mar" within the payment's own year, "Mar 2025" across years — compact
-// coverage labels for one history row.
-function coveredMonthLabel(
-  covered: { year: number; month: number },
-  settledYear: number,
-): string {
-  const name = SHORT_MONTHS[covered.month - 1];
-  return covered.year === settledYear ? name : `${name} ${covered.year}`;
+// "$1,981.00 → January" for a single portion; "$500.00 → Jan + $300.00 → Feb"
+// for a lump. Months outside the payment's own year carry the year.
+function portionsLabel(s: LedgerSettlementResponse): string | null {
+  const portions = s.portions ?? [];
+  if (portions.length === 0) return null;
+  const settledYear = Number(s.settled_at.slice(0, 4));
+  const names = portions.length === 1 ? MONTHS : SHORT_MONTHS;
+  return portions
+    .map((p) => {
+      const month = names[p.month - 1];
+      const year = p.year === settledYear ? "" : ` ${p.year}`;
+      return `${formatCurrency(p.amount)} → ${month}${year}`;
+    })
+    .join(" + ");
 }
 
 function SettlementHistoryRow({
@@ -357,15 +466,8 @@ function SettlementHistoryRow({
   const fromName = getPersonName(s.from_person_id);
   const toName = getPersonName(s.to_person_id);
   const settledDate = formatShortDate(s.settled_at);
-  const settledYear = Number(s.settled_at.slice(0, 4));
   const hasLinks = (s.linked_transactions?.length ?? 0) > 0;
-
-  const coverage =
-    s.covered.length > 0
-      ? `Covered ${s.covered
-          .map((c) => coveredMonthLabel(c, settledYear))
-          .join(" + ")}`
-      : null;
+  const coverage = portionsLabel(s);
 
   return (
     <div>
@@ -394,12 +496,6 @@ function SettlementHistoryRow({
               {s.method && (
                 <span className="ml-1.5 capitalize">via {s.method}</span>
               )}
-              {s.year !== null && s.month !== null && (
-                <span className="ml-1.5 text-muted-foreground/70">
-                  · recorded against {MONTHS[s.month - 1]}
-                  {s.year !== settledYear ? ` ${s.year}` : ""}
-                </span>
-              )}
               {s.notes && (
                 <span className="ml-1.5 text-muted-foreground/70">
                   — {s.notes}
@@ -407,12 +503,8 @@ function SettlementHistoryRow({
               )}
             </p>
             {coverage && (
-              <p className="text-xs text-muted-foreground">{coverage}</p>
-            )}
-            {s.unapplied > 0 && (
-              <p className="text-xs text-warning-muted-foreground">
-                {formatCurrency(s.unapplied)} not applied — increases the
-                balance
+              <p className="text-xs text-muted-foreground tabular-nums">
+                {coverage}
               </p>
             )}
             {!s.is_waived && !hasLinks && (
@@ -487,6 +579,10 @@ function SettlementHistory({
 
   if (settlements.length === 0) return null;
 
+  const oldestFirst = [...settlements].sort((a, b) =>
+    a.settled_at.localeCompare(b.settled_at),
+  );
+
   return (
     <Card>
       <SectionHeader
@@ -494,7 +590,7 @@ function SettlementHistory({
         description={`Every payment and waiver covering ${year}, oldest first`}
       />
       <div className="space-y-3">
-        {settlements.map((s) => (
+        {oldestFirst.map((s) => (
           <SettlementHistoryRow
             key={s.id}
             settlement={s}
@@ -610,7 +706,7 @@ export function SettleUpPage() {
   } = useGetSettleUpData(
     { year, month },
     // keepPreviousData: drilling into a month refetches with new params —
-    // the ledger-level sections must not flash back to a loading state.
+    // the year-level sections must not flash back to a loading state.
     { query: { refetchInterval: 5_000, placeholderData: keepPreviousData } },
   );
   const data =
@@ -642,13 +738,15 @@ export function SettleUpPage() {
 
   // The page summarizes a whole calendar year, independent of the month
   // drill-down the ?year/?month params drive. Until the reader picks a year,
-  // it follows the ledger so a balance carried over from an earlier year is
-  // never hidden behind the current-year tab.
+  // it follows the API's year rows so a balance left over from an earlier
+  // year is never hidden behind the current-year tab.
   const [pickedYear, setPickedYear] = useState<number | null>(null);
-  const selectedYear =
-    pickedYear ?? defaultLedgerYear(data?.ledger_months ?? []);
-  const yearSummary = summarizeLedgerYear(
-    data?.ledger_months ?? [],
+  const selectedYear = pickedYear ?? defaultLedgerYear(data?.years ?? []);
+  const yearRow = data?.years.find((y) => y.year === selectedYear) ?? null;
+  const monthsForYear =
+    data?.months.filter((m) => m.year === selectedYear) ?? [];
+  const settlementsForYear = settlementsTouching(
+    data?.settlements ?? [],
     selectedYear,
   );
 
@@ -656,7 +754,7 @@ export function SettleUpPage() {
     string | null
   >(null);
 
-  // Waiving hides WaiveAction on refetch (outstanding goes to zero), so
+  // Waiving hides WaiveAction on refetch (the balance goes to zero), so
   // its warnings must outlive the component.
   const [waiveWarnings, setWaiveWarnings] = useTemporary<string[] | null>(
     null,
@@ -676,17 +774,17 @@ export function SettleUpPage() {
     data?.persons,
   );
 
-  const ledgerMonths = data?.ledger_months;
+  const months = data?.months;
   const hasExplicitMonth =
     searchParams.has("year") || searchParams.has("month");
 
   // Deep links open with their month expanded; the bare page defaults to
   // the current month's row — or jumps to the newest row when the current
-  // month has no ledger activity.
+  // month has no settlement activity.
   useEffect(() => {
-    if (!ledgerMonths || hasExplicitMonth || ledgerMonths.length === 0) return;
-    if (ledgerMonths.some((m) => m.year === year && m.month === month)) return;
-    const newest = ledgerMonths[ledgerMonths.length - 1];
+    if (!months || hasExplicitMonth || months.length === 0) return;
+    if (months.some((m) => m.year === year && m.month === month)) return;
+    const newest = months[months.length - 1];
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
@@ -696,10 +794,9 @@ export function SettleUpPage() {
       },
       { replace: true },
     );
-  }, [ledgerMonths, hasExplicitMonth, year, month, setSearchParams]);
+  }, [months, hasExplicitMonth, year, month, setSearchParams]);
 
-  const rowForUrl =
-    ledgerMonths?.find((m) => m.year === year && m.month === month) ?? null;
+  const rowForUrl = findMonth(months ?? [], year, month);
   const derivedKey = rowForUrl ? ledgerMonthKey(rowForUrl) : null;
   const [collapsedKey, setCollapsedKey] = useState<string | null>(null);
   const expandedKey =
@@ -728,11 +825,11 @@ export function SettleUpPage() {
   const isEmpty =
     data &&
     data.transaction_count === 0 &&
-    data.all_settlements.length === 0 &&
-    data.ledger_months.length === 0;
+    data.settlements.length === 0 &&
+    data.months.length === 0;
 
   // Single wiring for both drill-down entry points (the empty-month card and
-  // the expanded ledger row) so finalize behavior can never diverge.
+  // the expanded month row) so finalize behavior can never diverge.
   const renderDrilldown = (drillYear: number, drillMonth: number) =>
     data && (
       <MonthDrilldown
@@ -790,15 +887,76 @@ export function SettleUpPage() {
       {data && !isEmpty && (
         <div className="space-y-6">
           <HeroCard
-            data={data}
-            summary={yearSummary}
+            years={ledgerYears(data.years)}
+            yearRow={yearRow}
+            selectedYear={selectedYear}
             onYearChange={setPickedYear}
             getPersonName={getPersonName}
             getPersonColor={getPersonColor}
           />
 
+          {/* A selected month with no settlement activity still needs its
+              audit, lock, and export controls (US-CLOSE-1/2) — the
+              LedgerMonthList only covers months with activity. Skip this
+              during the brief redirect to the newest row (months present, no
+              explicit month yet) to avoid a flash. */}
+          {!rowForUrl && (hasExplicitMonth || data.months.length === 0) && (
+            <Card>
+              {data.months.length > 0 && (
+                <p className="mb-4 text-sm text-muted-foreground">
+                  No settlement activity for {MONTHS[month - 1]} {year} —
+                  nothing to settle, but you can still review and lock the
+                  month.
+                </p>
+              )}
+              <div className="space-y-4">{renderDrilldown(year, month)}</div>
+            </Card>
+          )}
+
+          <LedgerMonthList
+            months={monthsForYear}
+            year={selectedYear}
+            emptyLabel={
+              data.months.length > 0
+                ? `No settlement activity in ${selectedYear}.`
+                : undefined
+            }
+            settlements={data.settlements}
+            expandedKey={expandedKey}
+            onToggle={handleToggle}
+            getPersonName={getPersonName}
+            getPersonColor={getPersonColor}
+            renderExpanded={(m) => renderDrilldown(m.year, m.month)}
+          />
+
+          <SettlementHistory
+            settlements={settlementsForYear}
+            year={selectedYear}
+            persons={data.persons}
+            getPersonName={getPersonName}
+            getPersonColor={getPersonColor}
+            onDelete={(id) => {
+              setDeletingSettlementId(id);
+              deleteMutation.mutate({ settlementId: id });
+            }}
+            deletingId={deletingSettlementId}
+            isDeletionPending={deleteMutation.isPending}
+            invalidateAll={invalidateAll}
+            latestTransactionMonth={data.latest_transaction_month}
+          />
+
+          <LinkSettlementSection
+            key={`${selectedYear}-${yearRow?.balance?.amount ?? 0}-${data.settlements.length}`}
+            data={data}
+            yearRow={yearRow}
+            monthsForYear={monthsForYear}
+            defaultMonth={{ year, month }}
+            getPersonName={getPersonName}
+            onSuccess={invalidateAll}
+          />
+
           <WaiveAction
-            summary={yearSummary}
+            yearRow={yearRow}
             getPersonName={getPersonName}
             onSuccess={(warnings) => {
               setWaiveWarnings(warnings.length > 0 ? warnings : null);
@@ -815,65 +973,6 @@ export function SettleUpPage() {
               ))}
             </ul>
           )}
-
-          {/* A selected month with no ledger row still needs its audit,
-              lock, and export controls (US-CLOSE-1/2) — the LedgerMonthList
-              only covers months with settlement activity. Skip this during
-              the brief redirect to the newest row (ledger present, no explicit
-              month yet) to avoid a flash. */}
-          {!rowForUrl &&
-            (hasExplicitMonth || data.ledger_months.length === 0) && (
-              <Card>
-                {data.ledger_months.length > 0 && (
-                  <p className="mb-4 text-sm text-muted-foreground">
-                    No settlement activity for {MONTHS[month - 1]} {year} —
-                    nothing to settle, but you can still review and lock the
-                    month.
-                  </p>
-                )}
-                <div className="space-y-4">{renderDrilldown(year, month)}</div>
-              </Card>
-            )}
-
-          <LedgerMonthList
-            months={data.ledger_months.filter((m) => m.year === selectedYear)}
-            year={selectedYear}
-            emptyLabel={
-              data.ledger_months.length > 0
-                ? `No settlement activity in ${selectedYear}.`
-                : undefined
-            }
-            settlements={data.all_settlements}
-            expandedKey={expandedKey}
-            onToggle={handleToggle}
-            getPersonName={getPersonName}
-            getPersonColor={getPersonColor}
-            renderExpanded={(m) => renderDrilldown(m.year, m.month)}
-          />
-
-          <SettlementHistory
-            settlements={settlementsForYear(data.all_settlements, selectedYear)}
-            year={selectedYear}
-            persons={data.persons}
-            getPersonName={getPersonName}
-            getPersonColor={getPersonColor}
-            onDelete={(id) => {
-              setDeletingSettlementId(id);
-              deleteMutation.mutate({ settlementId: id });
-            }}
-            deletingId={deletingSettlementId}
-            isDeletionPending={deleteMutation.isPending}
-            invalidateAll={invalidateAll}
-            latestTransactionMonth={data.latest_transaction_month}
-          />
-
-          <LinkSettlementSection
-            key={`${selectedYear}-${yearSummary.outstanding?.amount ?? 0}-${data.all_settlements.length}`}
-            data={data}
-            summary={yearSummary}
-            getPersonName={getPersonName}
-            onSuccess={invalidateAll}
-          />
         </div>
       )}
     </div>

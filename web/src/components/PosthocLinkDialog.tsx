@@ -1,9 +1,9 @@
 import { Link2, Loader2, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import type {
+  LedgerSettlementResponse,
   LinkedTransactionResponse,
   MonthReference,
-  SettlementResponse,
 } from "@/api/generated/model";
 import {
   useMarkTransactionAsSettlement,
@@ -14,8 +14,8 @@ import { CandidateChecklist } from "@/components/CandidateChecklist";
 import { Dialog, DialogFooter, DialogHeader } from "@/components/Dialog";
 import { InlineError } from "@/components/InlineError";
 import { PersonBadge } from "@/components/PersonBadge";
-import { settlementAnnotationMonth } from "@/lib/date-range";
 import { formatCurrency } from "@/lib/format";
+import { attributedMonth } from "@/lib/ledger";
 
 function LinkedRow({
   tx,
@@ -79,7 +79,7 @@ export function PosthocLinkDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  settlement: SettlementResponse;
+  settlement: LedgerSettlementResponse;
   persons: Array<{ id: string; name: string }>;
   getPersonName: (id: string) => string;
   getPersonColor: (id: string) => string;
@@ -169,9 +169,9 @@ export function PosthocLinkDialog({
       <div className="mt-4">
         <CandidateChecklist
           amount={settlement.amount.toFixed(2)}
-          // Annotation is optional since v1.7.5 — fall back to the recording
-          // date (shared helper; ISO string slicing avoids TZ shifts).
-          initialSearchMonth={settlementAnnotationMonth(settlement)}
+          // Start the search where the payment's oldest recorded portion
+          // points — the month it actually settles.
+          initialSearchMonth={attributedMonth(settlement)}
           searchFloor={null}
           persons={persons}
           selectedIds={selectedIds}

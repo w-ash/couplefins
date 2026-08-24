@@ -108,15 +108,6 @@ if TYPE_CHECKING:
     PayerGroupSplitSummaryResponse.their_share
     PayerGroupSplitSummaryResponse.partner_share
 
-    # --- Settlement ledger domain API: tested in test_ledger.py ---
-
-    from src.domain.ledger import SettlementLedger
-
-    # Aggregate overpayment/reverse-payment credit. The UI surfaces per-payment
-    # `unapplied` instead; this total anchors the zero-sum invariants in
-    # test_ledger.py.
-    SettlementLedger.unapplied_payment_total
-
     # --- TypedDict fields: consumed by type checker + dict access ---
 
     from src.application.chat.voices import VoiceDict

@@ -9,6 +9,7 @@ import type { ReactNode } from "react";
 import { useMemo } from "react";
 import { Link } from "react-router";
 import type {
+  MonthSettlementStatus,
   OwedAmountResponse,
   ReconciliationResponse,
   SettleUpDataResponse,
@@ -24,6 +25,7 @@ import {
   isZeroCurrency,
   plural,
 } from "@/lib/format";
+import { findMonth, settlementsTouching } from "@/lib/ledger";
 import {
   bucketTransactions,
   SCOPE_LABELS,
@@ -152,33 +154,24 @@ function SettlementBalance({
   onShowSettlements: () => void;
   hasSettlementRows: boolean;
 }) {
-  // The viewed month's ledger row: gross position, what FIFO applied to it,
-  // and the derived status. No row means no settlement-relevant activity.
-  const row =
-    settleUp.ledger_months.find(
-      (m) => m.year === settleUp.year && m.month === settleUp.month,
-    ) ?? null;
-  const gross = row?.gross ?? null;
-  const remaining = row?.remaining ?? 0;
+  // The viewed month's precomputed entry: balance after its recorded
+  // payments, plus a render-ready status. No row means no settlement-relevant
+  // activity. Same source as the month's row on Settle Up.
+  const row = findMonth(settleUp.months, settleUp.year, settleUp.month);
+  const balance = row?.balance ?? null;
   const status = row?.status ?? "settled";
-  const isSettled = status === "settled" || isZeroCurrency(remaining);
-  // What remains keeps the gross direction — FIFO never over-applies.
-  const remainingDirection =
-    !isSettled && gross
-      ? {
-          amount: remaining,
-          from_person_id: gross.from_person_id,
-          to_person_id: gross.to_person_id,
-        }
-      : null;
+  const isSettled = balance === null;
   const canFilter = hasSettlementRows;
 
   const description = settlementDescription({
     status,
-    gross,
-    applied: row?.applied ?? 0,
-    coveringCount: row?.covering_settlement_ids.length ?? 0,
-    isOffset: row?.is_offset ?? false,
+    charged: row?.charged ?? null,
+    paid: row?.paid ?? null,
+    coveringCount: settlementsTouching(
+      settleUp.settlements,
+      settleUp.year,
+      settleUp.month,
+    ).length,
   });
 
   return (
@@ -200,7 +193,7 @@ function SettlementBalance({
         )}
         title={canFilter ? "Show the linked settlement rows below" : undefined}
       >
-        {buildSettlementLabel(remainingDirection, personNames, {
+        {buildSettlementLabel(balance, personNames, {
           includeToName: true,
           settledLabel: "Settled",
         })}
@@ -256,28 +249,26 @@ function SettlementPlaceholder({
 }
 
 export function settlementDescription(args: {
-  status: string;
-  gross: OwedAmountResponse | null;
-  applied: number;
+  status: MonthSettlementStatus;
+  charged: OwedAmountResponse | null;
+  paid: OwedAmountResponse | null;
   coveringCount: number;
-  isOffset: boolean;
 }): string | null {
-  const { status, gross, applied, coveringCount, isOffset } = args;
+  const { status, charged, paid, coveringCount } = args;
   if (status === "settled") {
-    if (isOffset) return "Offset against other months' balances";
-    if (coveringCount > 0) {
-      return `Covered by ${plural("settlement", coveringCount)} · ${formatCurrency(applied)} applied`;
+    if (coveringCount > 0 && paid !== null) {
+      return `Covered by ${plural("settlement", coveringCount)} · ${formatCurrency(paid.amount)} paid`;
     }
-    if (!gross || isZeroCurrency(gross.amount)) {
+    if (charged === null) {
       return "No transactions to settle this period";
     }
     return "Fully covered";
   }
-  if (!gross) return null;
-  if (status === "partially_settled") {
-    return `Gross ${formatCurrency(gross.amount)} · ${formatCurrency(applied)} applied (${plural("settlement", coveringCount)})`;
+  if (charged === null) return null;
+  if (status === "partially_settled" && paid !== null) {
+    return `${formatCurrency(charged.amount)} charged · ${formatCurrency(paid.amount)} paid (${plural("settlement", coveringCount)})`;
   }
-  return `Gross ${formatCurrency(gross.amount)} · carried forward on the ledger`;
+  return `${formatCurrency(charged.amount)} charged · no payments recorded`;
 }
 
 type SettleUpForMonth =
@@ -448,10 +439,9 @@ function SettlementInfo({
   return (
     <>
       <p>
-        <strong>Formula:</strong> gross balance from this period's split
-        transactions — any split under 100%, household or personal — minus what
-        the settlement ledger applied to this month (payments cover the oldest
-        months first). Matches this month's row on Settle Up.
+        <strong>Formula:</strong> net of this period's split transactions — any
+        split under 100%, household or personal — minus the payments recorded
+        against this month. Matches this month's row on Settle Up.
       </p>
       {!singleMonth && (
         <p>

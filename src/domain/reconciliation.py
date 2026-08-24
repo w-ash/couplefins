@@ -13,7 +13,6 @@ from src.domain.categories import (
 from src.domain.constants import (
     UNCATEGORIZED_GROUP_NAME,
     CoupleDefaults,
-    SplitDefaults,
 )
 from src.domain.date_math import month_bounds
 from src.domain.entities.category import Category
@@ -22,7 +21,7 @@ from src.domain.entities.person import Person
 from src.domain.entities.settlement import Settlement
 from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import InvariantViolationError
-from src.domain.filters import is_reconciliation_relevant
+from src.domain.filters import is_split_relevant
 from src.domain.splits import compute_shares
 
 
@@ -100,12 +99,7 @@ def filter_split_transactions(
     (payer_percentage == 100, which means the payer absorbs the whole bill
     and nothing is owed back).
     """
-    return [
-        tx
-        for tx in transactions
-        if is_reconciliation_relevant(tx)
-        and tx.payer_percentage < SplitDefaults.MAX_PAYER_PERCENTAGE
-    ]
+    return [tx for tx in transactions if is_split_relevant(tx)]
 
 
 def _compute_person_summaries(
