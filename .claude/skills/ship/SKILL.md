@@ -104,3 +104,12 @@ Do not proceed to commit until every gate is clean.
 - Stage files by explicit name — never `git add -A` or `git add .`.
 - Read the `git-conventions` skill before composing the message, then follow the conventions from the git log. Current format: `type(scope): concise summary (vX.Y.Z)`.
 - If the commit fails due to a pre-commit hook, fix and re-stage. Do NOT use `--no-verify`.
+
+## Step 9: Merge to main and push
+
+A version is not shipped until it's on the remote — both laptops pull from `origin/main`, and a schema migration already applied to Neon will strand the other machine on the upgrade screen until the matching code is pushed.
+
+- If the commit landed on a feature branch, merge it into `main` (ask before force-anything).
+- `git push origin main`. If SSH auth fails (no identities in `ssh-add -l`), fall back to a one-off HTTPS push via gh: `git -c credential.helper='!gh auth git-credential' push https://github.com/<owner>/<repo>.git main` — do not rewrite the remote or git config.
+- Verify against the remote itself, not the local ref (it can be stale when fetch is broken): `git ls-remote --heads <remote-url> main` must show the new commit hash.
+- Report the pushed hash to the user.
