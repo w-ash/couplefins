@@ -85,6 +85,31 @@ export function computeSettlementAmount(
   return Math.max(sumPositive, sumAbsNegative) / 100;
 }
 
+// The legs are the authority on who paid whom: a negative leg's payer is
+// the sender, a positive leg's payer the recipient. A single leg fills the
+// other side with the other member of the couple. Contradictory legs
+// (two senders, two recipients, or the same person on both sides) yield
+// null — never a guess from the outstanding-balance direction.
+export function deriveSettlementDirection(
+  candidates: SelectedCandidate[],
+  persons: Array<{ id: string }>,
+): { from_person_id: string; to_person_id: string } | null {
+  const senders = new Set(
+    candidates.filter((c) => c.amount < 0).map((c) => c.payer_person_id),
+  );
+  const recipients = new Set(
+    candidates.filter((c) => c.amount > 0).map((c) => c.payer_person_id),
+  );
+  if (senders.size > 1 || recipients.size > 1) return null;
+  let from = senders.values().next().value ?? null;
+  let to = recipients.values().next().value ?? null;
+  if (from === null && to === null) return null;
+  if (from === null) from = persons.find((p) => p.id !== to)?.id ?? null;
+  if (to === null) to = persons.find((p) => p.id !== from)?.id ?? null;
+  if (from === null || to === null || from === to) return null;
+  return { from_person_id: from, to_person_id: to };
+}
+
 export function CandidateChecklist({
   amount,
   initialSearchMonth,

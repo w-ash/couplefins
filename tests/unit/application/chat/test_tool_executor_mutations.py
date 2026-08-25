@@ -5,6 +5,7 @@ pending_confirmation response — it never executes the mutation directly.
 """
 
 from datetime import date
+from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 import uuid
 
@@ -620,6 +621,35 @@ async def test_record_settlement_returns_pending_with_covered_months() -> None:
     assert details["covered_months"] == [{"year": 2026, "month": 3}]
     assert "$147.50 from Alice to Bob via Venmo" in str(result["description"])
     assert "covering March 2026" in str(result["description"])
+
+
+@pytest.mark.anyio
+async def test_record_settlement_linked_legs_correct_direction() -> None:
+    """The card shows the legs' true sender and recipient, not the model's
+    stated direction — the user confirms what actually happened."""
+    sent = make_transaction(payer_person_id=ALICE.id, amount=Decimal("-1981.00"))
+    received = make_transaction(payer_person_id=BOB.id, amount=Decimal("1981.00"))
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        return_value={sent.id: sent, received.id: received},
+    ):
+        result = await execute_tool(
+            "record_settlement",
+            {
+                "from_person": "Bob",
+                "to_person": "Alice",
+                "amount": 1981,
+                "linked_transaction_ids": [str(sent.id), str(received.id)],
+            },
+            CTX,
+        )
+
+    assert result["status"] == "pending_confirmation"
+    details = result["details"]
+    assert details["from_person_id"] == str(ALICE.id)
+    assert details["to_person_id"] == str(BOB.id)
+    assert "from Alice to Bob" in str(result["description"])
 
 
 @pytest.mark.anyio

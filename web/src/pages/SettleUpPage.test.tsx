@@ -565,6 +565,73 @@ describe("SettleUpPage", () => {
     });
   });
 
+  it("sends the legs' sender and recipient, not the outstanding direction", async () => {
+    // Regression: the year balance says Kew owes Ash, but the selected
+    // Venmo legs show Ash sent the money — the POST and the success copy
+    // must follow the legs.
+    const user = userEvent.setup();
+    let recorded: Record<string, unknown> | null = null;
+    server.use(
+      http.get("/api/v1/settlements/candidates", () =>
+        HttpResponse.json([
+          {
+            id: "t1",
+            date: `${Y}-07-06`,
+            merchant: "Venmo",
+            amount: -1981.0,
+            payer_person_id: ASH,
+            category: "Transfers",
+            score: 90,
+            match_reasons: ["amount match"],
+          },
+          {
+            id: "t2",
+            date: `${Y}-07-06`,
+            merchant: "Venmo",
+            amount: 1981.0,
+            payer_person_id: KEW,
+            category: "Transfers",
+            score: 90,
+            match_reasons: ["amount match"],
+          },
+        ]),
+      ),
+      http.post("/api/v1/settlements", async ({ request }) => {
+        recorded = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json(
+          { settlement: rentSettlement("new", 1), warnings: [] },
+          { status: 201 },
+        );
+      }),
+    );
+
+    renderWithProviders(<SettleUpPage />, {
+      routerProps: { initialEntries: [`/settle?year=${Y}&month=1`] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("2 matching transfers")).toBeInTheDocument();
+    });
+    await user.click(screen.getByText("2 matching transfers"));
+    await user.click(screen.getAllByRole("checkbox")[0]);
+    await user.click(screen.getAllByRole("checkbox")[1]);
+
+    await user.click(
+      screen.getByRole("button", { name: /Mark as settlement/ }),
+    );
+
+    await waitFor(() => {
+      expect(recorded).not.toBeNull();
+    });
+    expect(recorded).toMatchObject({
+      from_person_id: ASH,
+      to_person_id: KEW,
+    });
+    expect(
+      await screen.findByText(/Settlement linked — Ash paid Kew \$1,981\.00/),
+    ).toBeInTheDocument();
+  });
+
   it("shows the year as settled and hides link and waive actions", async () => {
     serveSettleUp(allSettledResponse);
 

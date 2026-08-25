@@ -8,6 +8,7 @@ from src.application.use_cases._shared.finalization import (
     assert_periods_not_finalized,
 )
 from src.application.use_cases._shared.settlement_records import (
+    assert_legs_match_direction,
     assert_transactions_not_linked,
 )
 from src.domain.entities.settlement_transaction_link import SettlementTransactionLink
@@ -41,14 +42,21 @@ class MarkTransactionAsSettlementUseCase:
 
             # Lock Month freezes transactions, not payments: only the tx's
             # own month is guarded (flipping is_settlement changes it).
+            settlement = None
             if command.is_settlement and command.settlement_id:
-                await require_by_id(
+                settlement = await require_by_id(
                     uow.settlements.get_by_id, command.settlement_id, "Settlement"
                 )
             await assert_periods_not_finalized(uow, {(tx.date.year, tx.date.month)})
 
-            if command.is_settlement and command.settlement_id:
+            if command.is_settlement and command.settlement_id and settlement:
                 await assert_transactions_not_linked(uow, [command.transaction_id])
+                # A leg whose sign and payer contradict the settlement's
+                # stored direction is the same corruption the record path
+                # derives away — reject it here too.
+                assert_legs_match_direction(
+                    [tx], settlement.from_person_id, settlement.to_person_id
+                )
                 link = SettlementTransactionLink(
                     id=uuid.uuid4(),
                     settlement_id=command.settlement_id,

@@ -21,6 +21,7 @@ from src.application.use_cases._shared.settlement_records import (
     allocate_and_save_portions,
     assert_transactions_not_linked,
     build_settlement,
+    derive_direction_from_legs,
     validate_settlement_persons,
 )
 from src.domain.constants import CoupleDefaults
@@ -112,9 +113,18 @@ class RecordSettlementUseCase:
             ctx = await load_reconciliation_context(uow)
             ledger = (await load_ledger(uow, ctx)).ledger
 
+            # Linked legs are the authority on direction — the stated
+            # from/to is only trusted for leg-less (manual) recordings.
+            from_person_id = command.from_person_id
+            to_person_id = command.to_person_id
+            if linked_txs:
+                from_person_id, to_person_id = derive_direction_from_legs(
+                    linked_txs, ctx.person_ids
+                )
+
             settlement = build_settlement(
-                from_person_id=command.from_person_id,
-                to_person_id=command.to_person_id,
+                from_person_id=from_person_id,
+                to_person_id=to_person_id,
                 amount=command.amount,
                 method=command.method,
                 is_waived=False,

@@ -38,6 +38,55 @@ def build_settlement(  # noqa: PLR0913
     )
 
 
+def derive_direction_from_legs(
+    legs: Iterable[Transaction], person_ids: Iterable[UUID]
+) -> tuple[UUID, UUID]:
+    """Derive a settlement's (from, to) from its linked transfer legs.
+
+    A negative leg names its payer as the sender; a positive leg names its
+    payer as the recipient. A single leg fills the missing side with the
+    other member of the couple. Contradictory legs raise ValidationError.
+    """
+    senders = {tx.payer_person_id for tx in legs if tx.amount < 0}
+    recipients = {tx.payer_person_id for tx in legs if tx.amount > 0}
+    if len(senders) > 1 or len(recipients) > 1 or (senders and senders == recipients):
+        raise ValidationError(
+            "Linked transactions imply contradictory settlement directions"
+        )
+    sender = next(iter(senders), None)
+    recipient = next(iter(recipients), None)
+    if sender is None and recipient is None:
+        raise ValidationError(
+            "Cannot derive settlement direction from the linked transactions"
+        )
+    if sender is None:
+        sender = next((pid for pid in person_ids if pid != recipient), None)
+    if recipient is None:
+        recipient = next((pid for pid in person_ids if pid != sender), None)
+    if sender is None or recipient is None:
+        raise ValidationError(
+            "Cannot derive settlement direction from the linked transactions"
+        )
+    return sender, recipient
+
+
+def assert_legs_match_direction(
+    legs: Iterable[Transaction], from_person_id: UUID, to_person_id: UUID
+) -> None:
+    """Reject legs whose sign and payer contradict a settlement's direction.
+
+    A negative leg's payer must be the settlement's sender; a positive
+    leg's payer must be its recipient. Zero-amount legs carry no signal.
+    """
+    for tx in legs:
+        if (tx.amount < 0 and tx.payer_person_id != from_person_id) or (
+            tx.amount > 0 and tx.payer_person_id != to_person_id
+        ):
+            raise ValidationError(
+                f"Transaction {tx.id} contradicts the settlement's direction"
+            )
+
+
 @define(frozen=True, slots=True)
 class SettlementRecord:
     settlement: Settlement

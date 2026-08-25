@@ -32,6 +32,9 @@ from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
 from src.application.use_cases._shared.settlement_math import load_ledger
+from src.application.use_cases._shared.settlement_records import (
+    derive_direction_from_legs,
+)
 from src.application.use_cases.export_adjustments import (
     ExportAdjustmentsCommand,
     PreviewAdjustmentsResult,
@@ -102,7 +105,7 @@ from src.application.use_cases.search_transactions import (
 from src.domain.entities.category_group import CategoryGroup
 from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
-from src.domain.exceptions import ToolExecutionError
+from src.domain.exceptions import ToolExecutionError, ValidationError
 from src.domain.ledger import MonthKey, SettlementLedger
 from src.domain.month_key import assert_month_key
 from src.domain.reconciliation import SettlementResult
@@ -1420,6 +1423,37 @@ async def handle_unfinalize_period(
     )
 
 
+async def _direction_from_linked_legs(
+    linked_uuids: list[UUID],
+    persons: list[Person],
+    default: tuple[Person, Person],
+) -> tuple[Person, Person]:
+    """Resolve a settlement card's (from, to) from its linked legs.
+
+    The legs are the authority on direction — the user confirms the true
+    sender and recipient, not the model's guess. Also the propose-time
+    existence check: a typo'd ID fails before the card. The use case
+    re-derives at confirm time.
+    """
+
+    async def _fetch(uow: UnitOfWorkProtocol) -> dict[UUID, Transaction]:
+        async with uow:
+            return await _fetch_transactions(uow, linked_uuids)
+
+    legs_by_id = await execute_use_case(_fetch)
+    try:
+        derived_from, derived_to = derive_direction_from_legs(
+            legs_by_id.values(), [p.id for p in persons]
+        )
+    except ValidationError as e:
+        raise ToolExecutionError(str(e)) from e
+    persons_by_id = {p.id: p for p in persons}
+    return (
+        persons_by_id.get(derived_from, default[0]),
+        persons_by_id.get(derived_to, default[1]),
+    )
+
+
 async def handle_record_settlement(
     tool_input: dict[str, object],
     ctx: ToolContext,
@@ -1444,13 +1478,9 @@ async def handle_record_settlement(
     linked_ids = [str(tid) for tid in linked_uuids]
 
     if linked_uuids:
-        # Propose-time existence check — the executor re-validates links
-        # and month locks, but a typo'd ID should fail before the card.
-        async def _verify(uow: UnitOfWorkProtocol) -> None:
-            async with uow:
-                await _fetch_transactions(uow, linked_uuids)
-
-        await execute_use_case(_verify)
+        from_person, to_person = await _direction_from_linked_legs(
+            linked_uuids, ctx.persons, default=(from_person, to_person)
+        )
 
     method = cast(str, tool_input.get("method", ""))
     notes = cast(str, tool_input.get("notes", ""))

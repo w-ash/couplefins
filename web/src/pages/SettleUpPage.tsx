@@ -37,6 +37,7 @@ import { Button } from "@/components/Button";
 import {
   CandidateChecklist,
   computeSettlementAmount,
+  deriveSettlementDirection,
   type SelectedCandidate,
 } from "@/components/CandidateChecklist";
 import { Card } from "@/components/Card";
@@ -236,12 +237,16 @@ function LinkSettlementSection({
     4000,
   );
 
+  // Who actually paid whom, read from the selected legs — the
+  // outstanding-balance direction is what is owed, not what happened.
+  const derived = deriveSettlementDirection(selected, data.persons);
+
   const mutation = useRecordSettlement({
     mutation: {
       onSuccess: () => {
-        if (direction) {
-          const fromName = getPersonName(direction.from_person_id);
-          const toName = getPersonName(direction.to_person_id);
+        if (derived) {
+          const fromName = getPersonName(derived.from_person_id);
+          const toName = getPersonName(derived.to_person_id);
           const amount = computeSettlementAmount(selected);
           setSuccessMessage(
             `Settlement linked — ${fromName} paid ${toName} ${formatCurrency(amount)}`,
@@ -293,11 +298,12 @@ function LinkSettlementSection({
             <Button
               icon={<Link2 className="size-4" />}
               onClick={() => {
+                if (!derived) return;
                 mutation.mutate({
                   data: {
                     amount,
-                    from_person_id: direction.from_person_id,
-                    to_person_id: direction.to_person_id,
+                    from_person_id: derived.from_person_id,
+                    to_person_id: derived.to_person_id,
                     method,
                     linked_transaction_ids: selectedIds,
                     // The backend allocates the amount across these months
@@ -306,7 +312,7 @@ function LinkSettlementSection({
                   },
                 });
               }}
-              disabled={coveredMonths.length === 0}
+              disabled={coveredMonths.length === 0 || derived === null}
               loading={mutation.isPending}
               loadingText="Linking..."
             >

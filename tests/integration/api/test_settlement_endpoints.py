@@ -290,12 +290,14 @@ async def test_mark_transaction_link_hygiene(client: AsyncClient) -> None:
     recon = await client.get("/api/v1/reconciliation?year=2026&month=1", auth=cookies)
     tx_id = recon.json()["transactions"][0]["id"]
 
+    # The linked leg is Alice's negative row, so Alice must be the sender —
+    # a contradicting direction is rejected at link time.
     settlement = await client.post(
         "/api/v1/settlements",
         json={
             "amount": 50.0,
-            "from_person_id": bob_id,
-            "to_person_id": alice_id,
+            "from_person_id": alice_id,
+            "to_person_id": bob_id,
             "method": "Venmo",
             "covered_months": [{"year": 2026, "month": 1}],
         },

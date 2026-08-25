@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   CandidateChecklist,
   computeSettlementAmount,
+  deriveSettlementDirection,
   type SelectedCandidate,
 } from "@/components/CandidateChecklist";
 import { server } from "@/test/server";
@@ -43,6 +44,60 @@ describe("computeSettlementAmount", () => {
       candidate({ id: "2", amount: 95.5, payer_person_id: "p2" }),
     ];
     expect(computeSettlementAmount(selected)).toBe(95.5);
+  });
+});
+
+describe("deriveSettlementDirection", () => {
+  const persons = [{ id: "p1" }, { id: "p2" }];
+
+  it("reads sender and recipient from a debit/credit pair", () => {
+    const selected = [
+      candidate({ id: "1", amount: -95.5, payer_person_id: "p1" }),
+      candidate({ id: "2", amount: 95.5, payer_person_id: "p2" }),
+    ];
+    expect(deriveSettlementDirection(selected, persons)).toEqual({
+      from_person_id: "p1",
+      to_person_id: "p2",
+    });
+  });
+
+  it("fills the missing side of a single leg with the other person", () => {
+    expect(
+      deriveSettlementDirection(
+        [candidate({ amount: -50, payer_person_id: "p2" })],
+        persons,
+      ),
+    ).toEqual({ from_person_id: "p2", to_person_id: "p1" });
+    expect(
+      deriveSettlementDirection(
+        [candidate({ amount: 50, payer_person_id: "p2" })],
+        persons,
+      ),
+    ).toEqual({ from_person_id: "p1", to_person_id: "p2" });
+  });
+
+  it("returns null for contradictory or empty selections", () => {
+    // Two senders.
+    expect(
+      deriveSettlementDirection(
+        [
+          candidate({ id: "1", amount: -50, payer_person_id: "p1" }),
+          candidate({ id: "2", amount: -50, payer_person_id: "p2" }),
+        ],
+        persons,
+      ),
+    ).toBeNull();
+    // Same person on both sides.
+    expect(
+      deriveSettlementDirection(
+        [
+          candidate({ id: "1", amount: -50, payer_person_id: "p1" }),
+          candidate({ id: "2", amount: 50, payer_person_id: "p1" }),
+        ],
+        persons,
+      ),
+    ).toBeNull();
+    expect(deriveSettlementDirection([], persons)).toBeNull();
   });
 });
 

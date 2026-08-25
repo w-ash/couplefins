@@ -198,12 +198,14 @@ async def test_reupload_unlinks_settlement_on_removed_row(
         if tx["merchant"] == "Gas Station"
     )
 
+    # The linked leg is Alice's negative row, so Alice must be the sender —
+    # a contradicting direction is rejected at link time.
     settlement = await client.post(
         "/api/v1/settlements",
         json={
             "amount": 30.0,
-            "from_person_id": bob_id,
-            "to_person_id": alice_id,
+            "from_person_id": alice_id,
+            "to_person_id": bob_id,
             "method": "Venmo",
             "covered_months": [{"year": 2026, "month": 1}],
         },

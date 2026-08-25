@@ -56,8 +56,9 @@ class TestMarkTransactionAsSettlement:
             await MarkTransactionAsSettlementUseCase().execute(command, uow)
 
     async def test_links_to_settlement(self) -> None:
+        # Negative leg — its payer must be the settlement's sender.
         tx = make_transaction(is_settlement=False)
-        settlement = make_settlement()
+        settlement = make_settlement(from_person_id=tx.payer_person_id)
         uow = make_mock_uow()
         uow.transactions.get_by_id.return_value = tx
         uow.settlements.get_by_id.return_value = settlement
@@ -156,6 +157,23 @@ class TestMarkTransactionAsSettlement:
             settlement_id=settlement.id,
         )
         with pytest.raises(ValidationError, match="already linked"):
+            await MarkTransactionAsSettlementUseCase().execute(command, uow)
+        uow.settlement_transaction_links.save_batch.assert_not_called()
+
+    async def test_contradicting_leg_direction_rejected(self) -> None:
+        """A negative leg whose payer is not the settlement's sender is the
+        same corruption the record path derives away — rejected here too."""
+        tx = make_transaction(is_settlement=False)
+        settlement = make_settlement(to_person_id=tx.payer_person_id)
+        uow = make_mock_uow()
+        uow.transactions.get_by_id.return_value = tx
+        uow.settlements.get_by_id.return_value = settlement
+
+        command = MarkTransactionAsSettlementCommand(
+            transaction_id=tx.id,
+            settlement_id=settlement.id,
+        )
+        with pytest.raises(ValidationError, match="contradicts"):
             await MarkTransactionAsSettlementUseCase().execute(command, uow)
         uow.settlement_transaction_links.save_batch.assert_not_called()
 

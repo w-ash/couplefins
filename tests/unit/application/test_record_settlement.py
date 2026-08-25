@@ -76,6 +76,7 @@ class TestRecordSettlement:
         tx = make_transaction(payer_person_id=alice.id)
         uow = make_mock_uow()
         uow.persons.get_by_ids.return_value = [alice, bob]
+        uow.persons.get_all.return_value = [alice, bob]
         set_passthrough_save(uow)
         uow.transactions.get_by_ids.return_value = [tx]
         uow.transactions.update_mutable_fields.return_value = tx
@@ -153,10 +154,12 @@ class TestRecordSettlement:
     async def test_allows_mixed_person_links(self) -> None:
         alice = make_person(name="Alice")
         bob = make_person(name="Bob")
+        # Real transfer legs: sender's leg negative, recipient's positive.
         tx1 = make_transaction(payer_person_id=alice.id)
-        tx2 = make_transaction(payer_person_id=bob.id)
+        tx2 = make_transaction(payer_person_id=bob.id, amount=Decimal("50.00"))
         uow = make_mock_uow()
         uow.persons.get_by_ids.return_value = [alice, bob]
+        uow.persons.get_all.return_value = [alice, bob]
         set_passthrough_save(uow)
         uow.transactions.get_by_ids.return_value = [tx1, tx2]
         uow.transactions.update_mutable_fields.return_value = tx1
@@ -170,6 +173,96 @@ class TestRecordSettlement:
         )
         result = await RecordSettlementUseCase().execute(command, uow)
         assert result.settlement.amount == Decimal("50.00")
+
+    async def test_derived_direction_overrides_stated(self) -> None:
+        """Regression: the outstanding balance pointed at Bob, but the legs
+        show Alice sent the money — the stored direction is Alice → Bob."""
+        alice = make_person(name="Alice")
+        bob = make_person(name="Bob")
+        sent = make_transaction(payer_person_id=alice.id, amount=Decimal("-1981.00"))
+        received = make_transaction(payer_person_id=bob.id, amount=Decimal("1981.00"))
+        uow = make_mock_uow()
+        uow.persons.get_by_ids.return_value = [alice, bob]
+        uow.persons.get_all.return_value = [alice, bob]
+        set_passthrough_save(uow)
+        uow.transactions.get_by_ids.return_value = [sent, received]
+        uow.transactions.update_mutable_fields.return_value = sent
+
+        command = RecordSettlementCommand(
+            amount=Decimal("1981.00"),
+            from_person_id=bob.id,
+            to_person_id=alice.id,
+            method="Venmo",
+            linked_transaction_ids=[sent.id, received.id],
+        )
+        result = await RecordSettlementUseCase().execute(command, uow)
+        assert result.settlement.from_person_id == alice.id
+        assert result.settlement.to_person_id == bob.id
+
+    @pytest.mark.parametrize("sign", [Decimal(-1), Decimal(1)])
+    async def test_single_leg_derives_both_sides(self, sign: Decimal) -> None:
+        alice = make_person(name="Alice")
+        bob = make_person(name="Bob")
+        tx = make_transaction(payer_person_id=alice.id, amount=sign * 50)
+        uow = make_mock_uow()
+        uow.persons.get_by_ids.return_value = [alice, bob]
+        uow.persons.get_all.return_value = [alice, bob]
+        set_passthrough_save(uow)
+        uow.transactions.get_by_ids.return_value = [tx]
+        uow.transactions.update_mutable_fields.return_value = tx
+
+        command = RecordSettlementCommand(
+            amount=Decimal("50.00"),
+            # Stated backwards on purpose — the leg decides.
+            from_person_id=bob.id,
+            to_person_id=alice.id,
+            method="Venmo",
+            linked_transaction_ids=[tx.id],
+        )
+        result = await RecordSettlementUseCase().execute(command, uow)
+        expected_from = alice.id if sign < 0 else bob.id
+        expected_to = bob.id if sign < 0 else alice.id
+        assert result.settlement.from_person_id == expected_from
+        assert result.settlement.to_person_id == expected_to
+
+    async def test_contradictory_legs_rejected(self) -> None:
+        alice = make_person(name="Alice")
+        bob = make_person(name="Bob")
+        # Two negative legs from different payers — two senders.
+        tx1 = make_transaction(payer_person_id=alice.id)
+        tx2 = make_transaction(payer_person_id=bob.id)
+        uow = make_mock_uow()
+        uow.persons.get_by_ids.return_value = [alice, bob]
+        uow.persons.get_all.return_value = [alice, bob]
+        uow.transactions.get_by_ids.return_value = [tx1, tx2]
+
+        command = RecordSettlementCommand(
+            amount=Decimal("50.00"),
+            from_person_id=alice.id,
+            to_person_id=bob.id,
+            method="Venmo",
+            linked_transaction_ids=[tx1.id, tx2.id],
+        )
+        with pytest.raises(ValidationError, match="contradictory"):
+            await RecordSettlementUseCase().execute(command, uow)
+        uow.settlements.save.assert_not_called()
+
+    async def test_legless_recording_keeps_stated_direction(self) -> None:
+        alice = make_person(name="Alice")
+        bob = make_person(name="Bob")
+        uow = make_mock_uow()
+        uow.persons.get_by_ids.return_value = [alice, bob]
+        set_passthrough_save(uow)
+
+        command = RecordSettlementCommand(
+            amount=Decimal("50.00"),
+            from_person_id=bob.id,
+            to_person_id=alice.id,
+            method="Cash",
+        )
+        result = await RecordSettlementUseCase().execute(command, uow)
+        assert result.settlement.from_person_id == bob.id
+        assert result.settlement.to_person_id == alice.id
 
 
 async def test_default_portion_covers_settled_at_month() -> None:
