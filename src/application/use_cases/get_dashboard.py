@@ -36,10 +36,12 @@ from src.domain.exceptions import ValidationError
 from src.domain.filters import is_reconciliation_relevant
 from src.domain.ledger import (
     LedgerMonth,
+    LedgerYear,
     MonthKey,
     MonthSettlementStatus,
     SettlementLedger,
     sum_settlement_results,
+    year_row,
 )
 from src.domain.reconciliation import (
     ReconciliationSummary,
@@ -112,6 +114,9 @@ class GetDashboardResult:
     ytd_settlement: SettlementResult | None
     ytd_net_settlement: SettlementResult | None
     ytd_total_settled: Decimal
+    # The requested year's settlement totals — the same row Settle Up's hero
+    # renders, so the two pages can never state different figures.
+    settlement_year: LedgerYear
     outstanding_balance: SettlementResult | None
     outstanding_span: tuple[MonthKey, MonthKey] | None
     month_history: list[MonthHistoryEntry]
@@ -562,6 +567,8 @@ class GetDashboardUseCase:
                     ),
                     Decimal(0),
                 ),
+                settlement_year=year_row(ledger.years, command.year),
+                # All-time figures — chat's dashboard summary reads these.
                 outstanding_balance=ledger.outstanding,
                 outstanding_span=ledger.span,
                 month_history=_build_month_history(

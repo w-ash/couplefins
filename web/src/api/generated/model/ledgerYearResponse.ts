@@ -8,7 +8,7 @@ import type { MonthSpanResponse } from './monthSpanResponse';
 import type { OwedAmountResponse } from './owedAmountResponse';
 
 /**
- * One calendar year's totals — the Settle Up hero renders this as-is.
+ * One calendar year's totals — rendered as-is by both settlement cards.
  */
 export interface LedgerYearResponse {
   year: number;

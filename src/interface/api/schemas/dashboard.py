@@ -6,8 +6,8 @@ from pydantic import BaseModel
 from src.application.use_cases._shared.command_validators import Scope
 from src.application.use_cases.get_dashboard import GetDashboardResult
 from src.domain.budget import HealthStatus
+from src.interface.api.schemas.ledger import LedgerYearResponse
 from src.interface.api.schemas.reconciliation import (
-    MonthSpanResponse,
     OwedAmountResponse,
     PersonSummaryResponse,
     UploadStatusResponse,
@@ -67,8 +67,9 @@ class DashboardResponse(BaseModel):
     ytd_settlement: OwedAmountResponse | None
     ytd_net_settlement: OwedAmountResponse | None
     ytd_total_settled: MoneyField
-    outstanding_balance: OwedAmountResponse | None
-    outstanding_span: MonthSpanResponse | None
+    # The dashboard's settlement card renders this row as-is — same shape and
+    # same numbers as the Settle Up hero for that year.
+    settlement_year: LedgerYearResponse
     month_history: list[MonthHistoryEntryResponse]
     persons: list[DashboardPersonResponse]
     unmapped_categories: list[str]
@@ -118,14 +119,7 @@ class DashboardResponse(BaseModel):
                 else None
             ),
             ytd_total_settled=result.ytd_total_settled,
-            outstanding_balance=(
-                OwedAmountResponse.from_domain(result.outstanding_balance)
-                if result.outstanding_balance
-                else None
-            ),
-            outstanding_span=MonthSpanResponse.from_optional_span(
-                result.outstanding_span
-            ),
+            settlement_year=LedgerYearResponse.from_domain(result.settlement_year),
             month_history=[
                 MonthHistoryEntryResponse(
                     year=mh.year,

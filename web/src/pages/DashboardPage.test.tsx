@@ -75,14 +75,15 @@ const dashboardResponse = {
     to_person_id: "p1",
   },
   ytd_total_settled: 0.0,
-  outstanding_balance: {
-    amount: 20.0,
-    from_person_id: "p2",
-    to_person_id: "p1",
-  },
-  outstanding_span: {
-    start: { year: 2026, month: 1 },
-    end: { year: 2026, month: 1 },
+  settlement_year: {
+    year: 2026,
+    charged: { amount: 20.0, from_person_id: "p2", to_person_id: "p1" },
+    paid: null,
+    balance: { amount: 20.0, from_person_id: "p2", to_person_id: "p1" },
+    span: {
+      start: { year: 2026, month: 1 },
+      end: { year: 2026, month: 1 },
+    },
   },
   month_history: [
     {
@@ -144,8 +145,13 @@ const emptyResponse = {
   ytd_settlement: null,
   ytd_net_settlement: null,
   ytd_total_settled: 0,
-  outstanding_balance: null,
-  outstanding_span: null,
+  settlement_year: {
+    year: 2026,
+    charged: null,
+    paid: null,
+    balance: null,
+    span: null,
+  },
   month_history: [],
   persons: [
     { id: "p1", name: "Alice" },
@@ -294,12 +300,68 @@ describe("DashboardPage", () => {
     });
   });
 
-  it("shows the outstanding balance with its covered span in the hero", async () => {
+  it("shows the year's balance with its covered span in the hero", async () => {
     renderWithProviders(<DashboardPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Outstanding balance")).toBeInTheDocument();
+      expect(screen.getByText("Balance for 2026")).toBeInTheDocument();
       expect(screen.getByText("covers January")).toBeInTheDocument();
+    });
+  });
+
+  it("shows the year's charged and paid working line once paid", async () => {
+    server.use(
+      http.get("/api/v1/dashboard", () =>
+        HttpResponse.json({
+          ...dashboardResponse,
+          settlement_year: {
+            year: 2026,
+            charged: { amount: 70.0, from_person_id: "p2", to_person_id: "p1" },
+            paid: { amount: 50.0, from_person_id: "p2", to_person_id: "p1" },
+            balance: {
+              amount: 20.0,
+              from_person_id: "p2",
+              to_person_id: "p1",
+            },
+            span: {
+              start: { year: 2026, month: 1 },
+              end: { year: 2026, month: 1 },
+            },
+          },
+        } satisfies DashboardResponse),
+      ),
+    );
+    renderWithProviders(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("$70.00 charged, $50.00 paid in 2026"),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("names the year when it is settled", async () => {
+    server.use(
+      http.get("/api/v1/dashboard", () =>
+        HttpResponse.json({
+          ...dashboardResponse,
+          settlement_year: {
+            year: 2026,
+            charged: { amount: 20.0, from_person_id: "p2", to_person_id: "p1" },
+            paid: { amount: 20.0, from_person_id: "p2", to_person_id: "p1" },
+            balance: null,
+            span: {
+              start: { year: 2026, month: 1 },
+              end: { year: 2026, month: 1 },
+            },
+          },
+        } satisfies DashboardResponse),
+      ),
+    );
+    renderWithProviders(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("2026 is settled")).toBeInTheDocument();
     });
   });
 
@@ -314,14 +376,15 @@ describe("DashboardPage", () => {
         from_person_id: "p2",
         to_person_id: "p1",
       },
-      outstanding_balance: {
-        amount: 40.0,
-        from_person_id: "p2",
-        to_person_id: "p1",
-      },
-      outstanding_span: {
-        start: { year: 2026, month: 2 },
-        end: { year: 2026, month: 2 },
+      settlement_year: {
+        year: 2026,
+        charged: { amount: 70.0, from_person_id: "p2", to_person_id: "p1" },
+        paid: { amount: 30.0, from_person_id: "p2", to_person_id: "p1" },
+        balance: { amount: 40.0, from_person_id: "p2", to_person_id: "p1" },
+        span: {
+          start: { year: 2026, month: 1 },
+          end: { year: 2026, month: 2 },
+        },
       },
       month_history: [
         {

@@ -23,7 +23,7 @@ from src.application.use_cases._shared.upload_status import UploadStatus
 from src.domain.entities.category import Category
 from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
-from src.domain.ledger import LedgerMonth, LedgerYear, empty_ledger_year
+from src.domain.ledger import LedgerMonth, LedgerYear, year_row
 from src.domain.reconciliation import (
     PayerGroupSummary,
     PayerSplitSummary,
@@ -67,9 +67,8 @@ class GetSettleUpDataResult:
 
 def _pad_years(years: list[LedgerYear], ensure: set[int]) -> list[LedgerYear]:
     """Engine years plus empty rows for years the page must offer anyway."""
-    missing = ensure - {row.year for row in years}
-    padded = years + [empty_ledger_year(year) for year in missing]
-    return sorted(padded, key=lambda row: row.year)
+    wanted = {row.year for row in years} | ensure
+    return [year_row(years, year) for year in sorted(wanted)]
 
 
 def _compute_audit_splits(
@@ -127,7 +126,8 @@ class GetSettleUpDataUseCase:
                 list(bundle.ledger.years),
                 {command.year, datetime.now(UTC).year},
             )
-            year_row = next((row for row in years if row.year == command.year), None)
+            # _pad_years guarantees the selected year is present.
+            selected_year = year_row(years, command.year)
 
             payer_splits, payer_group_splits = _compute_audit_splits(
                 snapshot.summary, ctx.persons
@@ -143,7 +143,7 @@ class GetSettleUpDataUseCase:
                 is_finalized,
                 snapshot.upload_statuses,
                 command.year,
-                year_row.balance if year_row else None,
+                selected_year.balance,
                 snapshot.transactions,
                 ctx.categories,
             )

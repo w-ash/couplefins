@@ -771,6 +771,8 @@ async def test_portion_decides_the_month_not_settled_at() -> None:
     assert result.ytd_net_settlement is None
     assert result.outstanding_balance is None
     assert result.outstanding_span is None
+    assert result.settlement_year.year == 2026
+    assert result.settlement_year.balance is None
 
 
 async def test_zero_balance_month_is_trivially_settled() -> None:
@@ -858,6 +860,13 @@ async def test_month_paid_past_charges_swings_direction() -> None:
     assert result.outstanding_balance.amount == Decimal("150.00")
     assert result.outstanding_balance.from_person_id == alice.id
     assert result.outstanding_balance.to_person_id == bob.id
+    assert result.settlement_year.balance is not None
+    assert result.settlement_year.balance.amount == Decimal("150.00")
+    assert result.settlement_year.balance.from_person_id == alice.id
+    assert result.settlement_year.charged is not None
+    assert result.settlement_year.charged.amount == Decimal("50.00")
+    assert result.settlement_year.paid is not None
+    assert result.settlement_year.paid.amount == Decimal("200.00")
 
 
 async def test_net_settlement_partial_payment() -> None:
@@ -899,6 +908,60 @@ async def test_net_settlement_partial_payment() -> None:
     assert result.outstanding_balance.from_person_id == bob.id
     march = next(e for e in result.month_history if e.month == 3)
     assert march.settlement_status == "partially_settled"
+
+
+async def test_settlement_year_covers_only_the_requested_year() -> None:
+    """The settlement card answers for one calendar year — a prior year's
+    open balance rides in the all-time figure but not this one."""
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    _setup_uow_base(uow, alice, bob)
+
+    txs = [
+        make_transaction(
+            date=date(2025, 11, 4),
+            amount=Decimal("-300.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+        make_transaction(
+            date=date(2026, 2, 9),
+            amount=Decimal("-80.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        ),
+    ]
+    _set_transactions(uow, txs)
+    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+
+    result = await GetDashboardUseCase().execute(_make_command(), uow)
+
+    # All-time: $150 (2025) + $40 (2026). The year row reports 2026 alone.
+    assert result.outstanding_balance is not None
+    assert result.outstanding_balance.amount == Decimal("190.00")
+    assert result.settlement_year.year == 2026
+    assert result.settlement_year.balance is not None
+    assert result.settlement_year.balance.amount == Decimal("40.00")
+    assert result.settlement_year.balance.from_person_id == bob.id
+    assert result.settlement_year.span == ((2026, 2), (2026, 2))
+
+
+async def test_settlement_year_is_empty_for_a_year_without_activity() -> None:
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    _setup_uow_base(uow, alice, bob)
+    _set_transactions(uow, [])
+    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+
+    result = await GetDashboardUseCase().execute(_make_command(year=2027), uow)
+
+    assert result.settlement_year.year == 2027
+    assert result.settlement_year.balance is None
+    assert result.settlement_year.charged is None
+    assert result.settlement_year.paid is None
+    assert result.settlement_year.span is None
 
 
 async def test_no_settlements_yields_zero_ytd_total() -> None:

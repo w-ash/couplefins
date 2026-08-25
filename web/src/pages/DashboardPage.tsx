@@ -82,7 +82,7 @@ function HouseholdStats({
         {
           label: "YTD balance",
           value: ytdLabel,
-          description: `Net settlement across all months, ${ytdRange}`,
+          description: `Net settlement, ${ytdRange}`,
         },
         {
           label: "Settled this year",
@@ -248,9 +248,11 @@ function SettlementHero({
   getPersonName: (id: string) => string;
   getPersonColor: (id: string) => string;
 }) {
-  // The running ledger's total outstanding — the "now" answer across all
-  // months, not just the active one.
-  const settlement = data.outstanding_balance;
+  // The requested year's balance, precomputed server-side — the same row
+  // the Settle Up hero renders for that year.
+  const yearRow = data.settlement_year;
+  const settlement = yearRow.balance;
+  const year = yearRow.year;
 
   if (!settlement) {
     return (
@@ -261,7 +263,9 @@ function SettlementHero({
         <p className="text-center text-base font-semibold text-primary sm:text-lg">
           <span className="inline-flex items-center gap-2">
             <CheckCircle2 className="size-5" />
-            All settled!
+            {yearRow.charged
+              ? `${year} is settled`
+              : `Nothing to settle in ${year}`}
           </span>
         </p>
       </div>
@@ -282,7 +286,7 @@ function SettlementHero({
       )}
     >
       <p className="mb-1 text-center text-xs font-medium tracking-wider text-muted-foreground uppercase">
-        Outstanding balance
+        Balance for {year}
       </p>
       <p className="text-center text-base font-semibold text-foreground sm:text-lg">
         {iOwe ? (
@@ -313,9 +317,17 @@ function SettlementHero({
           </>
         )}
       </p>
-      {data.outstanding_span && (
+      {yearRow.span && (
         <p className="mt-1 text-center text-xs text-muted-foreground">
-          covers {formatMonthSpan(data.outstanding_span)}
+          covers {formatMonthSpan(yearRow.span)}
+        </p>
+      )}
+      {/* The working line — the headline is never a bare number the couple
+          has to take on trust. */}
+      {yearRow.paid && (
+        <p className="mt-1 text-center text-xs text-muted-foreground tabular-nums">
+          {formatCurrency(yearRow.charged?.amount ?? 0)} charged,{" "}
+          {formatCurrency(yearRow.paid.amount)} paid in {year}
         </p>
       )}
       <p className="mt-1 text-center text-sm text-primary">

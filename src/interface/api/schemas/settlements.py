@@ -9,18 +9,18 @@ from src.application.use_cases._shared.settlement_records import SettlementRecor
 from src.application.use_cases.get_settle_up_data import GetSettleUpDataResult
 from src.domain.entities.settlement import Settlement
 from src.domain.entities.transaction import Transaction
-from src.domain.ledger import LedgerMonth, LedgerYear, MonthSettlementStatus
 from src.domain.reconciliation import (
     PayerGroupSummary,
     PayerSplitSummary,
-    SettlementResult,
 )
 from src.domain.settlement_matching import SettlementCandidate
 from src.interface.api.schemas.dashboard import DashboardPersonResponse
+from src.interface.api.schemas.ledger import (
+    LedgerMonthResponse,
+    LedgerYearResponse,
+)
 from src.interface.api.schemas.reconciliation import (
     MonthReference,
-    MonthSpanResponse,
-    OwedAmountResponse,
     UploadStatusResponse,
 )
 from src.interface.api.schemas.types import MoneyField
@@ -136,56 +136,6 @@ class LedgerSettlementResponse(SettlementResponse):
             for p in entry.application.portions
         ]
         return response
-
-
-class LedgerMonthResponse(BaseModel):
-    """One month, fully precomputed: charged, paid, balance, status."""
-
-    year: int
-    month: int
-    charged: OwedAmountResponse | None  # net of the month's charges' shares
-    paid: OwedAmountResponse | None  # payments applied to this month
-    balance: OwedAmountResponse | None  # charged - paid; None means settled
-    status: MonthSettlementStatus
-    # True when the balance direction differs from its year's — the UI names
-    # the person only on such rows.
-    runs_against_year: bool
-
-    @classmethod
-    def from_domain(cls, month: LedgerMonth) -> LedgerMonthResponse:
-        return cls(
-            year=month.year,
-            month=month.month,
-            charged=_owed(month.charged),
-            paid=_owed(month.paid),
-            balance=_owed(month.balance),
-            status=month.status,
-            runs_against_year=month.runs_against_year,
-        )
-
-
-class LedgerYearResponse(BaseModel):
-    """One calendar year's totals — the Settle Up hero renders this as-is."""
-
-    year: int
-    charged: OwedAmountResponse | None
-    paid: OwedAmountResponse | None
-    balance: OwedAmountResponse | None
-    span: MonthSpanResponse | None  # (oldest, newest) charged month
-
-    @classmethod
-    def from_domain(cls, row: LedgerYear) -> LedgerYearResponse:
-        return cls(
-            year=row.year,
-            charged=_owed(row.charged),
-            paid=_owed(row.paid),
-            balance=_owed(row.balance),
-            span=MonthSpanResponse.from_optional_span(row.span),
-        )
-
-
-def _owed(result: SettlementResult | None) -> OwedAmountResponse | None:
-    return None if result is None else OwedAmountResponse.from_domain(result)
 
 
 class SettlementCandidateResponse(BaseModel):

@@ -40,7 +40,7 @@ Each person, on their own time:
 
 The couple sits down to:
 
-1. Open the dashboard — see the total outstanding balance, whether anything needs attention
+1. Open the dashboard — see this year's balance, whether anything needs attention
 2. Settle up — link the settlement transactions (Venmo, Zelle, etc.) and record what each covers; one catch-up transfer can cover several months
 3. Review budget — are we on track this month? This year?
 4. Finalize the months you've reviewed — lock them so nothing shifts (a skipped month can be locked too; it stays unsettled until a settlement covers it)
@@ -213,7 +213,9 @@ The dashboard is the landing page. It answers "what's going on and what do I nee
 **US-DASH-1**: As a partner opening the app, I want to immediately understand the current state of our shared finances.
 
 - Given I open the app, then I land on the Dashboard
-- Given we have transaction data, then I see the total outstanding balance across all months (with its covered span) and year-to-date summary stats
+- Given we have transaction data, then I see the current year's balance (with its covered span) and year-to-date summary stats (v1.11.3)
+- Given the current year's balance and payments against it, then the settlement card shows what the year charged and what was paid, matching the Settle Up hero for that year (v1.11.3)
+- Given no settlement activity this year, then the card says so by name — "{year} is settled" once its charges are covered, "Nothing to settle in {year}" when there were none (v1.11.3)
 - Given no transaction data exists, then I see a directional empty state prompting me to upload
 
 **US-DASH-2**: As a partner doing solo prep, I want to know what I need to do before our together session.
@@ -224,7 +226,7 @@ The dashboard is the landing page. It answers "what's going on and what do I nee
 
 **US-DASH-3**: As a partner sitting down together, I want to get to the right action quickly — settle up, review budget, or finalize.
 
-- Given there's an outstanding balance, then the settlement card links directly to Settle Up
+- Given there's a balance for the year, then the settlement card links directly to Settle Up
 - Given the dashboard, then I can navigate to Transactions or Settle Up in one click
 
 **US-DASH-4**: As a partner, I want to see how recent months have gone so I can spot trends and catch unfinished business.

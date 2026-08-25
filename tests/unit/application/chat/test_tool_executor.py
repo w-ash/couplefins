@@ -27,7 +27,12 @@ from src.application.use_cases.search_transactions import (
 from src.domain.budget import BudgetOverview, CategoryGroupBudgetStatus
 from src.domain.categories import CategoryGroupBreakdown
 from src.domain.exceptions import ToolExecutionError
-from src.domain.ledger import LedgerMonth, LedgerYear, MonthSettlementStatus
+from src.domain.ledger import (
+    LedgerMonth,
+    LedgerYear,
+    MonthSettlementStatus,
+    empty_ledger_year,
+)
 from src.domain.reconciliation import (
     PersonSummary,
     ReconciliationSummary,
@@ -1021,6 +1026,7 @@ def _dashboard_result(**overrides: object) -> GetDashboardResult:
         ytd_settlement=None,
         ytd_net_settlement=None,
         ytd_total_settled=Decimal("500.00"),
+        settlement_year=empty_ledger_year(2026),
         outstanding_balance=SettlementResult(
             amount=Decimal("147.50"),
             from_person_id=ALICE.id,

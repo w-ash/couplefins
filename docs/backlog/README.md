@@ -182,6 +182,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.11.0 | Settlement coverage — per-month settlement portions, all settle-up math in Python ([spec](v1.11.x.md)) | Completed (2026-08-24) | L |
 | v1.11.1 | Slim month-status endpoint — Transactions header card stops polling the full settle-up payload ([spec](v1.11.x.md)) | Planned | S |
 | v1.11.2 | Structured warnings — use cases return codes + params, frontend owns the copy ([spec](v1.11.x.md)) | Planned | M |
+| v1.11.3 | Year-scoped Dashboard settlement card — the hero answers for the current year ([spec](v1.11.x.md)) | Completed (2026-08-24) | S |
 
 ## Infrastructure Readiness
 

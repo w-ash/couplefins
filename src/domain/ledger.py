@@ -97,6 +97,11 @@ def empty_ledger_year(year: int) -> LedgerYear:
     return LedgerYear(year=year, charged=None, paid=None, balance=None, span=None)
 
 
+def year_row(years: Iterable[LedgerYear], year: int) -> LedgerYear:
+    """One calendar year's totals, or an empty row when it has no activity."""
+    return next((row for row in years if row.year == year), empty_ledger_year(year))
+
+
 def sum_settlement_results(
     results: Iterable[SettlementResult | None],
     person_ids: list[UUID],
