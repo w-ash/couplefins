@@ -308,13 +308,9 @@ export function InsightsPage() {
                   description="Click any part of the chart or the legend to see its transactions"
                 />
               </div>
-              <div className="mb-4 flex flex-wrap gap-2">
-                <SegmentedControl<InsightsChart>
-                  options={INSIGHTS_CHART_OPTIONS}
-                  value={chart}
-                  onChange={setChart}
-                  size="sm"
-                />
+              {/* The chart selector stays put on the right; the group-by
+                  control appears to its left only when the chart uses it. */}
+              <div className="mb-4 flex flex-wrap justify-end gap-2">
                 {chart !== "flow" && (
                   <SegmentedControl<InsightsGroupBy>
                     options={INSIGHTS_GROUP_BY_OPTIONS}
@@ -323,6 +319,12 @@ export function InsightsPage() {
                     size="sm"
                   />
                 )}
+                <SegmentedControl<InsightsChart>
+                  options={INSIGHTS_CHART_OPTIONS}
+                  value={chart}
+                  onChange={setChart}
+                  size="sm"
+                />
               </div>
             </div>
             {!hasPeriodData ? (
