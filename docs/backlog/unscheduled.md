@@ -9,9 +9,6 @@ Ideas and features without version assignment. Move to a version file when ready
 - Export reconciliation summary as PDF
 - Email/notification when both uploads are in for a month
 
-## Spending lenses
-- Income-kind category groups — a person's lens counts every row where their share is nonzero, so a paycheck or tax refund (positive, non-household) nets against "My Spending" and can push a month negative (the v1.13.2 Insights headline makes this visible). Add `kind = income` beside `expense` / `transfer`, excluded from spending the way transfers are, and let Settings mark the Income group. Interim: mark the Income group "Transfer" in Settings.
-
 ## Budgets
 - Rollover unused budget to next month
 - Budget alerts when approaching limit mid-month

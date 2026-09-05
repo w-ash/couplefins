@@ -1,7 +1,7 @@
 """The only place use cases read transaction lists.
 
 Each function names the rows it returns. Where rows feed money math, the
-transfer rule (`exclude_transfers`) is applied here, once, so a use case
+transfer rule (`exclude_non_spending`) is applied here, once, so a use case
 cannot forget it. A grep gate in tests/unit/application/test_transaction_reads.py
 forbids list reads on `uow.transactions` anywhere else under src/application.
 """
@@ -16,7 +16,7 @@ from src.application.use_cases._shared.reconciliation_context import (
     ReconciliationContext,
 )
 from src.domain.entities.transaction import Transaction
-from src.domain.filters import exclude_transfers
+from src.domain.filters import exclude_non_spending
 from src.domain.person_spending import compute_person_share
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
@@ -42,15 +42,16 @@ async def fetch_year_spending_rows(
         txs = await uow.transactions.get_household_by_year(year)
     else:
         txs = await uow.transactions.get_by_year(year)
-    return exclude_transfers(txs, ctx.transfer_categories)
+    return exclude_non_spending(txs, ctx.non_spending_categories)
 
 
 async def fetch_all_settlement_rows(
     uow: UnitOfWorkProtocol, ctx: ReconciliationContext
 ) -> list[Transaction]:
     """Every settlement-relevant row, all time — the ledger's input."""
-    return exclude_transfers(
-        await uow.transactions.get_all_settlement_relevant(), ctx.transfer_categories
+    return exclude_non_spending(
+        await uow.transactions.get_all_settlement_relevant(),
+        ctx.non_spending_categories,
     )
 
 
@@ -63,11 +64,11 @@ async def fetch_settlement_rows(
 ) -> list[Transaction]:
     """Settlement-relevant rows in a date window."""
     start, end = window
-    return exclude_transfers(
+    return exclude_non_spending(
         await uow.transactions.get_settlement_relevant_by_date_range(
             start, end, tags=tags
         ),
-        ctx.transfer_categories,
+        ctx.non_spending_categories,
     )
 
 
@@ -105,7 +106,8 @@ async def fetch_scoped_rows(
             start, end, tags=tags
         )
     return ScopedRows(
-        listed=listed, spending=exclude_transfers(listed, ctx.transfer_categories)
+        listed=listed,
+        spending=exclude_non_spending(listed, ctx.non_spending_categories),
     )
 
 
@@ -115,7 +117,7 @@ async def fetch_latest_spending_month(
     """(year, month) of the newest household spending row, or None. Transfer
     rows are excluded so a card payment cannot point at an empty month."""
     latest = await uow.transactions.get_latest_household_transaction_date(
-        excluding_categories=ctx.transfer_categories
+        excluding_categories=ctx.non_spending_categories
     )
     return (latest.year, latest.month) if latest else None
 

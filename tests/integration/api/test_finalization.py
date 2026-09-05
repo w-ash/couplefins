@@ -158,7 +158,8 @@ async def test_finalized_month_locks_budgets_but_not_settlement_records(
     bob_id = persons[1]["id"]
 
     groups = await client.get("/api/v1/category-groups", auth=cookies)
-    group_id = groups.json()[0]["id"]
+    # The first seeded group is Income, which carries no budget.
+    group_id = next(g["id"] for g in groups.json() if g["kind"] == "expense")
 
     finalize = await client.post(
         "/api/v1/reconciliation/finalize",

@@ -18,10 +18,13 @@ import { Button } from "@/components/Button";
 import { Combobox } from "@/components/Combobox";
 import { Dialog } from "@/components/Dialog";
 import { ExpandChevron } from "@/components/ExpandChevron";
+import {
+  GroupKindPill,
+  NON_SPENDING_CAPTION,
+} from "@/components/GroupKindPill";
 import { InlineError } from "@/components/InlineError";
 import { PageError, PageLoading } from "@/components/PageStates";
 import { SegmentedControl } from "@/components/SegmentedControl";
-import { TRANSFER_CAPTION, TransferPill } from "@/components/TransferPill";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { useGroupOptions, useInvalidateCategories } from "@/lib/categories";
 import { getCategoryGroupIcon, ICON_OPTIONS } from "@/lib/category-icons";
@@ -31,6 +34,7 @@ const KIND_OPTIONS: Array<{ value: CategoryGroupResponseKind; label: string }> =
   [
     { value: "expense", label: "Spending" },
     { value: "transfer", label: "Transfer" },
+    { value: "income", label: "Income" },
   ];
 
 // -- Icon picker sheet --
@@ -219,7 +223,7 @@ function GroupCard({
               <span className="text-xs text-muted-foreground tabular-nums">
                 {group.categories.length}
               </span>
-              {group.kind === "transfer" && <TransferPill />}
+              {group.kind !== "expense" && <GroupKindPill kind={group.kind} />}
             </button>
           )}
         </div>
@@ -263,9 +267,9 @@ function GroupCard({
                   size="sm"
                 />
               </div>
-              {group.kind === "transfer" && (
+              {group.kind !== "expense" && (
                 <p className="text-xs text-muted-foreground">
-                  {TRANSFER_CAPTION}
+                  {NON_SPENDING_CAPTION}
                 </p>
               )}
               {updateMutation.isError && (

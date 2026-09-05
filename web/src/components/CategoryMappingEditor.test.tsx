@@ -312,6 +312,24 @@ describe("CategoryMappingEditor", () => {
     });
   });
 
+  it("offers Income as a kind and marks an income group with a pill", async () => {
+    server.use(
+      http.get("/api/v1/category-groups", () =>
+        HttpResponse.json([{ ...groups[0], kind: "income" }]),
+      ),
+    );
+    renderWithProviders(<CategoryMappingEditor />);
+    await waitFor(() => {
+      expect(
+        screen.getByTitle(/Income — money in, not spending/),
+      ).toBeInTheDocument();
+    });
+    await userEvent.click(
+      screen.getByRole("button", { name: /Food & Dining/ }),
+    );
+    expect(screen.getAllByRole("radio", { name: "Income" })[0]).toBeChecked();
+  });
+
   it("marks a transfer group with a pill and caption", async () => {
     renderWithProviders(<CategoryMappingEditor />);
 

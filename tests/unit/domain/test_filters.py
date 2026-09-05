@@ -4,7 +4,7 @@ import re
 
 import pytest
 
-from src.domain.filters import exclude_transfers, is_reconciliation_relevant
+from src.domain.filters import exclude_non_spending, is_reconciliation_relevant
 from tests.fixtures.factories import make_transaction
 
 _SRC_DOMAIN_APPLICATION = [
@@ -68,21 +68,21 @@ def test_no_inline_copies_of_the_exclusion_predicate() -> None:
     )
 
 
-def test_exclude_transfers_drops_both_legs_and_keeps_the_rest() -> None:
+def test_exclude_non_spending_drops_both_legs_and_keeps_the_rest() -> None:
     debit = make_transaction(category="Credit Card Payment", amount=Decimal(-500))
     credit = make_transaction(category="Credit Card Payment", amount=Decimal(500))
     dinner = make_transaction(category="Dining Out")
 
-    assert exclude_transfers([debit, credit, dinner], {"Credit Card Payment"}) == [
+    assert exclude_non_spending([debit, credit, dinner], {"Credit Card Payment"}) == [
         dinner
     ]
 
 
-def test_exclude_transfers_is_exact_match() -> None:
+def test_exclude_non_spending_is_exact_match() -> None:
     tx = make_transaction(category="Credit Card Payments")
-    assert exclude_transfers([tx], {"Credit Card Payment"}) == [tx]
+    assert exclude_non_spending([tx], {"Credit Card Payment"}) == [tx]
 
 
-def test_exclude_transfers_empty_set_is_a_no_op() -> None:
+def test_exclude_non_spending_empty_set_is_a_no_op() -> None:
     txs = [make_transaction(category="Credit Card Payment")]
-    assert exclude_transfers(txs, frozenset()) is txs
+    assert exclude_non_spending(txs, frozenset()) is txs

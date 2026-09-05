@@ -7,7 +7,7 @@ from attrs import Factory, define
 
 from src.domain.categories import CategoryBreakdown, CategoryGroupBreakdown
 from src.domain.constants import UNCATEGORIZED_GROUP_NAME
-from src.domain.entities.category_group import CategoryGroup
+from src.domain.entities.category_group import CategoryGroup, is_spending_kind
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.entities.transaction import Transaction
 from src.domain.spending_lens import (
@@ -278,7 +278,7 @@ class BudgetOverviewInputs:
 
 def _budgetable_group_names(groups: list[CategoryGroup]) -> dict[UUID, str]:
     """Transfer groups are money movement: no status row, no budget."""
-    return {g.id: g.name for g in groups if g.kind == "expense"}
+    return {g.id: g.name for g in groups if is_spending_kind(g.kind)}
 
 
 def compute_budget_overview(

@@ -76,6 +76,7 @@ function makeTx(overrides: Partial<TransactionResponse>): TransactionResponse {
     is_excluded: false,
     is_settlement: false,
     is_transfer: false,
+    is_income: false,
     original_date: null,
     original_amount: null,
     ...overrides,
@@ -814,5 +815,35 @@ describe("sumMyShares", () => {
 
   it("collapses -0 to 0", () => {
     expect(sumMyShares([], me)).toBe(0);
+  });
+});
+
+describe("income rows", () => {
+  const me = "p1";
+
+  it("are never spending under any scope", () => {
+    const paycheck = makeTx({
+      household: false,
+      payer_person_id: me,
+      payer_percentage: 100,
+      amount: 5000,
+      is_income: true,
+    });
+    expect(isSpendingRow(paycheck)).toBe(false);
+    expect(isInHouseholdScope({ ...paycheck, household: true })).toBe(false);
+    expect(isInPersonalScope(paycheck, me)).toBe(false);
+    expect(isInSpottedScope({ ...paycheck, payer_percentage: 0 }, me)).toBe(
+      false,
+    );
+  });
+
+  it("land in their own Imported bucket", () => {
+    const buckets = bucketTransactions(
+      [makeTx({ amount: 5000, household: false, is_income: true }), makeTx({})],
+      me,
+    );
+    expect(buckets.income).toEqual({ count: 1, amount: 5000 });
+    expect(buckets.household.count).toBe(1);
+    expect(buckets.personal.count).toBe(0);
   });
 });

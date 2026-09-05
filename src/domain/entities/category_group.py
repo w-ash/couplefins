@@ -5,9 +5,15 @@ from attrs import define
 
 # What a group's rows mean for the money math. An `expense` group is spending.
 # A `transfer` group is money movement between the couple's own accounts
-# (credit card payments, account transfers): its rows never count toward
-# spending, budgets, or settlement, but stay visible on the Transactions page.
-GroupKind = Literal["expense", "transfer"]
+# (credit card payments, account transfers); an `income` group is money
+# coming in (paychecks, dividends). Neither counts toward spending, budgets,
+# or settlement, but both stay visible on the Transactions page.
+GroupKind = Literal["expense", "transfer", "income"]
+
+
+def is_spending_kind(kind: GroupKind) -> bool:
+    """Only expense groups are spending; transfers and income are not."""
+    return kind == "expense"
 
 
 def parse_group_kind(raw: str) -> GroupKind:

@@ -12,6 +12,7 @@ from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.application.use_cases._shared.finalization import (
     assert_period_not_finalized,
 )
+from src.domain.entities.category_group import is_spending_kind
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.exceptions import ValidationError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
@@ -40,8 +41,8 @@ class SaveBudgetUseCase:
             group = await require_by_id(
                 uow.category_groups.get_by_id, command.group_id, "Category group"
             )
-            if group.kind == "transfer":
-                raise ValidationError("Transfer groups can't carry a budget")
+            if not is_spending_kind(group.kind):
+                raise ValidationError("Only spending groups can carry a budget")
             if command.person_id is not None:
                 await require_by_id(uow.persons.get_by_id, command.person_id, "Person")
             await assert_period_not_finalized(uow, command.year, command.month)

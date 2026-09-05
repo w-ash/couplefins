@@ -319,3 +319,27 @@ async def test_settlement_relevant_rows_agree_across_surfaces(
     merchants = {a["merchant"] for a in preview.json()["adjustments"]}
     assert "Parking Garage" in merchants
     assert "Bike Shop" in merchants
+
+
+async def test_income_rows_are_listed_with_a_badge_but_not_counted(
+    client: AsyncClient,
+) -> None:
+    persons, cookies = await setup_and_login(client)
+    alice_id = persons[0]["id"]
+    csv = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        '2026-01-05,Employer,Paychecks,Chase,PAYROLL,,"5000.00",\n'
+        '2026-01-15,Restaurant,Dining Out,Chase,REST,,"-100.00",shared\n'
+    )
+    await upload_csv(client, alice_id, csv, auth=cookies)
+
+    response = await client.get(
+        f"/api/v1/reconciliation?year=2026&month=1&scope=all&person_id={alice_id}",
+        auth=cookies,
+    )
+    assert response.status_code == 200
+    rows = {t["merchant"]: t for t in response.json()["transactions"]}
+    assert rows["Employer"]["is_income"] is True
+    assert rows["Employer"]["is_transfer"] is False
+    assert rows["Restaurant"]["is_income"] is False
+    assert response.json()["transaction_count"] == 1

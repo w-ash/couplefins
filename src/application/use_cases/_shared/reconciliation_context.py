@@ -2,9 +2,9 @@ from uuid import UUID
 
 from attrs import define
 
-from src.domain.categories import get_transfer_categories
+from src.domain.categories import get_category_kinds, get_non_spending_categories
 from src.domain.entities.category import Category
-from src.domain.entities.category_group import CategoryGroup
+from src.domain.entities.category_group import CategoryGroup, GroupKind
 from src.domain.entities.person import Person
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
@@ -14,8 +14,10 @@ class ReconciliationContext:
     persons: list[Person]
     categories: list[Category]
     category_groups: list[CategoryGroup]
-    # Categories whose rows are money movement, not spending.
-    transfer_categories: frozenset[str]
+    # Each mapped category's group kind, and the ones that are not spending
+    # (transfer: money movement; income: money in).
+    category_kinds: dict[str, GroupKind]
+    non_spending_categories: frozenset[str]
 
     @property
     def person_ids(self) -> list[UUID]:
@@ -34,5 +36,8 @@ async def load_reconciliation_context(
         persons=persons,
         categories=categories,
         category_groups=category_groups,
-        transfer_categories=get_transfer_categories(categories, category_groups),
+        category_kinds=get_category_kinds(categories, category_groups),
+        non_spending_categories=get_non_spending_categories(
+            categories, category_groups
+        ),
     )

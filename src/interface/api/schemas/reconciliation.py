@@ -111,8 +111,10 @@ class TransactionResponse(BaseModel):
     household: bool
     is_excluded: bool
     is_settlement: bool
-    # Row is money movement (transfer-kind category): listed, never counted.
+    # Row is money movement (transfer-kind category) or money in (income-kind
+    # category): listed with a badge, never counted as spending.
     is_transfer: bool
+    is_income: bool
     original_date: datetime.date | None
     original_amount: MoneyField | None
 
@@ -218,7 +220,8 @@ class ReconciliationResponse(BaseModel):
                     household=tx.household,
                     is_excluded=tx.is_excluded,
                     is_settlement=tx.is_settlement,
-                    is_transfer=tx.category in result.transfer_categories,
+                    is_transfer=result.category_kinds.get(tx.category) == "transfer",
+                    is_income=result.category_kinds.get(tx.category) == "income",
                     original_date=tx.original_date,
                     original_amount=tx.original_amount,
                 )

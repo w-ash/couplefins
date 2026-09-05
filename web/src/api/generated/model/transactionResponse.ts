@@ -20,6 +20,7 @@ export interface TransactionResponse {
   is_excluded: boolean;
   is_settlement: boolean;
   is_transfer: boolean;
+  is_income: boolean;
   original_date: string | null;
   original_amount: number | null;
 }

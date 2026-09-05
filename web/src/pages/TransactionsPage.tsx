@@ -40,6 +40,7 @@ import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import type { ComboboxOption } from "@/components/Combobox";
 import { DateRangePicker } from "@/components/DateRangePicker";
+import { GroupKindPill } from "@/components/GroupKindPill";
 import { InlineSuccess } from "@/components/InlineSuccess";
 import { PageHeader } from "@/components/PageHeader";
 import {
@@ -61,7 +62,6 @@ import {
 } from "@/components/TransactionFilters";
 import { TransactionSearch } from "@/components/TransactionSearch";
 import { TransactionsHeaderCards } from "@/components/TransactionsHeaderCards";
-import { TransferPill } from "@/components/TransferPill";
 import { useSetToggle } from "@/hooks/useSetToggle";
 import { useTemporary } from "@/hooks/useTemporary";
 import { cn } from "@/lib/cn";
@@ -511,7 +511,8 @@ function TransactionRow({
                 aria-label="Linked settlement payment"
               />
             )}
-            {tx.is_transfer && <TransferPill />}
+            {tx.is_transfer && <GroupKindPill kind="transfer" />}
+            {tx.is_income && <GroupKindPill kind="income" />}
           </span>
         </td>
         <td

@@ -862,7 +862,7 @@ async def test_get_reconciliation_report_concise() -> None:
         month=3,
         latest_transaction_month=(2026, 3),
         spending_transactions=[],
-        transfer_categories=frozenset(),
+        category_kinds={},
     )
     with patch(
         "src.application.chat.tool_executor.execute_use_case",
@@ -910,7 +910,7 @@ async def test_get_reconciliation_report_detailed_adds_breakdown_and_rows() -> N
         month=3,
         latest_transaction_month=(2026, 3),
         spending_transactions=txns,
-        transfer_categories=frozenset(),
+        category_kinds={},
     )
     with patch(
         "src.application.chat.tool_executor.execute_use_case",
@@ -959,7 +959,7 @@ async def test_get_reconciliation_report_largest_lists_spending_rows_only() -> N
         spending_transactions=[
             t for t in listed if t.category != "Credit Card Payment"
         ],
-        transfer_categories=frozenset({"Credit Card Payment"}),
+        category_kinds={"Credit Card Payment": "transfer"},
     )
     with patch(
         "src.application.chat.tool_executor.execute_use_case",

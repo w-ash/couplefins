@@ -5,7 +5,11 @@ from attrs import define, field
 
 from src.application.use_cases._shared.command_validators import non_empty_string
 from src.application.use_cases._shared.entity_lookup import require_by_id
-from src.domain.entities.category_group import CategoryGroup, GroupKind
+from src.domain.entities.category_group import (
+    CategoryGroup,
+    GroupKind,
+    is_spending_kind,
+)
 from src.domain.exceptions import ValidationError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
@@ -36,15 +40,16 @@ class UpdateCategoryGroupUseCase:
             )
 
             # Every budget on the group blocks the flip, including the
-            # partner's personal ones — a transfer group carries none.
+            # partner's personal ones — only a spending group carries budgets.
             if (
-                command.kind == "transfer"
-                and existing.kind != "transfer"
+                not is_spending_kind(command.kind)
+                and is_spending_kind(existing.kind)
                 and await uow.category_group_budgets.get_by_group_id(command.id)
             ):
                 raise ValidationError(
                     "Remove this group's budgets (yours and your partner's) "
-                    "before marking it as a transfer group"
+                    f"before marking it as {'an' if command.kind == 'income' else 'a'} "
+                    f"{command.kind} group"
                 )
 
             updated = attrs.evolve(

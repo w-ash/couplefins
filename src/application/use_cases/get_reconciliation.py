@@ -26,6 +26,7 @@ from src.application.use_cases._shared.upload_status import (
     UploadStatus,
     build_upload_statuses,
 )
+from src.domain.entities.category_group import GroupKind
 from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
 from src.domain.reconciliation import (
@@ -98,11 +99,11 @@ class GetReconciliationResult:
     year: int | None
     month: int | None
     latest_transaction_month: tuple[int, int] | None
-    # `transactions` keeps transfer rows for display (badged via
-    # `transfer_categories`); `spending_transactions` is the same fetch with
-    # money movement dropped — what the summary was computed over.
+    # `transactions` keeps transfer and income rows for display (badged via
+    # `category_kinds`); `spending_transactions` is the same fetch with those
+    # dropped — what the summary was computed over.
     spending_transactions: list[Transaction]
-    transfer_categories: frozenset[str]
+    category_kinds: dict[str, GroupKind]
 
 
 @define(slots=True)
@@ -169,5 +170,5 @@ class GetReconciliationUseCase:
                 month=command.single_month[1] if command.single_month else None,
                 latest_transaction_month=latest_month,
                 spending_transactions=rows.spending,
-                transfer_categories=ctx.transfer_categories,
+                category_kinds=ctx.category_kinds,
             )

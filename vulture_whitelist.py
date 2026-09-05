@@ -134,3 +134,4 @@ if TYPE_CHECKING:
     from src.interface.api.schemas.reconciliation import TransactionResponse
 
     TransactionResponse.is_transfer  # response field — serialized, read by the web client
+    TransactionResponse.is_income  # response field — serialized, read by the web client

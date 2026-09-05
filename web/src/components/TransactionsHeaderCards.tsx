@@ -329,6 +329,7 @@ function ImportedCard({
             ["Partner-paid", buckets.partnerPaid],
             ["Settlement", buckets.settlement],
             ["Transfer", buckets.transfer],
+            ["Income", buckets.income],
             ["Excluded", buckets.excluded],
           ]}
           periodLabel={periodLabel}
@@ -522,9 +523,9 @@ function InViewInfo({ periodLabel }: { periodLabel: string }) {
   return (
     <p>
       Net total of the spending rows matching the active filters. Refunds reduce
-      the total; linked settlement transfers and Transfer-group rows don't count
-      (money movement, not spending). Filter-scoped — changes as you adjust
-      filters within {periodLabel}.
+      the total; linked settlement transfers and Transfer- or Income-group rows
+      don't count (money movement, not spending). Filter-scoped — changes as you
+      adjust filters within {periodLabel}.
     </p>
   );
 }

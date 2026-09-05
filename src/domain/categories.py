@@ -4,7 +4,11 @@ from uuid import UUID
 from attrs import Factory, define
 
 from src.domain.entities.category import Category
-from src.domain.entities.category_group import CategoryGroup
+from src.domain.entities.category_group import (
+    CategoryGroup,
+    GroupKind,
+    is_spending_kind,
+)
 
 
 @define(frozen=True, slots=True)
@@ -43,13 +47,33 @@ def get_personal_included_categories(categories: list[Category]) -> set[str]:
     return {c.name for c in categories if c.include_personal}
 
 
-def get_transfer_categories(
+def get_category_kinds(
+    categories: list[Category],
+    category_groups: list[CategoryGroup],
+) -> dict[str, GroupKind]:
+    """Each mapped category's group kind, by category name."""
+    kinds: dict[UUID, GroupKind] = {g.id: g.kind for g in category_groups}
+    result: dict[str, GroupKind] = {}
+    for c in categories:
+        if c.group_id is None:
+            continue
+        kind = kinds.get(c.group_id)
+        if kind is not None:
+            result[c.name] = kind
+    return result
+
+
+def get_non_spending_categories(
     categories: list[Category],
     category_groups: list[CategoryGroup],
 ) -> frozenset[str]:
-    """Names of categories whose group is money movement, not spending."""
-    transfer_group_ids = {g.id for g in category_groups if g.kind == "transfer"}
-    return frozenset(c.name for c in categories if c.group_id in transfer_group_ids)
+    """Names of categories whose group is not spending: money movement
+    (transfer) or money coming in (income)."""
+    return frozenset(
+        name
+        for name, kind in get_category_kinds(categories, category_groups).items()
+        if not is_spending_kind(kind)
+    )
 
 
 def group_category_breakdowns(

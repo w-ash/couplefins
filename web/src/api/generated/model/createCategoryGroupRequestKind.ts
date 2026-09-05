@@ -11,4 +11,5 @@ export type CreateCategoryGroupRequestKind = typeof CreateCategoryGroupRequestKi
 export const CreateCategoryGroupRequestKind = {
   expense: 'expense',
   transfer: 'transfer',
+  income: 'income',
 } as const;

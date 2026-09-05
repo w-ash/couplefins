@@ -162,10 +162,11 @@ async def test_finalized_period_raises() -> None:
     uow.category_group_budgets.save.assert_not_called()
 
 
-async def test_rejects_budget_on_transfer_group() -> None:
+@pytest.mark.parametrize("kind", ["transfer", "income"])
+async def test_rejects_budget_on_non_spending_group(kind) -> None:
     uow = make_mock_uow()
     uow.category_groups.get_by_id.return_value = make_category_group(
-        name="Transfer", kind="transfer"
+        name=kind.title(), kind=kind
     )
     command = SaveBudgetCommand(
         group_id=uow.category_groups.get_by_id.return_value.id,
@@ -174,6 +175,6 @@ async def test_rejects_budget_on_transfer_group() -> None:
         month=1,
     )
 
-    with pytest.raises(ValidationError, match="Transfer groups"):
+    with pytest.raises(ValidationError, match="Only spending groups"):
         await SaveBudgetUseCase().execute(command, uow)
     uow.category_group_budgets.save.assert_not_called()

@@ -11,4 +11,5 @@ export type CategoryGroupResponseKind = typeof CategoryGroupResponseKind[keyof t
 export const CategoryGroupResponseKind = {
   expense: 'expense',
   transfer: 'transfer',
+  income: 'income',
 } as const;

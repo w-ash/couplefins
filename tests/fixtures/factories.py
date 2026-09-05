@@ -154,6 +154,12 @@ def make_transfer_group() -> tuple[CategoryGroup, Category]:
     return group, make_category(name="Credit Card Payment", group_id=group.id)
 
 
+def make_income_group() -> tuple[CategoryGroup, Category]:
+    """The seeded Income group with its Paychecks category."""
+    group = make_category_group(name="Income", kind="income")
+    return group, make_category(name="Paychecks", group_id=group.id)
+
+
 def make_category_group_budget(
     *,
     id: uuid.UUID | None = None,

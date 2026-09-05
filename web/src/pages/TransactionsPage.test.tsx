@@ -29,6 +29,7 @@ function makeTx(overrides: Partial<TransactionResponse>): TransactionResponse {
     is_excluded: false,
     is_settlement: false,
     is_transfer: false,
+    is_income: false,
     original_date: null,
     original_amount: null,
     ...overrides,

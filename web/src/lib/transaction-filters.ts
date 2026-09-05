@@ -9,17 +9,18 @@ export function hasDiscussTag(tx: TransactionResponse): boolean {
   return tx.tags.some((t) => t.toLowerCase() === DISCUSS_TAG);
 }
 
-// Money movement, not spending: a linked settlement leg or a transfer-kind
-// row (credit card payment, account transfer — the server marks these).
-function isMoneyMovement(tx: TransactionResponse): boolean {
-  return tx.is_settlement || tx.is_transfer;
+// Not spending: a linked settlement leg, a transfer-kind row (credit card
+// payment, account transfer), or an income-kind row (paycheck) — the server
+// marks the last two from the category's group.
+function isNotSpending(tx: TransactionResponse): boolean {
+  return tx.is_settlement || tx.is_transfer || tx.is_income;
 }
 
 // Household spending. Money movement — linked settlement legs and
 // transfer-kind rows — is never spending, so the three spending-scope
 // predicates all drop it; only the "all" scope keeps it visible.
 export function isInHouseholdScope(tx: TransactionResponse): boolean {
-  return tx.household && !isMoneyMovement(tx);
+  return tx.household && !isNotSpending(tx);
 }
 
 // The current user's share percentage of a row: their split when they paid,
@@ -52,7 +53,7 @@ export function isInPersonalScope(
   tx: TransactionResponse,
   currentPersonId: string | null,
 ): boolean {
-  if (isMoneyMovement(tx)) return false;
+  if (isNotSpending(tx)) return false;
   if (!currentPersonId) return !tx.household;
   return myPercentage(tx, currentPersonId) > 0;
 }
@@ -67,7 +68,7 @@ export function isInSpottedScope(
   currentPersonId: string | null,
 ): boolean {
   if (!currentPersonId) return false;
-  if (isMoneyMovement(tx)) return false;
+  if (isNotSpending(tx)) return false;
   return tx.payer_person_id === currentPersonId && tx.payer_percentage === 0;
 }
 
@@ -76,9 +77,15 @@ export function isSettlementLinked(tx: TransactionResponse): boolean {
 }
 
 /** A row that counts toward spending totals: not a linked settlement leg,
- * not excluded, not money movement (the server marks transfer-kind rows). */
+ * not excluded, not money movement or income (the server marks those from
+ * the category's group kind). */
 export function isSpendingRow(tx: TransactionResponse): boolean {
-  return !isSettlementLinked(tx) && !tx.is_excluded && !tx.is_transfer;
+  return (
+    !isSettlementLinked(tx) &&
+    !tx.is_excluded &&
+    !tx.is_transfer &&
+    !tx.is_income
+  );
 }
 
 // Upload-preview classification. Preview rows are always paid by the
@@ -146,6 +153,7 @@ export interface ReconciliationBuckets {
   settlement: BucketStat;
   excluded: BucketStat;
   transfer: BucketStat;
+  income: BucketStat;
 }
 
 function emptyStat(): BucketStat {
@@ -174,6 +182,7 @@ export function bucketTransactions(
     settlement: emptyStat(),
     excluded: emptyStat(),
     transfer: emptyStat(),
+    income: emptyStat(),
   };
 
   for (const tx of transactions) {
@@ -194,6 +203,12 @@ export function bucketTransactions(
     // household nor personal spending.
     if (tx.is_transfer) {
       add(buckets.transfer, abs);
+      continue;
+    }
+
+    // Money in (paychecks, dividends) is not spending either.
+    if (tx.is_income) {
+      add(buckets.income, abs);
       continue;
     }
 

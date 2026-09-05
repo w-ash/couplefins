@@ -59,15 +59,27 @@ async def test_rename_keeps_transfer_kind_when_passed() -> None:
     uow.category_group_budgets.get_by_group_id.assert_not_called()
 
 
-async def test_rejects_transfer_flip_while_group_has_budgets() -> None:
+@pytest.mark.parametrize("kind", ["transfer", "income"])
+async def test_rejects_non_spending_flip_while_group_has_budgets(kind) -> None:
     uow = make_mock_uow()
     group = make_category_group(name="Food & Dining")
     uow.category_groups.get_by_id.return_value = group
     uow.category_group_budgets.get_by_group_id.return_value = [
         make_category_group_budget(group_id=group.id)
     ]
-    command = UpdateCategoryGroupCommand(id=group.id, name=group.name, kind="transfer")
+    command = UpdateCategoryGroupCommand(id=group.id, name=group.name, kind=kind)
 
-    with pytest.raises(ValidationError, match="budgets"):
+    with pytest.raises(ValidationError, match=f"budgets.*{kind} group"):
         await UpdateCategoryGroupUseCase().execute(command, uow)
     uow.category_groups.save.assert_not_called()
+
+
+async def test_marks_group_as_income() -> None:
+    uow = make_mock_uow()
+    group = make_category_group(name="Income")
+    uow.category_groups.get_by_id.return_value = group
+    uow.category_group_budgets.get_by_group_id.return_value = []
+    command = UpdateCategoryGroupCommand(id=group.id, name="Income", kind="income")
+
+    await UpdateCategoryGroupUseCase().execute(command, uow)
+    assert uow.category_groups.save.call_args[0][0].kind == "income"

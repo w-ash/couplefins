@@ -172,7 +172,7 @@ Making sure the data is right before settling. This is solo prep work — each p
 **US-REVIEW-7** (v0.9.x): As a partner, I want to filter transactions by classification type.
 
 - Given the transaction table, then I can filter by type: All / Shared / Spotted / Household / Personal
-- Given a row in a transfer-kind category (credit card payment, account transfer), then it appears only under All, with a "Transfer" badge, and the header-card totals leave it out (v1.12.1)
+- Given a row in a transfer-kind category (credit card payment, account transfer), then it appears only under All, with a "Transfer" badge, and the header-card totals leave it out (v1.12.1); an income-kind row (paycheck) behaves the same with an "Income" badge (v1.13.3)
 - Given the spotted filter, then I see only transactions I fronted for my partner (or they fronted for me)
 - Given the household filter, then I see transactions relevant to the couple but not split — shared experiences paid individually
 - Given the personal filter, then I see every spending row where my share is positive — my share of household splits, my own personal rows, and what my partner spotted for me — and the "In view" total is the sum of my shares, so it matches Insights and Dashboard "my spending" (v1.13.0). A row where my share is zero (my partner's own `s100` ticket) does not appear
@@ -514,6 +514,8 @@ Setup and maintenance tasks that happen occasionally, not monthly.
 - Given a Transfer row on the Transactions page, then it is listed under All with a "Transfer" badge and left out of the In view total; Household / Personal / Spotted omit it
 - Given a Venmo leg categorized as a transfer, then Settle Up still offers it as a settlement candidate
 - Given a transfer that is really an expense, then I change that row's category to a spending category in the editor, as today
+- Given Settings → Category Groups, then a group can also count as Income (paychecks, dividends); an Income group shows an "Income" pill and the same caption, its rows are excluded from spending, budgets, and settlement in every scope, and the seeded "Income" group is Income on deploy (v1.13.3)
+- Given an Income row on the Transactions page, then it is listed under All with an "Income" badge, left out of the In view total, and never enters My Spending as a negative expense (v1.13.3)
 
 ### Asking Questions (v1.5.x)
 

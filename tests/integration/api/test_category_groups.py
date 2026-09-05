@@ -117,11 +117,12 @@ async def test_unmapped_categories_empty_when_no_transactions(
     assert response.json() == []
 
 
-async def test_seeded_transfer_group_is_transfer_kind(client: AsyncClient) -> None:
+async def test_seeded_groups_carry_their_kind(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
     groups = (await client.get("/api/v1/category-groups", auth=cookies)).json()
     kinds = {g["name"]: g["kind"] for g in groups}
     assert kinds["Transfer"] == "transfer"
+    assert kinds["Income"] == "income"
     assert kinds["Food & Dining"] == "expense"
 
 

@@ -2,6 +2,7 @@
 and the only place the transfer rule is applied. Two grep gates enforce it."""
 
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 import re
 
@@ -21,6 +22,7 @@ from src.domain.repositories.transaction_repository import (
 )
 from tests.fixtures.factories import (
     ALICE,
+    make_income_group,
     make_person,
     make_transaction,
     make_transfer_group,
@@ -131,9 +133,9 @@ async def test_latest_spending_month_excludes_transfer_categories() -> None:
 
     assert await fetch_latest_spending_month(uow, ctx) == (2026, 2)
     uow.transactions.get_latest_household_transaction_date.assert_called_once_with(
-        excluding_categories=ctx.transfer_categories
+        excluding_categories=ctx.non_spending_categories
     )
-    assert "Credit Card Payment" in ctx.transfer_categories
+    assert "Credit Card Payment" in ctx.non_spending_categories
 
 
 async def test_latest_spending_month_is_none_without_rows() -> None:
@@ -161,11 +163,38 @@ def test_transfer_rule_is_applied_only_in_the_reads_module() -> None:
     offenders = [
         str(path.relative_to(_APPLICATION.parent.parent))
         for path in _APPLICATION.rglob("*.py")
-        if path != _READS_MODULE and "exclude_transfers" in path.read_text()
+        if path != _READS_MODULE and "exclude_non_spending" in path.read_text()
     ]
     assert offenders == [], (
-        f"exclude_transfers belongs in transaction_reads: {offenders}"
+        f"exclude_non_spending belongs in transaction_reads: {offenders}"
     )
+
+
+async def test_income_rows_are_not_spending_under_any_scope() -> None:
+    """A paycheck is money in: listed, badged, never a (negative) expense."""
+    uow = make_mock_uow()
+    transfer, card_payment = make_transfer_group()
+    income, paychecks = make_income_group()
+    uow.persons.get_all.return_value = [ALICE]
+    uow.category_groups.get_all.return_value = [transfer, income]
+    uow.categories.get_all.return_value = [card_payment, paychecks]
+    ctx = await load_reconciliation_context(uow)
+    dinner, _, _ = _rows()
+    paycheck = make_transaction(
+        category="Paychecks",
+        household=False,
+        payer_person_id=ALICE.id,
+        payer_percentage=100,
+        amount=Decimal("5000.00"),
+        tags=(),
+    )
+    uow.transactions.get_by_year.return_value = [dinner, paycheck]
+    uow.transactions.get_by_date_range.return_value = [dinner, paycheck]
+
+    assert await fetch_year_spending_rows(uow, 2026, "personal", ctx) == [dinner]
+    rows = await fetch_scoped_rows(uow, ctx, WINDOW, "personal", ALICE.id)
+    assert (rows.listed, rows.spending) == ([dinner, paycheck], [dinner])
+    assert ctx.category_kinds["Paychecks"] == "income"
 
 
 async def test_personal_scope_is_every_row_where_my_share_is_positive() -> None:

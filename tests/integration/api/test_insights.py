@@ -292,3 +292,24 @@ async def test_credit_card_payments_are_not_spending(client: AsyncClient) -> Non
         assert data["monthly_totals"] == [
             {"year": 2026, "month": 1, "total_amount": expected}
         ]
+
+
+PAYCHECK_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags
+2026-01-05,Employer,Paychecks,Chase,PAYROLL,,5000.00,
+2026-01-11,Book Store,Dining Out,Chase,BOOK STORE,,-40.00,
+"""
+
+
+async def test_paychecks_are_not_personal_spending(client: AsyncClient) -> None:
+    persons, alice = await setup_and_login(client)
+    await upload_csv(client, persons[0]["id"], PAYCHECK_CSV, auth=alice)
+
+    resp = await client.get(
+        "/api/v1/insights/spending-trends",
+        params={"year": 2026, "month": 1, "scope": "personal"},
+        auth=alice,
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["monthly_totals"] == [{"year": 2026, "month": 1, "total_amount": 40.0}]
+    assert [c["category"] for c in data["month_flow"]["cells"]] == ["Dining Out"]

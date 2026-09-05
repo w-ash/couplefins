@@ -422,7 +422,7 @@ async def test_budget_on_transfer_group_rejected(client: AsyncClient) -> None:
         auth=cookies,
     )
     assert response.status_code == 422
-    assert "Transfer groups" in response.text
+    assert "Only spending groups" in response.text
 
 
 async def test_overview_has_no_transfer_row(client: AsyncClient) -> None:
