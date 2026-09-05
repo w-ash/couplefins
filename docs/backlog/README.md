@@ -190,6 +190,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.13.1 | Spending flow dataset (source → group → category), category comparisons, one Transactions link builder ([spec](v1.13.x.md)) | Completed (2026-09-05) | M |
 | v1.13.2 | Insights redesign — Sankey / donut / bars with drill-down, monthly stack, group table, notable list, every figure deep-linked ([spec](v1.13.x.md)) | Completed (2026-09-05) | L |
 | v1.13.3 | Income-kind category groups — paychecks are income, not spending ([spec](v1.13.x.md)) | Completed (2026-09-05) | M |
+| v1.13.4 | Category setup parity with Monarch — four groups, 21 mappings, seed fixture regenerated ([spec](v1.13.x.md)) | Completed (2026-09-05) | S |
 
 ## Infrastructure Readiness
 

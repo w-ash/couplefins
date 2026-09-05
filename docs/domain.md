@@ -154,8 +154,12 @@ Monarch Money has ~75 transaction categories (e.g., "Groceries & Home Supplies",
 - **Gifts & Donations**: Charity, gifts
 - **Financial**: Loans, fees, cash & ATM, taxes
 - **Transfer** (kind `transfer`): Transfer, credit card payment, balance adjustment — money movement, not spending
+- **Income** (kind `income`): Paychecks, interest, dividends, business income — money in, not spending
+- **Rent**: Rent alone, so the couple's largest split has its own line
+- **Work** and **Professional**: Work reimbursable expenses; coding tools and networking
+- **Other**, **Business**, **Children**, **Education**: Monarch's remaining default groups, seeded so a new category never lands unmapped
 
-Each Monarch category maps to exactly one group. The initial mapping is seeded from a JSON fixture file (`data/category_groups.json`) and can be updated via the app as new categories appear.
+Each Monarch category maps to exactly one group. The initial mapping is seeded from a JSON fixture file (`data/category_groups.json`), kept in step with the couple's Monarch category settings (last reconciled 2026-09-05), and can be updated via the app as new categories appear.
 
 ## Category Group Budgets
 
