@@ -97,12 +97,16 @@ async def test_scoped_rows_list_transfers_but_do_not_spend_them() -> None:
     dinner, card, personal = _rows()
     uow.transactions.get_household_by_date_range.return_value = [dinner, card]
     uow.transactions.get_by_person_and_date_range.return_value = [dinner, personal]
+    uow.transactions.get_by_date_range.return_value = [dinner, card, personal]
 
     household = await fetch_scoped_rows(uow, ctx, WINDOW, "household")
     assert (household.listed, household.spending) == ([dinner, card], [dinner])
 
     personal_rows = await fetch_scoped_rows(uow, ctx, WINDOW, "personal", ALICE.id)
-    assert personal_rows.listed == [personal]
+    assert (personal_rows.listed, personal_rows.spending) == (
+        [dinner, card, personal],
+        [dinner, personal],
+    )
 
     both = await fetch_scoped_rows(uow, ctx, WINDOW, "all", ALICE.id)
     assert both.listed == [dinner, card, personal]
@@ -162,3 +166,37 @@ def test_transfer_rule_is_applied_only_in_the_reads_module() -> None:
     assert offenders == [], (
         f"exclude_transfers belongs in transaction_reads: {offenders}"
     )
+
+
+async def test_personal_scope_is_every_row_where_my_share_is_positive() -> None:
+    """The Transactions personal list reconciles to Insights "My Spending":
+    my share of household splits, my own rows, and what my partner spotted
+    for me — never a row where my share is zero."""
+    uow, ctx = await _ctx()
+    bob = make_person(name="Bob")
+    split_rent = make_transaction(
+        category="Rent", payer_person_id=bob.id, payer_percentage=50
+    )
+    partner_ticket = make_transaction(
+        category="Concerts", payer_person_id=bob.id, payer_percentage=100
+    )
+    spotted_for_me = make_transaction(
+        category="Parking", household=False, payer_person_id=bob.id, payer_percentage=0
+    )
+    i_spotted = make_transaction(
+        category="Parking",
+        household=False,
+        payer_person_id=ALICE.id,
+        payer_percentage=0,
+    )
+    uow.transactions.get_by_date_range.return_value = [
+        split_rent,
+        partner_ticket,
+        spotted_for_me,
+        i_spotted,
+    ]
+
+    rows = await fetch_scoped_rows(uow, ctx, WINDOW, "personal", ALICE.id)
+
+    assert rows.listed == [split_rent, spotted_for_me]
+    uow.transactions.get_by_date_range.assert_called_once_with(*WINDOW, tags=None)

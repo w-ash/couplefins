@@ -4,14 +4,13 @@
  * Couplefins
  * OpenAPI spec version: 0.1.0
  */
-import type { BudgetLineItem } from './budgetLineItem';
+import type { CategoryComparisonItem } from './categoryComparisonItem';
 import type { GroupComparisonItem } from './groupComparisonItem';
 import type { GroupSummaryItem } from './groupSummaryItem';
 import type { MonthlyGroupSpendingItem } from './monthlyGroupSpendingItem';
-import type { MonthlyPersonPaidItem } from './monthlyPersonPaidItem';
-import type { MonthlySettlementItem } from './monthlySettlementItem';
 import type { MonthlyTotalItem } from './monthlyTotalItem';
 import type { PersonResponse } from './personResponse';
+import type { SpendingFlowItem } from './spendingFlowItem';
 
 export interface SpendingTrendsResponse {
   year: number;
@@ -20,9 +19,9 @@ export interface SpendingTrendsResponse {
   monthly_totals: MonthlyTotalItem[];
   group_summaries: GroupSummaryItem[];
   comparison_cards: GroupComparisonItem[];
-  budget_lines: BudgetLineItem[];
-  settlement_trend: MonthlySettlementItem[];
-  monthly_person_paid: MonthlyPersonPaidItem[];
+  category_comparisons: CategoryComparisonItem[];
+  month_flow: SpendingFlowItem;
+  ytd_flow: SpendingFlowItem;
   persons: PersonResponse[];
   comparison_monthly_group_spending: MonthlyGroupSpendingItem[];
 }

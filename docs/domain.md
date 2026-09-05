@@ -123,6 +123,8 @@ Budget, Insights, and the Dashboard all compute "spending" through one domain mo
 | Split (reconcile only) | `payer_percentage < 100`, household or not | full signed amount | none |
 | All rows (Dashboard "all" scope) | every reconciliation-relevant row, household or not | full signed amount | the payer (household + personal partition the total) |
 
+Each lens also names a row's **flow source** for the Insights Sankey: full-amount lenses answer with the payer (`payer`); a person's lens answers with the kind of claim they have on the row — `household_share` (their share of a household row), `personal` (a non-household row they paid), or `spotted_for_me` (a non-household row their partner paid that they owe part of). `compute_spending_flow` in `src/domain/insights.py` accumulates (source, category) cells for a month or a year to date; the cells sum to the lens total, so the flow chart, the donut, and the group table on Insights all agree with the headline.
+
 Consequences of the personal rule: a household row where the viewer's share is $0 belongs to the **household view only**. If both partners buy their own concert ticket and tag it `household`, the household view shows both tickets and each partner's personal view shows only their own. A row the partner spotted for the viewer is the viewer's personal spending. Refunds net under every lens (the signed-amount convention): an expense adds, a refund subtracts, so a refund-heavy month can go negative.
 
 ### Settlement vs. budget

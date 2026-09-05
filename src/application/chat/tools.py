@@ -112,9 +112,10 @@ SEARCH_TRANSACTIONS_SCHEMA: dict[str, object] = {
         "— use this when finding transactions to tag, re-categorize, or "
         "re-split, since those actions aren't limited to household rows. "
         "'household' searches only household-flagged transactions. "
-        "'personal' searches the current user's personal spending "
-        "(their own non-household transactions, plus their share of "
-        "transactions where a partner fronted money on their behalf). "
+        "'personal' searches every transaction where the current user's "
+        "share is positive: their share of household splits, their own "
+        "non-household transactions, and what a partner fronted on their "
+        'behalf — the same rule as Insights and Dashboard "my spending". '
         "Returns up to 20 matching transactions with date, merchant, "
         "category, amount, payer, split ratio, and household flag, plus "
         "the total count of matches."
@@ -191,8 +192,9 @@ GET_SPENDING_TRENDS_SCHEMA: dict[str, object] = {
         "year-over-year analysis. Supports household scope (full amounts "
         "of household rows) and personal scope (the current user's share "
         "of household rows plus their personal spending and what their "
-        "partner spotted for them). Does not include budget amounts — use "
-        "get_budget_overview for budget comparisons."
+        "partner spotted for them). Also lists the year's top merchants by "
+        "amount. Does not include budget amounts — use get_budget_overview "
+        "for budget comparisons."
     ),
     "input_schema": {
         "type": "object",

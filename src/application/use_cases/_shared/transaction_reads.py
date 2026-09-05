@@ -17,6 +17,7 @@ from src.application.use_cases._shared.reconciliation_context import (
 )
 from src.domain.entities.transaction import Transaction
 from src.domain.filters import exclude_transfers
+from src.domain.person_spending import compute_person_share
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 type DateWindow = tuple[date, date]
@@ -79,15 +80,15 @@ async def fetch_scoped_rows(
     *,
     tags: tuple[str, ...] | None = None,
 ) -> ScopedRows:
-    """Rows for a scoped list page. Personal = the person's own
-    non-household rows (household rows they paid are household spending);
+    """Rows for a scoped list page. Personal = every row where the person's
+    share is positive (`PersonalLens`): their share of household splits,
+    their own personal rows, and what their partner spotted for them — so
+    the list sums to the Insights and Dashboard "my spending" figure.
     "all" with a person = household rows plus that person's own personal rows."""
     start, end = window
     if scope == "personal" and person_id is not None:
-        person_txs = await uow.transactions.get_by_person_and_date_range(
-            person_id, start, end, tags=tags
-        )
-        listed = [tx for tx in person_txs if not tx.household]
+        window_txs = await uow.transactions.get_by_date_range(start, end, tags=tags)
+        listed = [tx for tx in window_txs if compute_person_share(tx, person_id) > 0]
     elif scope == "all" and person_id is not None:
         household_txs = await uow.transactions.get_household_by_date_range(
             start, end, tags=tags

@@ -1,5 +1,4 @@
 from datetime import UTC, datetime
-from decimal import Decimal
 from uuid import UUID
 
 from attrs import define, field
@@ -14,24 +13,22 @@ from src.application.use_cases._shared.command_validators import (
 from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
-from src.application.use_cases._shared.settlement_math import load_ledger
 from src.application.use_cases._shared.transaction_reads import (
     fetch_year_spending_rows,
 )
 from src.domain.categories import build_category_lookup
-from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.entities.person import Person
 from src.domain.insights import (
+    CategoryComparison,
     GroupComparison,
     MonthlyGroupSpending,
-    MonthlyPersonPaid,
-    MonthlySettlement,
+    SpendingFlow,
     SpendingTrends,
+    compute_category_comparisons,
     compute_comparison_cards,
-    compute_person_paid_by_month,
+    compute_spending_flow,
     compute_spending_trends,
 )
-from src.domain.ledger import MonthSettlementStatus, SettlementLedger
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -53,20 +50,11 @@ class GetSpendingTrendsResult:
     month: int
     trends: SpendingTrends
     comparison_cards: list[GroupComparison]
-    budget_lines: dict[UUID, dict[int, Decimal]]
-    settlement_trend: list[MonthlySettlement]
-    monthly_person_paid: list[MonthlyPersonPaid]
+    category_comparisons: list[CategoryComparison]
+    month_flow: SpendingFlow
+    ytd_flow: SpendingFlow
     persons: list[Person]
     comparison_monthly_group_spending: list[MonthlyGroupSpending] = field(factory=list)
-
-
-def _build_budget_lines(
-    budgets: list[CategoryGroupBudget],
-) -> dict[UUID, dict[int, Decimal]]:
-    result: dict[UUID, dict[int, Decimal]] = {}
-    for b in budgets:
-        result.setdefault(b.group_id, {})[b.month] = b.monthly_amount
-    return result
 
 
 def _resolve_months(command: GetSpendingTrendsCommand) -> tuple[int, int]:
@@ -76,27 +64,6 @@ def _resolve_months(command: GetSpendingTrendsCommand) -> tuple[int, int]:
     target_month = command.month or now.month
     through_month = target_month if command.year == now.year else 12
     return target_month, through_month
-
-
-def _build_settlement_trend(
-    ledger: SettlementLedger, year: int
-) -> list[MonthlySettlement]:
-    # Ledger months cover settlement-relevant rows (payer_percentage < 100,
-    # household or not) — matching Dashboard/Settle Up — so a month whose only
-    # settlement signal is a spotted / personal-split row is not dropped.
-    return [
-        MonthlySettlement(
-            year=year,
-            month=row.month,
-            amount=row.charged.amount,
-            from_person_id=row.charged.from_person_id,
-            to_person_id=row.charged.to_person_id,
-            is_settled=row.status is MonthSettlementStatus.SETTLED,
-            status=row.status,
-        )
-        for row in ledger.months
-        if row.year == year and row.charged is not None
-    ]
 
 
 @define(slots=True)
@@ -124,24 +91,24 @@ class GetSpendingTrendsUseCase:
             comparison_cards = compute_comparison_cards(
                 year_txs, category_lookup, target_month, person_id=command.person_id
             )
-
-            # Household budgets (person_id=None) or the person's own budgets.
-            year_budgets = await uow.category_group_budgets.get_by_year(
-                command.year, command.person_id
+            category_comparisons = compute_category_comparisons(
+                year_txs, category_lookup, target_month, person_id=command.person_id
             )
-            budget_lines = _build_budget_lines(year_budgets)
 
-            # "Who's paying" (who fronted the household money, settlement
-            # trend) is a couple-level fact with no personal reading; the
-            # personal page hides it, so skip the all-time ledger work.
-            settlement_trend: list[MonthlySettlement] = []
-            monthly_person_paid: list[MonthlyPersonPaid] = []
-            if command.scope == "household":
-                ledger = (await load_ledger(uow, ctx)).ledger
-                settlement_trend = _build_settlement_trend(ledger, command.year)
-                monthly_person_paid = compute_person_paid_by_month(
-                    year_txs, category_lookup
-                )
+            # Both flows come from the rows already fetched; the YTD window
+            # ends at `through_month`, so its cells sum to the YTD summaries.
+            month_flow = compute_spending_flow(
+                year_txs,
+                category_lookup,
+                person_id=command.person_id,
+                months={target_month},
+            )
+            ytd_flow = compute_spending_flow(
+                year_txs,
+                category_lookup,
+                person_id=command.person_id,
+                months=range(1, through_month + 1),
+            )
 
             comparison_monthly_group_spending: list[MonthlyGroupSpending] = []
             if command.comparison_year is not None:
@@ -161,9 +128,9 @@ class GetSpendingTrendsUseCase:
                 month=target_month,
                 trends=trends,
                 comparison_cards=comparison_cards,
-                budget_lines=budget_lines,
-                settlement_trend=settlement_trend,
-                monthly_person_paid=monthly_person_paid,
+                category_comparisons=category_comparisons,
+                month_flow=month_flow,
+                ytd_flow=ytd_flow,
                 persons=ctx.persons,
                 comparison_monthly_group_spending=comparison_monthly_group_spending,
             )

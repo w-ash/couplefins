@@ -16,6 +16,7 @@ from tests.fixtures.factories import (
 from tests.fixtures.mocks import make_mock_uow
 
 ALICE_ID = uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+BOB_ID = uuid.UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
 GROUP_ID = uuid.UUID("11111111-1111-1111-1111-111111111111")
 
 
@@ -50,9 +51,9 @@ async def test_household_scope_uses_household_fetch() -> None:
 
 
 @pytest.mark.asyncio
-async def test_personal_scope_uses_person_fetch() -> None:
+async def test_personal_scope_reads_the_window_and_keeps_my_share() -> None:
     uow = make_mock_uow()
-    uow.transactions.get_by_person_and_date_range.return_value = [
+    uow.transactions.get_by_date_range.return_value = [
         make_transaction(
             merchant="Whole Foods", payer_person_id=ALICE_ID, household=False
         ),
@@ -64,21 +65,25 @@ async def test_personal_scope_uses_person_fetch() -> None:
     result = await SearchTransactionsUseCase().execute(command, uow)
 
     assert result.total_count == 1
-    uow.transactions.get_by_person_and_date_range.assert_called_once()
-    call_args = uow.transactions.get_by_person_and_date_range.call_args
-    assert call_args.args[0] == ALICE_ID
-    uow.transactions.get_by_date_range.assert_not_called()
+    uow.transactions.get_by_date_range.assert_called_once()
     uow.transactions.get_household_by_date_range.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_personal_scope_excludes_household_rows() -> None:
-    """Personal = the user's own non-household spending; household rows they
-    paid are household spending, not personal (matches the tool contract)."""
+async def test_personal_scope_is_every_row_where_my_share_is_positive() -> None:
+    """Personal = the user's share of household splits, their own rows, and
+    what their partner spotted for them; a row where their share is zero is
+    not theirs (matches the Transactions page and Insights "My Spending")."""
     uow = make_mock_uow()
-    uow.transactions.get_by_person_and_date_range.return_value = [
+    uow.transactions.get_by_date_range.return_value = [
         make_transaction(merchant="Rent", payer_person_id=ALICE_ID, household=True),
         make_transaction(merchant="Hobby", payer_person_id=ALICE_ID, household=False),
+        make_transaction(
+            merchant="Their ticket",
+            payer_person_id=BOB_ID,
+            household=True,
+            payer_percentage=100,
+        ),
     ]
 
     command = SearchTransactionsCommand(
@@ -86,8 +91,8 @@ async def test_personal_scope_excludes_household_rows() -> None:
     )
     result = await SearchTransactionsUseCase().execute(command, uow)
 
-    assert result.total_count == 1
-    assert result.transactions[0].merchant == "Hobby"
+    assert result.total_count == 2
+    assert {t.merchant for t in result.transactions} == {"Rent", "Hobby"}
 
 
 def test_personal_scope_requires_person_id() -> None:

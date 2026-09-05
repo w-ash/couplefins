@@ -12,9 +12,7 @@ from src.domain.exceptions import ValidationError
 from tests.fixtures.factories import (
     make_category,
     make_category_group,
-    make_category_group_budget,
     make_person,
-    make_settlement,
     make_transaction,
     make_transfer_group,
 )
@@ -117,8 +115,9 @@ async def test_no_data() -> None:
     assert result.trends.monthly_totals == []
     assert result.trends.group_summaries == []
     assert result.comparison_cards == []
-    assert result.budget_lines == {}
-    assert result.settlement_trend == []
+    assert result.category_comparisons == []
+    assert result.month_flow.cells == []
+    assert result.ytd_flow.cells == []
 
 
 def test_invalid_year() -> None:
@@ -163,225 +162,6 @@ async def test_comparison_cards_computed() -> None:
     assert card.group_id == food_group.id
     assert card.current_month_amount == Decimal("200.00")
     assert card.trailing_average == Decimal("100.00")
-
-
-async def test_budget_lines_populated() -> None:
-    uow, alice, _, food_group = _setup_uow()
-    uow.transactions.get_household_by_year.return_value = [
-        make_transaction(
-            date=date(2026, 1, 10),
-            category="Dining Out",
-            amount=Decimal("-50.00"),
-            payer_person_id=alice.id,
-        ),
-    ]
-    uow.category_group_budgets.get_by_year.return_value = [
-        make_category_group_budget(
-            group_id=food_group.id,
-            monthly_amount=Decimal("500.00"),
-            year=2026,
-            month=1,
-        ),
-    ]
-
-    command = GetSpendingTrendsCommand(year=2026, month=1)
-    result = await GetSpendingTrendsUseCase().execute(command, uow)
-
-    assert food_group.id in result.budget_lines
-    assert result.budget_lines[food_group.id] == {1: Decimal("500.00")}
-
-
-async def test_budget_lines_empty_when_no_budgets() -> None:
-    uow, _, _, _ = _setup_uow()
-    uow.transactions.get_household_by_year.return_value = []
-
-    command = GetSpendingTrendsCommand(year=2026, month=1)
-    result = await GetSpendingTrendsUseCase().execute(command, uow)
-
-    assert result.budget_lines == {}
-
-
-async def test_budget_lines_per_month() -> None:
-    uow, alice, _, food_group = _setup_uow()
-    uow.transactions.get_household_by_year.return_value = [
-        make_transaction(
-            date=date(2026, 1, 10),
-            category="Dining Out",
-            amount=Decimal("-50.00"),
-            payer_person_id=alice.id,
-        ),
-    ]
-    uow.category_group_budgets.get_by_year.return_value = [
-        make_category_group_budget(
-            group_id=food_group.id,
-            monthly_amount=Decimal("500.00"),
-            year=2026,
-            month=1,
-        ),
-        make_category_group_budget(
-            group_id=food_group.id,
-            monthly_amount=Decimal("600.00"),
-            year=2026,
-            month=2,
-        ),
-    ]
-
-    command = GetSpendingTrendsCommand(year=2026, month=2)
-    result = await GetSpendingTrendsUseCase().execute(command, uow)
-
-    assert result.budget_lines[food_group.id] == {
-        1: Decimal("500.00"),
-        2: Decimal("600.00"),
-    }
-
-
-async def test_budget_lines_sparse_months() -> None:
-    uow, alice, _, food_group = _setup_uow()
-    uow.transactions.get_household_by_year.return_value = [
-        make_transaction(
-            date=date(2026, 1, 10),
-            category="Dining Out",
-            amount=Decimal("-50.00"),
-            payer_person_id=alice.id,
-        ),
-    ]
-    uow.category_group_budgets.get_by_year.return_value = [
-        make_category_group_budget(
-            group_id=food_group.id,
-            monthly_amount=Decimal("500.00"),
-            year=2026,
-            month=1,
-        ),
-        make_category_group_budget(
-            group_id=food_group.id,
-            monthly_amount=Decimal("500.00"),
-            year=2026,
-            month=3,
-        ),
-    ]
-
-    command = GetSpendingTrendsCommand(year=2026, month=3)
-    result = await GetSpendingTrendsUseCase().execute(command, uow)
-
-    months = result.budget_lines[food_group.id]
-    assert 1 in months
-    assert 2 not in months  # null semantics: absent, not 0
-    assert 3 in months
-
-
-async def test_settlement_trend_populated() -> None:
-    uow, alice, _bob, _food_group = _setup_uow()
-    txs = [
-        make_transaction(
-            date=date(2026, 1, 10),
-            category="Dining Out",
-            amount=Decimal("-100.00"),
-            payer_person_id=alice.id,
-        ),
-        make_transaction(
-            date=date(2026, 2, 10),
-            category="Dining Out",
-            amount=Decimal("-80.00"),
-            payer_person_id=alice.id,
-        ),
-    ]
-    uow.transactions.get_household_by_year.return_value = txs
-    # The settlement trend is computed over settlement-relevant rows (ledger).
-    uow.transactions.get_all_settlement_relevant.return_value = txs
-
-    command = GetSpendingTrendsCommand(year=2026, month=2)
-    result = await GetSpendingTrendsUseCase().execute(command, uow)
-
-    assert len(result.settlement_trend) == 2
-    jan = result.settlement_trend[0]
-    assert jan.month == 1
-    assert jan.amount > 0
-    assert jan.is_settled is False
-    assert jan.status == "carried_forward"
-
-
-async def test_settlement_trend_marks_settled() -> None:
-    uow, alice, bob, _food_group = _setup_uow()
-    txs = [
-        make_transaction(
-            date=date(2026, 1, 10),
-            category="Dining Out",
-            amount=Decimal("-100.00"),
-            payer_person_id=alice.id,
-        ),
-    ]
-    uow.transactions.get_household_by_year.return_value = txs
-    uow.transactions.get_all_settlement_relevant.return_value = txs
-    # Settlement that covers the owed amount
-    uow.settlements.get_all.return_value = [
-        make_settlement(
-            amount=Decimal("50.00"),
-            from_person_id=bob.id,
-            to_person_id=alice.id,
-            settled_at=datetime(2026, 1, 31, tzinfo=UTC),
-        ),
-    ]
-
-    command = GetSpendingTrendsCommand(year=2026, month=1)
-    result = await GetSpendingTrendsUseCase().execute(command, uow)
-
-    assert len(result.settlement_trend) == 1
-    assert result.settlement_trend[0].is_settled is True
-    assert result.settlement_trend[0].status == "settled"
-
-
-async def test_settlement_trend_reverse_direction_not_settled() -> None:
-    uow, alice, bob, _food_group = _setup_uow()
-    txs = [
-        make_transaction(
-            date=date(2026, 1, 10),
-            category="Dining Out",
-            amount=Decimal("-100.00"),
-            payer_person_id=alice.id,
-        ),
-    ]
-    uow.transactions.get_household_by_year.return_value = txs
-    uow.transactions.get_all_settlement_relevant.return_value = txs
-    # Gross: bob owes alice $50. A same-magnitude payment in the *wrong*
-    # direction (alice paying bob) doubles the imbalance instead of
-    # clearing it — must not be marked settled.
-    uow.settlements.get_all.return_value = [
-        make_settlement(
-            amount=Decimal("50.00"),
-            from_person_id=alice.id,
-            to_person_id=bob.id,
-            settled_at=datetime(2026, 1, 31, tzinfo=UTC),
-        ),
-    ]
-
-    command = GetSpendingTrendsCommand(year=2026, month=1)
-    result = await GetSpendingTrendsUseCase().execute(command, uow)
-
-    assert len(result.settlement_trend) == 1
-    assert result.settlement_trend[0].is_settled is False
-
-
-async def test_settlement_trend_includes_non_household_month() -> None:
-    uow, alice, _bob, _food_group = _setup_uow()
-    # A month whose only settlement signal is a spotted (non-household) row must
-    # still appear — gross runs over settlement-relevant rows, not household-only.
-    spotted = make_transaction(
-        date=date(2026, 3, 10),
-        category="Dining Out",
-        amount=Decimal("-30.00"),
-        payer_person_id=alice.id,
-        household=False,
-        payer_percentage=0,
-    )
-    uow.transactions.get_household_by_year.return_value = []
-    uow.transactions.get_all_settlement_relevant.return_value = [spotted]
-
-    command = GetSpendingTrendsCommand(year=2026, month=3)
-    result = await GetSpendingTrendsUseCase().execute(command, uow)
-
-    assert len(result.settlement_trend) == 1
-    assert result.settlement_trend[0].month == 3
-    assert result.settlement_trend[0].amount == Decimal("30.00")
 
 
 async def test_past_year_ytd_spans_full_year() -> None:
@@ -509,9 +289,9 @@ def test_personal_scope_requires_person_id() -> None:
         GetSpendingTrendsCommand(year=2026, scope="personal")
 
 
-async def test_personal_scope_reads_all_rows_and_own_budgets() -> None:
-    """Personal scope must take the whole year (personal and spotted rows
-    live outside the household fetch) and overlay the person's own budgets."""
+async def test_personal_scope_reads_all_rows() -> None:
+    """Personal scope must take the whole year: personal and spotted rows
+    live outside the household fetch."""
     uow, alice, bob, food_group = _setup_uow()
     uow.transactions.get_by_year.return_value = [
         make_transaction(
@@ -547,14 +327,14 @@ async def test_personal_scope_reads_all_rows_and_own_budgets() -> None:
     result = await GetSpendingTrendsUseCase().execute(command, uow)
 
     uow.transactions.get_household_by_year.assert_not_called()
-    uow.category_group_budgets.get_by_year.assert_called_once_with(2026, alice.id)
-    # The hidden "Who's paying" section costs an all-time ledger load — skipped.
-    uow.settlements.get_all.assert_not_called()
-    assert result.settlement_trend == []
-    assert result.monthly_person_paid == []
     # Alice's half of dinner + Bob's spot for her; Bob's own row excluded.
     assert result.trends.group_summaries[0].group_id == food_group.id
     assert result.trends.group_summaries[0].ytd_total == Decimal("70.00")
+    # The flow names her claim on each row.
+    assert {(c.source_kind, c.amount) for c in result.month_flow.cells} == {
+        ("household_share", Decimal("40.00")),
+        ("spotted_for_me", Decimal("30.00")),
+    }
 
 
 async def test_personal_scope_comparison_year_uses_same_lens() -> None:
@@ -578,7 +358,7 @@ async def test_personal_scope_comparison_year_uses_same_lens() -> None:
     assert result.comparison_monthly_group_spending[0].amount == Decimal("50.00")
 
 
-async def test_household_scope_fetches_household_rows_and_budgets() -> None:
+async def test_household_scope_fetches_household_rows() -> None:
     uow, _, _, _food_group = _setup_uow()
     uow.transactions.get_household_by_year.return_value = []
 
@@ -587,8 +367,7 @@ async def test_household_scope_fetches_household_rows_and_budgets() -> None:
     )
 
     uow.transactions.get_by_year.assert_not_called()
-    uow.category_group_budgets.get_by_year.assert_called_once_with(2026, None)
-    assert result.settlement_trend == []
+    assert result.month_flow.cells == []
 
 
 async def test_transfer_rows_excluded_in_both_scopes_and_comparison_year() -> None:
@@ -641,3 +420,79 @@ async def test_transfer_rows_excluded_in_both_scopes_and_comparison_year() -> No
         assert [m.amount for m in result.comparison_monthly_group_spending] == [
             expected
         ]
+
+
+def _year_rows(alice_id, bob_id) -> list[Transaction]:
+    return [
+        make_transaction(
+            date=date(2026, 1, 10),
+            merchant="Sushi",
+            category="Dining Out",
+            amount=Decimal("-80.00"),
+            payer_person_id=alice_id,
+        ),
+        make_transaction(
+            date=date(2026, 2, 5),
+            merchant="Pizza",
+            category="Dining Out",
+            amount=Decimal("-60.00"),
+            payer_person_id=bob_id,
+        ),
+        make_transaction(
+            date=date(2026, 3, 5),
+            merchant="Sushi",
+            category="Dining Out",
+            amount=Decimal("-20.00"),
+            payer_person_id=alice_id,
+        ),
+    ]
+
+
+async def test_flows_cover_the_month_and_year_to_date() -> None:
+    uow, alice, bob, food_group = _setup_uow()
+    uow.transactions.get_household_by_year.return_value = _year_rows(alice.id, bob.id)
+
+    result = await GetSpendingTrendsUseCase().execute(
+        GetSpendingTrendsCommand(year=2026, month=2), uow
+    )
+
+    assert [(c.source_person_id, c.amount) for c in result.month_flow.cells] == [
+        (bob.id, Decimal("60.00"))
+    ]
+    # YTD stops at the selected month: March's sushi is not in it.
+    assert sum(c.amount for c in result.ytd_flow.cells) == Decimal("140.00")
+    assert sum(c.amount for c in result.ytd_flow.cells) == (
+        result.trends.group_summaries[0].ytd_total
+    )
+    assert [m.merchant for m in result.ytd_flow.top_merchants] == ["Sushi", "Pizza"]
+    assert result.month_flow.largest_transactions[0].merchant == "Pizza"
+    assert all(c.group_id == food_group.id for c in result.ytd_flow.cells)
+
+
+async def test_past_year_ytd_flow_spans_full_year() -> None:
+    uow, alice, bob, _ = _setup_uow()
+    uow.transactions.get_household_by_year.return_value = _year_rows(alice.id, bob.id)
+
+    result = await GetSpendingTrendsUseCase().execute(
+        GetSpendingTrendsCommand(year=2026, month=1), uow
+    )
+    # 2026 is the current year in this suite's clock only if it is; pin the
+    # rule instead: a completed year's YTD flow covers all twelve months.
+    now = datetime.now(UTC)
+    expected = Decimal("160.00") if now.year != 2026 else Decimal("80.00")
+    assert sum(c.amount for c in result.ytd_flow.cells) == expected
+
+
+async def test_category_comparisons_computed() -> None:
+    uow, alice, bob, _ = _setup_uow()
+    uow.transactions.get_household_by_year.return_value = _year_rows(alice.id, bob.id)
+
+    result = await GetSpendingTrendsUseCase().execute(
+        GetSpendingTrendsCommand(year=2026, month=3), uow
+    )
+
+    [comparison] = result.category_comparisons
+    assert comparison.category == "Dining Out"
+    assert comparison.current_month_amount == Decimal("20.00")
+    assert comparison.trailing_average == Decimal("70.00")
+    assert comparison.is_new is False

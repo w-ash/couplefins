@@ -1,11 +1,15 @@
 from collections import defaultdict
+from collections.abc import Container
+from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
 from attrs import define
 
+from src.domain.constants import UNCATEGORIZED_GROUP_NAME
 from src.domain.entities.transaction import Transaction
 from src.domain.spending_lens import (
+    FlowSourceKind,
     HouseholdLens,
     PersonalLens,
     SpendingLens,
@@ -46,29 +50,61 @@ class GroupComparison:
 
 
 @define(frozen=True, slots=True)
-class MonthlySettlement:
-    year: int
-    month: int
-    amount: Decimal
-    from_person_id: UUID
-    to_person_id: UUID
-    is_settled: bool
-    # Ledger-derived: settled | partially_settled | carried_forward
-    status: str
+class CategoryComparison:
+    category: str
+    group_id: UUID | None
+    group_name: str
+    current_month_amount: Decimal
+    trailing_average: Decimal
+    delta_amount: Decimal
+    delta_percentage: Decimal
+    is_new: bool
 
 
 @define(frozen=True, slots=True)
-class CategorySpending:
+class SpendingFlowCell:
+    """One (source, category) sum under the lens: the flow chart's atom.
+    `source_person_id` is the payer; `source_kind` says what claim the
+    viewer has on the row (see `SpendingLens.flow_source`)."""
+
+    source_kind: FlowSourceKind
+    source_person_id: UUID
+    group_id: UUID | None
+    group_name: str
     category: str
     amount: Decimal
+    transaction_count: int
 
 
 @define(frozen=True, slots=True)
-class MonthlyPersonPaid:
-    month: int
-    person_id: UUID
+class TopMerchant:
+    merchant: str
+    amount: Decimal
+    transaction_count: int
+    category: str
     group_id: UUID | None
-    amount_paid: Decimal
+
+
+@define(frozen=True, slots=True)
+class LargestTransaction:
+    id: UUID
+    date: date
+    merchant: str
+    category: str
+    group_id: UUID | None
+    amount: Decimal
+    payer_person_id: UUID
+
+
+@define(frozen=True, slots=True)
+class SpendingFlow:
+    """Where a period's money went: flow cells plus the merchants and single
+    rows that dominated it. Every amount is the lens contribution (expense
+    positive, refund negative), so cells sum to the period's spending."""
+
+    cells: list[SpendingFlowCell]
+    top_merchants: list[TopMerchant]
+    largest_transactions: list[LargestTransaction]
 
 
 @define(frozen=True, slots=True)
@@ -78,7 +114,6 @@ class MonthlyGroupSpending:
     group_id: UUID | None
     group_name: str
     amount: Decimal
-    categories: list[CategorySpending]
 
 
 @define(frozen=True, slots=True)
@@ -142,10 +177,6 @@ def compute_spending_trends(
                     group_id=bd.group_id,
                     group_name=bd.group_name,
                     amount=bd.total_amount,
-                    categories=[
-                        CategorySpending(category=cat.category, amount=cat.total_amount)
-                        for cat in bd.categories
-                    ],
                 )
             )
             month_total += bd.total_amount
@@ -276,34 +307,169 @@ def compute_comparison_cards(
     return cards
 
 
-def compute_person_paid_by_month(
+def _group_of(
+    category_lookup: dict[str, tuple[UUID, str]], category: str
+) -> tuple[UUID | None, str]:
+    return category_lookup.get(category, (None, UNCATEGORIZED_GROUP_NAME))
+
+
+def _dominant_category(amount_by_category: dict[str, Decimal]) -> str:
+    return max(amount_by_category, key=amount_by_category.__getitem__)
+
+
+def compute_spending_flow(
     year_txs: list[Transaction],
     category_lookup: dict[str, tuple[UUID, str]],
-) -> list[MonthlyPersonPaid]:
-    """Per-person paid amounts grouped by month and category group.
+    *,
+    person_id: UUID | None = None,
+    months: Container[int],
+    merchant_limit: int = 10,
+    largest_limit: int = 5,
+) -> SpendingFlow:
+    """Where the money went in `months` (one month, or January through the
+    selected month for year to date), under the household or a person's lens.
+    Cells sort by group total, then amount, so the largest flows come first."""
+    lens = _lens(person_id)
+    rows = [tx for tx in select(lens, year_txs) if tx.date.month in months]
 
-    Always the household lens: this answers "who fronted the household money".
-    A refund nets against what its payer fronted.
-    """
-    lens = HouseholdLens()
-    totals: dict[tuple[int, UUID, UUID | None], Decimal] = defaultdict(Decimal)
+    cell_amount: dict[tuple[FlowSourceKind, UUID, str], Decimal] = defaultdict(Decimal)
+    cell_count: dict[tuple[FlowSourceKind, UUID, str], int] = defaultdict(int)
+    merchant_amount: dict[str, Decimal] = defaultdict(Decimal)
+    merchant_count: dict[str, int] = defaultdict(int)
+    merchant_categories: dict[str, dict[str, Decimal]] = defaultdict(
+        lambda: defaultdict(Decimal)
+    )
+    group_total: dict[UUID | None, Decimal] = defaultdict(Decimal)
 
-    for tx in select(lens, year_txs):
-        group_id: UUID | None = None
-        cat_entry = category_lookup.get(tx.category)
-        if cat_entry is not None:
-            group_id = cat_entry[0]
-        key = (tx.date.month, tx.payer_person_id, group_id)
-        totals[key] += lens.contribution(tx)
+    for tx in rows:
+        amount = lens.contribution(tx)
+        source = lens.flow_source(tx)
+        key = (source.kind, source.person_id, tx.category)
+        cell_amount[key] += amount
+        cell_count[key] += 1
+        merchant_amount[tx.merchant] += amount
+        merchant_count[tx.merchant] += 1
+        merchant_categories[tx.merchant][tx.category] += amount
+        group_total[_group_of(category_lookup, tx.category)[0]] += amount
 
-    return [
-        MonthlyPersonPaid(
-            month=month,
-            person_id=pid,
+    cells = [
+        SpendingFlowCell(
+            source_kind=kind,
+            source_person_id=pid,
             group_id=gid,
-            amount_paid=amount,
+            group_name=gname,
+            category=category,
+            amount=amount,
+            transaction_count=cell_count[kind, pid, category],
         )
-        for (month, pid, gid), amount in sorted(
-            totals.items(), key=lambda t: (t[0][0], str(t[0][1]), str(t[0][2]))
-        )
+        for (kind, pid, category), amount in cell_amount.items()
+        for gid, gname in [_group_of(category_lookup, category)]
     ]
+    cells.sort(
+        key=lambda c: (-group_total[c.group_id], c.group_name, -c.amount, c.category)
+    )
+
+    top_merchants = [
+        TopMerchant(
+            merchant=merchant,
+            amount=amount,
+            transaction_count=merchant_count[merchant],
+            category=dominant,
+            group_id=_group_of(category_lookup, dominant)[0],
+        )
+        for merchant, amount in sorted(
+            merchant_amount.items(), key=lambda m: (-m[1], m[0])
+        )
+        if amount > 0
+        for dominant in [_dominant_category(merchant_categories[merchant])]
+    ][:merchant_limit]
+
+    largest = sorted(
+        (tx for tx in rows if lens.contribution(tx) > 0),
+        key=lambda tx: (-lens.contribution(tx), tx.date, tx.merchant),
+    )[:largest_limit]
+    largest_transactions = [
+        LargestTransaction(
+            id=tx.id,
+            date=tx.date,
+            merchant=tx.merchant,
+            category=tx.category,
+            group_id=_group_of(category_lookup, tx.category)[0],
+            amount=lens.contribution(tx),
+            payer_person_id=tx.payer_person_id,
+        )
+        for tx in largest
+    ]
+
+    return SpendingFlow(
+        cells=cells,
+        top_merchants=top_merchants,
+        largest_transactions=largest_transactions,
+    )
+
+
+def _category_totals(
+    lens: SpendingLens,
+    txs: list[Transaction],
+    category_lookup: dict[str, tuple[UUID, str]],
+) -> dict[str, Decimal]:
+    return {
+        cat.category: cat.total_amount
+        for bd in compute_breakdowns(lens, txs, category_lookup)
+        for cat in bd.categories
+    }
+
+
+def compute_category_comparisons(
+    year_txs: list[Transaction],
+    category_lookup: dict[str, tuple[UUID, str]],
+    target_month: int,
+    window: int = 3,
+    *,
+    person_id: UUID | None = None,
+) -> list[CategoryComparison]:
+    """`compute_comparison_cards` at category grain: the target month against
+    the trailing-window average per category, biggest swings first (a new
+    category outranks any finite percentage, ties broken by dollars)."""
+    lens = _lens(person_id)
+    by_month = _group_by_month(select(lens, year_txs))
+    current = _category_totals(lens, by_month.get(target_month, []), category_lookup)
+
+    trailing_months = sorted(m for m in by_month if m < target_month)[-window:]
+    trailing_sum: dict[str, Decimal] = defaultdict(Decimal)
+    for month in trailing_months:
+        for cat, amount in _category_totals(
+            lens, by_month[month], category_lookup
+        ).items():
+            trailing_sum[cat] += amount
+    trailing_avg = {
+        cat: total / len(trailing_months) for cat, total in trailing_sum.items()
+    }
+
+    comparisons: list[CategoryComparison] = []
+    for cat in set(current) | set(trailing_avg):
+        amount = current.get(cat, Decimal(0))
+        avg = trailing_avg.get(cat, Decimal(0))
+        gid, gname = _group_of(category_lookup, cat)
+        delta = amount - avg
+        comparisons.append(
+            CategoryComparison(
+                category=cat,
+                group_id=gid,
+                group_name=gname,
+                current_month_amount=amount,
+                trailing_average=avg,
+                delta_amount=delta,
+                delta_percentage=(delta / avg * 100) if avg > 0 else Decimal(0),
+                is_new=avg == 0,
+            )
+        )
+    comparisons.sort(
+        key=lambda c: (
+            c.is_new,
+            abs(c.delta_amount if c.is_new else c.delta_percentage),
+            c.category,
+        ),
+        reverse=True,
+    )
+    return comparisons

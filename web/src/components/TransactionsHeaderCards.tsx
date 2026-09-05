@@ -30,6 +30,7 @@ import {
   bucketTransactions,
   isSpendingRow,
   SCOPE_LABELS,
+  sumMyShares,
   sumNet,
   type TransactionScope,
 } from "@/lib/transaction-filters";
@@ -75,6 +76,7 @@ export function TransactionsHeaderCards({
         data={data}
         filtered={filtered}
         scope={scope}
+        currentPersonId={currentPersonId}
         periodLabel={periodLabel}
       />
     </div>
@@ -393,17 +395,32 @@ interface InViewCardProps {
   data: ReconciliationResponse;
   filtered: TransactionResponse[];
   scope: TransactionScope;
+  currentPersonId: string | null;
   periodLabel: string;
 }
 
-function InViewCard({ data, filtered, scope, periodLabel }: InViewCardProps) {
+function InViewCard({
+  data,
+  filtered,
+  scope,
+  currentPersonId,
+  periodLabel,
+}: InViewCardProps) {
+  const spending = filtered.filter(isSpendingRow);
+  // Personal scope lists household splits at their full amount but counts
+  // only the viewer's share, so the total matches Insights "My Spending".
+  const showShares = scope === "personal" && currentPersonId !== null;
+  const total = showShares
+    ? sumMyShares(spending, currentPersonId)
+    : sumNet(spending);
   return (
     <CardShell label="In view" info={<InViewInfo periodLabel={periodLabel} />}>
       <p className="text-lg font-semibold tabular-nums text-foreground">
-        {formatCurrency(sumNet(filtered.filter(isSpendingRow)))}
+        {formatCurrency(total)}
       </p>
       <p className="text-[11px] leading-tight text-muted-foreground/70">
         {filtered.length} of {data.transactions.length} · {SCOPE_LABELS[scope]}
+        {showShares ? " · your share" : ""}
       </p>
     </CardShell>
   );

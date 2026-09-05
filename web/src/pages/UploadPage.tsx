@@ -58,6 +58,7 @@ import {
   type PreviewScopeKind,
   previewScopeKind,
 } from "@/lib/transaction-filters";
+import { buildTransactionsUrl } from "@/lib/transaction-links";
 import { getPersonAccentColor } from "@/types/person";
 
 const PREVIEW_LIMIT = 5;
@@ -574,7 +575,7 @@ function ConfirmedCard({
           </p>
           {uploadMonth && (
             <Link
-              to={`/transactions?year=${uploadMonth.year}&month=${uploadMonth.month}`}
+              to={buildTransactionsUrl({ range: uploadMonth })}
               className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-foreground transition-colors hover:bg-muted/50"
             >
               <ListChecks className="size-4 text-muted-foreground" />

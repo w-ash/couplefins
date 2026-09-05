@@ -15,6 +15,7 @@ import {
   previewScopeKind,
   type SortState,
   sortList,
+  sumMyShares,
   sumNet,
 } from "@/lib/transaction-filters";
 
@@ -224,11 +225,26 @@ describe("isInPersonalScope", () => {
   const me = "p1";
   const partner = "p2";
 
-  it("excludes household transactions regardless of split", () => {
-    const tx = makeTx({
+  it("includes a household split where my share is positive (my share of the couple's spending)", () => {
+    const mine = makeTx({
       household: true,
       payer_person_id: me,
       payer_percentage: 50,
+    });
+    const partnerPaid = makeTx({
+      household: true,
+      payer_person_id: partner,
+      payer_percentage: 70,
+    });
+    expect(isInPersonalScope(mine, me)).toBe(true);
+    expect(isInPersonalScope(partnerPaid, me)).toBe(true);
+  });
+
+  it("excludes a household row where my share is zero (partner's own s100 ticket)", () => {
+    const tx = makeTx({
+      household: true,
+      payer_person_id: partner,
+      payer_percentage: 100,
     });
     expect(isInPersonalScope(tx, me)).toBe(false);
   });
@@ -606,7 +622,8 @@ describe("computeScopeCounts", () => {
       }),
     ];
     const counts = computeScopeCounts(txs, me);
-    expect(counts).toEqual({ all: 4, household: 1, personal: 1, spotted: 1 });
+    // The 50/50 household row counts as personal too: half of it is mine.
+    expect(counts).toEqual({ all: 4, household: 1, personal: 2, spotted: 1 });
   });
 
   it("excludes linked settlement transfers from every spending scope", () => {
@@ -761,5 +778,41 @@ describe("transfer rows", () => {
       makeTx({ id: "dinner", household: true, payer_person_id: me }),
     ];
     expect(computeScopeCounts(txs, me).all).toBe(2);
+  });
+});
+
+// ─── sumMyShares ───
+
+describe("sumMyShares", () => {
+  const me = "p1";
+  const partner = "p2";
+
+  it("nets the viewer's share of each row, negated like sumNet", () => {
+    const txs = [
+      makeTx({
+        amount: -100,
+        household: true,
+        payer_person_id: me,
+        payer_percentage: 50,
+      }),
+      makeTx({
+        amount: -30,
+        household: false,
+        payer_person_id: partner,
+        payer_percentage: 0,
+      }),
+      makeTx({
+        amount: 20,
+        household: true,
+        payer_person_id: partner,
+        payer_percentage: 50,
+      }),
+    ];
+    // 50 (my half) + 30 (spotted for me) - 10 (my half of a refund)
+    expect(sumMyShares(txs, me)).toBe(70);
+  });
+
+  it("collapses -0 to 0", () => {
+    expect(sumMyShares([], me)).toBe(0);
   });
 });

@@ -4,8 +4,9 @@ from uuid import UUID, uuid4
 
 from src.domain.entities.transaction import Transaction
 from src.domain.insights import (
+    compute_category_comparisons,
     compute_comparison_cards,
-    compute_person_paid_by_month,
+    compute_spending_flow,
     compute_spending_trends,
     compute_trailing_average,
 )
@@ -177,28 +178,6 @@ class TestComputeSpendingTrends:
 
         assert result.group_summaries[0].group_id == food_id
         assert result.group_summaries[1].group_id == travel_id
-
-    def test_categories_populated(self) -> None:
-        food_id, _, lookup = _setup_groups()
-        txs = [
-            make_transaction(
-                date=date(2026, 1, 10), category="Dining Out", amount=Decimal("-40.00")
-            ),
-            make_transaction(
-                date=date(2026, 1, 20), category="Groceries", amount=Decimal("-60.00")
-            ),
-        ]
-
-        result = compute_spending_trends(txs, lookup, 2026)
-
-        mgs = result.monthly_group_spending[0]
-        assert mgs.group_id == food_id
-        assert len(mgs.categories) == 2
-        cat_names = {c.category for c in mgs.categories}
-        assert cat_names == {"Dining Out", "Groceries"}
-        cat_amounts = {c.category: c.amount for c in mgs.categories}
-        assert cat_amounts["Dining Out"] == Decimal("40.00")
-        assert cat_amounts["Groceries"] == Decimal("60.00")
 
     def test_through_month_bounds_ytd_but_not_monthly_lists(self) -> None:
         food_id, _, lookup = _setup_groups()
@@ -505,133 +484,6 @@ class TestComputeComparisonCards:
         assert all(c.is_new for c in cards)
 
 
-class TestComputePersonPaidByMonth:
-    def test_two_payers_one_month(self) -> None:
-        food_id, _, lookup = _setup_groups()
-        alice = uuid4()
-        bob = uuid4()
-        txs = [
-            make_transaction(
-                date=date(2026, 1, 10),
-                category="Dining Out",
-                amount=Decimal("-60.00"),
-                payer_person_id=alice,
-            ),
-            make_transaction(
-                date=date(2026, 1, 20),
-                category="Groceries",
-                amount=Decimal("-40.00"),
-                payer_person_id=bob,
-            ),
-        ]
-
-        result = compute_person_paid_by_month(txs, lookup)
-
-        by_person = {r.person_id: r for r in result}
-        assert by_person[alice].month == 1
-        assert by_person[alice].group_id == food_id
-        assert by_person[alice].amount_paid == Decimal("60.00")
-        assert by_person[bob].amount_paid == Decimal("40.00")
-
-    def test_multiple_months(self) -> None:
-        _, _, lookup = _setup_groups()
-        alice = uuid4()
-        txs = [
-            make_transaction(
-                date=date(2026, 1, 10),
-                category="Dining Out",
-                amount=Decimal("-50.00"),
-                payer_person_id=alice,
-            ),
-            make_transaction(
-                date=date(2026, 2, 10),
-                category="Dining Out",
-                amount=Decimal("-70.00"),
-                payer_person_id=alice,
-            ),
-        ]
-
-        result = compute_person_paid_by_month(txs, lookup)
-
-        months = {r.month: r.amount_paid for r in result}
-        assert months[1] == Decimal("50.00")
-        assert months[2] == Decimal("70.00")
-
-    def test_empty_returns_empty(self) -> None:
-        result = compute_person_paid_by_month([], {})
-        assert result == []
-
-    def test_groups_by_category_group(self) -> None:
-        food_id, travel_id, lookup = _setup_groups()
-        alice = uuid4()
-        txs = [
-            make_transaction(
-                date=date(2026, 1, 10),
-                category="Dining Out",
-                amount=Decimal("-30.00"),
-                payer_person_id=alice,
-            ),
-            make_transaction(
-                date=date(2026, 1, 15),
-                category="Flights",
-                amount=Decimal("-200.00"),
-                payer_person_id=alice,
-            ),
-        ]
-
-        result = compute_person_paid_by_month(txs, lookup)
-
-        by_group = {r.group_id: r.amount_paid for r in result}
-        assert by_group[food_id] == Decimal("30.00")
-        assert by_group[travel_id] == Decimal("200.00")
-
-    def test_unmapped_category_has_none_group_id(self) -> None:
-        _, _, lookup = _setup_groups()
-        alice = uuid4()
-        txs = [
-            make_transaction(
-                date=date(2026, 1, 10),
-                category="Dining Out",
-                amount=Decimal("-40.00"),
-                payer_person_id=alice,
-            ),
-            make_transaction(
-                date=date(2026, 1, 15),
-                category="Mystery Store",  # not in lookup
-                amount=Decimal("-25.00"),
-                payer_person_id=alice,
-            ),
-        ]
-
-        result = compute_person_paid_by_month(txs, lookup)
-
-        by_group = {r.group_id: r.amount_paid for r in result}
-        assert by_group[None] == Decimal("25.00")
-
-
-class TestPersonPaidRefunds:
-    def test_refund_nets_against_what_the_payer_fronted(self) -> None:
-        food_id, _, lookup = _setup_groups()
-        txs = [
-            make_transaction(
-                date=date(2026, 1, 5),
-                category="Dining Out",
-                amount=Decimal("-100.00"),
-                payer_person_id=ALICE.id,
-            ),
-            make_transaction(
-                date=date(2026, 1, 9),
-                category="Dining Out",
-                amount=Decimal("20.00"),
-                payer_person_id=ALICE.id,
-            ),
-        ]
-        paid = compute_person_paid_by_month(txs, lookup)
-        assert [(p.person_id, p.group_id, p.amount_paid) for p in paid] == [
-            (ALICE.id, food_id, Decimal("80.00"))
-        ]
-
-
 class TestExcludedTransactions:
     def test_excluded_not_in_spending_trends(self) -> None:
         _, _, lookup = _setup_groups()
@@ -826,27 +678,212 @@ class TestPersonalScope:
         assert cards[0].trailing_average == Decimal("30.00")
         assert cards[0].delta_amount == Decimal("0.00")
 
-    def test_person_paid_stays_household_lens(self) -> None:
-        """Who fronted the household money is a couple-level fact; personal
-        rows never enter it even when the caller is scoped to a person."""
+
+def _row(
+    *,
+    month: int = 1,
+    day: int = 10,
+    merchant: str = "Sushi Place",
+    category: str = "Dining Out",
+    amount: str = "-40.00",
+    payer: UUID = ALICE.id,
+    pct: int = 50,
+    household: bool = True,
+) -> Transaction:
+    return make_transaction(
+        date=date(2026, month, day),
+        merchant=merchant,
+        category=category,
+        amount=Decimal(amount),
+        payer_person_id=payer,
+        payer_percentage=pct,
+        household=household,
+        tags=() if household else ("x",),
+    )
+
+
+class TestComputeSpendingFlow:
+    def test_empty_input(self) -> None:
+        _, _, lookup = _setup_groups()
+        flow = compute_spending_flow([], lookup, months={1})
+        assert (flow.cells, flow.top_merchants, flow.largest_transactions) == (
+            [],
+            [],
+            [],
+        )
+
+    def test_household_cells_are_keyed_by_payer_and_category(self) -> None:
+        food_id, travel_id, lookup = _setup_groups()
+        txs = [
+            _row(amount="-40.00", payer=ALICE.id),
+            _row(amount="-60.00", payer=BOB.id),
+            _row(amount="-10.00", payer=ALICE.id, day=12),
+            _row(category="Flights", amount="-300.00", payer=ALICE.id, pct=100),
+        ]
+
+        flow = compute_spending_flow(txs, lookup, months={1})
+
+        assert [
+            (
+                c.source_kind,
+                c.source_person_id,
+                c.group_id,
+                c.category,
+                c.amount,
+                c.transaction_count,
+            )
+            for c in flow.cells
+        ] == [
+            ("payer", ALICE.id, travel_id, "Flights", Decimal("300.00"), 1),
+            ("payer", BOB.id, food_id, "Dining Out", Decimal("60.00"), 1),
+            ("payer", ALICE.id, food_id, "Dining Out", Decimal("50.00"), 2),
+        ]
+
+    def test_refund_nets_against_the_payers_cell(self) -> None:
+        _, _, lookup = _setup_groups()
+        txs = [_row(amount="-40.00"), _row(amount="15.00", day=20)]
+        [cell] = compute_spending_flow(txs, lookup, months={1}).cells
+        assert (cell.amount, cell.transaction_count) == (Decimal("25.00"), 2)
+
+    def test_unmapped_category_is_uncategorized(self) -> None:
+        _, _, lookup = _setup_groups()
+        [cell] = compute_spending_flow(
+            [_row(category="Mystery")], lookup, months={1}
+        ).cells
+        assert (cell.group_id, cell.group_name) == (None, "Uncategorized")
+
+    def test_month_window_versus_year_to_date(self) -> None:
+        _, _, lookup = _setup_groups()
+        txs = [
+            _row(month=1),
+            _row(month=2, amount="-20.00"),
+            _row(month=3, amount="-5.00"),
+        ]
+
+        february = compute_spending_flow(txs, lookup, months={2})
+        ytd = compute_spending_flow(txs, lookup, months=range(1, 3))
+
+        assert sum(c.amount for c in february.cells) == Decimal("20.00")
+        assert sum(c.amount for c in ytd.cells) == Decimal("60.00")
+
+    def test_personal_lens_names_the_viewers_claim(self) -> None:
+        _, _, lookup = _setup_groups()
+        txs = [
+            _row(amount="-100.00", payer=BOB.id, pct=50),  # my half
+            _row(amount="-40.00", payer=ALICE.id, pct=100, household=False),  # mine
+            _row(amount="-30.00", payer=BOB.id, pct=0, household=False),  # spotted
+            _row(amount="-99.00", payer=BOB.id, pct=100, household=False),  # theirs
+            _row(amount="-50.00", payer=BOB.id, pct=100),  # their own ticket
+            _row(amount="-12.00", payer=ALICE.id, pct=0, household=False),  # I spotted
+        ]
+
+        flow = compute_spending_flow(txs, lookup, person_id=ALICE.id, months={1})
+
+        assert {(c.source_kind, c.source_person_id, c.amount) for c in flow.cells} == {
+            ("household_share", BOB.id, Decimal("50.00")),
+            ("personal", ALICE.id, Decimal("40.00")),
+            ("spotted_for_me", BOB.id, Decimal("30.00")),
+        }
+
+    def test_top_merchants_sorted_limited_and_refund_only_dropped(self) -> None:
         food_id, _, lookup = _setup_groups()
         txs = [
-            make_transaction(
-                category="Dining Out",
-                amount=Decimal("-100.00"),
-                payer_person_id=ALICE.id,
-                payer_percentage=50,
-            ),
-            make_transaction(
-                category="Dining Out",
-                amount=Decimal("-40.00"),
-                payer_person_id=ALICE.id,
-                payer_percentage=100,
-                household=False,
-                tags=(),
-            ),
+            _row(merchant="Sushi Place", amount="-40.00"),
+            _row(merchant="Sushi Place", amount="-30.00", day=11, category="Groceries"),
+            _row(merchant="Sushi Place", amount="-35.00", day=12),
+            _row(merchant="Grocer", amount="-90.00", category="Groceries"),
+            _row(merchant="Airline", amount="-500.00", category="Flights"),
+            _row(merchant="Refunder", amount="25.00"),
         ]
-        paid = compute_person_paid_by_month(txs, lookup)
-        assert [(p.person_id, p.group_id, p.amount_paid) for p in paid] == [
-            (ALICE.id, food_id, Decimal("100.00"))
+
+        flow = compute_spending_flow(txs, lookup, months={1}, merchant_limit=2)
+
+        assert [
+            (m.merchant, m.amount, m.transaction_count) for m in flow.top_merchants
+        ] == [
+            ("Airline", Decimal("500.00"), 1),
+            ("Sushi Place", Decimal("105.00"), 3),
         ]
+        sushi = flow.top_merchants[1]
+        assert (sushi.category, sushi.group_id) == ("Dining Out", food_id)
+        unlimited = compute_spending_flow(txs, lookup, months={1})
+        assert "Refunder" not in {m.merchant for m in unlimited.top_merchants}
+
+    def test_largest_transactions_use_the_lens_contribution(self) -> None:
+        _, travel_id, lookup = _setup_groups()
+        txs = [
+            _row(category="Flights", amount="-300.00", payer=BOB.id, pct=50),
+            _row(amount="-80.00", payer=ALICE.id, pct=100, household=False),
+            _row(amount="20.00", day=20),
+        ]
+
+        household = compute_spending_flow(txs, lookup, months={1}, largest_limit=1)
+        [largest] = household.largest_transactions
+        assert (
+            largest.merchant,
+            largest.amount,
+            largest.group_id,
+            largest.payer_person_id,
+        ) == (
+            "Sushi Place",
+            Decimal("300.00"),
+            travel_id,
+            BOB.id,
+        )
+
+        personal = compute_spending_flow(txs, lookup, person_id=ALICE.id, months={1})
+        assert [t.amount for t in personal.largest_transactions] == [
+            Decimal("150.00"),
+            Decimal("80.00"),
+        ]
+
+
+class TestComputeCategoryComparisons:
+    def test_swing_against_trailing_average(self) -> None:
+        food_id, _, lookup = _setup_groups()
+        txs = [
+            _row(month=1, amount="-40.00"),
+            _row(month=2, amount="-60.00"),
+            _row(month=3, amount="-100.00"),
+            _row(month=3, category="Groceries", amount="-30.00"),
+        ]
+
+        comparisons = compute_category_comparisons(txs, lookup, 3)
+
+        assert [(c.category, c.is_new) for c in comparisons] == [
+            ("Groceries", True),
+            ("Dining Out", False),
+        ]
+        dining = comparisons[1]
+        assert (
+            dining.group_id,
+            dining.current_month_amount,
+            dining.trailing_average,
+        ) == (
+            food_id,
+            Decimal("100.00"),
+            Decimal("50.00"),
+        )
+        assert (dining.delta_amount, dining.delta_percentage) == (
+            Decimal("50.00"),
+            Decimal(100),
+        )
+
+    def test_category_missing_this_month_still_compares(self) -> None:
+        _, _, lookup = _setup_groups()
+        txs = [_row(month=1, amount="-40.00"), _row(month=2, category="Groceries")]
+        by_category = {
+            c.category: c for c in compute_category_comparisons(txs, lookup, 2)
+        }
+        assert by_category["Dining Out"].current_month_amount == Decimal(0)
+        assert by_category["Dining Out"].delta_percentage == Decimal(-100)
+
+    def test_uses_the_person_lens(self) -> None:
+        _, _, lookup = _setup_groups()
+        txs = [_row(month=1, amount="-100.00", payer=BOB.id, pct=50)]
+        [alice] = compute_category_comparisons(txs, lookup, 1, person_id=ALICE.id)
+        assert alice.current_month_amount == Decimal("50.00")
+
+    def test_empty(self) -> None:
+        _, _, lookup = _setup_groups()
+        assert compute_category_comparisons([], lookup, 1) == []

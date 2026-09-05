@@ -16,7 +16,11 @@ from src.domain.budget import (
     BudgetOverviewInputs,
     compute_budget_overview,
 )
-from src.domain.insights import compute_comparison_cards, compute_spending_trends
+from src.domain.insights import (
+    compute_comparison_cards,
+    compute_spending_flow,
+    compute_spending_trends,
+)
 from src.domain.spending_lens import (
     HouseholdLens,
     PersonalLens,
@@ -158,3 +162,33 @@ def test_unmapped_category_lands_in_uncategorized_with_no_drift(
     budget = _budget(lens, 3)
     assert any(s.group_id is None for s in budget.group_statuses)
     assert budget.spending_drift is None
+
+
+@pytest.mark.parametrize(("lens", "person_id"), zip(LENSES, PERSON_IDS, strict=True))
+def test_flow_cells_sum_to_the_lens_total(
+    lens: SpendingLens, person_id: UUID | None
+) -> None:
+    """The flow chart is drawn from cells, so the cells must add up to the
+    same spending the headline and the group table show."""
+    month_rows = [tx for tx in ROWS if tx.date.month == 2]
+    month_flow = compute_spending_flow(ROWS, LOOKUP, person_id=person_id, months={2})
+    assert sum((c.amount for c in month_flow.cells), D(0)) == total_spending(
+        lens, month_rows
+    )
+
+    trends = compute_spending_trends(
+        ROWS, LOOKUP, 2026, through_month=3, person_id=person_id
+    )
+    ytd_flow = compute_spending_flow(
+        ROWS, LOOKUP, person_id=person_id, months=range(1, 4)
+    )
+    assert sum((c.amount for c in ytd_flow.cells), D(0)) == sum(
+        (g.ytd_total for g in trends.group_summaries), D(0)
+    )
+    assert {
+        gid: total
+        for gid in {c.group_id for c in ytd_flow.cells}
+        for total in [
+            sum((c.amount for c in ytd_flow.cells if c.group_id == gid), D(0))
+        ]
+    } == {g.group_id: g.ytd_total for g in trends.group_summaries}

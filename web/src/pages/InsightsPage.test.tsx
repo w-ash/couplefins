@@ -1,146 +1,40 @@
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { SpendingTrendsResponse } from "@/api/generated/model";
+import {
+  makeEmptySpendingTrends,
+  makeSpendingTrends,
+} from "@/test/insights-fixtures";
 import { server } from "@/test/server";
-import { renderWithProviders, screen, waitFor } from "@/test/test-utils";
+import {
+  renderWithProviders,
+  screen,
+  userEvent,
+  waitFor,
+  within,
+} from "@/test/test-utils";
 import { InsightsPage } from "./InsightsPage";
 
-const baseFields = {
-  month: 2,
-  comparison_cards: [] as SpendingTrendsResponse["comparison_cards"],
-  budget_lines: [] as SpendingTrendsResponse["budget_lines"],
-  settlement_trend: [] as SpendingTrendsResponse["settlement_trend"],
-  monthly_person_paid: [] as SpendingTrendsResponse["monthly_person_paid"],
-  comparison_monthly_group_spending:
-    [] as SpendingTrendsResponse["comparison_monthly_group_spending"],
-  persons: [
-    {
-      id: "p1",
-      name: "Alice",
-      adjustment_account: "",
-      theme_preference: "system",
-      chat_voice: "fiona",
-    },
-    {
-      id: "p2",
-      name: "Bob",
-      adjustment_account: "",
-      theme_preference: "system",
-      chat_voice: "fiona",
-    },
-  ],
-};
+const emptyResponse = makeEmptySpendingTrends();
+const populatedResponse = makeSpendingTrends();
 
-const emptyResponse: SpendingTrendsResponse = {
-  year: 2026,
-  monthly_group_spending: [],
-  monthly_totals: [],
-  group_summaries: [],
-  ...baseFields,
-};
+function servePopulated() {
+  server.use(
+    http.get("/api/v1/insights/spending-trends", () =>
+      HttpResponse.json(populatedResponse),
+    ),
+  );
+}
 
-const populatedResponse: SpendingTrendsResponse = {
-  year: 2026,
-  monthly_group_spending: [
-    {
-      year: 2026,
-      month: 1,
-      group_id: "g1",
-      group_name: "Food & Dining",
-      amount: 400,
-      categories: [
-        { category: "Dining Out", amount: 250 },
-        { category: "Groceries", amount: 150 },
-      ],
-    },
-    {
-      year: 2026,
-      month: 2,
-      group_id: "g1",
-      group_name: "Food & Dining",
-      amount: 450,
-      categories: [
-        { category: "Dining Out", amount: 300 },
-        { category: "Groceries", amount: 150 },
-      ],
-    },
-    {
-      year: 2026,
-      month: 1,
-      group_id: "g2",
-      group_name: "Travel",
-      amount: 300,
-      categories: [{ category: "Flights", amount: 300 }],
-    },
-    {
-      year: 2026,
-      month: 2,
-      group_id: "g2",
-      group_name: "Travel",
-      amount: 200,
-      categories: [{ category: "Flights", amount: 200 }],
-    },
-  ],
-  monthly_totals: [
-    { year: 2026, month: 1, total_amount: 700 },
-    { year: 2026, month: 2, total_amount: 650 },
-  ],
-  group_summaries: [
-    {
-      group_id: "g1",
-      group_name: "Food & Dining",
-      ytd_total: 850,
-      transaction_count: 10,
-    },
-    {
-      group_id: "g2",
-      group_name: "Travel",
-      ytd_total: 500,
-      transaction_count: 5,
-    },
-  ],
-  ...baseFields,
-  comparison_cards: [
-    {
-      group_id: "g1",
-      group_name: "Food & Dining",
-      current_month_amount: 450,
-      trailing_average: 400,
-      delta_amount: 50,
-      delta_percentage: 12.5,
-      is_new: false,
-    },
-  ],
-  budget_lines: [{ group_id: "g1", month: 1, monthly_budget: 500 }],
-  settlement_trend: [
-    {
-      year: 2026,
-      month: 1,
-      amount: 50,
-      from_person_id: "p1",
-      to_person_id: "p2",
-      is_settled: true,
-      status: "settled",
-    },
-    {
-      year: 2026,
-      month: 2,
-      amount: 75,
-      from_person_id: "p1",
-      to_person_id: "p2",
-      is_settled: false,
-      status: "carried_forward",
-    },
-  ],
-  monthly_person_paid: [
-    { month: 1, person_id: "p1", group_id: "g1", amount_paid: 250 },
-    { month: 1, person_id: "p2", group_id: "g1", amount_paid: 150 },
-    { month: 1, person_id: "p1", group_id: "g2", amount_paid: 300 },
-    { month: 2, person_id: "p1", group_id: "g1", amount_paid: 300 },
-    { month: 2, person_id: "p2", group_id: "g1", amount_paid: 150 },
-    { month: 2, person_id: "p2", group_id: "g2", amount_paid: 200 },
-  ],
-};
+async function renderPopulated(path = "/?year=2026&month=2") {
+  servePopulated();
+  const view = renderWithProviders(<InsightsPage />, {
+    routerProps: { initialEntries: [path] },
+  });
+  await waitFor(() => {
+    expect(screen.getByTestId("group-breakdown")).toBeInTheDocument();
+  });
+  return view;
+}
 
 describe("InsightsPage", () => {
   beforeEach(() => {
@@ -151,16 +45,18 @@ describe("InsightsPage", () => {
     );
   });
 
-  it("renders the heading", () => {
+  it("renders the heading, month picker, and controls", () => {
     renderWithProviders(<InsightsPage />);
     expect(
       screen.getByRole("heading", { name: "Insights" }),
     ).toBeInTheDocument();
+    expect(screen.getByLabelText("Select month")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Household" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Month" })).toBeChecked();
   });
 
-  it("shows empty state when no data", async () => {
+  it("shows the empty state when the year has no data", async () => {
     renderWithProviders(<InsightsPage />);
-
     await waitFor(() => {
       expect(
         screen.getByRole("heading", { name: "No spending data" }),
@@ -168,146 +64,153 @@ describe("InsightsPage", () => {
     });
   });
 
-  it("renders sparkline cards for each group", async () => {
-    server.use(
-      http.get("/api/v1/insights/spending-trends", () =>
-        HttpResponse.json(populatedResponse),
-      ),
-    );
-
-    renderWithProviders(<InsightsPage />);
-
-    await waitFor(() => {
-      expect(screen.getAllByText("Food & Dining").length).toBeGreaterThan(0);
-    });
-    expect(screen.getAllByText("Travel").length).toBeGreaterThan(0);
-    expect(screen.getByText("YTD: $850.00")).toBeInTheDocument();
-    expect(screen.getByText("YTD: $500.00")).toBeInTheDocument();
-  });
-
-  it("shows KPI cards with visual accents", async () => {
-    server.use(
-      http.get("/api/v1/insights/spending-trends", () =>
-        HttpResponse.json(populatedResponse),
-      ),
-    );
-
-    renderWithProviders(<InsightsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Year to date")).toBeInTheDocument();
-    });
-    expect(screen.getByText("Top category")).toBeInTheDocument();
-    expect(screen.getByText("$1,350.00")).toBeInTheDocument();
+  it("shows the headline strip with a comparison sentence and links", async () => {
+    await renderPopulated();
+    expect(screen.getByText("$650.00")).toBeInTheDocument();
+    expect(screen.getByText("$50.00 less than January")).toBeInTheDocument();
     expect(screen.getByTestId("ytd-mini-chart")).toBeInTheDocument();
-  });
-
-  it("shows month picker", () => {
-    renderWithProviders(<InsightsPage />);
-    expect(screen.getByLabelText("Select month")).toBeInTheDocument();
-  });
-
-  it("renders comparison cards", async () => {
-    server.use(
-      http.get("/api/v1/insights/spending-trends", () =>
-        HttpResponse.json(populatedResponse),
-      ),
+    expect(screen.getByText("per day")).toBeInTheDocument();
+    const topGroup = screen.getByRole("link", { name: /Top group/ });
+    expect(topGroup).toHaveAttribute(
+      "href",
+      "/transactions?year=2026&month=2&scope=household&cat=Dining+Out&cat=Groceries",
     );
-
-    renderWithProviders(<InsightsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("3-mo avg: $400.00")).toBeInTheDocument();
-    });
+    const largest = screen.getByRole("link", { name: /Largest transaction/ });
+    expect(largest).toHaveAttribute(
+      "href",
+      "/transactions?year=2026&month=2&scope=household&q=Airline",
+    );
   });
 
-  it("renders the scope toggle defaulting to household", () => {
-    renderWithProviders(<InsightsPage />);
-    expect(screen.getByRole("radio", { name: "Household" })).toBeChecked();
+  it("defaults to the flow chart and lists groups in the breakdown table", async () => {
+    await renderPopulated();
+    expect(screen.getByTestId("spending-flow-chart")).toBeInTheDocument();
+    const table = within(screen.getByTestId("group-breakdown"));
+    expect(table.getByText("Food & Dining")).toBeInTheDocument();
+    expect(table.getByText("$450.00")).toBeInTheDocument();
+    expect(table.getByText("+13%")).toBeInTheDocument();
     expect(
-      screen.getByRole("radio", { name: "My Spending" }),
-    ).not.toBeChecked();
+      table.getByRole("link", { name: "View Food & Dining transactions" }),
+    ).toHaveAttribute(
+      "href",
+      "/transactions?year=2026&month=2&scope=household&cat=Dining+Out&cat=Groceries",
+    );
   });
 
-  it("sends the scope from the URL to the API", async () => {
+  it("expands a group row into linked categories", async () => {
+    await renderPopulated();
+    const table = within(screen.getByTestId("group-breakdown"));
+    await userEvent.click(table.getByRole("button", { name: /Food & Dining/ }));
+    const groceries = table.getByRole("link", { name: /Groceries/ });
+    expect(groceries).toHaveAttribute(
+      "href",
+      "/transactions?year=2026&month=2&scope=household&cat=Groceries",
+    );
+    expect(table.getByText("$150.00")).toBeInTheDocument();
+  });
+
+  it("switches to year to date and links with a date range", async () => {
+    await renderPopulated("/?year=2026&month=2&period=ytd");
+    expect(screen.getByText("Jan–Feb 2026")).toBeInTheDocument();
+    expect(screen.getByText("$1,350.00")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "View Travel transactions" }),
+    ).toHaveAttribute(
+      "href",
+      "/transactions?startDate=2026-01-01&endDate=2026-02-28&scope=household&cat=Flights",
+    );
+    expect(screen.queryByText(/Notable in/)).not.toBeInTheDocument();
+  });
+
+  it("shows the donut with a legend that drills into a group", async () => {
+    await renderPopulated("/?year=2026&month=2&chart=donut");
+    expect(screen.getByTestId("spending-donut")).toBeInTheDocument();
+    const legend = within(screen.getByTestId("spending-legend"));
+    expect(legend.getByText("Travel")).toBeInTheDocument();
+    await userEvent.click(
+      legend.getByRole("button", { name: /Food & Dining/ }),
+    );
+    expect(
+      screen.getByRole("navigation", { name: "Breakdown level" }),
+    ).toHaveTextContent("All groups");
+    expect(legend.getByRole("link", { name: /Dining Out/ })).toHaveAttribute(
+      "href",
+      "/transactions?year=2026&month=2&scope=household&cat=Dining+Out",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "All groups" }));
+    expect(legend.getByText("Travel")).toBeInTheDocument();
+  });
+
+  it("shows merchant bars with search links", async () => {
+    await renderPopulated("/?year=2026&month=2&chart=bars&by=merchant");
+    const bars = within(screen.getByTestId("spending-bars"));
+    expect(bars.getByRole("link", { name: /Sushi Place/ })).toHaveAttribute(
+      "href",
+      "/transactions?year=2026&month=2&scope=household&q=Sushi+Place",
+    );
+  });
+
+  it("lists what moved this month with links", async () => {
+    await renderPopulated();
+    const list = within(screen.getByTestId("notable-list"));
+    expect(
+      list.getByRole("link", { name: /Dining Out up 20%/ }),
+    ).toHaveAttribute(
+      "href",
+      "/transactions?year=2026&month=2&scope=household&cat=Dining+Out",
+    );
+    expect(list.getByText("Groceries is new this month")).toBeInTheDocument();
+  });
+
+  it("sends the scope from the URL and carries it into every link", async () => {
     let requestedScope: string | null = null;
     server.use(
       http.get("/api/v1/insights/spending-trends", ({ request }) => {
         requestedScope = new URL(request.url).searchParams.get("scope");
-        return HttpResponse.json({ ...emptyResponse, scope: "personal" });
+        return HttpResponse.json(populatedResponse);
       }),
     );
-
     renderWithProviders(<InsightsPage />, {
-      routerProps: { initialEntries: ["/?scope=personal"] },
+      routerProps: { initialEntries: ["/?year=2026&month=2&scope=personal"] },
     });
-
     await waitFor(() => {
       expect(requestedScope).toBe("personal");
     });
     expect(screen.getByRole("radio", { name: "My Spending" })).toBeChecked();
     expect(
-      screen.getByRole("heading", { name: "No spending data" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/No spending of yours found for 2026/),
-    ).toBeInTheDocument();
-  });
-
-  it("hides who's paying in personal scope", async () => {
-    server.use(
-      http.get("/api/v1/insights/spending-trends", () =>
-        HttpResponse.json({ ...populatedResponse, scope: "personal" }),
-      ),
-    );
-
-    renderWithProviders(<InsightsPage />, {
-      routerProps: { initialEntries: ["/?scope=personal"] },
-    });
-
-    await waitFor(() => {
-      expect(screen.getAllByText("Food & Dining").length).toBeGreaterThan(0);
-    });
-    expect(screen.queryByText("Who's paying")).not.toBeInTheDocument();
-    expect(
       screen.getByText(/Your share of household spending/),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "View Travel transactions" }),
+    ).toHaveAttribute(
+      "href",
+      "/transactions?year=2026&month=2&scope=personal&cat=Flights",
+    );
   });
 
-  it("renders who's paying section", async () => {
+  it("explains an empty month inside a year with data", async () => {
     server.use(
       http.get("/api/v1/insights/spending-trends", () =>
-        HttpResponse.json(populatedResponse),
+        HttpResponse.json({
+          ...populatedResponse,
+          month: 3,
+          month_flow: {
+            cells: [],
+            top_merchants: [],
+            largest_transactions: [],
+          },
+        }),
       ),
     );
-
-    renderWithProviders(<InsightsPage />);
-
+    renderWithProviders(<InsightsPage />, {
+      routerProps: { initialEntries: ["/?year=2026&month=3"] },
+    });
     await waitFor(() => {
-      expect(screen.getByText("Who's paying")).toBeInTheDocument();
+      expect(screen.getByText(/No spending in March 2026/)).toBeInTheDocument();
     });
   });
 
-  it("hides comparison cards when empty", async () => {
-    const noComparisons = {
-      ...populatedResponse,
-      comparison_cards: [],
-    };
-    server.use(
-      http.get("/api/v1/insights/spending-trends", () =>
-        HttpResponse.json(noComparisons),
-      ),
-    );
-
-    renderWithProviders(<InsightsPage />);
-
-    await waitFor(() => {
-      expect(screen.getAllByText("Food & Dining").length).toBeGreaterThan(0);
-    });
-    expect(screen.queryByText("vs 3-month average")).not.toBeInTheDocument();
-  });
-
-  it("shows error state", async () => {
+  it("shows the error state", async () => {
     server.use(
       http.get("/api/v1/insights/spending-trends", () =>
         HttpResponse.json(
@@ -316,44 +219,9 @@ describe("InsightsPage", () => {
         ),
       ),
     );
-
     renderWithProviders(<InsightsPage />);
-
     await waitFor(() => {
       expect(screen.getByRole("alert")).toBeInTheDocument();
     });
-  });
-
-  it("expands sparkline card on click", async () => {
-    server.use(
-      http.get("/api/v1/insights/spending-trends", () =>
-        HttpResponse.json(populatedResponse),
-      ),
-    );
-
-    renderWithProviders(<InsightsPage />, {
-      routerProps: { initialEntries: ["/?year=2026&month=2"] },
-    });
-
-    await waitFor(() => {
-      expect(screen.getAllByText("Food & Dining").length).toBeGreaterThan(0);
-    });
-
-    // Sparkline cards should have expand buttons
-    const expandButtons = screen.getAllByRole("button", { expanded: false });
-    const sparklineButton = expandButtons.find((btn) =>
-      btn.textContent?.includes("Food & Dining"),
-    );
-    expect(sparklineButton).toBeDefined();
-
-    // Click to expand
-    sparklineButton?.click();
-
-    // Should show category breakdown for month 2
-    await waitFor(() => {
-      expect(screen.getByText("Dining Out")).toBeInTheDocument();
-    });
-    expect(screen.getByText("Groceries")).toBeInTheDocument();
-    expect(screen.getByText("View transactions")).toBeInTheDocument();
   });
 });

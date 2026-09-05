@@ -169,15 +169,16 @@ async def test_reconciliation_personal_scope(client: AsyncClient) -> None:
     )
     await upload_csv(client, alice_id, csv, auth=cookies)
 
-    # Personal scope: only Alice's non-household txs
+    # Personal scope: every row where Alice's share is positive — her half
+    # of the shared restaurant and her own coffee.
     response = await client.get(
         f"/api/v1/reconciliation?year=2026&month=1&scope=personal&person_id={alice_id}",
         auth=cookies,
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["transaction_count"] == 0  # personal txs have payer_percentage=100
-    assert len(data["transactions"]) == 1  # the coffee tx (non-household)
+    assert data["transaction_count"] == 1  # the 50/50 restaurant enters settlement
+    assert {t["merchant"] for t in data["transactions"]} == {"Restaurant", "Coffee"}
 
 
 async def test_reconciliation_all_scope(client: AsyncClient) -> None:

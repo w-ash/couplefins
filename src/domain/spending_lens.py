@@ -21,7 +21,7 @@ refund subtracts.
 from collections import defaultdict
 from collections.abc import Iterable, Set
 from decimal import Decimal
-from typing import Protocol
+from typing import Literal, Protocol
 from uuid import UUID
 
 from attrs import define
@@ -36,6 +36,21 @@ from src.domain.entities.transaction import Transaction
 from src.domain.filters import is_reconciliation_relevant, is_split_relevant
 from src.domain.person_spending import compute_person_share, signed_person_share
 
+# Where a row's money came from, as the spending-flow chart draws it. Full-
+# amount lenses answer with the payer; a person's lens answers with the kind
+# of claim they have on the row.
+type FlowSourceKind = Literal["payer", "household_share", "personal", "spotted_for_me"]
+
+
+@define(frozen=True, slots=True)
+class FlowSource:
+    kind: FlowSourceKind
+    person_id: UUID
+
+
+def _paid_by(tx: Transaction) -> FlowSource:
+    return FlowSource("payer", tx.payer_person_id)
+
 
 class SpendingLens(Protocol):
     def is_relevant(self, tx: Transaction, /) -> bool:
@@ -48,6 +63,10 @@ class SpendingLens(Protocol):
 
     def personal_owner(self, tx: Transaction, /) -> UUID | None:
         """Whose personal spending a non-household row is; None = unattributed."""
+        ...
+
+    def flow_source(self, tx: Transaction, /) -> FlowSource:
+        """Where the money came from, for the spending-flow chart."""
         ...
 
 
@@ -71,6 +90,10 @@ class HouseholdLens:
     def personal_owner(self, tx: Transaction) -> UUID | None:
         return tx.payer_person_id if tx.category in self.personal_categories else None
 
+    @staticmethod
+    def flow_source(tx: Transaction) -> FlowSource:
+        return _paid_by(tx)
+
 
 @define(frozen=True, slots=True)
 class PersonalLens:
@@ -92,6 +115,16 @@ class PersonalLens:
     def personal_owner(self, _tx: Transaction, /) -> UUID | None:
         return self.person_id
 
+    def flow_source(self, tx: Transaction) -> FlowSource:
+        """A household row is my share of the couple's spending; a row I paid
+        is personal; a row my partner paid that I owe part of is theirs to
+        settle — "spotted for me" (a personal split lands here too)."""
+        if tx.household:
+            return FlowSource("household_share", tx.payer_person_id)
+        if tx.payer_person_id == self.person_id:
+            return FlowSource("personal", tx.payer_person_id)
+        return FlowSource("spotted_for_me", tx.payer_person_id)
+
 
 @define(frozen=True, slots=True)
 class SplitLens:
@@ -108,6 +141,10 @@ class SplitLens:
     @staticmethod
     def personal_owner(_tx: Transaction, /) -> UUID | None:
         return None
+
+    @staticmethod
+    def flow_source(tx: Transaction) -> FlowSource:
+        return _paid_by(tx)
 
 
 @define(frozen=True, slots=True)
@@ -127,6 +164,10 @@ class AllRowsLens:
     @staticmethod
     def personal_owner(tx: Transaction) -> UUID | None:
         return tx.payer_person_id
+
+    @staticmethod
+    def flow_source(tx: Transaction) -> FlowSource:
+        return _paid_by(tx)
 
 
 def select(lens: SpendingLens, txs: list[Transaction]) -> list[Transaction]:

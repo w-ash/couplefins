@@ -1,245 +1,82 @@
 import { TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 import { Bar, BarChart, ResponsiveContainer } from "recharts";
 import { useGetSpendingTrends } from "@/api/generated/insights/insights";
-import type {
-  BudgetLineItem,
-  CategorySpendingItem,
-  GroupSummaryItem,
-  MonthlyGroupSpendingItem,
-  MonthlyPersonPaidItem,
-  MonthlySettlementItem,
-  SpendingTrendsResponse,
-} from "@/api/generated/model";
 import { Card } from "@/components/Card";
-import { ComparisonCard } from "@/components/ComparisonCard";
+import { GroupBreakdownTable } from "@/components/insights/GroupBreakdownTable";
+import { MonthlyStackChart } from "@/components/insights/MonthlyStackChart";
+import { NotableList } from "@/components/insights/NotableList";
+import { SpendingBars } from "@/components/insights/SpendingBars";
+import { SpendingDonut } from "@/components/insights/SpendingDonut";
+import { SpendingFlowChart } from "@/components/insights/SpendingFlowChart";
+import { SpendingLegendTable } from "@/components/insights/SpendingLegendTable";
 import { MonthPicker } from "@/components/MonthPicker";
 import { PageHeader } from "@/components/PageHeader";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
-import { PersonPaidChart } from "@/components/PersonPaidChart";
 import { SectionHeader } from "@/components/SectionHeader";
 import { SegmentedControl } from "@/components/SegmentedControl";
-import { SettlementTrendChart } from "@/components/SettlementTrendChart";
-import { SparklineCard } from "@/components/SparklineCard";
+import { StatsGrid } from "@/components/StatsGrid";
 import { useGroupIconMap } from "@/lib/categories";
-import { getChartColor } from "@/lib/chart-colors";
 import {
   formatCurrency,
+  formatShortDate,
   getDeltaColorClass,
   MONTHS,
   useMonthYear,
 } from "@/lib/format";
-import { PAGE_PADDING } from "@/lib/layout";
+import { useIdentityStore } from "@/lib/identity";
 import {
-  PERSON_SCOPE_OPTIONS,
-  type PersonScope,
-  usePersonScopeParam,
-} from "@/lib/person-scope";
+  buildGroupRows,
+  buildHeadline,
+  buildMonthlyStack,
+  buildNotable,
+} from "@/lib/insights-data";
+import {
+  INSIGHTS_CHART_OPTIONS,
+  INSIGHTS_GROUP_BY_OPTIONS,
+  INSIGHTS_PERIOD_OPTIONS,
+  type InsightsChart,
+  type InsightsGroupBy,
+  type InsightsPeriod,
+  periodRange,
+  useInsightsFilters,
+} from "@/lib/insights-filters";
+import { PAGE_PADDING } from "@/lib/layout";
+import { PERSON_SCOPE_OPTIONS, type PersonScope } from "@/lib/person-scope";
 import { usePersonMaps } from "@/lib/persons";
+import {
+  assignGroupColors,
+  buildCategorySlices,
+  buildGroupSlices,
+  buildMerchantSlices,
+  buildSankeyData,
+  type FlowContext,
+  foldSlices,
+  type SliceDatum,
+} from "@/lib/spending-flow";
+import { buildTransactionsUrl } from "@/lib/transaction-links";
 
-interface GroupChartData {
-  groupId: string | null;
-  groupName: string;
-  data: { month: number; amount: number }[];
-  ytdTotal: number;
-}
-
-function groupSpendingByGroupId(
-  spending: MonthlyGroupSpendingItem[],
-): Map<string | null, { month: number; amount: number }[]> {
-  const byGroup = new Map<string | null, { month: number; amount: number }[]>();
-  for (const item of spending) {
-    const key = item.group_id;
-    if (!byGroup.has(key)) byGroup.set(key, []);
-    byGroup.get(key)?.push({ month: item.month, amount: item.amount });
-  }
-  return byGroup;
-}
-
-function buildGroupCharts(
-  spending: MonthlyGroupSpendingItem[],
-  summaries: GroupSummaryItem[],
-): GroupChartData[] {
-  const byGroup = groupSpendingByGroupId(spending);
-
-  return summaries.map((gs) => ({
-    groupId: gs.group_id,
-    groupName: gs.group_name,
-    data: (byGroup.get(gs.group_id) ?? []).sort((a, b) => a.month - b.month),
-    ytdTotal: gs.ytd_total,
-  }));
-}
-
-function buildCategoryMap(
-  spending: MonthlyGroupSpendingItem[],
-  month: number,
-): Map<string | null, CategorySpendingItem[]> {
-  const result = new Map<string | null, CategorySpendingItem[]>();
-  for (const item of spending) {
-    if (item.month === month) {
-      result.set(item.group_id, item.categories);
-    }
-  }
-  return result;
-}
-
-function buildBudgetMap(
-  budgetLines: BudgetLineItem[],
-): Map<string, Array<{ month: number; amount: number }>> {
-  const map = new Map<string, Array<{ month: number; amount: number }>>();
-  for (const bl of budgetLines) {
-    let arr = map.get(bl.group_id);
-    if (!arr) {
-      arr = [];
-      map.set(bl.group_id, arr);
-    }
-    arr.push({ month: bl.month, amount: bl.monthly_budget });
-  }
-  return map;
-}
-
-interface KpiData {
-  ytdTotal: number;
-  monthCount: number;
-  avg: number;
-  selectedMonth: { label: string; amount: number };
-  selectedDelta: { pct: number; label: string } | null;
-  trailingAvg: number | null;
-  topGroup: { name: string; amount: number; sharePct: number } | null;
-}
-
-function buildKpiData(
-  data: SpendingTrendsResponse,
-  month: number,
-): KpiData | null {
-  const { monthly_totals: totals, group_summaries: groups } = data;
-  if (totals.length === 0) return null;
-
-  const ytdTotal = groups.reduce((sum, g) => sum + g.ytd_total, 0);
-  // `totals` covers the whole year (for the sparklines below), but the
-  // "averaging $X/mo" hint must divide by months through the selection —
-  // otherwise viewing March later in the year would average YTD spending
-  // over months that haven't happened yet from the selected month's view.
-  const monthCount = totals.filter((t) => t.month <= month).length;
-  const avg = monthCount > 0 ? ytdTotal / monthCount : 0;
-
-  const selectedAmount =
-    totals.find((t) => t.month === month)?.total_amount ?? 0;
-
-  const trailing = totals
-    .filter((t) => t.month < month)
-    .sort((a, b) => b.month - a.month)
-    .slice(0, 3);
-  const trailingAvg =
-    trailing.length > 0
-      ? trailing.reduce((s, t) => s + t.total_amount, 0) / trailing.length
-      : null;
-  const selectedDelta =
-    trailingAvg != null && trailingAvg > 0
-      ? {
-          pct: ((selectedAmount - trailingAvg) / trailingAvg) * 100,
-          label: "vs 3-mo avg",
-        }
-      : null;
-
-  const top = groups[0];
-  const topGroup =
-    top && ytdTotal > 0
-      ? {
-          name: top.group_name,
-          amount: top.ytd_total,
-          sharePct: (top.ytd_total / ytdTotal) * 100,
-        }
-      : null;
-
-  return {
-    ytdTotal,
-    monthCount,
-    avg,
-    selectedMonth: { label: MONTHS[month - 1], amount: selectedAmount },
-    selectedDelta,
-    trailingAvg,
-    topGroup,
-  };
-}
-
-interface PersonPaidChartPoint {
-  month: number;
-  [personId: string]: number | string;
-}
-
-function buildPersonPaidChartData(
-  items: MonthlyPersonPaidItem[],
-  selectedGroupIds: Set<string> | "all",
-): PersonPaidChartPoint[] {
-  const byMonth = new Map<number, PersonPaidChartPoint>();
-
-  for (const item of items) {
-    if (
-      selectedGroupIds !== "all" &&
-      !selectedGroupIds.has(item.group_id ?? "")
-    )
-      continue;
-
-    let point = byMonth.get(item.month);
-    if (!point) {
-      point = { month: item.month };
-      byMonth.set(item.month, point);
-    }
-    const current = (point[item.person_id] as number) ?? 0;
-    point[item.person_id] = current + item.amount_paid;
-  }
-
-  return [...byMonth.values()].sort(
-    (a, b) => (a.month as number) - (b.month as number),
-  );
-}
-
-function buildPersonYtdTotals(
-  items: MonthlyPersonPaidItem[],
-  selectedGroupIds: Set<string> | "all",
-): Map<string, number> {
-  const totals = new Map<string, number>();
-  for (const item of items) {
-    if (
-      selectedGroupIds !== "all" &&
-      !selectedGroupIds.has(item.group_id ?? "")
-    )
-      continue;
-    totals.set(
-      item.person_id,
-      (totals.get(item.person_id) ?? 0) + item.amount_paid,
-    );
-  }
-  return totals;
-}
-
-function buildSettledCount(
-  data: MonthlySettlementItem[],
-): { settled: number; total: number } | null {
-  if (data.length === 0) return null;
-  return {
-    settled: data.filter((d) => d.status === "settled").length,
-    total: data.length,
-  };
-}
-
-function filterPillClass(selected: boolean): string {
-  return `rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-    selected
-      ? "bg-primary text-primary-foreground"
-      : "bg-muted text-muted-foreground hover:text-foreground"
-  }`;
-}
+const EMPTY_ICON_MAP = new Map<string, string | null>();
 
 export function InsightsPage() {
   const { year, month } = useMonthYear();
-  const [scope, setScope] = usePersonScopeParam();
+  const [, setSearchParams] = useSearchParams();
+  const {
+    scope,
+    setScope,
+    period,
+    setPeriod,
+    chart,
+    setChart,
+    groupBy,
+    setGroupBy,
+  } = useInsightsFilters();
   const isPersonal = scope === "personal";
+  const currentPersonId = useIdentityStore((s) => s.currentPersonId);
   const groupIconMap = useGroupIconMap();
-  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
-  const [paidFilterGroups, setPaidFilterGroups] = useState<Set<string> | "all">(
-    "all",
+  const [drill, setDrill] = useState<{ key: string; name: string } | null>(
+    null,
   );
 
   const {
@@ -254,40 +91,73 @@ export function InsightsPage() {
     scope,
   });
   const data = response?.status === 200 ? response.data : undefined;
+  const { personNames, personIndexMap } = usePersonMaps(data?.persons);
 
-  const groupCharts = useMemo(
-    () =>
-      data
-        ? buildGroupCharts(data.monthly_group_spending, data.group_summaries)
-        : [],
-    [data],
+  // A drill-down belongs to one view; leave it when the view changes.
+  const drillKey = `${year}-${month}-${scope}-${period}-${groupBy}`;
+  const [lastDrillKey, setLastDrillKey] = useState(drillKey);
+  if (lastDrillKey !== drillKey) {
+    setLastDrillKey(drillKey);
+    setDrill(null);
+  }
+
+  const ctx: FlowContext = useMemo(
+    () => ({
+      range: periodRange(year, month, period),
+      scope,
+      currentPersonId,
+      personNames,
+      personIndex: personIndexMap,
+      groupColors: assignGroupColors(
+        (data?.group_summaries ?? []).map((g) => g.group_id),
+      ),
+    }),
+    [
+      year,
+      month,
+      period,
+      scope,
+      currentPersonId,
+      personNames,
+      personIndexMap,
+      data?.group_summaries,
+    ],
   );
 
-  const comparisonMap = useMemo(
-    () =>
-      data?.comparison_monthly_group_spending
-        ? groupSpendingByGroupId(data.comparison_monthly_group_spending)
-        : new Map(),
-    [data],
+  const flow = data
+    ? period === "month"
+      ? data.month_flow
+      : data.ytd_flow
+    : null;
+  const headline = useMemo(
+    () => (data ? buildHeadline(data, period, ctx) : null),
+    [data, period, ctx],
   );
-
-  const categoryMap = useMemo(
-    () =>
-      data ? buildCategoryMap(data.monthly_group_spending, month) : new Map(),
-    [data, month],
+  const sankey = useMemo(
+    () => (flow ? buildSankeyData(flow.cells, ctx) : null),
+    [flow, ctx],
   );
-
-  const budgetMap = useMemo(
-    () =>
-      data
-        ? buildBudgetMap(data.budget_lines)
-        : new Map<string, Array<{ month: number; amount: number }>>(),
-    [data],
+  const slices = useMemo<SliceDatum[]>(() => {
+    if (!flow) return [];
+    if (groupBy === "merchant")
+      return buildMerchantSlices(flow.top_merchants, ctx);
+    if (groupBy === "category")
+      return foldSlices(buildCategorySlices(flow.cells, ctx), ctx);
+    if (drill)
+      return foldSlices(buildCategorySlices(flow.cells, ctx, drill.key), ctx);
+    return buildGroupSlices(flow.cells, ctx);
+  }, [flow, ctx, groupBy, drill]);
+  const stack = useMemo(
+    () => (data ? buildMonthlyStack(data, ctx) : null),
+    [data, ctx],
   );
-
-  const kpi = useMemo(
-    () => (data ? buildKpiData(data, month) : null),
-    [data, month],
+  const groupRows = useMemo(
+    () => (data ? buildGroupRows(data, period, ctx) : []),
+    [data, period, ctx],
+  );
+  const notable = useMemo(
+    () => (data && period === "month" ? buildNotable(data, ctx) : []),
+    [data, period, ctx],
   );
 
   const sortedMonthlyTotals = useMemo(
@@ -296,45 +166,21 @@ export function InsightsPage() {
     [data],
   );
 
-  const personPaidItems = useMemo(
-    () => data?.monthly_person_paid ?? [],
-    [data],
-  );
+  const canDrill = (slice: SliceDatum) =>
+    groupBy === "group" && !drill && slice.groupKey !== null && !slice.members;
+  const onDrill = (slice: SliceDatum) =>
+    setDrill({ key: slice.groupKey ?? "", name: slice.name });
+  const selectMonth = (m: number) =>
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("year", String(year));
+      next.set("month", String(m));
+      return next;
+    });
 
-  const personPaidChartData = useMemo(
-    () => buildPersonPaidChartData(personPaidItems, paidFilterGroups),
-    [personPaidItems, paidFilterGroups],
-  );
-
-  const personYtdTotals = useMemo(
-    () => buildPersonYtdTotals(personPaidItems, paidFilterGroups),
-    [personPaidItems, paidFilterGroups],
-  );
-
-  const settledCount = useMemo(
-    () => (data ? buildSettledCount(data.settlement_trend) : null),
-    [data],
-  );
-
-  const { personNames } = usePersonMaps(data?.persons);
-
-  const personChartEntries = useMemo(
-    () =>
-      (data?.persons ?? []).map((p, i) => ({
-        id: p.id,
-        name: p.name,
-        color: `var(--person-${i})`,
-      })),
-    [data?.persons],
-  );
-
-  const comparisonCards = data?.comparison_cards ?? [];
-  const settlementTrend = data?.settlement_trend ?? [];
-  // Who fronted the household money is a couple-level fact with no "my"
-  // reading, so the section only appears in household scope.
-  const showWhoPays =
-    !isPersonal &&
-    (personPaidChartData.length > 0 || settlementTrend.length > 0);
+  const hasYearData = (data?.group_summaries.length ?? 0) > 0;
+  const hasPeriodData = (flow?.cells.length ?? 0) > 0;
+  const sliceTotal = slices.reduce((s, x) => s + x.amount, 0);
 
   return (
     <div className={`mx-auto max-w-5xl ${PAGE_PADDING}`}>
@@ -342,12 +188,17 @@ export function InsightsPage() {
         <MonthPicker />
       </PageHeader>
 
-      {/* Controls */}
-      <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+      <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
         <SegmentedControl<PersonScope>
           options={PERSON_SCOPE_OPTIONS}
           value={scope}
           onChange={setScope}
+          size="sm"
+        />
+        <SegmentedControl<InsightsPeriod>
+          options={INSIGHTS_PERIOD_OPTIONS}
+          value={period}
+          onChange={setPeriod}
           size="sm"
         />
         {isPersonal && (
@@ -358,11 +209,11 @@ export function InsightsPage() {
         )}
       </div>
 
-      {isLoading && <PageLoading label="Loading spending trends..." />}
+      {isLoading && <PageLoading label="Loading spending insights..." />}
 
       {error && <PageError error={error} onRetry={refetch} />}
 
-      {data && groupCharts.length === 0 && (
+      {data && !hasYearData && (
         <PageEmpty
           icon={<TrendingUp />}
           heading="No spending data"
@@ -374,256 +225,212 @@ export function InsightsPage() {
         />
       )}
 
-      {data && groupCharts.length > 0 && (
-        <div className="space-y-6">
-          {kpi && (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {/* Hero — Year to date */}
-              <Card className="rounded-lg p-5">
-                <p className="text-sm font-medium text-muted-foreground">
-                  Year to date
-                </p>
-                <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
-                  {formatCurrency(kpi.ytdTotal)}
-                </p>
-                {sortedMonthlyTotals.length > 0 && (
-                  <div className="mt-3" data-testid="ytd-mini-chart">
-                    <ResponsiveContainer width="100%" height={48}>
-                      <BarChart
-                        data={sortedMonthlyTotals}
-                        margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
-                      >
-                        <Bar
-                          dataKey="total_amount"
-                          fill="var(--color-primary)"
-                          fillOpacity={0.2}
-                          radius={[2, 2, 0, 0]}
-                          isAnimationActive={false}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-                <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-                  averaging {formatCurrency(kpi.avg)}/mo &middot;{" "}
-                  {kpi.monthCount} {kpi.monthCount === 1 ? "month" : "months"}
-                </p>
-              </Card>
+      {data && hasYearData && headline && (
+        <div className="space-y-8">
+          <StatsGrid
+            stats={[
+              {
+                label: headline.label,
+                value: formatCurrency(headline.total),
+                accent:
+                  sortedMonthlyTotals.length > 0 ? (
+                    <div className="mt-2" data-testid="ytd-mini-chart">
+                      <ResponsiveContainer width="100%" height={32}>
+                        <BarChart
+                          data={sortedMonthlyTotals}
+                          margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
+                        >
+                          <Bar
+                            dataKey="total_amount"
+                            fill="var(--color-primary)"
+                            fillOpacity={0.25}
+                            radius={[2, 2, 0, 0]}
+                            isAnimationActive={false}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : undefined,
+                description: headline.comparison ? (
+                  <span
+                    className={`font-medium ${getDeltaColorClass(headline.comparison.deltaPct)}`}
+                  >
+                    {formatCurrency(Math.abs(headline.comparison.deltaAmount))}{" "}
+                    {headline.comparison.text}
+                  </span>
+                ) : (
+                  "First period on record"
+                ),
+              },
+              {
+                label: "Average",
+                value: headline.average
+                  ? formatCurrency(headline.average.value)
+                  : "—",
+                description: headline.average
+                  ? headline.average.unit === "day"
+                    ? "per day"
+                    : "per complete month"
+                  : "No complete month yet",
+              },
+              {
+                label: "Top group",
+                value: headline.topGroup?.name ?? "None",
+                valueClassName: "text-foreground text-base truncate",
+                description: headline.topGroup
+                  ? `${formatCurrency(headline.topGroup.amount)} · ${Math.round(headline.topGroup.share * 100)}% of the period`
+                  : undefined,
+                href: headline.topGroup
+                  ? buildTransactionsUrl(headline.topGroup.link)
+                  : undefined,
+              },
+              {
+                label: "Largest transaction",
+                value: headline.largest
+                  ? formatCurrency(headline.largest.amount)
+                  : "—",
+                description: headline.largest
+                  ? `${headline.largest.merchant} · ${formatShortDate(headline.largest.date)}`
+                  : undefined,
+                href: headline.largest
+                  ? buildTransactionsUrl(headline.largest.link)
+                  : undefined,
+              },
+            ]}
+          />
 
-              {/* Selected month */}
-              <Card className="rounded-lg p-4">
-                <p className="text-xs font-medium text-muted-foreground">
-                  {kpi.selectedMonth.label}
-                </p>
-                <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">
-                  {formatCurrency(kpi.selectedMonth.amount)}
-                </p>
-                {kpi.trailingAvg != null && (
-                  <div className="mt-2 space-y-1">
-                    <div className="h-1 rounded-full bg-muted">
-                      <div
-                        className="h-1 rounded-full bg-primary"
-                        style={{
-                          width: `${(kpi.selectedMonth.amount / Math.max(kpi.selectedMonth.amount, kpi.trailingAvg, 1)) * 100}%`,
-                        }}
-                      />
-                    </div>
-                    <div className="h-1 rounded-full bg-muted">
-                      <div
-                        className="h-1 rounded-full bg-muted-foreground/30"
-                        style={{
-                          width: `${(kpi.trailingAvg / Math.max(kpi.selectedMonth.amount, kpi.trailingAvg, 1)) * 100}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
+          <section aria-labelledby="where-heading">
+            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <SectionHeader
+                  id="where-heading"
+                  title="Where the money went"
+                  description="Click any part of the chart or the legend to see its transactions"
+                />
+              </div>
+              <div className="mb-4 flex flex-wrap gap-2">
+                <SegmentedControl<InsightsChart>
+                  options={INSIGHTS_CHART_OPTIONS}
+                  value={chart}
+                  onChange={setChart}
+                  size="sm"
+                />
+                {chart !== "flow" && (
+                  <SegmentedControl<InsightsGroupBy>
+                    options={INSIGHTS_GROUP_BY_OPTIONS}
+                    value={groupBy}
+                    onChange={setGroupBy}
+                    size="sm"
+                  />
                 )}
-                <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-                  {kpi.selectedDelta ? (
-                    <span
-                      className={`font-medium ${getDeltaColorClass(kpi.selectedDelta.pct)}`}
-                    >
-                      {kpi.selectedDelta.pct >= 0 ? "+" : ""}
-                      {Math.round(kpi.selectedDelta.pct)}%{" "}
-                      {kpi.selectedDelta.label}
-                    </span>
-                  ) : (
-                    "First month on record"
-                  )}
-                </p>
+              </div>
+            </div>
+            {!hasPeriodData ? (
+              <Card className="rounded-lg p-5 text-sm text-muted-foreground">
+                No spending in {headline.label}. Pick another month or switch to
+                year to date.
               </Card>
-
-              {/* Top category */}
+            ) : chart === "flow" && sankey ? (
               <Card className="rounded-lg p-4">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Top category
+                <p className="mb-2 text-xs text-muted-foreground sm:hidden">
+                  Swipe sideways to see the whole flow, or switch to Bars.
                 </p>
-                <p className="mt-1 text-lg font-semibold text-foreground">
-                  {kpi.topGroup?.name ?? "None"}
-                </p>
-                {kpi.topGroup && (
-                  <div className="mt-2">
-                    <div className="h-1.5 rounded-full bg-muted">
-                      <div
-                        className="h-1.5 rounded-full bg-primary"
-                        style={{
-                          width: `${Math.min(100, Math.round(kpi.topGroup.sharePct))}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-                {kpi.topGroup && (
-                  <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-                    {formatCurrency(kpi.topGroup.amount)} &mdash;{" "}
-                    {Math.round(kpi.topGroup.sharePct)}% of YTD
+                <SpendingFlowChart dataset={sankey} />
+                {sankey.droppedRefundOnly > 0 && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {sankey.droppedRefundOnly} refund-heavy{" "}
+                    {sankey.droppedRefundOnly === 1 ? "line is" : "lines are"}{" "}
+                    left out of the flow; the table below still counts{" "}
+                    {sankey.droppedRefundOnly === 1 ? "it" : "them"}.
                   </p>
                 )}
               </Card>
-            </div>
-          )}
-
-          {comparisonCards.length > 0 && (
-            <section>
-              <SectionHeader
-                title={`${MONTHS[month - 1]} vs 3-month average`}
-                description="Spot categories where spending jumped or dropped this month"
-              />
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {comparisonCards.map((card) => (
-                  <ComparisonCard
-                    key={card.group_id ?? "uncategorized"}
-                    groupName={card.group_name}
-                    groupIcon={groupIconMap.get(card.group_id ?? "") ?? null}
-                    currentAmount={card.current_month_amount}
-                    trailingAverage={card.trailing_average}
-                    deltaAmount={card.delta_amount}
-                    deltaPercentage={card.delta_percentage}
-                    isNew={card.is_new}
+            ) : chart === "donut" ? (
+              <Card className="rounded-lg p-4">
+                <div className="grid gap-4 lg:grid-cols-[280px_1fr] lg:items-start">
+                  <SpendingDonut
+                    slices={slices}
+                    centerLabel={drill ? drill.name : headline.label}
+                    total={sliceTotal}
+                    canDrill={canDrill}
+                    onDrill={onDrill}
                   />
-                ))}
-              </div>
-            </section>
-          )}
-
-          <section>
-            <SectionHeader
-              title="Spending by category"
-              description="Monthly trends for each category — tap to see the breakdown"
-            />
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {groupCharts.map((group, index) => (
-                <SparklineCard
-                  key={group.groupId ?? "uncategorized"}
-                  groupName={group.groupName}
-                  groupIcon={groupIconMap.get(group.groupId ?? "") ?? null}
-                  data={group.data}
-                  ytdTotal={group.ytdTotal}
-                  color={getChartColor(index)}
-                  budgetAmounts={budgetMap.get(group.groupId ?? "")}
-                  comparisonData={comparisonMap.get(group.groupId) ?? undefined}
-                  comparisonYear={year - 1}
-                  year={year}
-                  isExpanded={
-                    expandedGroupId === (group.groupId ?? "uncategorized")
-                  }
-                  onToggle={() =>
-                    setExpandedGroupId(
-                      expandedGroupId === (group.groupId ?? "uncategorized")
-                        ? null
-                        : (group.groupId ?? "uncategorized"),
-                    )
-                  }
-                  categories={categoryMap.get(group.groupId) ?? undefined}
-                  selectedMonth={month}
-                  scope={scope}
+                  <SpendingLegendTable
+                    slices={slices}
+                    breadcrumb={
+                      drill
+                        ? { label: drill.name, onBack: () => setDrill(null) }
+                        : null
+                    }
+                    canDrill={canDrill}
+                    onDrill={onDrill}
+                  />
+                </div>
+              </Card>
+            ) : (
+              <Card className="rounded-lg p-4">
+                {drill && (
+                  <nav
+                    aria-label="Breakdown level"
+                    className="mb-3 flex items-center gap-1 text-xs"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setDrill(null)}
+                      className="text-primary hover:underline"
+                    >
+                      All groups
+                    </button>
+                    <span className="text-muted-foreground">›</span>
+                    <span className="font-medium text-foreground">
+                      {drill.name}
+                    </span>
+                  </nav>
+                )}
+                <SpendingBars
+                  slices={slices}
+                  canDrill={canDrill}
+                  onDrill={onDrill}
                 />
-              ))}
-            </div>
+              </Card>
+            )}
           </section>
 
-          {showWhoPays && (
-            <section>
-              <SectionHeader
-                title="Who's paying"
-                description="See who's been covering more of the household spending each month"
-              />
-
-              {/* Category group filter */}
-              {data && data.group_summaries.length > 1 && (
-                <div className="mb-4 flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setPaidFilterGroups("all")}
-                    className={filterPillClass(paidFilterGroups === "all")}
-                  >
-                    All categories
-                  </button>
-                  {data.group_summaries.map((gs) => {
-                    const gid = gs.group_id ?? "";
-                    const isSelected =
-                      paidFilterGroups !== "all" && paidFilterGroups.has(gid);
-                    return (
-                      <button
-                        key={gid}
-                        type="button"
-                        onClick={() => {
-                          setPaidFilterGroups((prev) => {
-                            if (prev === "all") return new Set([gid]);
-                            const next = new Set(prev);
-                            if (next.has(gid)) next.delete(gid);
-                            else next.add(gid);
-                            return next.size === 0 ? "all" : next;
-                          });
-                        }}
-                        className={filterPillClass(isSelected)}
-                      >
-                        {gs.group_name}
-                      </button>
-                    );
-                  })}
-                </div>
+          <section aria-labelledby="time-heading">
+            <SectionHeader
+              id="time-heading"
+              title="Spending over time"
+              description={`Each bar is a month of ${year}; the dotted line is ${year - 1}. Click a bar to select that month.`}
+            />
+            <Card className="rounded-lg p-4">
+              {stack && (
+                <MonthlyStackChart
+                  stack={stack}
+                  year={year}
+                  selectedMonth={month}
+                  onSelectMonth={selectMonth}
+                />
               )}
-
-              {/* Per-person stats */}
-              <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                {personChartEntries.map((person) => (
-                  <Card key={person.id} className="rounded-lg p-4">
-                    <p className="text-xs font-medium text-muted-foreground">
-                      {person.name} paid
-                    </p>
-                    <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">
-                      {formatCurrency(personYtdTotals.get(person.id) ?? 0)}
-                    </p>
-                  </Card>
-                ))}
-                {settledCount && (
-                  <Card className="rounded-lg p-4">
-                    <p className="text-xs font-medium text-muted-foreground">
-                      Months settled
-                    </p>
-                    <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">
-                      {settledCount.settled} of {settledCount.total}
-                    </p>
-                  </Card>
-                )}
+              <div className="mt-4 border-t border-border-muted pt-3">
+                <GroupBreakdownTable
+                  rows={groupRows}
+                  iconMap={groupIconMap ?? EMPTY_ICON_MAP}
+                  selectedMonth={month}
+                />
               </div>
+            </Card>
+          </section>
 
-              {/* Who's paying chart */}
-              <PersonPaidChart
-                data={personPaidChartData}
-                persons={personChartEntries}
+          {notable.length > 0 && (
+            <section aria-labelledby="notable-heading">
+              <SectionHeader
+                id="notable-heading"
+                title={`Notable in ${MONTHS[month - 1]}`}
+                description="The biggest swings against the last three months"
               />
-
-              {/* Settlement trend */}
-              {settlementTrend.length > 0 && (
-                <div className="mt-4">
-                  <SettlementTrendChart
-                    data={settlementTrend}
-                    personNames={personNames}
-                  />
-                </div>
-              )}
+              <Card className="rounded-lg px-4 py-1">
+                <NotableList items={notable} />
+              </Card>
             </section>
           )}
         </div>

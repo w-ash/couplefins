@@ -1,4 +1,5 @@
 from httpx import AsyncClient
+import pytest
 
 from tests.integration.conftest import login_as_bob, setup_and_login, upload_csv
 
@@ -35,15 +36,10 @@ async def test_spending_trends_with_data(client: AsyncClient) -> None:
     assert all("group_name" in gs for gs in data["group_summaries"])
     assert all("ytd_total" in gs for gs in data["group_summaries"])
 
-    # v0.7.1 fields present
     assert "comparison_cards" in data
-    assert "budget_lines" in data
-    assert "settlement_trend" in data
     assert "persons" in data
     assert "month" in data
-
     assert len(data["persons"]) == 2
-    assert len(data["settlement_trend"]) == 2  # Jan + Feb have settlements
 
 
 async def test_spending_trends_empty_year(client: AsyncClient) -> None:
@@ -60,8 +56,12 @@ async def test_spending_trends_empty_year(client: AsyncClient) -> None:
     assert data["monthly_totals"] == []
     assert data["group_summaries"] == []
     assert data["comparison_cards"] == []
-    assert data["budget_lines"] == []
-    assert data["settlement_trend"] == []
+    assert data["category_comparisons"] == []
+    assert data["month_flow"] == {
+        "cells": [],
+        "top_merchants": [],
+        "largest_transactions": [],
+    }
 
 
 async def test_spending_trends_defaults_to_current_year(client: AsyncClient) -> None:
@@ -132,22 +132,60 @@ async def test_spending_trends_comparison_year_no_data(client: AsyncClient) -> N
     assert resp.json()["comparison_monthly_group_spending"] == []
 
 
-async def test_spending_trends_categories_present(client: AsyncClient) -> None:
+async def test_spending_trends_flow_household_sources_are_payers(
+    client: AsyncClient,
+) -> None:
+    persons, cookies = await setup_and_login(client)
+    await upload_csv(client, persons[0]["id"], ALICE_CSV, auth=cookies)
+    bob = await login_as_bob(client)
+    await upload_csv(client, persons[1]["id"], BOB_CSV, auth=bob)
+
+    resp = await client.get(
+        "/api/v1/insights/spending-trends",
+        params={"year": 2026, "month": 1},
+        auth=cookies,
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+
+    cells = data["month_flow"]["cells"]
+    assert {c["source_kind"] for c in cells} == {"payer"}
+    assert {c["source_person_id"] for c in cells} == {
+        persons[0]["id"],
+        persons[1]["id"],
+    }
+    assert {c["category"] for c in cells} == {
+        "Dining Out",
+        "Groceries & Home Supplies",
+        "Gas",
+    }
+    assert sum(c["amount"] for c in cells) == pytest.approx(
+        data["monthly_totals"][0]["total_amount"]
+    )
+    # Year to date through January is January alone.
+    assert sum(c["amount"] for c in data["ytd_flow"]["cells"]) == pytest.approx(150)
+    assert [m["merchant"] for m in data["month_flow"]["top_merchants"]] == [
+        "Grocery Store",
+        "Gas Station",
+        "Sushi Place",
+    ]
+    assert data["month_flow"]["largest_transactions"][0]["merchant"] == "Grocery Store"
+
+
+async def test_spending_trends_category_comparisons(client: AsyncClient) -> None:
     persons, cookies = await setup_and_login(client)
     await upload_csv(client, persons[0]["id"], ALICE_CSV, auth=cookies)
 
     resp = await client.get(
-        "/api/v1/insights/spending-trends", params={"year": 2026}, auth=cookies
+        "/api/v1/insights/spending-trends",
+        params={"year": 2026, "month": 2},
+        auth=cookies,
     )
     assert resp.status_code == 200
-
-    data = resp.json()
-    mgs = data["monthly_group_spending"]
-    assert len(mgs) > 0
-    # Each item should have categories
-    for item in mgs:
-        assert "categories" in item
-        assert isinstance(item["categories"], list)
+    comparisons = {c["category"]: c for c in resp.json()["category_comparisons"]}
+    assert comparisons["Dining Out"]["current_month_amount"] == pytest.approx(30)
+    assert comparisons["Dining Out"]["trailing_average"] == pytest.approx(40)
+    assert comparisons["Groceries & Home Supplies"]["current_month_amount"] == 0
 
 
 # --- scope ---
@@ -184,9 +222,23 @@ async def test_spending_trends_personal_scope_is_the_users_share(
         {"year": 2026, "month": 1, "total_amount": 110.0}
     ]
     # Bob's 30% of sushi + the parking Alice spotted for him.
-    assert bob_resp.json()["monthly_totals"] == [
+    bob_data = bob_resp.json()
+    assert bob_data["monthly_totals"] == [
         {"year": 2026, "month": 1, "total_amount": 60.0}
     ]
+    # Each person's flow names their claim on the row.
+    assert {
+        (c["source_kind"], c["amount"]) for c in alice_data["month_flow"]["cells"]
+    } == {
+        ("household_share", 70.0),
+        ("personal", 40.0),
+    }
+    assert {
+        (c["source_kind"], c["amount"]) for c in bob_data["month_flow"]["cells"]
+    } == {
+        ("household_share", 30.0),
+        ("spotted_for_me", 30.0),
+    }
 
 
 async def test_spending_trends_default_scope_is_household(

@@ -428,6 +428,14 @@ async def handle_spending_trends(
         "year": result.year,
         "scope": scope,
         "groups": [{"name": name, "months": months} for name, months in groups.items()],
+        "top_merchants_ytd": [
+            {
+                "merchant": UserData(m.merchant),
+                "amount": _fmt(m.amount),
+                "transactions": m.transaction_count,
+            }
+            for m in result.ytd_flow.top_merchants
+        ],
     }
 
 

@@ -1,16 +1,13 @@
+from datetime import date
 from uuid import UUID
 
 from pydantic import BaseModel
 
 from src.application.use_cases.get_spending_trends import GetSpendingTrendsResult
-from src.domain.insights import MonthlyGroupSpending
+from src.domain.insights import MonthlyGroupSpending, SpendingFlow
+from src.domain.spending_lens import FlowSourceKind
 from src.interface.api.schemas.persons import PersonResponse
 from src.interface.api.schemas.types import MoneyField
-
-
-class CategorySpendingItem(BaseModel):
-    category: str
-    amount: MoneyField
 
 
 class MonthlyGroupSpendingItem(BaseModel):
@@ -19,7 +16,6 @@ class MonthlyGroupSpendingItem(BaseModel):
     group_id: UUID | None
     group_name: str
     amount: MoneyField
-    categories: list[CategorySpendingItem]
 
 
 class MonthlyTotalItem(BaseModel):
@@ -45,27 +41,88 @@ class GroupComparisonItem(BaseModel):
     is_new: bool
 
 
-class BudgetLineItem(BaseModel):
-    group_id: UUID
-    month: int
-    monthly_budget: MoneyField
-
-
-class MonthlyPersonPaidItem(BaseModel):
-    month: int
-    person_id: UUID
+class CategoryComparisonItem(BaseModel):
+    category: str
     group_id: UUID | None
-    amount_paid: MoneyField
+    group_name: str
+    current_month_amount: MoneyField
+    trailing_average: MoneyField
+    delta_amount: MoneyField
+    delta_percentage: MoneyField
+    is_new: bool
 
 
-class MonthlySettlementItem(BaseModel):
-    year: int
-    month: int
+class SpendingFlowCellItem(BaseModel):
+    source_kind: FlowSourceKind
+    source_person_id: UUID
+    group_id: UUID | None
+    group_name: str
+    category: str
     amount: MoneyField
-    from_person_id: UUID
-    to_person_id: UUID
-    is_settled: bool
-    status: str  # settled | partially_settled | carried_forward
+    transaction_count: int
+
+
+class TopMerchantItem(BaseModel):
+    merchant: str
+    amount: MoneyField
+    transaction_count: int
+    category: str
+    group_id: UUID | None
+
+
+class LargestTransactionItem(BaseModel):
+    id: UUID
+    date: date
+    merchant: str
+    category: str
+    group_id: UUID | None
+    amount: MoneyField
+    payer_person_id: UUID
+
+
+class SpendingFlowItem(BaseModel):
+    cells: list[SpendingFlowCellItem]
+    top_merchants: list[TopMerchantItem]
+    largest_transactions: list[LargestTransactionItem]
+
+    @classmethod
+    def from_domain(cls, flow: SpendingFlow) -> SpendingFlowItem:
+        return cls(
+            cells=[
+                SpendingFlowCellItem(
+                    source_kind=c.source_kind,
+                    source_person_id=c.source_person_id,
+                    group_id=c.group_id,
+                    group_name=c.group_name,
+                    category=c.category,
+                    amount=c.amount,
+                    transaction_count=c.transaction_count,
+                )
+                for c in flow.cells
+            ],
+            top_merchants=[
+                TopMerchantItem(
+                    merchant=m.merchant,
+                    amount=m.amount,
+                    transaction_count=m.transaction_count,
+                    category=m.category,
+                    group_id=m.group_id,
+                )
+                for m in flow.top_merchants
+            ],
+            largest_transactions=[
+                LargestTransactionItem(
+                    id=t.id,
+                    date=t.date,
+                    merchant=t.merchant,
+                    category=t.category,
+                    group_id=t.group_id,
+                    amount=t.amount,
+                    payer_person_id=t.payer_person_id,
+                )
+                for t in flow.largest_transactions
+            ],
+        )
 
 
 class SpendingTrendsResponse(BaseModel):
@@ -75,9 +132,9 @@ class SpendingTrendsResponse(BaseModel):
     monthly_totals: list[MonthlyTotalItem]
     group_summaries: list[GroupSummaryItem]
     comparison_cards: list[GroupComparisonItem]
-    budget_lines: list[BudgetLineItem]
-    settlement_trend: list[MonthlySettlementItem]
-    monthly_person_paid: list[MonthlyPersonPaidItem]
+    category_comparisons: list[CategoryComparisonItem]
+    month_flow: SpendingFlowItem
+    ytd_flow: SpendingFlowItem
     persons: list[PersonResponse]
     comparison_monthly_group_spending: list[MonthlyGroupSpendingItem]
 
@@ -93,10 +150,6 @@ class SpendingTrendsResponse(BaseModel):
                     group_id=mgs.group_id,
                     group_name=mgs.group_name,
                     amount=mgs.amount,
-                    categories=[
-                        CategorySpendingItem(category=cs.category, amount=cs.amount)
-                        for cs in mgs.categories
-                    ],
                 )
                 for mgs in mgs_list
             ]
@@ -134,36 +187,21 @@ class SpendingTrendsResponse(BaseModel):
                 )
                 for cc in result.comparison_cards
             ],
-            budget_lines=[
-                BudgetLineItem(
-                    group_id=gid,
-                    month=month,
-                    monthly_budget=amount,
+            category_comparisons=[
+                CategoryComparisonItem(
+                    category=cc.category,
+                    group_id=cc.group_id,
+                    group_name=cc.group_name,
+                    current_month_amount=cc.current_month_amount,
+                    trailing_average=cc.trailing_average,
+                    delta_amount=cc.delta_amount,
+                    delta_percentage=cc.delta_percentage,
+                    is_new=cc.is_new,
                 )
-                for gid, months in result.budget_lines.items()
-                for month, amount in months.items()
+                for cc in result.category_comparisons
             ],
-            monthly_person_paid=[
-                MonthlyPersonPaidItem(
-                    month=pp.month,
-                    person_id=pp.person_id,
-                    group_id=pp.group_id,
-                    amount_paid=pp.amount_paid,
-                )
-                for pp in result.monthly_person_paid
-            ],
-            settlement_trend=[
-                MonthlySettlementItem(
-                    year=ms.year,
-                    month=ms.month,
-                    amount=ms.amount,
-                    from_person_id=ms.from_person_id,
-                    to_person_id=ms.to_person_id,
-                    is_settled=ms.is_settled,
-                    status=ms.status,
-                )
-                for ms in result.settlement_trend
-            ],
+            month_flow=SpendingFlowItem.from_domain(result.month_flow),
+            ytd_flow=SpendingFlowItem.from_domain(result.ytd_flow),
             persons=[PersonResponse.from_domain(p) for p in result.persons],
             comparison_monthly_group_spending=_map_spending(
                 result.comparison_monthly_group_spending

@@ -60,7 +60,7 @@ Seven top-level pages in the sidebar, ordered by workflow, plus a chat assistant
 | **Transactions** | Shared transaction table with search, filtering, bulk editing, category breakdown | v0.2.0 |
 | **Settle Up** | Link settlement transactions, waive balances, finalization controls | v0.6.0 |
 | **Budget** | Category group budgets, monthly + YTD views, progress indicators, spending charts | v0.4.0 |
-| **Insights** | Spending trend sparklines per category group, comparison cards, budget overlays, settlement balance trend, YoY comparison. Household / My Spending scope toggle (v1.12.0) | v0.7.0 |
+| **Insights** | Where the money went (Sankey / donut / bars with drill-down), spending over time (stacked months + group table with YoY), what moved this month; every figure links to its transactions (v1.13.2). Household / My Spending scope toggle (v1.12.0) | v0.7.0 |
 | **Upload** | CSV import: preview, confirm, re-upload. Drag-and-drop in v0.8.x | v0.1.1 |
 | **Settings** | Person config, category-to-group mappings, adjustment accounts, theme | v0.1.3 |
 | **Ask** *(panel)* | Chat assistant — natural language queries about spending, budgets, settlements. Right-edge panel on desktop, full-screen page on mobile. Optional (requires API key). | v1.5.0 |
@@ -175,6 +175,7 @@ Making sure the data is right before settling. This is solo prep work — each p
 - Given a row in a transfer-kind category (credit card payment, account transfer), then it appears only under All, with a "Transfer" badge, and the header-card totals leave it out (v1.12.1)
 - Given the spotted filter, then I see only transactions I fronted for my partner (or they fronted for me)
 - Given the household filter, then I see transactions relevant to the couple but not split — shared experiences paid individually
+- Given the personal filter, then I see every spending row where my share is positive — my share of household splits, my own personal rows, and what my partner spotted for me — and the "In view" total is the sum of my shares, so it matches Insights and Dashboard "my spending" (v1.13.0). A row where my share is zero (my partner's own `s100` ticket) does not appear
 
 **US-REVIEW-8** (v0.9.x): As a partner, I want to exclude a specific transaction from reconciliation without deleting it.
 
@@ -360,9 +361,9 @@ Are we on track for the month and the year? The couple reviews this together.
 
 **US-BUDGET-5** (v0.7.x): As a partner, I want to see spending trends over time so we can have data-driven conversations.
 
-- Given the Budget or a dedicated Insights page, then I see line/area charts of monthly spending per category group across the year
-- Given a chart, then I can toggle category groups on/off to focus on specific areas
-- Given a chart, then I can see budget limit lines overlaid to spot when we crossed thresholds
+- Given the Budget or a dedicated Insights page, then I see line/area charts of monthly spending per category group across the year *(superseded in part by US-INSIGHTS-3, v1.13.2: one stacked monthly chart plus a per-group trend line in the group table)*
+- Given a chart, then I can toggle category groups on/off to focus on specific areas *(superseded by US-INSIGHTS-2's drill-down, v1.13.2)*
+- Given a chart, then I can see budget limit lines overlaid to spot when we crossed thresholds *(superseded, v1.13.2: budget-versus-actual lives on the Budget page only)*
 - Given a year-over-year mode, then I can compare this year's spending trajectory to last year's
 
 **US-BUDGET-6** (v1.3.x): As a partner, I want to copy budgets from a previous month so I don't re-enter them every month.
@@ -382,6 +383,8 @@ Are we on track for the month and the year? The couple reviews this together.
 - Given "My Budget", then a household row where my share is $0 (my partner's own ticket, tagged household) does not appear at all, and a refund reduces the month's spending and the average hint (v1.12.2)
 
 **US-BUDGET-8** (v1.3.x): As a partner, I want to see budget lines on spending trend charts.
+
+*(Superseded in v1.13.2: the Insights redesign dropped the budget overlay; the Budget page owns budget versus actual. Criteria kept for history.)*
 
 - Given the Insights page spending trends, then I see a dashed line showing the budget amount per month overlaid on each group's spending chart
 - Given my budget changed between months, then the overlay reflects the actual budget for each month
@@ -405,13 +408,49 @@ Are we on track for the month and the year? The couple reviews this together.
 
 - Given the Insights page, then I see a Household / My Spending toggle that defaults to Household and lives in the URL (`?scope=personal`), like Budget's
 - Given Household scope, then every number is unchanged from before: household rows at their full amount
-- Given My Spending scope, then every number (year to date, selected month, comparison cards, sparklines, drill-down categories, YoY overlay) is my share of household rows + my personal rows + what my partner spotted for me — the same rule as Budget's "My Budget" and the Dashboard's "My spending"
+- Given My Spending scope, then every number (headline, flow, slices, group table, notable list, YoY overlay) is my share of household rows + my personal rows + what my partner spotted for me — the same rule as Budget's "My Budget" and the Dashboard's "My spending"
 - Given My Spending scope, then my partner's personal rows, rows I spotted for them, and household rows where my share is $0 do not appear at all
-- Given My Spending scope, then the budget overlay lines are my personal budgets, not the household budgets
-- Given My Spending scope, then the "Who's paying" section (who fronted the household money, settlement trend) is hidden — it has no "my" reading
+- Given My Spending scope, then the budget overlay lines are my personal budgets, not the household budgets *(superseded, v1.13.2: no budget overlay on Insights)*
+- Given My Spending scope, then the "Who's paying" section (who fronted the household money, settlement trend) is hidden — it has no "my" reading *(superseded, v1.13.2: the section is gone; the flow's left column shows my sources instead, see US-INSIGHTS-2)*
 - Given both partners view My Spending for the same month, then their totals add up to the Household total for that month, to the cent
 - Given a refund in either scope, then it reduces that month's spending rather than being ignored — the same signed-amount rule Budget and the Dashboard use (v1.12.2)
-- Given a sparkline's "View transactions" link in My Spending scope, then Transactions opens with `scope=personal`. Known gap: that page's personal scope lists non-household rows only, so its list does not reconcile to the Insights total (see backlog v1.12.x)
+- Given a "View transactions" link in My Spending scope, then Transactions opens with `scope=personal` and its "In view" total equals the Insights figure it came from (v1.13.0; see US-REVIEW-7)
+
+### Understanding Spending (Insights)
+
+The Insights page is the together-session's "where did the money go?" view. One dataset — spending flow cells of (source, group, category) under the page's lens — drives every chart, and every figure on the page opens the Transactions list that sums to it.
+
+**US-INSIGHTS-1** (v1.13.x): As a partner, I want the Insights view I am looking at to live in the URL, so I can share it and come back to it.
+
+- Given the Insights page, then `year`, `month`, `scope`, `period` (month | ytd), `chart` (flow | donut | bars), and `by` (group | category | merchant) are URL params with sensible defaults, and defaults are omitted from the URL
+- Given I follow a link from the page and press Back, then I return to the same view
+- Given I click a bar in the monthly chart, then that month becomes the selected month, the same as picking it in the month picker
+
+**US-INSIGHTS-2** (v1.13.x): As a partner, I want to see where the period's money went, as a flow, a donut, or bars, and open the transactions behind any part of it.
+
+- Given the Flow view, then I see a Sankey from sources (who paid in Household scope; my share of household / my personal / what my partner paid for me in My Spending) through category groups to categories, largest first
+- Given a group with more than four categories, then only the top four or any category over 3% of the period stay as nodes and the rest fold into "Everything else (n)"; a single leftover is never folded
+- Given the Donut or Bars view, then I can show the period by group, by category, or by merchant; at most eight slices are drawn and the rest fold into "Everything else (n)"
+- Given the legend table beside the donut, then each row shows a swatch, name, amount, and share; a group row drills into its categories with an "All groups › Group" breadcrumb; an "Everything else" row expands to list what it folds
+- Given any node, slice, bar, or legend row, then clicking it opens Transactions for the period and scope filtered to exactly that row's categories (`cat=` names), payer (`payer=`), or merchant (`q=`), so the list total equals the figure clicked
+- Given a category whose net for the period is a refund, then the flow leaves it out and says so in a footnote; the group table still counts it
+- Given a month with no spending inside a year that has some, then the section says so instead of showing an empty chart
+
+**US-INSIGHTS-3** (v1.13.x): As a partner, I want to see spending over time and how each group is trending.
+
+- Given the Spending over time section, then I see one stacked bar per month of the year, one segment per group in the group's stable color, the selected month at full strength, and the prior year's monthly total as a dotted line when it exists
+- Given the group table beneath it, then each group shows a small trend line (this year solid, last year dashed), the period amount, share, change (vs the 3-month average for a month, vs the same span last year for year to date), and transaction count
+- Given a group row, then it expands to its categories with amounts and counts, and the group and every category link to their transactions
+
+**US-INSIGHTS-4** (v1.13.x): As a partner, I want the page to tell me what moved this month.
+
+- Given a month period, then a "Notable" list names the biggest category increase and decrease against the 3-month average, up to two categories that are new this month, any group that has moved the same way three or more months in a row, and a category that netted a refund — at most five lines, each a link
+- Given year to date, then the section is hidden
+
+**US-INSIGHTS-5** (v1.13.x): As a partner, I want the headline numbers to answer "how are we doing?" in one glance.
+
+- Given the headline strip, then I see the period total with a one-line comparison ("$212 more than January"; for January, December of the prior year; for year to date, the same span last year), the average per day (month) or per complete month (year to date), the top group with its share, and the largest single transaction
+- Given the top group or largest transaction tile, then it links to its transactions
 
 ### Closing the Month
 

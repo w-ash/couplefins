@@ -22,22 +22,39 @@ export function isInHouseholdScope(tx: TransactionResponse): boolean {
   return tx.household && !isMoneyMovement(tx);
 }
 
-// A non-household transaction is in the current user's Personal scope only
-// when their share of the cost (derived from payer_percentage) is greater than
-// zero. Money movement is never spending. Falls back to !household when
-// identity isn't yet hydrated.
+// The current user's share percentage of a row: their split when they paid,
+// the remainder when their partner did.
+export function myPercentage(
+  tx: TransactionResponse,
+  currentPersonId: string,
+): number {
+  return tx.payer_person_id === currentPersonId
+    ? tx.payer_percentage
+    : 100 - tx.payer_percentage;
+}
+
+// The current user's signed share of a row's amount (the same sign convention
+// as `amount`: expense negative, refund positive).
+export function myShareAmount(
+  tx: TransactionResponse,
+  currentPersonId: string,
+): number {
+  return (tx.amount * myPercentage(tx, currentPersonId)) / 100;
+}
+
+// Personal scope = every spending row where the current user's share is
+// greater than zero: their share of household splits, their own personal
+// rows, and what their partner spotted for them — the same rule Insights and
+// the Dashboard use for "my spending", so the list sums to that figure. Money
+// movement is never spending. Falls back to !household when identity isn't
+// yet hydrated.
 export function isInPersonalScope(
   tx: TransactionResponse,
   currentPersonId: string | null,
 ): boolean {
   if (isMoneyMovement(tx)) return false;
-  if (tx.household) return false;
-  if (!currentPersonId) return true;
-  const myShare =
-    tx.payer_person_id === currentPersonId
-      ? tx.payer_percentage
-      : 100 - tx.payer_percentage;
-  return myShare > 0;
+  if (!currentPersonId) return !tx.household;
+  return myPercentage(tx, currentPersonId) > 0;
 }
 
 // "Spotted" = I fronted cash for an expense that is entirely my partner's.
@@ -79,7 +96,22 @@ export function previewScopeKind(tx: {
 
 // Negated so expense-heavy sets render as a positive number.
 export function sumNet(transactions: TransactionResponse[]): number {
-  const net = -transactions.reduce((s, t) => s + t.amount, 0);
+  return negateNet(transactions.reduce((s, t) => s + t.amount, 0));
+}
+
+// Net of the current user's shares, negated like `sumNet` — the personal
+// scope's "In view" figure, which reconciles to Insights "My Spending".
+export function sumMyShares(
+  transactions: TransactionResponse[],
+  currentPersonId: string,
+): number {
+  return negateNet(
+    transactions.reduce((s, t) => s + myShareAmount(t, currentPersonId), 0),
+  );
+}
+
+function negateNet(signedTotal: number): number {
+  const net = -signedTotal;
   // Collapse -0 and float dust (e.g. -5.55e-17 from summing signed amounts)
   // so Intl never renders "-$0.00".
   return isZeroCurrency(net) ? 0 : net;

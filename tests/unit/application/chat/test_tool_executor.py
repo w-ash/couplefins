@@ -32,7 +32,7 @@ from src.application.use_cases.search_transactions import (
 from src.domain.budget import BudgetOverview, CategoryGroupBudgetStatus
 from src.domain.categories import CategoryGroupBreakdown
 from src.domain.exceptions import ToolExecutionError, ValidationError
-from src.domain.insights import SpendingTrends
+from src.domain.insights import SpendingFlow, SpendingTrends
 from src.domain.ledger import (
     LedgerMonth,
     LedgerYear,
@@ -1236,9 +1236,9 @@ async def test_spending_trends_scope_resolves_current_user(
                 monthly_group_spending=[], monthly_totals=[], group_summaries=[]
             ),
             comparison_cards=[],
-            budget_lines={},
-            settlement_trend=[],
-            monthly_person_paid=[],
+            category_comparisons=[],
+            month_flow=SpendingFlow([], [], []),
+            ytd_flow=SpendingFlow([], [], []),
             persons=PERSONS,
         )
     )

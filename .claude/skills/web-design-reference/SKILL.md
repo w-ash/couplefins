@@ -55,7 +55,7 @@ Muted variants: `*-muted` (background), `*-muted-foreground` (text), `*-border`.
 | `--person-0` | 230 | blue | First person's individual spending | `bg-person-0`, `bg-person-0-muted` |
 | `--person-1` | 290 | violet | Second person's individual spending | `bg-person-1`, `bg-person-1-muted` |
 
-Cool-tone triad, ~55-60° apart. Person index is creation-order (deterministic). Used in budget category bars (stacked segments), person badges, sidebar identity toggle, transaction payer pills, and Insights "Who's paying" charts. Utilities: `getPersonAccentColor(index)` from `types/person.ts`, `usePersonMaps()` from `lib/persons.ts`.
+Cool-tone triad, ~55-60° apart. Person index is creation-order (deterministic). Used in budget category bars (stacked segments), person badges, sidebar identity toggle, transaction payer pills, and the Insights flow's source nodes (who paid). Utilities: `getPersonAccentColor(index)` from `types/person.ts`, `usePersonMaps()` from `lib/persons.ts`.
 
 All tokens in `web/src/app.css` `:root` (light) and `.dark` (dark), mapped via `@theme`.
 

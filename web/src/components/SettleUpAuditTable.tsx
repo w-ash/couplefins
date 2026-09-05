@@ -22,10 +22,7 @@ import {
 } from "@/lib/format";
 import { tableHeaderRowClass } from "@/lib/layout";
 import { attributedMonth, findMonth, settlementsTouching } from "@/lib/ledger";
-import {
-  type TransactionScope,
-  TX_FILTER_PARAMS,
-} from "@/lib/transaction-filters";
+import { buildTransactionsUrl } from "@/lib/transaction-links";
 
 interface Props {
   data: SettleUpDataResponse;
@@ -472,8 +469,7 @@ function buildLedgerRows({
           key: `${r.group_id ?? "uncat"}-${r.payer_person_id}`,
           activity: `${r.group_name} · ${payerName}`,
           href: buildTransactionsUrl({
-            year: data.year,
-            month: data.month,
+            range: { year: data.year, month: data.month },
             payerId: r.payer_person_id,
             // Backend-provided per-row category names, so the link filters to
             // exactly this row's transactions — including Uncategorized rows.
@@ -495,8 +491,7 @@ function buildLedgerRows({
           key: `payer-${r.payer_person_id}`,
           activity: `${payerName}'s bills`,
           href: buildTransactionsUrl({
-            year: data.year,
-            month: data.month,
+            range: { year: data.year, month: data.month },
             payerId: r.payer_person_id,
             // scope=all: include the non-household settlement splits this row counts.
             scope: "all",
@@ -574,7 +569,7 @@ function settlementRow(
     key: `settlement-${s.id}`,
     activity,
     href: buildTransactionsUrl({
-      ...settlementLinkMonth(s),
+      range: settlementLinkMonth(s),
       settlement: true,
     }),
     amount: null,
@@ -583,32 +578,6 @@ function settlementRow(
     p1Share: null,
     net: signedForP0(portion?.amount ?? 0, s.from_person_id, p0Id),
   };
-}
-
-function buildTransactionsUrl({
-  year,
-  month,
-  payerId,
-  categoryNames,
-  settlement,
-  scope,
-}: {
-  year: number;
-  month: number;
-  payerId?: string;
-  categoryNames?: string[];
-  settlement?: boolean;
-  scope?: TransactionScope;
-}): string {
-  const params = new URLSearchParams();
-  params.set("year", String(year));
-  params.set("month", String(month));
-  if (scope && scope !== "all") params.set(TX_FILTER_PARAMS.scope, scope);
-  if (payerId) params.append(TX_FILTER_PARAMS.payer, payerId);
-  for (const cat of categoryNames ?? [])
-    params.append(TX_FILTER_PARAMS.category, cat);
-  if (settlement) params.set(TX_FILTER_PARAMS.settlement, "1");
-  return `/transactions?${params.toString()}`;
 }
 
 type ClipboardCell =

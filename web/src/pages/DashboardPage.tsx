@@ -46,6 +46,7 @@ import { actionLinkClass } from "@/lib/input-styles";
 import { heroCardClass, PAGE_PADDING, tableHeaderRowClass } from "@/lib/layout";
 import { PERSON_SCOPE_OPTIONS } from "@/lib/person-scope";
 import { usePersonMaps } from "@/lib/persons";
+import { buildTransactionsUrl } from "@/lib/transaction-links";
 
 // --- Stats ---
 
@@ -405,7 +406,9 @@ function HouseholdMonthHistory({
                 className="cursor-pointer border-b border-border-muted transition-colors duration-150 hover:bg-muted/50"
                 onClick={() =>
                   navigate(
-                    `/transactions?year=${entry.year}&month=${entry.month}`,
+                    buildTransactionsUrl({
+                      range: { year: entry.year, month: entry.month },
+                    }),
                   )
                 }
               >
@@ -486,7 +489,10 @@ function PersonalMonthHistory({
                 className="cursor-pointer border-b border-border-muted transition-colors duration-150 hover:bg-muted/50"
                 onClick={() =>
                   navigate(
-                    `/transactions?year=${year}&month=${entry.month}&scope=personal`,
+                    buildTransactionsUrl({
+                      range: { year, month: entry.month },
+                      scope: "personal",
+                    }),
                   )
                 }
               >
