@@ -9,17 +9,29 @@ import {
   usePostCategoryGroup,
   usePutCategoryGroup,
 } from "@/api/generated/category-groups/category-groups";
-import type { CategoryGroupResponse } from "@/api/generated/model";
+import type {
+  CategoryGroupResponse,
+  CategoryGroupResponseKind,
+} from "@/api/generated/model";
 import { BottomSheet } from "@/components/BottomSheet";
 import { Button } from "@/components/Button";
 import { Combobox } from "@/components/Combobox";
 import { Dialog } from "@/components/Dialog";
 import { ExpandChevron } from "@/components/ExpandChevron";
+import { InlineError } from "@/components/InlineError";
 import { PageError, PageLoading } from "@/components/PageStates";
+import { SegmentedControl } from "@/components/SegmentedControl";
+import { TRANSFER_CAPTION, TransferPill } from "@/components/TransferPill";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { useGroupOptions, useInvalidateCategories } from "@/lib/categories";
 import { getCategoryGroupIcon, ICON_OPTIONS } from "@/lib/category-icons";
 import { baseInputClass } from "@/lib/input-styles";
+
+const KIND_OPTIONS: Array<{ value: CategoryGroupResponseKind; label: string }> =
+  [
+    { value: "expense", label: "Spending" },
+    { value: "transfer", label: "Transfer" },
+  ];
 
 // -- Icon picker sheet --
 
@@ -130,7 +142,7 @@ function GroupCard({
     if (trimmed && trimmed !== group.name) {
       updateMutation.mutate({
         groupId: group.id,
-        data: { name: trimmed, icon: group.icon },
+        data: { name: trimmed, icon: group.icon, kind: group.kind },
       });
     } else {
       setEditing(false);
@@ -207,6 +219,7 @@ function GroupCard({
               <span className="text-xs text-muted-foreground tabular-nums">
                 {group.categories.length}
               </span>
+              {group.kind === "transfer" && <TransferPill />}
             </button>
           )}
         </div>
@@ -233,6 +246,36 @@ function GroupCard({
                 No categories assigned yet.
               </p>
             )}
+
+            {/* Kind: spending vs money movement */}
+            <div className="flex flex-col gap-1.5 border-t border-border-muted px-4 py-3">
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-muted-foreground">Counts as</span>
+                <SegmentedControl<CategoryGroupResponseKind>
+                  options={KIND_OPTIONS}
+                  value={group.kind}
+                  onChange={(kind) =>
+                    updateMutation.mutate({
+                      groupId: group.id,
+                      data: { name: group.name, icon: group.icon, kind },
+                    })
+                  }
+                  size="sm"
+                />
+              </div>
+              {group.kind === "transfer" && (
+                <p className="text-xs text-muted-foreground">
+                  {TRANSFER_CAPTION}
+                </p>
+              )}
+              {updateMutation.isError && (
+                <InlineError>
+                  {updateMutation.error instanceof Error
+                    ? updateMutation.error.message
+                    : "Couldn't update this group"}
+                </InlineError>
+              )}
+            </div>
 
             {/* Action bar */}
             <div className="flex items-center gap-4 border-t border-border-muted px-4 py-3">
@@ -291,7 +334,7 @@ function GroupCard({
         onSelect={(icon) =>
           updateMutation.mutate({
             groupId: group.id,
-            data: { name: group.name, icon },
+            data: { name: group.name, icon, kind: group.kind },
           })
         }
       />
@@ -377,11 +420,13 @@ function GroupCard({
 function AddGroupForm() {
   const invalidate = useInvalidateCategories();
   const [name, setName] = useState("");
+  const [kind, setKind] = useState<CategoryGroupResponseKind>("expense");
 
   const createMutation = usePostCategoryGroup({
     mutation: {
       onSuccess: () => {
         setName("");
+        setKind("expense");
         invalidate();
       },
     },
@@ -390,7 +435,7 @@ function AddGroupForm() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = name.trim();
-    if (trimmed) createMutation.mutate({ data: { name: trimmed } });
+    if (trimmed) createMutation.mutate({ data: { name: trimmed, kind } });
   }
 
   return (
@@ -401,6 +446,12 @@ function AddGroupForm() {
         placeholder="New group name..."
         aria-label="New group name"
         className={`min-w-0 flex-1 ${baseInputClass}`}
+      />
+      <SegmentedControl<CategoryGroupResponseKind>
+        options={KIND_OPTIONS}
+        value={kind}
+        onChange={setKind}
+        size="sm"
       />
       <Button
         type="submit"

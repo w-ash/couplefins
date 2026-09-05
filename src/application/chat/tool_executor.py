@@ -17,7 +17,7 @@ via ToolSpec entries, never called by name from this module.
 import calendar
 from decimal import Decimal
 from itertools import starmap
-from typing import Literal, cast
+from typing import cast, get_args
 from uuid import UUID
 
 from src.application.chat.pending_actions import pending_action_store
@@ -25,7 +25,10 @@ from src.application.chat.protocols import ToolContext
 from src.application.chat.user_data import UserData, wrap
 from src.application.runner import execute_use_case
 from src.application.use_cases._shared.command_validators import (
+    PersonScope,
+    Scope,
     assert_positive_decimal,
+    person_for_scope,
 )
 from src.application.use_cases._shared.finalization import load_period_status
 from src.application.use_cases._shared.reconciliation_context import (
@@ -106,6 +109,7 @@ from src.domain.entities.category_group import CategoryGroup
 from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import ToolExecutionError, ValidationError
+from src.domain.filters import is_reconciliation_relevant
 from src.domain.ledger import MonthKey, SettlementLedger
 from src.domain.month_key import assert_month_key
 from src.domain.reconciliation import SettlementResult
@@ -245,16 +249,37 @@ async def _month_settlement_summary(
     return summary
 
 
+# The Literal members, as runtime values the validator can narrow against.
+_SCOPES: tuple[Scope, ...] = get_args(Scope)
+_PERSON_SCOPES: tuple[PersonScope, ...] = get_args(PersonScope)
+
+
+def _scope_from_input[S: str](
+    tool_input: dict[str, object], *, allowed: tuple[S, ...], default: S
+) -> S:
+    """Read `scope`, narrowed to one of `allowed`; the schema enum is not
+    enforced before dispatch, so reject anything else here."""
+    raw = tool_input.get("scope", default)
+    if isinstance(raw, str) and raw in allowed:
+        return cast(S, raw)
+    options = ", ".join(repr(v) for v in allowed)
+    raise ValidationError(f"scope must be one of {options}, got {raw!r}")
+
+
+def _person_scope(tool_input: dict[str, object]) -> PersonScope:
+    return _scope_from_input(tool_input, allowed=_PERSON_SCOPES, default="household")
+
+
 async def handle_budget_overview(
     tool_input: dict[str, object],
     ctx: ToolContext,
 ) -> dict[str, object]:
-    scope = cast(Literal["household", "personal"], tool_input.get("scope", "household"))
+    scope = _person_scope(tool_input)
     command = GetBudgetOverviewCommand(
         year=cast(int, tool_input["year"]),
         month=cast(int, tool_input["month"]),
         scope=scope,
-        person_id=ctx.current_user.id if scope == "personal" else None,
+        person_id=person_for_scope(scope, ctx.current_user),
     )
     result: GetBudgetOverviewResult = await execute_use_case(
         lambda uow: GetBudgetOverviewUseCase().execute(command, uow)
@@ -295,9 +320,7 @@ async def handle_search_transactions(
     if group_name:
         group_id = (await _require_group(group_name)).id
 
-    scope = cast(
-        Literal["all", "household", "personal"], tool_input.get("scope", "all")
-    )
+    scope: Scope = _scope_from_input(tool_input, allowed=_SCOPES, default="all")
     command = SearchTransactionsCommand(
         year=cast(int, tool_input["year"]),
         month=cast(int, tool_input["month"]),
@@ -305,7 +328,7 @@ async def handle_search_transactions(
         category_group_id=group_id,
         tag=cast(str | None, tool_input.get("tag")),
         scope=scope,
-        person_id=ctx.current_user.id if scope == "personal" else None,
+        person_id=person_for_scope(scope, ctx.current_user),
     )
     result: SearchTransactionsResult = await execute_use_case(
         lambda uow: SearchTransactionsUseCase().execute(command, uow)
@@ -381,11 +404,14 @@ async def handle_spending_by_group(
 
 async def handle_spending_trends(
     tool_input: dict[str, object],
-    _ctx: ToolContext,
+    ctx: ToolContext,
 ) -> dict[str, object]:
+    scope = _person_scope(tool_input)
     command = GetSpendingTrendsCommand(
         year=cast(int, tool_input["year"]),
         comparison_year=cast(int | None, tool_input.get("comparison_year")),
+        scope=scope,
+        person_id=person_for_scope(scope, ctx.current_user),
     )
     result: GetSpendingTrendsResult = await execute_use_case(
         lambda uow: GetSpendingTrendsUseCase().execute(command, uow)
@@ -400,6 +426,7 @@ async def handle_spending_trends(
 
     return {
         "year": result.year,
+        "scope": scope,
         "groups": [{"name": name, "months": months} for name, months in groups.items()],
     }
 
@@ -543,6 +570,7 @@ async def handle_get_category_setup(
         "groups": [
             {
                 "group": item.group.name,
+                "kind": item.group.kind,
                 "categories": [UserData(c.name) for c in item.categories],
             }
             for item in groups.items
@@ -643,9 +671,13 @@ async def handle_get_reconciliation_report(
             }
             for b in s.category_group_breakdowns
         ]
-        largest = sorted(
-            result.transactions, key=lambda t: abs(t.amount), reverse=True
-        )[:_MAX_LIST_ROWS]
+        # Spending rows only, so the list agrees with the totals above.
+        spending_rows = [
+            t for t in result.spending_transactions if is_reconciliation_relevant(t)
+        ]
+        largest = sorted(spending_rows, key=lambda t: abs(t.amount), reverse=True)[
+            :_MAX_LIST_ROWS
+        ]
         summary["largest_transactions"] = [
             {
                 "id": str(t.id),
@@ -746,13 +778,13 @@ async def handle_get_dashboard_summary(
 ) -> dict[str, object]:
     year = cast(int, tool_input["year"])
     month = cast(int | None, tool_input.get("month"))
-    scope = cast(Literal["household", "personal"], tool_input.get("scope", "household"))
+    scope = _person_scope(tool_input)
 
     command = GetDashboardCommand(
         year=year,
         month=month,
         scope=scope,
-        person_id=ctx.current_user.id if scope == "personal" else None,
+        person_id=person_for_scope(scope, ctx.current_user),
     )
     result: GetDashboardResult = await execute_use_case(
         lambda uow: GetDashboardUseCase().execute(command, uow)
@@ -938,13 +970,13 @@ async def handle_update_budget(
     amount = cast(int | float, tool_input["amount"])
     year = cast(int, tool_input["year"])
     month = cast(int, tool_input["month"])
-    scope = cast(str, tool_input.get("scope", "household"))
+    scope = _person_scope(tool_input)
 
     await _check_finalization(year, month)
 
     group = await _require_group(group_name)
 
-    person_id = ctx.current_user.id if scope == "personal" else None
+    person_id = person_for_scope(scope, ctx.current_user)
     description = (
         f"Set {group_name} budget to ${amount:,.2f} "
         f"for {_month_label(year, month)} ({scope})"
@@ -1148,13 +1180,13 @@ async def handle_delete_budget(
     group_name = cast(str, tool_input["group_name"])
     year = cast(int, tool_input["year"])
     month = cast(int, tool_input["month"])
-    scope = cast(str, tool_input.get("scope", "household"))
+    scope = _person_scope(tool_input)
 
     await _check_finalization(year, month)
     group_id = (await _require_group(group_name)).id
 
     budgets = await execute_use_case(lambda uow: list_budgets(uow, ctx.current_user.id))
-    target_person = ctx.current_user.id if scope == "personal" else None
+    target_person = person_for_scope(scope, ctx.current_user)
     budget = next(
         (
             b

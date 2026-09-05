@@ -1,14 +1,10 @@
-from collections import defaultdict
-from collections.abc import Set
 from decimal import Decimal
 from uuid import UUID
 
 from attrs import Factory, define
 
-from src.domain.constants import UNCATEGORIZED_GROUP_NAME
 from src.domain.entities.category import Category
 from src.domain.entities.category_group import CategoryGroup
-from src.domain.entities.transaction import Transaction
 
 
 @define(frozen=True, slots=True)
@@ -47,49 +43,13 @@ def get_personal_included_categories(categories: list[Category]) -> set[str]:
     return {c.name for c in categories if c.include_personal}
 
 
-def compute_category_breakdowns(
-    transactions: list[Transaction],
-    category_lookup: dict[str, tuple[UUID, str]],
-    personal_categories: Set[str] = frozenset(),
-) -> list[CategoryGroupBreakdown]:
-    # Accumulate per category
-    cat_amounts: dict[str, Decimal] = defaultdict(Decimal)
-    cat_counts: dict[str, int] = defaultdict(int)
-    cat_household: dict[str, Decimal] = defaultdict(Decimal)
-    cat_personal: dict[str, dict[UUID, Decimal]] = defaultdict(
-        lambda: defaultdict(Decimal)
-    )
-
-    for tx in transactions:
-        # Signed contribution: an expense (amount < 0) adds to spend, a
-        # refund (amount > 0) subtracts — mirrors reconcile()'s
-        # total_spending - total_refunds. Never inflate spend with abs().
-        spend = -tx.amount
-        cat_amounts[tx.category] += spend
-        cat_counts[tx.category] += 1
-
-        if tx.household:
-            cat_household[tx.category] += spend
-        elif tx.category in personal_categories:
-            cat_personal[tx.category][tx.payer_person_id] += spend
-
-    # Build CategoryBreakdown per category
-    category_breakdowns: list[CategoryBreakdown] = []
-    for cat, amount in cat_amounts.items():
-        gid, gname = category_lookup.get(cat, (None, UNCATEGORIZED_GROUP_NAME))
-        category_breakdowns.append(
-            CategoryBreakdown(
-                category=cat,
-                group_id=gid,
-                group_name=gname,
-                total_amount=amount,
-                transaction_count=cat_counts[cat],
-                household_amount=cat_household.get(cat, Decimal(0)),
-                personal_amounts=dict(cat_personal.get(cat, {})),
-            )
-        )
-
-    return group_category_breakdowns(category_breakdowns)
+def get_transfer_categories(
+    categories: list[Category],
+    category_groups: list[CategoryGroup],
+) -> frozenset[str]:
+    """Names of categories whose group is money movement, not spending."""
+    transfer_group_ids = {g.id for g in category_groups if g.kind == "transfer"}
+    return frozenset(c.name for c in categories if c.group_id in transfer_group_ids)
 
 
 def group_category_breakdowns(

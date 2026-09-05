@@ -8,6 +8,9 @@ from src.application.use_cases._shared.settlement_records import (
     SettlementRecord,
     enrich_with_links,
 )
+from src.application.use_cases._shared.transaction_reads import (
+    fetch_all_settlement_rows,
+)
 from src.application.use_cases._shared.upload_status import (
     UploadStatus,
     build_upload_statuses,
@@ -66,7 +69,7 @@ async def load_ledger(
     this — it skips the enrichment queries ``load_settlement_ledger`` pays
     for its ``records``.
     """
-    transactions = await uow.transactions.get_all_settlement_relevant()
+    transactions = await fetch_all_settlement_rows(uow, ctx)
     settlements = await uow.settlements.get_all()
     portions = await uow.settlement_portions.get_all()
     return LoadedLedger(

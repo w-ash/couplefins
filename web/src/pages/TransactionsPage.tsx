@@ -61,6 +61,7 @@ import {
 } from "@/components/TransactionFilters";
 import { TransactionSearch } from "@/components/TransactionSearch";
 import { TransactionsHeaderCards } from "@/components/TransactionsHeaderCards";
+import { TransferPill } from "@/components/TransferPill";
 import { useSetToggle } from "@/hooks/useSetToggle";
 import { useTemporary } from "@/hooks/useTemporary";
 import { cn } from "@/lib/cn";
@@ -510,6 +511,7 @@ function TransactionRow({
                 aria-label="Linked settlement payment"
               />
             )}
+            {tx.is_transfer && <TransferPill />}
           </span>
         </td>
         <td

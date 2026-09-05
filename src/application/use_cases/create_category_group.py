@@ -3,7 +3,7 @@ import uuid
 from attrs import define, field
 
 from src.application.use_cases._shared.command_validators import non_empty_string
-from src.domain.entities.category_group import CategoryGroup
+from src.domain.entities.category_group import CategoryGroup, GroupKind
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -11,6 +11,7 @@ from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 class CreateCategoryGroupCommand:
     name: str = field(validator=non_empty_string)
     icon: str | None = None
+    kind: GroupKind = "expense"
 
 
 @define(frozen=True, slots=True)
@@ -24,7 +25,9 @@ class CreateCategoryGroupUseCase:
         self, command: CreateCategoryGroupCommand, uow: UnitOfWorkProtocol
     ) -> CreateCategoryGroupResult:
         async with uow:
-            group = CategoryGroup(id=uuid.uuid4(), name=command.name, icon=command.icon)
+            group = CategoryGroup(
+                id=uuid.uuid4(), name=command.name, icon=command.icon, kind=command.kind
+            )
             saved = await uow.category_groups.save(group)
             await uow.commit()
             return CreateCategoryGroupResult(group=saved)

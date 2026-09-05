@@ -5,6 +5,8 @@ spending/settlement?" — replaces hand-copied `is_excluded or is_settlement`
 checks scattered across the domain and application layers.
 """
 
+from collections.abc import Set
+
 from src.domain.constants import SplitDefaults
 from src.domain.entities.transaction import Transaction
 
@@ -30,3 +32,19 @@ def is_split_relevant(tx: Transaction) -> bool:
         is_reconciliation_relevant(tx)
         and tx.payer_percentage < SplitDefaults.MAX_PAYER_PERCENTAGE
     )
+
+
+def exclude_transfers(
+    transactions: list[Transaction], transfer_categories: Set[str]
+) -> list[Transaction]:
+    """Drop rows in transfer-kind categories (credit card payments, account
+    transfers). They are money movement, not spending: the purchases a card
+    payment covers were already counted when they hit the card. Category-
+    scoped complement to `is_reconciliation_relevant`, with the same reach —
+    spending, budgets, and settlement. Applied once, in the application's
+    transaction reads module — the only place use cases read transaction
+    lists — so every computation downstream sees the same rows.
+    """
+    if not transfer_categories:
+        return transactions
+    return [tx for tx in transactions if tx.category not in transfer_categories]

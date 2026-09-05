@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 import uuid
 
 from attrs import define
@@ -7,7 +7,7 @@ from pydantic import TypeAdapter
 from structlog.stdlib import get_logger
 
 from src.domain.entities.category import Category
-from src.domain.entities.category_group import CategoryGroup
+from src.domain.entities.category_group import CategoryGroup, GroupKind
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 logger = get_logger()
@@ -23,6 +23,7 @@ class _CategoryGroupFixture(TypedDict):
     name: str
     icon: str
     categories: list[str]
+    kind: NotRequired[GroupKind]
 
 
 _fixture_adapter = TypeAdapter(list[_CategoryGroupFixture])
@@ -63,7 +64,10 @@ class SeedCategoryGroupsUseCase:
                 group_id = uuid.uuid4()
                 groups.append(
                     CategoryGroup(
-                        id=group_id, name=group_data["name"], icon=group_data["icon"]
+                        id=group_id,
+                        name=group_data["name"],
+                        icon=group_data["icon"],
+                        kind=group_data.get("kind", "expense"),
                     )
                 )
                 categories.extend(

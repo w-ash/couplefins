@@ -26,6 +26,7 @@ from src.application.use_cases.update_category_group import (
     UpdateCategoryGroupCommand,
     UpdateCategoryGroupUseCase,
 )
+from src.infrastructure.events.event_bus import event_bus
 from src.interface.api.dependencies import get_current_user
 from src.interface.api.schemas.category_groups import (
     BulkUpdateMappingsRequest,
@@ -49,10 +50,11 @@ async def get_category_groups() -> list[CategoryGroupResponse]:
 async def post_category_group(
     body: CreateCategoryGroupRequest,
 ) -> CategoryGroupResponse:
-    command = CreateCategoryGroupCommand(name=body.name, icon=body.icon)
+    command = CreateCategoryGroupCommand(name=body.name, icon=body.icon, kind=body.kind)
     result = await execute_use_case(
         lambda uow: CreateCategoryGroupUseCase().execute(command, uow)
     )
+    event_bus.broadcast("category_groups")
     return CategoryGroupResponse.from_group(result.group)
 
 
@@ -60,10 +62,13 @@ async def post_category_group(
 async def put_category_group(
     group_id: UUID, body: UpdateCategoryGroupRequest
 ) -> CategoryGroupResponse:
-    command = UpdateCategoryGroupCommand(id=group_id, name=body.name, icon=body.icon)
+    command = UpdateCategoryGroupCommand(
+        id=group_id, name=body.name, icon=body.icon, kind=body.kind
+    )
     result = await execute_use_case(
         lambda uow: UpdateCategoryGroupUseCase().execute(command, uow)
     )
+    event_bus.broadcast("category_groups")
     return CategoryGroupResponse.from_group(result.group)
 
 
@@ -78,6 +83,7 @@ async def delete_category_group(
     await execute_use_case(
         lambda uow: DeleteCategoryGroupUseCase().execute(command, uow)
     )
+    event_bus.broadcast("category_groups")
 
 
 @router.put("/category-mappings")
@@ -91,6 +97,7 @@ async def put_category_mappings(body: BulkUpdateMappingsRequest) -> dict[str, in
     result = await execute_use_case(
         lambda uow: BulkUpdateMappingsUseCase().execute(command, uow)
     )
+    event_bus.broadcast("category_groups")
     return {"updated": result.updated_count}
 
 
@@ -110,4 +117,5 @@ async def patch_category(
     result = await execute_use_case(
         lambda uow: UpdateCategoryUseCase().execute(command, uow)
     )
+    event_bus.broadcast("category_groups")
     return CategoryResponse.from_domain(result.category)

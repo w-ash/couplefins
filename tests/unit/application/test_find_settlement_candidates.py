@@ -9,6 +9,8 @@ from src.application.use_cases.find_settlement_candidates import (
     FindSettlementCandidatesUseCase,
 )
 from tests.fixtures.factories import (
+    make_category,
+    make_category_group,
     make_person,
     make_settlement_merchant,
     make_transaction,
@@ -98,6 +100,46 @@ class TestFindSettlementCandidates:
         call_args = uow.transactions.get_by_date_range.call_args
         assert call_args.args[0] == date(2026, 1, 1)
         assert call_args.args[1] == date(2026, 4, 7)  # 2026-03-31 + 7 days
+
+    async def test_transfer_kind_category_rows_stay_candidates(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Venmo legs live in the Transfer group — excluded from spending, but
+        the candidate finder must still see them."""
+        _freeze_today(monkeypatch, date(2026, 4, 15))
+        alice = make_person(name="Alice")
+        bob = make_person(name="Bob")
+        uow = make_mock_uow()
+        uow.persons.get_all.return_value = [alice, bob]
+        transfer_group = make_category_group(name="Transfer", kind="transfer")
+        uow.categories.get_all.return_value = [
+            make_category(name="Transfer", group_id=transfer_group.id)
+        ]
+        uow.category_groups.get_all.return_value = [transfer_group]
+        uow.transactions.get_all_settlement_relevant.return_value = [
+            make_transaction(
+                date=date(2026, 3, 10),
+                payer_person_id=alice.id,
+                amount=Decimal("-200.00"),
+                payer_percentage=50,
+            )
+        ]
+        leg = make_transaction(
+            merchant="Venmo",
+            category="Transfer",
+            amount=Decimal("-100.00"),
+            household=False,
+            date=date(2026, 4, 1),
+        )
+        uow.transactions.get_by_date_range.return_value = [leg]
+        uow.settlement_merchants.get_all.return_value = [
+            make_settlement_merchant(name="Venmo", merchant_pattern="venmo")
+        ]
+
+        command = FindSettlementCandidatesCommand(amount=Decimal("100.00"))
+        result = await FindSettlementCandidatesUseCase().execute(command, uow)
+
+        assert [c.transaction.id for c in result.candidates] == [leg.id]
 
     async def test_transfer_after_span_still_surfaces(
         self, monkeypatch: pytest.MonkeyPatch

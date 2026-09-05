@@ -11,6 +11,7 @@ import {
   isInPersonalScope,
   isInSpottedScope,
   isSettlementLinked,
+  isSpendingRow,
   previewScopeKind,
   type SortState,
   sortList,
@@ -73,6 +74,7 @@ function makeTx(overrides: Partial<TransactionResponse>): TransactionResponse {
     household: true,
     is_excluded: false,
     is_settlement: false,
+    is_transfer: false,
     original_date: null,
     original_amount: null,
     ...overrides,
@@ -302,6 +304,17 @@ describe("isInPersonalScope", () => {
     expect(isInPersonalScope(tx, me)).toBe(false);
     expect(isInPersonalScope(tx, null)).toBe(false);
   });
+
+  it("excludes transfer rows (money movement, not spending)", () => {
+    const tx = makeTx({
+      household: false,
+      payer_person_id: me,
+      payer_percentage: 100,
+      is_transfer: true,
+    });
+    expect(isInPersonalScope(tx, me)).toBe(false);
+    expect(isInPersonalScope(tx, null)).toBe(false);
+  });
 });
 
 // ─── isInSpottedScope ───
@@ -335,6 +348,16 @@ describe("isInSpottedScope", () => {
       payer_person_id: me,
       payer_percentage: 0,
       is_settlement: true,
+    });
+    expect(isInSpottedScope(tx, me)).toBe(false);
+  });
+
+  it("excludes transfer rows (money movement, not spending)", () => {
+    const tx = makeTx({
+      household: false,
+      payer_person_id: me,
+      payer_percentage: 0,
+      is_transfer: true,
     });
     expect(isInSpottedScope(tx, me)).toBe(false);
   });
@@ -605,10 +628,13 @@ describe("computeScopeCounts", () => {
 // ─── isInHouseholdScope ───
 
 describe("isInHouseholdScope", () => {
-  it("includes household rows and excludes linked transfers", () => {
+  it("includes household rows and excludes money movement", () => {
     expect(isInHouseholdScope(makeTx({ household: true }))).toBe(true);
     expect(
       isInHouseholdScope(makeTx({ household: true, is_settlement: true })),
+    ).toBe(false);
+    expect(
+      isInHouseholdScope(makeTx({ household: true, is_transfer: true })),
     ).toBe(false);
     expect(isInHouseholdScope(makeTx({ household: false }))).toBe(false);
   });
@@ -677,5 +703,63 @@ describe("sumNet", () => {
       makeTx({ amount: 0.3 }),
     ];
     expect(sumNet(txs)).toBe(0);
+  });
+});
+
+// ─── transfers ───
+
+describe("transfer rows", () => {
+  const me = "p1";
+
+  it("isSpendingRow drops settlement, excluded, and transfer rows", () => {
+    expect(isSpendingRow(makeTx({}))).toBe(true);
+    expect(isSpendingRow(makeTx({ is_settlement: true }))).toBe(false);
+    expect(isSpendingRow(makeTx({ is_excluded: true }))).toBe(false);
+    expect(isSpendingRow(makeTx({ is_transfer: true }))).toBe(false);
+  });
+
+  it("bucketTransactions puts both legs of a card payment in the transfer bucket", () => {
+    const txs = [
+      makeTx({
+        id: "debit",
+        is_transfer: true,
+        amount: -900,
+        household: true,
+        payer_person_id: me,
+      }),
+      makeTx({
+        id: "credit",
+        is_transfer: true,
+        amount: 900,
+        household: false,
+        payer_person_id: me,
+        payer_percentage: 100,
+      }),
+      makeTx({
+        id: "dinner",
+        amount: -40,
+        household: true,
+        payer_person_id: me,
+      }),
+    ];
+    const b = bucketTransactions(txs, me);
+
+    expect(b.transfer).toEqual({ count: 2, amount: 1800 });
+    expect(b.household).toEqual({ count: 1, amount: 40 });
+    expect(b.personal).toEqual({ count: 0, amount: 0 });
+    expect(b.total).toEqual({ count: 3, amount: 1840 });
+  });
+
+  it("computeScopeCounts.all still counts transfers", () => {
+    const txs = [
+      makeTx({
+        id: "cc",
+        is_transfer: true,
+        household: true,
+        payer_person_id: me,
+      }),
+      makeTx({ id: "dinner", household: true, payer_person_id: me }),
+    ];
+    expect(computeScopeCounts(txs, me).all).toBe(2);
   });
 });

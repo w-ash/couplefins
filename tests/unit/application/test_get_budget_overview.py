@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import pytest
 
 from src.application.use_cases.get_budget_overview import (
@@ -6,9 +8,12 @@ from src.application.use_cases.get_budget_overview import (
 )
 from src.domain.exceptions import ValidationError
 from tests.fixtures.factories import (
+    make_category,
     make_category_group,
     make_category_group_budget,
     make_person,
+    make_transaction,
+    make_transfer_group,
 )
 from tests.fixtures.mocks import make_mock_uow
 
@@ -178,3 +183,56 @@ async def test_source_budgets_populated_from_copyable_source() -> None:
 def test_personal_scope_requires_person_id() -> None:
     with pytest.raises(ValidationError, match="person_id is required"):
         GetBudgetOverviewCommand(year=2026, month=1, scope="personal")
+
+
+async def test_transfer_rows_never_reach_the_budget() -> None:
+    """A credit card payment is money movement: dropped in both scopes, and
+    its group gets no status row."""
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    uow.persons.get_all.return_value = [alice]
+    food = make_category_group(name="Food & Dining")
+    transfer, card_payment = make_transfer_group()
+    uow.category_groups.get_all.return_value = [food, transfer]
+    uow.categories.get_all.return_value = [
+        make_category(name="Dining Out", group_id=food.id),
+        card_payment,
+    ]
+    uow.category_group_budgets.get_by_year.return_value = []
+    txs = [
+        make_transaction(
+            category="Dining Out", amount=Decimal("-80.00"), payer_person_id=alice.id
+        ),
+        make_transaction(
+            category="Credit Card Payment",
+            amount=Decimal("-2000.00"),
+            payer_person_id=alice.id,
+            payer_percentage=100,
+            household=False,
+            tags=(),
+        ),
+        make_transaction(
+            category="Credit Card Payment",
+            amount=Decimal("-500.00"),
+            payer_person_id=alice.id,
+        ),
+    ]
+    uow.transactions.get_household_by_year.return_value = txs
+    uow.transactions.get_by_year.return_value = txs
+
+    household = await GetBudgetOverviewUseCase().execute(
+        GetBudgetOverviewCommand(year=2026, month=1), uow
+    )
+    personal = await GetBudgetOverviewUseCase().execute(
+        GetBudgetOverviewCommand(
+            year=2026, month=1, scope="personal", person_id=alice.id
+        ),
+        uow,
+    )
+
+    assert [s.group_name for s in household.overview.group_statuses] == [
+        "Food & Dining"
+    ]
+    assert household.overview.total_ytd_spent == Decimal("80.00")
+    assert [s.group_name for s in personal.overview.group_statuses] == ["Food & Dining"]
+    assert personal.overview.total_ytd_spent == Decimal("40.00")

@@ -15,3 +15,12 @@ async def test_creates_group_and_commits() -> None:
     saved = uow.category_groups.save.call_args[0][0]
     assert saved.name == "New Group"
     uow.commit.assert_called_once()
+
+
+async def test_creates_transfer_kind_group() -> None:
+    uow = make_mock_uow()
+    command = CreateCategoryGroupCommand(name="Transfers", kind="transfer")
+
+    await CreateCategoryGroupUseCase().execute(command, uow)
+
+    assert uow.category_groups.save.call_args[0][0].kind == "transfer"

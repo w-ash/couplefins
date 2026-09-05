@@ -28,6 +28,7 @@ import {
 import { findMonth, settlementsTouching } from "@/lib/ledger";
 import {
   bucketTransactions,
+  isSpendingRow,
   SCOPE_LABELS,
   sumNet,
   type TransactionScope,
@@ -325,6 +326,7 @@ function ImportedCard({
             ["Spotted", buckets.spotted],
             ["Partner-paid", buckets.partnerPaid],
             ["Settlement", buckets.settlement],
+            ["Transfer", buckets.transfer],
             ["Excluded", buckets.excluded],
           ]}
           periodLabel={periodLabel}
@@ -398,9 +400,7 @@ function InViewCard({ data, filtered, scope, periodLabel }: InViewCardProps) {
   return (
     <CardShell label="In view" info={<InViewInfo periodLabel={periodLabel} />}>
       <p className="text-lg font-semibold tabular-nums text-foreground">
-        {formatCurrency(
-          sumNet(filtered.filter((tx) => !tx.is_settlement && !tx.is_excluded)),
-        )}
+        {formatCurrency(sumNet(filtered.filter(isSpendingRow)))}
       </p>
       <p className="text-[11px] leading-tight text-muted-foreground/70">
         {filtered.length} of {data.transactions.length} · {SCOPE_LABELS[scope]}
@@ -504,10 +504,10 @@ function ImportedInfo({
 function InViewInfo({ periodLabel }: { periodLabel: string }) {
   return (
     <p>
-      Net total of every transaction matching the active filters. Refunds reduce
-      the total; linked settlement transfers don't count (money movement, not
-      spending). Filter-scoped — changes as you adjust filters within{" "}
-      {periodLabel}.
+      Net total of the spending rows matching the active filters. Refunds reduce
+      the total; linked settlement transfers and Transfer-group rows don't count
+      (money movement, not spending). Filter-scoped — changes as you adjust
+      filters within {periodLabel}.
     </p>
   );
 }

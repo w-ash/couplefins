@@ -5,18 +5,16 @@ from uuid import UUID
 from src.domain.budget import (
     BudgetOverviewInputs,
     _index_month_budgets,
-    _is_budget_relevant,
-    _is_personal_budget_relevant,
     compute_average_monthly_spending,
     compute_budget_overview,
-    compute_person_share,
-    compute_personal_budget_overview,
     determine_health,
 )
-from src.domain.categories import compute_category_breakdowns
 from src.domain.constants import UNCATEGORIZED_GROUP_NAME
 from src.domain.reconciliation import reconcile
+from src.domain.spending_lens import HouseholdLens, PersonalLens, compute_breakdowns
 from tests.fixtures.factories import (
+    ALICE,
+    BOB,
     make_category,
     make_category_group,
     make_category_group_budget,
@@ -487,13 +485,14 @@ def test_personal_overview_uncategorized_row_surfaces() -> None:
             amount=Decimal("-40.00"),
             household=False,
             payer_percentage=100,
-            payer_person_id=ALICE,
+            payer_person_id=ALICE.id,
             date=date(2026, 1, 12),
         ),
     ]
 
-    overview = compute_personal_budget_overview(
-        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1), ALICE
+    overview = compute_budget_overview(
+        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1),
+        PersonalLens(ALICE.id),
     )
 
     uncategorized = next(
@@ -506,24 +505,24 @@ def test_personal_overview_uncategorized_row_surfaces() -> None:
 
 def test_excluded_transaction_not_budget_relevant() -> None:
     tx = make_transaction(household=True, is_excluded=True)
-    assert _is_budget_relevant(tx, frozenset()) is False
+    assert HouseholdLens(frozenset()).is_relevant(tx) is False
 
 
 def test_excluded_transaction_not_budget_relevant_even_with_personal_category() -> None:
     tx = make_transaction(category="Groceries", household=False, is_excluded=True)
-    assert _is_budget_relevant(tx, frozenset({"Groceries"})) is False
+    assert HouseholdLens(frozenset({"Groceries"})).is_relevant(tx) is False
 
 
 def test_settlement_transaction_not_budget_relevant() -> None:
     tx = make_transaction(household=True, is_settlement=True)
-    assert _is_budget_relevant(tx, frozenset()) is False
+    assert HouseholdLens(frozenset()).is_relevant(tx) is False
 
 
 def test_settlement_transaction_not_budget_relevant_even_with_personal_category() -> (
     None
 ):
     tx = make_transaction(category="Groceries", household=False, is_settlement=True)
-    assert _is_budget_relevant(tx, frozenset({"Groceries"})) is False
+    assert HouseholdLens(frozenset({"Groceries"})).is_relevant(tx) is False
 
 
 # --- category breakdown per-source tracking ---
@@ -556,7 +555,7 @@ def test_breakdown_splits_household_vs_personal() -> None:
         ),
     ]
 
-    groups = compute_category_breakdowns(txs, lookup, personal_categories={"Groceries"})
+    groups = compute_breakdowns(HouseholdLens({"Groceries"}), txs, lookup)
     assert len(groups) == 1
     cat = groups[0].categories[0]
 
@@ -580,7 +579,7 @@ def test_breakdown_no_personal_categories_all_household() -> None:
         ),
     ]
 
-    groups = compute_category_breakdowns(txs, lookup)
+    groups = compute_breakdowns(HouseholdLens(), txs, lookup)
     cat = groups[0].categories[0]
 
     assert cat.total_amount == Decimal(100)
@@ -588,7 +587,9 @@ def test_breakdown_no_personal_categories_all_household() -> None:
     assert cat.personal_amounts == {}
 
 
-def test_breakdown_personal_not_in_set_excluded_from_personal_amounts() -> None:
+def test_breakdown_personal_not_in_set_is_not_household_spending() -> None:
+    """A personal row whose category is not opted in is outside the
+    household lens entirely — the accumulator selects rows itself."""
     food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
     alice = UUID("bbbbbbbb-0000-0000-0000-000000000001")
 
@@ -602,13 +603,7 @@ def test_breakdown_personal_not_in_set_excluded_from_personal_amounts() -> None:
         ),
     ]
 
-    # "Groceries" not in personal_categories, so personal_amounts stays empty
-    groups = compute_category_breakdowns(txs, lookup, personal_categories=frozenset())
-    cat = groups[0].categories[0]
-
-    assert cat.total_amount == Decimal(50)
-    assert cat.household_amount == Decimal(0)
-    assert cat.personal_amounts == {}
+    assert compute_breakdowns(HouseholdLens(), txs, lookup) == []
 
 
 def test_breakdown_refund_nets_instead_of_inflating() -> None:
@@ -632,7 +627,7 @@ def test_breakdown_refund_nets_instead_of_inflating() -> None:
         ),
     ]
 
-    groups = compute_category_breakdowns(txs, lookup)
+    groups = compute_breakdowns(HouseholdLens(), txs, lookup)
     cat = groups[0].categories[0]
 
     assert cat.total_amount == Decimal("140.00")
@@ -739,123 +734,7 @@ def test_household_split_spending_matches_reconcile_net() -> None:
     assert overview.group_statuses[0].monthly_spent == summary.net_household_spending
 
 
-# --- compute_person_share ---
-
-ALICE = UUID("bbbbbbbb-0000-0000-0000-000000000001")
-BOB = UUID("bbbbbbbb-0000-0000-0000-000000000002")
-
-
-def test_person_share_payer_household_50_50() -> None:
-    tx = make_transaction(
-        amount=Decimal(-100), payer_percentage=50, payer_person_id=ALICE
-    )
-    assert compute_person_share(tx, ALICE) == Decimal("50.00")
-
-
-def test_person_share_non_payer_household_50_50() -> None:
-    tx = make_transaction(
-        amount=Decimal(-100), payer_percentage=50, payer_person_id=ALICE
-    )
-    assert compute_person_share(tx, BOB) == Decimal("50.00")
-
-
-def test_person_share_payer_custom_split() -> None:
-    tx = make_transaction(
-        amount=Decimal(-200), payer_percentage=70, payer_person_id=ALICE
-    )
-    assert compute_person_share(tx, ALICE) == Decimal("140.00")
-
-
-def test_person_share_non_payer_custom_split() -> None:
-    tx = make_transaction(
-        amount=Decimal(-200), payer_percentage=70, payer_person_id=ALICE
-    )
-    assert compute_person_share(tx, BOB) == Decimal("60.00")
-
-
-def test_person_share_spotted_payer() -> None:
-    tx = make_transaction(
-        amount=Decimal(-30), payer_percentage=0, payer_person_id=ALICE
-    )
-    assert compute_person_share(tx, ALICE) == Decimal("0.00")
-
-
-def test_person_share_spotted_beneficiary() -> None:
-    tx = make_transaction(
-        amount=Decimal(-30), payer_percentage=0, payer_person_id=ALICE
-    )
-    assert compute_person_share(tx, BOB) == Decimal("30.00")
-
-
-def test_person_share_household_no_split_payer() -> None:
-    tx = make_transaction(
-        amount=Decimal(-60), payer_percentage=100, payer_person_id=ALICE
-    )
-    assert compute_person_share(tx, ALICE) == Decimal("60.00")
-
-
-def test_person_share_household_no_split_non_payer() -> None:
-    tx = make_transaction(
-        amount=Decimal(-60), payer_percentage=100, payer_person_id=ALICE
-    )
-    assert compute_person_share(tx, BOB) == Decimal("0.00")
-
-
-# --- _is_personal_budget_relevant ---
-
-
-def test_personal_relevant_household_tx() -> None:
-    tx = make_transaction(household=True, payer_person_id=ALICE)
-    assert _is_personal_budget_relevant(tx, BOB) is True
-
-
-def test_personal_relevant_own_personal_tx() -> None:
-    tx = make_transaction(household=False, payer_person_id=ALICE)
-    assert _is_personal_budget_relevant(tx, ALICE) is True
-
-
-def test_personal_relevant_beneficiary_of_partner_split() -> None:
-    """A personal split (non-household, pct<100) is relevant to the
-    beneficiary too — their share of the cost is their personal spending
-    (decided 2026-07-02: "if Bob pays for Alice and it's not household,
-    then it's Alice's personal")."""
-    tx = make_transaction(household=False, payer_person_id=ALICE, payer_percentage=50)
-    assert _is_personal_budget_relevant(tx, BOB) is True
-
-
-def test_personal_irrelevant_when_beneficiary_share_is_zero() -> None:
-    """Alice's wholly personal spending (pct=100, no split) never touches Bob."""
-    tx = make_transaction(household=False, payer_person_id=ALICE, payer_percentage=100)
-    assert _is_personal_budget_relevant(tx, BOB) is False
-
-
-def test_personal_irrelevant_payer_spotted_zero_share() -> None:
-    """A spotted front (pct=0) is $0 for the payer — not their spending."""
-    tx = make_transaction(
-        household=False, payer_person_id=ALICE, payer_percentage=0, tags=("bob",)
-    )
-    assert _is_personal_budget_relevant(tx, ALICE) is False
-
-
-def test_personal_relevant_beneficiary_of_spotted_front() -> None:
-    """The beneficiary of a spotted front owes 100% back — fully relevant."""
-    tx = make_transaction(
-        household=False, payer_person_id=ALICE, payer_percentage=0, tags=("bob",)
-    )
-    assert _is_personal_budget_relevant(tx, BOB) is True
-
-
-def test_personal_irrelevant_excluded() -> None:
-    tx = make_transaction(household=True, is_excluded=True)
-    assert _is_personal_budget_relevant(tx, ALICE) is False
-
-
-def test_personal_irrelevant_settlement() -> None:
-    tx = make_transaction(household=True, is_settlement=True)
-    assert _is_personal_budget_relevant(tx, ALICE) is False
-
-
-# --- compute_personal_budget_overview ---
+# --- compute_budget_overview with PersonalLens ---
 
 
 def test_personal_overview_mixed_household_and_personal() -> None:
@@ -867,7 +746,7 @@ def test_personal_overview_mixed_household_and_personal() -> None:
             year=2026,
             month=1,
             monthly_amount=Decimal(400),
-            person_id=ALICE,
+            person_id=ALICE.id,
         ),
     ]
     year_budgets = list(month_budgets)
@@ -880,7 +759,7 @@ def test_personal_overview_mixed_household_and_personal() -> None:
             amount=Decimal(-100),
             payer_percentage=50,
             household=True,
-            payer_person_id=ALICE,
+            payer_person_id=ALICE.id,
             date=date(2026, 1, 10),
         ),
         # Shared 50/50 paid by Bob: Alice's share = $30
@@ -889,7 +768,7 @@ def test_personal_overview_mixed_household_and_personal() -> None:
             amount=Decimal(-60),
             payer_percentage=50,
             household=True,
-            payer_person_id=BOB,
+            payer_person_id=BOB.id,
             date=date(2026, 1, 12),
         ),
         # Alice's personal grocery run: $40
@@ -898,7 +777,7 @@ def test_personal_overview_mixed_household_and_personal() -> None:
             amount=Decimal(-40),
             payer_percentage=100,
             household=False,
-            payer_person_id=ALICE,
+            payer_person_id=ALICE.id,
             date=date(2026, 1, 15),
         ),
         # Bob's personal (should not appear for Alice)
@@ -907,14 +786,14 @@ def test_personal_overview_mixed_household_and_personal() -> None:
             amount=Decimal(-25),
             payer_percentage=100,
             household=False,
-            payer_person_id=BOB,
+            payer_person_id=BOB.id,
             date=date(2026, 1, 16),
         ),
     ]
 
-    overview = compute_personal_budget_overview(
+    overview = compute_budget_overview(
         BudgetOverviewInputs(month_budgets, year_budgets, txs, lookup, groups, 2026, 1),
-        ALICE,
+        PersonalLens(ALICE.id),
     )
 
     assert len(overview.group_statuses) == 1
@@ -933,8 +812,8 @@ def test_personal_overview_empty_txs() -> None:
     food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
     groups = [make_category_group(id=food_gid, name="Food & Dining")]
 
-    overview = compute_personal_budget_overview(
-        BudgetOverviewInputs([], [], [], {}, groups, 2026, 1), ALICE
+    overview = compute_budget_overview(
+        BudgetOverviewInputs([], [], [], {}, groups, 2026, 1), PersonalLens(ALICE.id)
     )
 
     assert len(overview.group_statuses) == 1
@@ -952,14 +831,15 @@ def test_personal_overview_excludes_excluded_txs() -> None:
             category="Groceries",
             amount=Decimal(-100),
             household=True,
-            payer_person_id=ALICE,
+            payer_person_id=ALICE.id,
             is_excluded=True,
             date=date(2026, 1, 10),
         ),
     ]
 
-    overview = compute_personal_budget_overview(
-        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1), ALICE
+    overview = compute_budget_overview(
+        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1),
+        PersonalLens(ALICE.id),
     )
     assert len(overview.group_statuses) == 1
     assert overview.group_statuses[0].monthly_spent == Decimal(0)
@@ -975,7 +855,7 @@ def test_personal_overview_partner_household_creates_share() -> None:
             year=2026,
             month=1,
             monthly_amount=Decimal(500),
-            person_id=ALICE,
+            person_id=ALICE.id,
         ),
     ]
     year_budgets = list(month_budgets)
@@ -988,14 +868,14 @@ def test_personal_overview_partner_household_creates_share() -> None:
             amount=Decimal(-200),
             payer_percentage=50,
             household=True,
-            payer_person_id=BOB,
+            payer_person_id=BOB.id,
             date=date(2026, 1, 10),
         ),
     ]
 
-    overview = compute_personal_budget_overview(
+    overview = compute_budget_overview(
         BudgetOverviewInputs(month_budgets, year_budgets, txs, lookup, groups, 2026, 1),
-        ALICE,
+        PersonalLens(ALICE.id),
     )
 
     status = overview.group_statuses[0]
@@ -1017,17 +897,18 @@ def test_personal_overview_spotted_front_attributes_to_beneficiary() -> None:
             amount=Decimal("-200.00"),
             payer_percentage=0,
             household=False,
-            payer_person_id=ALICE,
+            payer_person_id=ALICE.id,
             tags=("bob",),
             date=date(2026, 1, 10),
         ),
     ]
 
-    alice_overview = compute_personal_budget_overview(
-        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1), ALICE
+    alice_overview = compute_budget_overview(
+        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1),
+        PersonalLens(ALICE.id),
     )
-    bob_overview = compute_personal_budget_overview(
-        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1), BOB
+    bob_overview = compute_budget_overview(
+        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1), PersonalLens(BOB.id)
     )
 
     # Alice (payer, 0% share) sees nothing.
@@ -1053,16 +934,17 @@ def test_personal_overview_personal_split_divides_across_both() -> None:
             amount=Decimal("-100.00"),
             payer_percentage=70,
             household=False,
-            payer_person_id=ALICE,
+            payer_person_id=ALICE.id,
             date=date(2026, 1, 10),
         ),
     ]
 
-    alice_overview = compute_personal_budget_overview(
-        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1), ALICE
+    alice_overview = compute_budget_overview(
+        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1),
+        PersonalLens(ALICE.id),
     )
-    bob_overview = compute_personal_budget_overview(
-        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1), BOB
+    bob_overview = compute_budget_overview(
+        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1), PersonalLens(BOB.id)
     )
 
     assert alice_overview.group_statuses[0].personal_spending == Decimal("70.00")
@@ -1081,7 +963,7 @@ def test_personal_overview_household_refund_reduces_share() -> None:
             amount=Decimal("-200.00"),
             payer_percentage=50,
             household=True,
-            payer_person_id=ALICE,
+            payer_person_id=ALICE.id,
             date=date(2026, 1, 5),
         ),
         make_transaction(
@@ -1089,13 +971,14 @@ def test_personal_overview_household_refund_reduces_share() -> None:
             amount=Decimal("60.00"),
             payer_percentage=50,
             household=True,
-            payer_person_id=ALICE,
+            payer_person_id=ALICE.id,
             date=date(2026, 1, 10),
         ),
     ]
 
-    overview = compute_personal_budget_overview(
-        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1), ALICE
+    overview = compute_budget_overview(
+        BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1),
+        PersonalLens(ALICE.id),
     )
     status = overview.group_statuses[0]
 
@@ -1113,7 +996,7 @@ def test_personal_overview_ytd_across_months() -> None:
             year=2026,
             month=2,
             monthly_amount=Decimal(300),
-            person_id=ALICE,
+            person_id=ALICE.id,
         ),
     ]
     year_budgets = [
@@ -1122,14 +1005,14 @@ def test_personal_overview_ytd_across_months() -> None:
             year=2026,
             month=1,
             monthly_amount=Decimal(300),
-            person_id=ALICE,
+            person_id=ALICE.id,
         ),
         make_category_group_budget(
             group_id=food_gid,
             year=2026,
             month=2,
             monthly_amount=Decimal(300),
-            person_id=ALICE,
+            person_id=ALICE.id,
         ),
     ]
     lookup = {"Groceries": (food_gid, "Food & Dining")}
@@ -1140,7 +1023,7 @@ def test_personal_overview_ytd_across_months() -> None:
             amount=Decimal(-100),
             payer_percentage=50,
             household=True,
-            payer_person_id=ALICE,
+            payer_person_id=ALICE.id,
             date=date(2026, 1, 15),
         ),
         make_transaction(
@@ -1148,14 +1031,14 @@ def test_personal_overview_ytd_across_months() -> None:
             amount=Decimal(-80),
             payer_percentage=100,
             household=False,
-            payer_person_id=ALICE,
+            payer_person_id=ALICE.id,
             date=date(2026, 2, 15),
         ),
     ]
 
-    overview = compute_personal_budget_overview(
+    overview = compute_budget_overview(
         BudgetOverviewInputs(month_budgets, year_budgets, txs, lookup, groups, 2026, 2),
-        ALICE,
+        PersonalLens(ALICE.id),
     )
 
     status = overview.group_statuses[0]
@@ -1164,3 +1047,164 @@ def test_personal_overview_ytd_across_months() -> None:
     # YTD (Jan+Feb): $50 (Jan shared) + $80 (Feb personal) = $130
     assert status.ytd_spent == Decimal("130.00")
     assert status.ytd_budget == Decimal(600)
+
+
+# --- transfer groups ---
+
+
+def test_transfer_group_gets_no_status_row_in_either_overview() -> None:
+    """A transfer group is money movement: no row, no budget, and the
+    integrity check stays clean even if a transfer row reaches the domain."""
+    food = make_category_group(name="Food & Dining")
+    transfer = make_category_group(name="Transfer", kind="transfer")
+    lookup = {
+        "Dining Out": (food.id, food.name),
+        "Credit Card Payment": (transfer.id, transfer.name),
+    }
+    txs = [
+        make_transaction(
+            date=date(2026, 1, 5),
+            category="Dining Out",
+            amount=Decimal("-100.00"),
+            payer_person_id=ALICE.id,
+        ),
+        make_transaction(
+            date=date(2026, 1, 6),
+            category="Credit Card Payment",
+            amount=Decimal("-900.00"),
+            payer_person_id=ALICE.id,
+        ),
+    ]
+    inputs = BudgetOverviewInputs([], [], txs, lookup, [food, transfer], 2026, 1)
+
+    household = compute_budget_overview(inputs)
+    personal = compute_budget_overview(inputs, PersonalLens(ALICE.id))
+
+    for overview in (household, personal):
+        assert [s.group_name for s in overview.group_statuses] == ["Food & Dining"]
+        assert overview.spending_drift is None
+    assert household.total_ytd_spent == Decimal("100.00")
+    assert personal.total_ytd_spent == Decimal("50.00")
+
+
+# --- one lens for everyone ---
+
+
+def test_personal_overview_partner_paid_household_row_is_household_only() -> None:
+    """Both partners buy their own concert ticket and tag it household: the
+    household view shows both; each personal view shows only its own."""
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    groups = [make_category_group(id=food_gid, name="Food & Dining")]
+    lookup = {"Concerts": (food_gid, "Food & Dining")}
+    txs = [
+        make_transaction(
+            category="Concerts",
+            amount=Decimal("-60.00"),
+            household=True,
+            payer_percentage=100,
+            payer_person_id=ALICE.id,
+        ),
+        make_transaction(
+            category="Concerts",
+            amount=Decimal("-45.00"),
+            household=True,
+            payer_percentage=100,
+            payer_person_id=BOB.id,
+        ),
+    ]
+    inputs = BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1)
+
+    household = compute_budget_overview(inputs)
+    alice = compute_budget_overview(inputs, PersonalLens(ALICE.id))
+    bob = compute_budget_overview(inputs, PersonalLens(BOB.id))
+
+    assert household.group_statuses[0].monthly_spent == Decimal("105.00")
+    assert alice.group_statuses[0].monthly_spent == Decimal("60.00")
+    assert alice.group_statuses[0].categories[0].transaction_count == 1
+    assert bob.group_statuses[0].monthly_spent == Decimal("45.00")
+    assert bob.group_statuses[0].categories[0].transaction_count == 1
+
+
+def test_personal_overview_spotted_payer_gets_no_zero_row() -> None:
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    groups = [make_category_group(id=food_gid, name="Food & Dining")]
+    lookup = {"Dining Out": (food_gid, "Food & Dining")}
+    txs = [
+        make_transaction(
+            category="Dining Out",
+            amount=Decimal("-30.00"),
+            household=False,
+            payer_percentage=0,
+            payer_person_id=ALICE.id,
+            tags=("bob",),
+        )
+    ]
+    inputs = BudgetOverviewInputs([], [], txs, lookup, groups, 2026, 1)
+
+    alice = compute_budget_overview(inputs, PersonalLens(ALICE.id))
+    bob = compute_budget_overview(inputs, PersonalLens(BOB.id))
+
+    assert alice.group_statuses[0].categories == []
+    assert alice.group_statuses[0].monthly_spent == Decimal(0)
+    assert bob.group_statuses[0].monthly_spent == Decimal("30.00")
+
+
+def test_average_monthly_spending_nets_refunds() -> None:
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    lookup = {"Groceries": (food_gid, "Food & Dining")}
+    txs = [
+        make_transaction(
+            date=date(2026, 1, 5),
+            category="Groceries",
+            amount=Decimal("-200.00"),
+            payer_person_id=ALICE.id,
+        ),
+        make_transaction(
+            date=date(2026, 1, 9),
+            category="Groceries",
+            amount=Decimal("50.00"),
+            payer_person_id=ALICE.id,
+        ),
+        make_transaction(
+            date=date(2026, 2, 5),
+            category="Groceries",
+            amount=Decimal("-100.00"),
+            payer_person_id=ALICE.id,
+        ),
+    ]
+
+    assert compute_average_monthly_spending(txs, lookup, through_month=2) == {
+        food_gid: Decimal("125.00")
+    }
+    assert compute_average_monthly_spending(
+        txs, lookup, through_month=2, lens=PersonalLens(ALICE.id)
+    ) == {food_gid: Decimal("62.50")}
+
+
+def test_average_divisor_counts_months_with_any_row_under_the_lens() -> None:
+    """A refund-only month is a month of activity: Jan -200, Feb +50 →
+    150 / 2 = 75. A month with no rows would not count."""
+    food_gid = UUID("aaaaaaaa-0000-0000-0000-000000000001")
+    lookup = {"Groceries": (food_gid, "Food & Dining")}
+    txs = [
+        make_transaction(
+            date=date(2026, 1, 5),
+            category="Groceries",
+            amount=Decimal("-200.00"),
+            payer_person_id=ALICE.id,
+        ),
+        make_transaction(
+            date=date(2026, 2, 9),
+            category="Groceries",
+            amount=Decimal("50.00"),
+            payer_person_id=ALICE.id,
+        ),
+    ]
+
+    assert compute_average_monthly_spending(txs, lookup, through_month=2) == {
+        food_gid: Decimal("75.00")
+    }
+    # through_month=1 excludes February entirely: 200 / 1.
+    assert compute_average_monthly_spending(txs, lookup, through_month=1) == {
+        food_gid: Decimal("200.00")
+    }

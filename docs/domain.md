@@ -99,12 +99,38 @@ Neither field implies the other. A transaction can be household without being sp
 
 **Household (no split)**: An expense relevant to the couple's shared life but paid individually — concert tickets bought separately for a show they attend together, or groceries one person picked up but isn't splitting. Tagged `household` (or `shared, s100`) in Monarch. No settlement impact, but counts toward the shared budget.
 
+### Transfers
+
+A category **group** carries a `kind`: `expense` (the default, spending) or `transfer` (money movement between the couple's own accounts — credit card payments, account transfers, balance adjustments). Monarch types its own groups this way, but its CSV export drops the type, so the app re-declares it on the group. The seeded "Transfer" group is `transfer`; the migration that introduced `kind` marks any existing group named "Transfer" the same way.
+
+Rows in a transfer-kind category:
+
+- **Never count as spending.** A card payment pays for purchases that were already counted when they hit the card; counting the payment counts them twice. Both legs (the checking-side debit and the card-side credit) are dropped from Budget, Dashboard, Insights, and reconciliation summaries, in every scope.
+- **Never enter settlement math.** Same reach as `is_excluded`. The Venmo legs of a rent transfer are already `is_settlement`; they stay findable as settlement candidates because the candidate finder is deliberately not filtered by kind.
+- **Stay visible.** The Transactions page lists them under the "All" scope with a "Transfer" badge and leaves them out of the header-card totals. The Household / Personal / Spotted scopes are spending lenses and omit them.
+- **Carry no budget.** Transfer groups get no Budget rows; saving a budget on one is rejected, and a group with budgets cannot be flipped to `transfer` until they are removed.
+
+The rule is evaluated at read time from the category → group mapping (`exclude_transfers` in `src/domain/filters.py`, applied once in `src/application/use_cases/_shared/transaction_reads.py` — the only module that reads transaction lists; a grep gate enforces it), never stamped on rows at import — so moving a category between groups in Settings corrects history too. The per-row levers (`is_settlement`, `is_excluded`) remain for individual exceptions. A transfer that is really an expense (paying down an old balance that was never tracked) is fixed by changing that row's category to a spending category. Note that "Uncategorized" is both the synthetic group for unmapped categories and a real Monarch category; the kind rule only ever looks at a category's mapped group.
+
+### Spending lenses
+
+Budget, Insights, and the Dashboard all compute "spending" through one domain module, `src/domain/spending_lens.py`: one lens per view and one accumulator behind them. A lens says which rows count, how much each contributes, and whose personal spending a non-household row is. `compute_breakdowns` is the single accumulator behind every per-category figure. For the same rows the three pages agree exactly, with one deliberate exception: Budget's household view additionally admits personal rows in `include_personal` categories (US-BUDGET-4), which Insights and the Dashboard never do — so a household group can read higher on Budget by exactly those rows (pinned in `tests/unit/domain/test_spending_parity.py`).
+
+| Lens | Rows | Contribution | `personal_amounts` key |
+|---|---|---|---|
+| Household | `household=true`, plus personal rows in `include_personal` categories | full signed amount | the payer (opted-in categories only) |
+| Personal (one person) | any row where that person's share is nonzero | their signed share | the viewer |
+| Split (reconcile only) | `payer_percentage < 100`, household or not | full signed amount | none |
+| All rows (Dashboard "all" scope) | every reconciliation-relevant row, household or not | full signed amount | the payer (household + personal partition the total) |
+
+Consequences of the personal rule: a household row where the viewer's share is $0 belongs to the **household view only**. If both partners buy their own concert ticket and tag it `household`, the household view shows both tickets and each partner's personal view shows only their own. A row the partner spotted for the viewer is the viewer's personal spending. Refunds net under every lens (the signed-amount convention): an expense adds, a refund subtracts, so a refund-heavy month can go negative.
+
 ### Settlement vs. budget
 
 Settlement and budget are separate concerns:
 
 - **Settlement**: Any transaction with `payer_percentage < 100` enters reconciliation math. The split determines each person's share. The `household` flag is irrelevant to settlement.
-- **Budget**: Any transaction with `household=true` counts toward its category group's budget. Additionally, individual categories can be configured with `include_personal=true` to also count personal (`household=false`) transactions in that category's budget totals. This lets the couple track total spending in categories like Groceries across both people, even when some purchases weren't tagged as household.
+- **Budget**: The household lens — any transaction with `household=true` counts toward its category group's budget. Additionally, individual categories can be configured with `include_personal=true` to also count personal (`household=false`) transactions in that category's budget totals. This lets the couple track total spending in categories like Groceries across both people, even when some purchases weren't tagged as household.
 
 ## User Identity
 
@@ -125,6 +151,7 @@ Monarch Money has ~75 transaction categories (e.g., "Groceries & Home Supplies",
 - **Festivals**: Infrastructure, tickets, consumables, outfits, transportation
 - **Gifts & Donations**: Charity, gifts
 - **Financial**: Loans, fees, cash & ATM, taxes
+- **Transfer** (kind `transfer`): Transfer, credit card payment, balance adjustment — money movement, not spending
 
 Each Monarch category maps to exactly one group. The initial mapping is seeded from a JSON fixture file (`data/category_groups.json`) and can be updated via the app as new categories appear.
 
@@ -138,6 +165,8 @@ The couple reviews budgets together once a month. The system supports two views:
 
 - **Monthly**: Current month's spending vs. the monthly budget amount per group.
 - **Year-to-date (YTD)**: Cumulative spending from January through the current month vs. the YTD budget (sum of individual monthly amounts where a budget was set). A month with no budget record contributes $0 to the YTD total.
+
+The per-group **average per month** hint divides the group's net spending by the number of months through the viewed month that have any row under the view's lens (any group, expense or refund); months with no rows at all — typically not yet uploaded — do not dilute it, while a refund-only month counts as a month.
 
 ## Accounting Concepts Mapping
 
@@ -156,6 +185,7 @@ Couplefins vocabulary mapped to standard accounting terms:
 | `payer_percentage` | Allocation Rule / Split Ratio | Determines each person's share (0-100, always set). Settlement: any transaction where `payer_percentage < 100` |
 | `household` | Expense Classification | Per-transaction flag — "relevant to the couple's shared life." Set by `shared`, `split`, or `household` tags (person-name tags do NOT set it — spotted is the beneficiary's personal spending) |
 | `include_personal` | Budget Scope Flag | Per-category toggle to also include personal (non-household) transactions in budget totals |
+| `CategoryGroup.kind` | Account Type (expense vs. transfer/contra) | `expense` groups are spending; `transfer` groups are money movement between own accounts, excluded from spending, budgets, and settlement |
 | `is_finalized` | Period Close | Prevents modification of a month's transactions after agreement; settlements covering the month stay possible |
 | TransactionEdit | Audit Log Entry | Records post-upload changes to a transaction (field, old value, new value, timestamp) |
 

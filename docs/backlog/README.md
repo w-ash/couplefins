@@ -183,6 +183,9 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.11.1 | Slim month-status endpoint — Transactions header card stops polling the full settle-up payload ([spec](v1.11.x.md)) | Planned | S |
 | v1.11.2 | Structured warnings — use cases return codes + params, frontend owns the copy ([spec](v1.11.x.md)) | Planned | M |
 | v1.11.3 | Year-scoped Dashboard settlement card — the hero answers for the current year ([spec](v1.11.x.md)) | Completed (2026-08-24) | S |
+| v1.12.0 | Insights scope toggle — Household / My Spending, one person-share rule across Budget, Dashboard, Insights ([spec](v1.12.x.md)) | Completed (2026-09-03) | M |
+| v1.12.1 | Transfer-kind category groups — credit card payments and transfers are money movement, not spending ([spec](v1.12.x.md)) | Completed (2026-09-03) | M |
+| v1.12.2 | One source of truth — transaction reads module with grep gates, one spending lens for Budget/Insights/Dashboard ([spec](v1.12.x.md)) | Completed (2026-09-05) | M |
 
 ## Infrastructure Readiness
 

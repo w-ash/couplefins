@@ -278,17 +278,20 @@ async def test_personal_budget_overview(client: AsyncClient) -> None:
     assert food["monthly_budget"] == pytest.approx(400.0)
 
 
-async def test_default_scope_backward_compatible(client: AsyncClient) -> None:
+async def test_default_scope_reports_household_source_split(
+    client: AsyncClient,
+) -> None:
+    """Household scope: spending is all household rows (no include_personal
+    categories are seeded), so the split is (monthly_spent, 0) per group."""
     _, cookies = await setup_and_login(client)
     response = await client.get(
         "/api/v1/budgets/overview?year=2026&month=1", auth=cookies
     )
     assert response.status_code == 200
     data = response.json()
-    # Household scope: shared/personal_spending should be null
     for status in data["group_statuses"]:
-        assert status["household_spending"] is None
-        assert status["personal_spending"] is None
+        assert status["household_spending"] == pytest.approx(status["monthly_spent"])
+        assert status["personal_spending"] == pytest.approx(0.0)
 
 
 async def test_copy_budgets_end_to_end(client: AsyncClient) -> None:
@@ -407,3 +410,26 @@ async def test_overview_includes_copyable_source(client: AsyncClient) -> None:
     assert data["copyable_source"] == {"year": 2026, "month": 1}
     assert data["next_month_has_budgets"] is False
     assert len(data["source_budgets"]) == 1
+
+
+async def test_budget_on_transfer_group_rejected(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
+    group_id = await _get_group_id(client, "Transfer", cookies)
+
+    response = await client.post(
+        "/api/v1/budgets",
+        json={"group_id": group_id, "monthly_amount": 100.0, "year": 2026, "month": 1},
+        auth=cookies,
+    )
+    assert response.status_code == 422
+    assert "Transfer groups" in response.text
+
+
+async def test_overview_has_no_transfer_row(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
+    response = await client.get(
+        "/api/v1/budgets/overview?year=2026&month=1", auth=cookies
+    )
+    names = {s["group_name"] for s in response.json()["group_statuses"]}
+    assert "Transfer" not in names
+    assert "Food & Dining" in names

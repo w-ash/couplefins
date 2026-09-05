@@ -28,6 +28,7 @@ function makeTx(overrides: Partial<TransactionResponse>): TransactionResponse {
     household: true,
     is_excluded: false,
     is_settlement: false,
+    is_transfer: false,
     original_date: null,
     original_amount: null,
     ...overrides,
@@ -491,5 +492,43 @@ describe("TransactionsPage", () => {
     });
 
     expect(screen.getByText(/1 of 3 · Spotted/)).toBeInTheDocument();
+  });
+
+  it("badges transfer-category rows and keeps them out of the In view total", async () => {
+    server.use(
+      http.get("/api/v1/reconciliation", () =>
+        HttpResponse.json({
+          ...reconciliationResponse,
+          transaction_count: 3,
+          transactions: [
+            ...reconciliationResponse.transactions,
+            makeTx({
+              id: "tx-cc",
+              date: "2026-01-28",
+              merchant: "Chase Card Payment",
+              category: "Credit Card Payment",
+              amount: -4000,
+              payer_person_id: "p1",
+              payer_percentage: 100,
+              household: false,
+              is_transfer: true,
+            }),
+          ],
+        }),
+      ),
+    );
+    renderWithProviders(<TransactionsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Chase Card Payment")).toBeInTheDocument();
+    });
+    expect(
+      screen.getByTitle(/Transfer — money movement, not spending/),
+    ).toBeInTheDocument();
+    // In view sums spending only: $100 + $60, not the $4,000 payment.
+    expect(screen.getByText("$160.00")).toBeInTheDocument();
+    expect(
+      screen.getByText(/3 transactions · \$4,160\.00 imported/),
+    ).toBeInTheDocument();
   });
 });

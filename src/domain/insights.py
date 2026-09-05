@@ -4,17 +4,19 @@ from uuid import UUID
 
 from attrs import define
 
-from src.domain.categories import compute_category_breakdowns
 from src.domain.entities.transaction import Transaction
-from src.domain.filters import is_reconciliation_relevant
+from src.domain.spending_lens import (
+    HouseholdLens,
+    PersonalLens,
+    SpendingLens,
+    compute_breakdowns,
+    select,
+)
 
 
-def _household_expenses(txs: list[Transaction]) -> list[Transaction]:
-    return [
-        tx
-        for tx in txs
-        if tx.household and tx.amount < 0 and is_reconciliation_relevant(tx)
-    ]
+def _lens(person_id: UUID | None) -> SpendingLens:
+    """Household lens, or one person's share of spending."""
+    return HouseholdLens() if person_id is None else PersonalLens(person_id)
 
 
 def _group_by_month(txs: list[Transaction]) -> dict[int, list[Transaction]]:
@@ -106,6 +108,8 @@ def compute_spending_trends(
     category_lookup: dict[str, tuple[UUID, str]],
     year: int,
     through_month: int | None = None,
+    *,
+    person_id: UUID | None = None,
 ) -> SpendingTrends:
     """Compute per-month trends (full year) and YTD group summaries.
 
@@ -114,9 +118,11 @@ def compute_spending_trends(
     year's shape. `group_summaries.ytd_total` is bounded at `through_month`
     when given (the selected month), so "Year to date" agrees with Budget
     and Dashboard's YTD instead of silently including months after the
-    one being viewed.
+    one being viewed. `person_id` switches to that person's share of
+    spending (`PersonalLens`).
     """
-    by_month = _group_by_month(_household_expenses(year_txs))
+    lens = _lens(person_id)
+    by_month = _group_by_month(select(lens, year_txs))
 
     monthly_group_spending: list[MonthlyGroupSpending] = []
     monthly_totals: list[MonthlyTotal] = []
@@ -125,7 +131,7 @@ def compute_spending_trends(
     group_names: dict[UUID | None, str] = {}
 
     for month in sorted(by_month):
-        breakdowns = compute_category_breakdowns(by_month[month], category_lookup)
+        breakdowns = compute_breakdowns(lens, by_month[month], category_lookup)
         month_total = Decimal(0)
         within_ytd = through_month is None or month <= through_month
         for bd in breakdowns:
@@ -177,7 +183,8 @@ def _compute_trailing_average_from_expenses(
     expenses: list[Transaction],
     category_lookup: dict[str, tuple[UUID, str]],
     target_month: int,
-    window: int = 3,
+    window: int,
+    lens: SpendingLens,
 ) -> dict[UUID | None, Decimal]:
     by_month = _group_by_month(expenses)
 
@@ -188,7 +195,7 @@ def _compute_trailing_average_from_expenses(
 
     group_totals: dict[UUID | None, Decimal] = defaultdict(Decimal)
     for month in trailing_months:
-        for bd in compute_category_breakdowns(by_month[month], category_lookup):
+        for bd in compute_breakdowns(lens, by_month[month], category_lookup):
             group_totals[bd.group_id] += bd.total_amount
 
     num_months = len(trailing_months)
@@ -200,9 +207,12 @@ def compute_trailing_average(
     category_lookup: dict[str, tuple[UUID, str]],
     target_month: int,
     window: int = 3,
+    *,
+    person_id: UUID | None = None,
 ) -> dict[UUID | None, Decimal]:
+    lens = _lens(person_id)
     return _compute_trailing_average_from_expenses(
-        _household_expenses(year_txs), category_lookup, target_month, window
+        select(lens, year_txs), category_lookup, target_month, window, lens
     )
 
 
@@ -211,16 +221,19 @@ def compute_comparison_cards(
     category_lookup: dict[str, tuple[UUID, str]],
     target_month: int,
     window: int = 3,
+    *,
+    person_id: UUID | None = None,
 ) -> list[GroupComparison]:
-    expenses = _household_expenses(year_txs)
+    lens = _lens(person_id)
+    expenses = select(lens, year_txs)
     target_txs = [tx for tx in expenses if tx.date.month == target_month]
 
     current_by_group: dict[UUID | None, tuple[str, Decimal]] = {}
-    for bd in compute_category_breakdowns(target_txs, category_lookup):
+    for bd in compute_breakdowns(lens, target_txs, category_lookup):
         current_by_group[bd.group_id] = (bd.group_name, bd.total_amount)
 
     trailing_avg = _compute_trailing_average_from_expenses(
-        expenses, category_lookup, target_month, window
+        expenses, category_lookup, target_month, window, lens
     )
 
     group_names = _build_group_name_lookup(category_lookup)
@@ -267,17 +280,21 @@ def compute_person_paid_by_month(
     year_txs: list[Transaction],
     category_lookup: dict[str, tuple[UUID, str]],
 ) -> list[MonthlyPersonPaid]:
-    """Per-person paid amounts grouped by month and category group."""
-    expenses = _household_expenses(year_txs)
+    """Per-person paid amounts grouped by month and category group.
+
+    Always the household lens: this answers "who fronted the household money".
+    A refund nets against what its payer fronted.
+    """
+    lens = HouseholdLens()
     totals: dict[tuple[int, UUID, UUID | None], Decimal] = defaultdict(Decimal)
 
-    for tx in expenses:
+    for tx in select(lens, year_txs):
         group_id: UUID | None = None
         cat_entry = category_lookup.get(tx.category)
         if cat_entry is not None:
             group_id = cat_entry[0]
         key = (tx.date.month, tx.payer_person_id, group_id)
-        totals[key] += abs(tx.amount)
+        totals[key] += lens.contribution(tx)
 
     return [
         MonthlyPersonPaid(

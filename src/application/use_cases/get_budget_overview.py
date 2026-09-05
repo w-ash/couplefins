@@ -1,18 +1,26 @@
-from typing import Literal, NamedTuple
+from typing import NamedTuple
 from uuid import UUID
 
 from attrs import Factory, define, field
 from structlog.stdlib import get_logger
 
 from src.application.use_cases._shared.command_validators import (
+    PersonScope,
+    Scope,
     month_range,
     positive_int,
+    require_person_for_personal_scope,
+)
+from src.application.use_cases._shared.reconciliation_context import (
+    load_reconciliation_context,
+)
+from src.application.use_cases._shared.transaction_reads import (
+    fetch_year_spending_rows,
 )
 from src.domain.budget import (
     BudgetOverview,
     BudgetOverviewInputs,
     compute_budget_overview,
-    compute_personal_budget_overview,
     find_copyable_source,
     has_budgets_for_month,
 )
@@ -23,8 +31,8 @@ from src.domain.categories import (
 from src.domain.entities.category import Category
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.entities.person import Person
-from src.domain.exceptions import ValidationError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
+from src.domain.spending_lens import HouseholdLens, PersonalLens, SpendingLens
 
 logger = get_logger()
 
@@ -33,12 +41,11 @@ logger = get_logger()
 class GetBudgetOverviewCommand:
     year: int = field(validator=positive_int)
     month: int = field(validator=month_range)
-    scope: Literal["household", "personal"] = "household"
+    scope: PersonScope = "household"
     person_id: UUID | None = None
 
     def __attrs_post_init__(self) -> None:
-        if self.scope == "personal" and self.person_id is None:
-            raise ValidationError("person_id is required for personal scope")
+        require_person_for_personal_scope(self.scope, self.person_id)
 
 
 @define(frozen=True, slots=True)
@@ -85,55 +92,39 @@ class GetBudgetOverviewUseCase:
         self, command: GetBudgetOverviewCommand, uow: UnitOfWorkProtocol
     ) -> GetBudgetOverviewResult:
         async with uow:
-            categories = await uow.categories.get_all()
-            category_groups = await uow.category_groups.get_all()
-            persons = await uow.persons.get_all()
-            category_lookup = build_category_lookup(categories, category_groups)
+            ctx = await load_reconciliation_context(uow)
+            category_lookup = build_category_lookup(ctx.categories, ctx.category_groups)
 
             if command.scope == "personal" and command.person_id is not None:
-                year_budgets = await uow.category_group_budgets.get_by_year(
-                    command.year, command.person_id
-                )
-                month_budgets = [b for b in year_budgets if b.month == command.month]
-                year_txs = await uow.transactions.get_by_year(command.year)
-                overview = compute_personal_budget_overview(
-                    BudgetOverviewInputs(
-                        month_budgets,
-                        year_budgets,
-                        year_txs,
-                        category_lookup,
-                        category_groups,
-                        command.year,
-                        command.month,
-                    ),
-                    command.person_id,
-                )
-                budgets = month_budgets
+                lens: SpendingLens = PersonalLens(command.person_id)
+                fetch_scope: Scope = "personal"
+                budget_owner: UUID | None = command.person_id
             else:
-                year_budgets = await uow.category_group_budgets.get_by_year(
-                    command.year, None
-                )
-                month_budgets = [b for b in year_budgets if b.month == command.month]
-                personal_cats = get_personal_included_categories(categories)
-                if personal_cats:
-                    year_txs = await uow.transactions.get_by_year(command.year)
-                else:
-                    year_txs = await uow.transactions.get_household_by_year(
-                        command.year
-                    )
-                overview = compute_budget_overview(
-                    BudgetOverviewInputs(
-                        month_budgets,
-                        year_budgets,
-                        year_txs,
-                        category_lookup,
-                        category_groups,
-                        command.year,
-                        command.month,
-                    ),
-                    personal_categories=personal_cats,
-                )
-                budgets = month_budgets
+                personal_cats = get_personal_included_categories(ctx.categories)
+                lens = HouseholdLens(personal_cats)
+                fetch_scope = "all" if personal_cats else "household"
+                budget_owner = None
+
+            year_budgets = await uow.category_group_budgets.get_by_year(
+                command.year, budget_owner
+            )
+            month_budgets = [b for b in year_budgets if b.month == command.month]
+            year_txs = await fetch_year_spending_rows(
+                uow, command.year, fetch_scope, ctx
+            )
+            overview = compute_budget_overview(
+                BudgetOverviewInputs(
+                    month_budgets,
+                    year_budgets,
+                    year_txs,
+                    category_lookup,
+                    ctx.category_groups,
+                    command.year,
+                    command.month,
+                ),
+                lens,
+            )
+            budgets = month_budgets
 
             if overview.spending_drift is not None:
                 logger.warning(
@@ -152,8 +143,8 @@ class GetBudgetOverviewUseCase:
             return GetBudgetOverviewResult(
                 overview=overview,
                 budgets=budgets,
-                categories=categories,
-                persons=persons,
+                categories=ctx.categories,
+                persons=ctx.persons,
                 copyable_source=ci.copyable_source,
                 next_month_has_budgets=ci.next_month_has_budgets,
                 source_budgets=ci.source_budgets,

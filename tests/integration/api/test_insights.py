@@ -1,6 +1,6 @@
 from httpx import AsyncClient
 
-from tests.integration.conftest import setup_and_login, upload_csv
+from tests.integration.conftest import login_as_bob, setup_and_login, upload_csv
 
 ALICE_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags
 2026-01-10,Sushi Place,Dining Out,Chase,SUSHI PLACE,,-40.00,"shared"
@@ -148,3 +148,95 @@ async def test_spending_trends_categories_present(client: AsyncClient) -> None:
     for item in mgs:
         assert "categories" in item
         assert isinstance(item["categories"], list)
+
+
+# --- scope ---
+
+# Alice's export: a 70/30 split she paid, her own personal row, and a
+# spot for Bob (his personal spending, fronted by her).
+ALICE_SCOPED_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags
+2026-01-10,Sushi Place,Dining Out,Chase,SUSHI PLACE,,-100.00,"shared, s70"
+2026-01-11,Book Store,Dining Out,Chase,BOOK STORE,,-40.00,
+2026-01-12,Parking Meter,Dining Out,Chase,PARKING METER,,-30.00,"bob"
+"""
+
+
+async def test_spending_trends_personal_scope_is_the_users_share(
+    client: AsyncClient,
+) -> None:
+    persons, alice = await setup_and_login(client)
+    await upload_csv(client, persons[0]["id"], ALICE_SCOPED_CSV, auth=alice)
+    bob = await login_as_bob(client)
+    params = {"year": 2026, "month": 1, "scope": "personal"}
+
+    alice_resp = await client.get(
+        "/api/v1/insights/spending-trends", params=params, auth=alice
+    )
+    bob_resp = await client.get(
+        "/api/v1/insights/spending-trends", params=params, auth=bob
+    )
+    assert alice_resp.status_code == 200
+    assert bob_resp.status_code == 200
+
+    alice_data = alice_resp.json()
+    # Her 70% of sushi + her own book; the spot for Bob is $0 for her.
+    assert alice_data["monthly_totals"] == [
+        {"year": 2026, "month": 1, "total_amount": 110.0}
+    ]
+    # Bob's 30% of sushi + the parking Alice spotted for him.
+    assert bob_resp.json()["monthly_totals"] == [
+        {"year": 2026, "month": 1, "total_amount": 60.0}
+    ]
+
+
+async def test_spending_trends_default_scope_is_household(
+    client: AsyncClient,
+) -> None:
+    persons, alice = await setup_and_login(client)
+    await upload_csv(client, persons[0]["id"], ALICE_SCOPED_CSV, auth=alice)
+
+    resp = await client.get(
+        "/api/v1/insights/spending-trends",
+        params={"year": 2026, "month": 1},
+        auth=alice,
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    # Only the shared sushi row at its full amount.
+    assert data["monthly_totals"] == [{"year": 2026, "month": 1, "total_amount": 100.0}]
+
+
+async def test_spending_trends_rejects_unknown_scope(client: AsyncClient) -> None:
+    _, alice = await setup_and_login(client)
+    resp = await client.get(
+        "/api/v1/insights/spending-trends",
+        params={"year": 2026, "scope": "all"},
+        auth=alice,
+    )
+    assert resp.status_code == 422
+
+
+CARD_PAYMENT_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags
+2026-01-10,Sushi Place,Dining Out,Chase,SUSHI PLACE,,-100.00,"shared"
+2026-01-15,Chase Card,Credit Card Payment,Checking,CHASE PAYMENT,,-4000.00,"shared"
+2026-01-15,Chase Card,Credit Card Payment,Chase,PAYMENT THANK YOU,,4000.00,
+2026-01-20,Amex,Credit Card Payment,Checking,AMEX PAYMENT,,-900.00,
+"""
+
+
+async def test_credit_card_payments_are_not_spending(client: AsyncClient) -> None:
+    persons, alice = await setup_and_login(client)
+    await upload_csv(client, persons[0]["id"], CARD_PAYMENT_CSV, auth=alice)
+
+    for scope, expected in (("household", 100.0), ("personal", 50.0)):
+        resp = await client.get(
+            "/api/v1/insights/spending-trends",
+            params={"year": 2026, "month": 1, "scope": scope},
+            auth=alice,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert [g["group_name"] for g in data["group_summaries"]] == ["Food & Dining"]
+        assert data["monthly_totals"] == [
+            {"year": 2026, "month": 1, "total_amount": expected}
+        ]

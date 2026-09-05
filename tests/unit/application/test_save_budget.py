@@ -4,7 +4,7 @@ from uuid import UUID
 import pytest
 
 from src.application.use_cases.save_budget import SaveBudgetCommand, SaveBudgetUseCase
-from src.domain.exceptions import NotFoundError, PeriodFinalizedError
+from src.domain.exceptions import NotFoundError, PeriodFinalizedError, ValidationError
 from tests.fixtures.factories import (
     make_category_group,
     make_category_group_budget,
@@ -158,5 +158,22 @@ async def test_finalized_period_raises() -> None:
         month=1,
     )
     with pytest.raises(PeriodFinalizedError):
+        await SaveBudgetUseCase().execute(command, uow)
+    uow.category_group_budgets.save.assert_not_called()
+
+
+async def test_rejects_budget_on_transfer_group() -> None:
+    uow = make_mock_uow()
+    uow.category_groups.get_by_id.return_value = make_category_group(
+        name="Transfer", kind="transfer"
+    )
+    command = SaveBudgetCommand(
+        group_id=uow.category_groups.get_by_id.return_value.id,
+        monthly_amount=Decimal(500),
+        year=2026,
+        month=1,
+    )
+
+    with pytest.raises(ValidationError, match="Transfer groups"):
         await SaveBudgetUseCase().execute(command, uow)
     uow.category_group_budgets.save.assert_not_called()

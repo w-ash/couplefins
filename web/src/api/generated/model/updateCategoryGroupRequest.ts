@@ -4,8 +4,10 @@
  * Couplefins
  * OpenAPI spec version: 0.1.0
  */
+import type { UpdateCategoryGroupRequestKind } from './updateCategoryGroupRequestKind';
 
 export interface UpdateCategoryGroupRequest {
   name: string;
+  kind: UpdateCategoryGroupRequestKind;
   icon?: string | null;
 }

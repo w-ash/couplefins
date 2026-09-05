@@ -15,9 +15,11 @@ from src.application.use_cases._shared.settlement_math import (
     load_month_audit_snapshot,
     load_settlement_ledger,
 )
+from src.application.use_cases._shared.transaction_reads import (
+    fetch_latest_spending_month,
+)
 from src.application.use_cases._shared.transactions import (
     find_all_unmapped_categories,
-    get_latest_transaction_month,
 )
 from src.application.use_cases._shared.upload_status import UploadStatus
 from src.domain.entities.category import Category
@@ -159,7 +161,7 @@ class GetSettleUpDataUseCase:
                 is_finalized=is_finalized,
                 finalized_at=finalized_at,
                 transaction_count=snapshot.summary.transaction_count,
-                latest_transaction_month=await get_latest_transaction_month(uow),
+                latest_transaction_month=await fetch_latest_spending_month(uow, ctx),
                 finalization_warnings=warnings,
                 payer_splits=payer_splits,
                 payer_group_splits=payer_group_splits,

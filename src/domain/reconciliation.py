@@ -8,7 +8,6 @@ from attrs import define
 from src.domain.categories import (
     CategoryGroupBreakdown,
     build_category_lookup,
-    compute_category_breakdowns,
 )
 from src.domain.constants import (
     UNCATEGORIZED_GROUP_NAME,
@@ -22,6 +21,7 @@ from src.domain.entities.settlement import Settlement
 from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import InvariantViolationError
 from src.domain.filters import is_split_relevant
+from src.domain.spending_lens import SplitLens, compute_breakdowns
 from src.domain.splits import compute_shares
 
 
@@ -322,7 +322,7 @@ def reconcile(
     category_lookup = build_category_lookup(categories, category_groups)
     person_summaries = _compute_person_summaries(household, person_ids)
     settlement = _compute_settlement(person_summaries)
-    breakdowns = compute_category_breakdowns(household, category_lookup)
+    breakdowns = compute_breakdowns(SplitLens(), household, category_lookup)
 
     return ReconciliationSummary(
         start_date=start_date,

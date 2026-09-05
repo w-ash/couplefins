@@ -1,25 +1,27 @@
 from collections import defaultdict
-from collections.abc import Set
 from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
-from attrs import Factory, define, evolve
+from attrs import Factory, define
 
-from src.domain.categories import (
-    CategoryBreakdown,
-    CategoryGroupBreakdown,
-    compute_category_breakdowns,
-    group_category_breakdowns,
-)
-from src.domain.constants import UNCATEGORIZED_GROUP_NAME, SplitDefaults
+from src.domain.categories import CategoryBreakdown, CategoryGroupBreakdown
+from src.domain.constants import UNCATEGORIZED_GROUP_NAME
 from src.domain.entities.category_group import CategoryGroup
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.entities.transaction import Transaction
-from src.domain.filters import is_reconciliation_relevant
-from src.domain.splits import compute_shares
+from src.domain.spending_lens import (
+    HouseholdLens,
+    SpendingLens,
+    compute_breakdowns,
+    select,
+    source_split,
+)
 
 HealthStatus = Literal["on_track", "near_limit", "over_budget"]
+
+# The default lens: the household's own spending, no include_personal opt-ins.
+HOUSEHOLD_LENS = HouseholdLens()
 
 _NEAR_LIMIT_THRESHOLD = Decimal("0.80")
 
@@ -72,38 +74,29 @@ def determine_health(spent: Decimal, budget: Decimal) -> HealthStatus:
     return "on_track"
 
 
-def _is_budget_relevant(tx: Transaction, personal_categories: Set[str]) -> bool:
-    if not is_reconciliation_relevant(tx):
-        return False
-    return tx.household or tx.category in personal_categories
-
-
 def compute_average_monthly_spending(
     year_txs: list[Transaction],
     category_lookup: dict[str, tuple[UUID, str]],
     through_month: int,
-    personal_categories: Set[str] = frozenset(),
+    lens: SpendingLens = HOUSEHOLD_LENS,
 ) -> dict[UUID, Decimal]:
+    """Average per group, divided by the number of months through
+    `through_month` with any row under the lens (any group, expense or
+    refund). Months with no rows — typically not yet uploaded — do not
+    dilute the average; a refund-only month does count as a month.
+    Refunds net, like every other spending figure."""
     by_month: dict[int, list[Transaction]] = defaultdict(list)
-    for tx in year_txs:
-        if _is_budget_relevant(tx, personal_categories) and tx.amount < 0:
+    for tx in select(lens, year_txs):
+        if tx.date.month <= through_month:
             by_month[tx.date.month].append(tx)
 
     group_totals: dict[UUID, Decimal] = defaultdict(Decimal)
-    months_with_data: set[int] = set()
-
-    for month, txs in by_month.items():
-        if month > through_month:
-            continue
-        months_with_data.add(month)
-        breakdowns = compute_category_breakdowns(
-            txs, category_lookup, personal_categories
-        )
-        for bd in breakdowns:
+    for txs in by_month.values():
+        for bd in compute_breakdowns(lens, txs, category_lookup):
             if bd.group_id is not None:
                 group_totals[bd.group_id] += bd.total_amount
 
-    num_months = len(months_with_data) or 1
+    num_months = len(by_month) or 1
     return {gid: total / num_months for gid, total in group_totals.items()}
 
 
@@ -186,6 +179,10 @@ def _build_group_status(
         else None
     )
 
+    household_spend, personal_spend = (
+        source_split([monthly_bd]) if monthly_bd else (Decimal(0), Decimal(0))
+    )
+
     return CategoryGroupBudgetStatus(
         group_id=gid,
         group_name=name,
@@ -206,6 +203,8 @@ def _build_group_status(
         categories=monthly_bd.categories if monthly_bd else [],
         ytd_categories=ytd_bd.categories if ytd_bd else [],
         budgeted_months=len(budgets_through_month),
+        household_spending=household_spend,
+        personal_spending=personal_spend,
     )
 
 
@@ -266,9 +265,7 @@ def _assemble_overview(
 
 @define(frozen=True, slots=True)
 class BudgetOverviewInputs:
-    """Shared inputs to `compute_budget_overview` and
-    `compute_personal_budget_overview` — bundled so neither function's
-    signature exceeds the project's max-args limit."""
+    """Inputs to `compute_budget_overview`, bundled to keep its signature small."""
 
     month_budgets: list[CategoryGroupBudget]
     year_budgets: list[CategoryGroupBudget]
@@ -279,35 +276,35 @@ class BudgetOverviewInputs:
     month: int
 
 
+def _budgetable_group_names(groups: list[CategoryGroup]) -> dict[UUID, str]:
+    """Transfer groups are money movement: no status row, no budget."""
+    return {g.id: g.name for g in groups if g.kind == "expense"}
+
+
 def compute_budget_overview(
     inputs: BudgetOverviewInputs,
-    personal_categories: Set[str] = frozenset(),
+    lens: SpendingLens = HOUSEHOLD_LENS,
 ) -> BudgetOverview:
-    group_names = {g.id: g.name for g in inputs.groups}
+    """Budget status per group under a lens: the household's spending, or
+    one person's share (`PersonalLens`). Transfer groups get no row."""
+    group_names = _budgetable_group_names(inputs.groups)
 
     ytd_txs = [
-        tx
-        for tx in inputs.year_txs
-        if _is_budget_relevant(tx, personal_categories)
-        and tx.date.month <= inputs.month
+        tx for tx in select(lens, inputs.year_txs) if tx.date.month <= inputs.month
     ]
     month_txs = [tx for tx in ytd_txs if tx.date.month == inputs.month]
 
     month_by_group: dict[UUID | None, CategoryGroupBreakdown] = {
         bd.group_id: bd
-        for bd in compute_category_breakdowns(
-            month_txs, inputs.category_lookup, personal_categories
-        )
+        for bd in compute_breakdowns(lens, month_txs, inputs.category_lookup)
     }
     ytd_by_group: dict[UUID | None, CategoryGroupBreakdown] = {
         bd.group_id: bd
-        for bd in compute_category_breakdowns(
-            ytd_txs, inputs.category_lookup, personal_categories
-        )
+        for bd in compute_breakdowns(lens, ytd_txs, inputs.category_lookup)
     }
 
     avg_spending = compute_average_monthly_spending(
-        inputs.year_txs, inputs.category_lookup, inputs.month, personal_categories
+        inputs.year_txs, inputs.category_lookup, inputs.month, lens
     )
 
     ctx = _GroupStatusContext(
@@ -325,202 +322,6 @@ def compute_budget_overview(
     uncategorized = _uncategorized_status_if_present(ctx)
     if uncategorized is not None:
         statuses.append(uncategorized)
-
-    drift = _check_spending_integrity(statuses, month_by_group, ytd_by_group)
-    return _assemble_overview(statuses, inputs.year, inputs.month, spending_drift=drift)
-
-
-def compute_person_share(tx: Transaction, person_id: UUID) -> Decimal:
-    """One person's share of a transaction."""
-    payer_share, other_share = compute_shares(tx.amount, tx.payer_percentage)
-    return payer_share if tx.payer_person_id == person_id else other_share
-
-
-def _is_personal_budget_relevant(tx: Transaction, person_id: UUID) -> bool:
-    """A non-household transaction is relevant to a person whenever their
-    share of it is nonzero — as payer (payer_percentage > 0) or as
-    beneficiary (payer_percentage < 100, i.e. someone else fronted it and
-    this person owes part or all of it back). Household rows are always
-    relevant (everyone has some share of shared life)."""
-    if not is_reconciliation_relevant(tx):
-        return False
-    if tx.household:
-        return True
-    if tx.payer_person_id == person_id:
-        return tx.payer_percentage > 0
-    return tx.payer_percentage < SplitDefaults.MAX_PAYER_PERCENTAGE
-
-
-def _compute_personal_breakdowns(
-    txs: list[Transaction],
-    person_id: UUID,
-    category_lookup: dict[str, tuple[UUID, str]],
-) -> tuple[list[CategoryGroupBreakdown], dict[UUID | None, tuple[Decimal, Decimal]]]:
-    """Compute category breakdowns using person's share amounts.
-
-    Returns (breakdowns, spending_split) where spending_split maps
-    group_id -> (household_spending, personal_spending).
-    """
-    uncategorized = "Uncategorized"
-
-    cat_total: dict[str, Decimal] = defaultdict(Decimal)
-    cat_count: dict[str, int] = defaultdict(int)
-    cat_household: dict[str, Decimal] = defaultdict(Decimal)
-    cat_personal: dict[str, dict[UUID, Decimal]] = defaultdict(
-        lambda: defaultdict(Decimal)
-    )
-    group_household: dict[UUID | None, Decimal] = defaultdict(Decimal)
-    group_personal: dict[UUID | None, Decimal] = defaultdict(Decimal)
-
-    for tx in txs:
-        gid, _ = category_lookup.get(tx.category, (None, uncategorized))
-        if tx.household:
-            # Sign-aware: an expense adds the share, a refund subtracts it —
-            # mirrors compute_category_breakdowns / _compute_person_summaries.
-            magnitude = compute_person_share(tx, person_id)
-            share = magnitude if tx.amount < 0 else -magnitude
-            cat_total[tx.category] += share
-            cat_count[tx.category] += 1
-            cat_household[tx.category] += share
-            group_household[gid] += share
-        else:
-            # Personal spending for this person = their share of the cost —
-            # payer_percentage when they're the payer, 100 - payer_percentage
-            # when they're the beneficiary (e.g. a spotted front). Sign-aware
-            # like the household branch: a refund subtracts.
-            magnitude = compute_person_share(tx, person_id)
-            share = magnitude if tx.amount < 0 else -magnitude
-            cat_total[tx.category] += share
-            cat_count[tx.category] += 1
-            cat_personal[tx.category][person_id] += share
-            group_personal[gid] += share
-
-    category_breakdowns: list[CategoryBreakdown] = []
-    for cat, amount in cat_total.items():
-        gid, gname = category_lookup.get(cat, (None, uncategorized))
-        category_breakdowns.append(
-            CategoryBreakdown(
-                category=cat,
-                group_id=gid,
-                group_name=gname,
-                total_amount=amount,
-                transaction_count=cat_count[cat],
-                household_amount=cat_household.get(cat, Decimal(0)),
-                personal_amounts=dict(cat_personal.get(cat, {})),
-            )
-        )
-
-    all_gids = set(group_household) | set(group_personal)
-    spending_split = {
-        gid: (group_household.get(gid, Decimal(0)), group_personal.get(gid, Decimal(0)))
-        for gid in all_gids
-    }
-
-    return group_category_breakdowns(category_breakdowns), spending_split
-
-
-def _personal_average_monthly_spending(
-    year_txs: list[Transaction],
-    category_lookup: dict[str, tuple[UUID, str]],
-    person_id: UUID,
-    through_month: int,
-) -> dict[UUID, Decimal]:
-    avg_txs = [
-        tx
-        for tx in year_txs
-        if _is_personal_budget_relevant(tx, person_id) and tx.amount < 0
-    ]
-    by_month: dict[int, list[Transaction]] = defaultdict(list)
-    for tx in avg_txs:
-        by_month[tx.date.month].append(tx)
-
-    group_totals: dict[UUID, Decimal] = defaultdict(Decimal)
-    months_with_data: set[int] = set()
-    for m, txs in by_month.items():
-        if m > through_month:
-            continue
-        months_with_data.add(m)
-        bds, _ = _compute_personal_breakdowns(txs, person_id, category_lookup)
-        for bd in bds:
-            if bd.group_id is not None:
-                group_totals[bd.group_id] += bd.total_amount
-
-    num_months = len(months_with_data) or 1
-    return {gid: total / num_months for gid, total in group_totals.items()}
-
-
-def _personal_group_statuses(
-    group_names: dict[UUID, str],
-    ctx: _GroupStatusContext,
-    month_split: dict[UUID | None, tuple[Decimal, Decimal]],
-) -> list[CategoryGroupBudgetStatus]:
-    statuses: list[CategoryGroupBudgetStatus] = []
-    for gid, name in group_names.items():
-        status = _build_group_status(gid, name, ctx)
-        household_spend, personal = month_split.get(gid, (Decimal(0), Decimal(0)))
-        statuses.append(
-            evolve(
-                status, household_spending=household_spend, personal_spending=personal
-            )
-        )
-
-    uncategorized = _uncategorized_status_if_present(ctx)
-    if uncategorized is not None:
-        household_spend, personal = month_split.get(None, (Decimal(0), Decimal(0)))
-        statuses.append(
-            evolve(
-                uncategorized,
-                household_spending=household_spend,
-                personal_spending=personal,
-            )
-        )
-    return statuses
-
-
-def compute_personal_budget_overview(
-    inputs: BudgetOverviewInputs,
-    person_id: UUID,
-) -> BudgetOverview:
-    """Compute budget overview from one person's perspective.
-
-    Spending = person's share of household txs + their personal txs.
-    """
-    group_names = {g.id: g.name for g in inputs.groups}
-
-    ytd_txs = [
-        tx
-        for tx in inputs.year_txs
-        if _is_personal_budget_relevant(tx, person_id) and tx.date.month <= inputs.month
-    ]
-    month_txs = [tx for tx in ytd_txs if tx.date.month == inputs.month]
-
-    month_breakdowns, month_split = _compute_personal_breakdowns(
-        month_txs, person_id, inputs.category_lookup
-    )
-    ytd_breakdowns, _ = _compute_personal_breakdowns(
-        ytd_txs, person_id, inputs.category_lookup
-    )
-
-    month_by_group: dict[UUID | None, CategoryGroupBreakdown] = {
-        bd.group_id: bd for bd in month_breakdowns
-    }
-    ytd_by_group: dict[UUID | None, CategoryGroupBreakdown] = {
-        bd.group_id: bd for bd in ytd_breakdowns
-    }
-
-    avg_spending = _personal_average_monthly_spending(
-        inputs.year_txs, inputs.category_lookup, person_id, inputs.month
-    )
-
-    ctx = _GroupStatusContext(
-        month_budget_index=_index_month_budgets(inputs.month_budgets),
-        year_budgets=inputs.year_budgets,
-        month_by_group=month_by_group,
-        ytd_by_group=ytd_by_group,
-        avg_spending=avg_spending,
-        month=inputs.month,
-    )
-    statuses = _personal_group_statuses(group_names, ctx, month_split)
 
     drift = _check_spending_integrity(statuses, month_by_group, ytd_by_group)
     return _assemble_overview(statuses, inputs.year, inputs.month, spending_drift=drift)

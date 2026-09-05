@@ -13,6 +13,7 @@ from attrs import evolve
 import pytest
 
 from src.application.chat.registry import execute_tool
+from src.application.chat.tool_executor import handle_search_transactions
 from src.application.use_cases._shared.upload_status import UploadStatus
 from src.application.use_cases.get_budget_overview import GetBudgetOverviewResult
 from src.application.use_cases.get_dashboard import (
@@ -20,13 +21,18 @@ from src.application.use_cases.get_dashboard import (
     MonthHistoryEntry,
 )
 from src.application.use_cases.get_settle_up_data import GetSettleUpDataResult
+from src.application.use_cases.get_spending_trends import (
+    GetSpendingTrendsResult,
+    GetSpendingTrendsUseCase,
+)
 from src.application.use_cases.search_transactions import (
     SearchTransactionsResult,
     SearchTransactionsUseCase,
 )
 from src.domain.budget import BudgetOverview, CategoryGroupBudgetStatus
 from src.domain.categories import CategoryGroupBreakdown
-from src.domain.exceptions import ToolExecutionError
+from src.domain.exceptions import ToolExecutionError, ValidationError
+from src.domain.insights import SpendingTrends
 from src.domain.ledger import (
     LedgerMonth,
     LedgerYear,
@@ -692,6 +698,7 @@ def _category_groups_result() -> object:
     from tests.fixtures.factories import make_category, make_category_group
 
     food = make_category_group(name="Food & Dining")
+    transfer = make_category_group(name="Transfer", kind="transfer")
     return ListCategoryGroupsResult(
         items=[
             CategoryGroupWithCategories(
@@ -702,7 +709,13 @@ def _category_groups_result() -> object:
                     ),
                     make_category(name="Dining Out", group_id=food.id),
                 ],
-            )
+            ),
+            CategoryGroupWithCategories(
+                group=transfer,
+                categories=[
+                    make_category(name="Credit Card Payment", group_id=transfer.id)
+                ],
+            ),
         ]
     )
 
@@ -788,7 +801,9 @@ async def test_get_category_setup_happy_path() -> None:
 
     group = result["groups"][0]
     assert group["group"] == "Food & Dining"
+    assert group["kind"] == "expense"
     assert "Groceries" in group["categories"]
+    assert result["groups"][1]["kind"] == "transfer"
     assert result["include_personal_categories"] == ["Groceries"]
     assert result["unmapped_categories"] == ["Mystery"]
 
@@ -846,6 +861,8 @@ async def test_get_reconciliation_report_concise() -> None:
         year=2026,
         month=3,
         latest_transaction_month=(2026, 3),
+        spending_transactions=[],
+        transfer_categories=frozenset(),
     )
     with patch(
         "src.application.chat.tool_executor.execute_use_case",
@@ -892,6 +909,8 @@ async def test_get_reconciliation_report_detailed_adds_breakdown_and_rows() -> N
         year=2026,
         month=3,
         latest_transaction_month=(2026, 3),
+        spending_transactions=txns,
+        transfer_categories=frozenset(),
     )
     with patch(
         "src.application.chat.tool_executor.execute_use_case",
@@ -910,6 +929,50 @@ async def test_get_reconciliation_report_detailed_adds_breakdown_and_rows() -> N
     # Sorted by |amount| descending — Store 24 (-34) first.
     assert largest[0]["merchant"] == "Store 24"
     assert result["unmapped_categories"] == ["Mystery"]
+
+
+@pytest.mark.asyncio
+async def test_get_reconciliation_report_largest_lists_spending_rows_only() -> None:
+    """The row list agrees with the totals: transfers, excluded rows, and
+    linked settlement legs never rank as the largest transaction."""
+    from src.application.use_cases.get_reconciliation import GetReconciliationResult
+
+    listed = [
+        make_transaction(
+            merchant="Chase", amount=Decimal(-5000), category="Credit Card Payment"
+        ),
+        make_transaction(merchant="Venmo", amount=Decimal(-1981), is_settlement=True),
+        make_transaction(merchant="Refund me", amount=Decimal(-900), is_excluded=True),
+        make_transaction(merchant="Whole Foods", amount=Decimal(-120)),
+    ]
+    recon = GetReconciliationResult(
+        summary=_recon_summary(),
+        transactions=listed,
+        upload_statuses=[],
+        unmapped_categories=[],
+        persons=PERSONS,
+        is_finalized=False,
+        finalized_at=None,
+        year=2026,
+        month=3,
+        latest_transaction_month=(2026, 3),
+        spending_transactions=[
+            t for t in listed if t.category != "Credit Card Payment"
+        ],
+        transfer_categories=frozenset({"Credit Card Payment"}),
+    )
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        return_value=recon,
+    ):
+        result = await execute_tool(
+            "get_reconciliation_report",
+            {"year": 2026, "month": 3, "response_format": "detailed"},
+            CTX,
+        )
+
+    assert [r["merchant"] for r in result["largest_transactions"]] == ["Whole Foods"]
 
 
 def _ledger_settlement_record() -> object:
@@ -1151,3 +1214,64 @@ async def test_get_adjustments_preview_happy_path() -> None:
     assert row["merchant"] == "Whole Foods"
     assert row["account"] == "Adjustments"
     assert row["amount"] == pytest.approx(-41.71)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("tool_input", "expected_person_id"),
+    [
+        ({"year": 2026}, None),
+        ({"year": 2026, "scope": "household"}, None),
+        ({"year": 2026, "scope": "personal"}, ALICE.id),
+    ],
+)
+async def test_spending_trends_scope_resolves_current_user(
+    tool_input: dict[str, object], expected_person_id: uuid.UUID | None
+) -> None:
+    mock_execute = AsyncMock(
+        return_value=GetSpendingTrendsResult(
+            year=2026,
+            month=3,
+            trends=SpendingTrends(
+                monthly_group_spending=[], monthly_totals=[], group_summaries=[]
+            ),
+            comparison_cards=[],
+            budget_lines={},
+            settlement_trend=[],
+            monthly_person_paid=[],
+            persons=PERSONS,
+        )
+    )
+    with (
+        patch(
+            "src.application.chat.tool_executor.execute_use_case",
+            side_effect=_run_factory_with_stub_uow,
+        ),
+        patch.object(GetSpendingTrendsUseCase, "execute", mock_execute),
+    ):
+        result = await execute_tool("get_spending_trends", tool_input, CTX)
+
+    command = mock_execute.call_args.args[0]
+    assert command.person_id == expected_person_id
+    assert result["scope"] == command.scope
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool", ["get_spending_trends", "get_budget_overview"])
+async def test_person_scoped_tools_reject_unknown_scope(tool: str) -> None:
+    """`all` is a valid scope for sibling tools but not here — it must fail
+    loudly instead of silently running the household lens."""
+    with pytest.raises(ToolExecutionError, match="scope must be"):
+        await execute_tool(tool, {"year": 2026, "month": 3, "scope": "all"}, CTX)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scope", ["mine", ["household"]])
+async def test_search_transactions_rejects_unknown_scope(scope: object) -> None:
+    """An off-enum scope must fail loudly rather than silently searching the
+    default lens and echoing the bogus label back. A non-string (list) input
+    is rejected the same way, not with a TypeError."""
+    with pytest.raises(ValidationError, match="scope must be"):
+        await handle_search_transactions(
+            {"year": 2026, "month": 3, "scope": scope}, CTX
+        )

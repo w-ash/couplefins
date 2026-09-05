@@ -51,14 +51,6 @@ def find_all_unmapped_categories(
     return sorted(tx_categories - mapped)
 
 
-async def get_latest_transaction_month(
-    uow: UnitOfWorkProtocol,
-) -> tuple[int, int] | None:
-    """Returns (year, month) of the most recent shared transaction, or None."""
-    latest_date = await uow.transactions.get_latest_household_transaction_date()
-    return (latest_date.year, latest_date.month) if latest_date else None
-
-
 async def classify_against_existing(
     incoming: list[Transaction], person_id: UUID, uow: UnitOfWorkProtocol
 ) -> tuple[list[ClassifiedTransaction], list[Transaction], list[Transaction]]:

@@ -13,13 +13,12 @@ from src.domain.exceptions import (
     PeriodFinalizedError,
 )
 from tests.fixtures.factories import (
+    ALICE,
+    BOB,
     make_category_group_budget,
     make_reconciliation_period,
 )
 from tests.fixtures.mocks import make_mock_uow
-
-ALICE = UUID("bbbbbbbb-0000-0000-0000-000000000001")
-BOB = UUID("bbbbbbbb-0000-0000-0000-000000000002")
 
 
 async def test_updates_amount_and_commits() -> None:
@@ -33,7 +32,7 @@ async def test_updates_amount_and_commits() -> None:
     )
 
     command = UpdateBudgetCommand(
-        budget_id=existing.id, monthly_amount=Decimal(600), person_id=ALICE
+        budget_id=existing.id, monthly_amount=Decimal(600), person_id=ALICE.id
     )
     result = await UpdateBudgetUseCase().execute(command, uow)
 
@@ -54,7 +53,7 @@ async def test_raises_not_found_for_missing_budget() -> None:
     command = UpdateBudgetCommand(
         budget_id=UUID("00000000-0000-0000-0000-000000000001"),
         monthly_amount=Decimal(600),
-        person_id=ALICE,
+        person_id=ALICE.id,
     )
 
     with pytest.raises(NotFoundError):
@@ -66,17 +65,19 @@ def test_rejects_zero_amount() -> None:
         UpdateBudgetCommand(
             budget_id=UUID("00000000-0000-0000-0000-000000000001"),
             monthly_amount=Decimal(0),
-            person_id=ALICE,
+            person_id=ALICE.id,
         )
 
 
 async def test_rejects_other_persons_personal_budget() -> None:
     uow = make_mock_uow()
-    existing = make_category_group_budget(monthly_amount=Decimal(500), person_id=ALICE)
+    existing = make_category_group_budget(
+        monthly_amount=Decimal(500), person_id=ALICE.id
+    )
     uow.category_group_budgets.get_by_id.return_value = existing
 
     command = UpdateBudgetCommand(
-        budget_id=existing.id, monthly_amount=Decimal(600), person_id=BOB
+        budget_id=existing.id, monthly_amount=Decimal(600), person_id=BOB.id
     )
 
     with pytest.raises(ForbiddenError):
@@ -93,7 +94,7 @@ async def test_allows_editing_household_budget() -> None:
     )
 
     command = UpdateBudgetCommand(
-        budget_id=existing.id, monthly_amount=Decimal(600), person_id=ALICE
+        budget_id=existing.id, monthly_amount=Decimal(600), person_id=ALICE.id
     )
     result = await UpdateBudgetUseCase().execute(command, uow)
     assert result.budget is not None

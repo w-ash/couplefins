@@ -4,8 +4,10 @@
  * Couplefins
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateCategoryGroupRequestKind } from './createCategoryGroupRequestKind';
 
 export interface CreateCategoryGroupRequest {
   name: string;
   icon?: string | null;
+  kind?: CreateCategoryGroupRequestKind;
 }

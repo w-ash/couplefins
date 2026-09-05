@@ -3,7 +3,7 @@ from decimal import Decimal
 import uuid
 
 from src.domain.entities.category import Category
-from src.domain.entities.category_group import CategoryGroup
+from src.domain.entities.category_group import CategoryGroup, GroupKind
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.entities.person import Person
 from src.domain.entities.reconciliation_period import ReconciliationPeriod
@@ -104,8 +104,9 @@ def make_category_group(
     id: uuid.UUID | None = None,
     name: str = "Food & Dining",
     icon: str | None = None,
+    kind: GroupKind = "expense",
 ) -> CategoryGroup:
-    return CategoryGroup(id=id or uuid.uuid4(), name=name, icon=icon)
+    return CategoryGroup(id=id or uuid.uuid4(), name=name, icon=icon, kind=kind)
 
 
 _MISSING_GROUP = object()
@@ -145,6 +146,12 @@ def make_reconciliation_period(
         notes=notes,
         created_at=created_at or datetime.now(UTC),
     )
+
+
+def make_transfer_group() -> tuple[CategoryGroup, Category]:
+    """The seeded Transfer group with its Credit Card Payment category."""
+    group = make_category_group(name="Transfer", kind="transfer")
+    return group, make_category(name="Credit Card Payment", group_id=group.id)
 
 
 def make_category_group_budget(

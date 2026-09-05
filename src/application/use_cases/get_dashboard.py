@@ -9,12 +9,16 @@ from src.application.use_cases._shared.command_validators import (
     Scope,
     optional_month_range,
     positive_int,
+    require_person_for_personal_scope,
 )
 from src.application.use_cases._shared.date_math import month_bounds, partition_by_month
 from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
 from src.application.use_cases._shared.settlement_math import load_ledger
+from src.application.use_cases._shared.transaction_reads import (
+    fetch_year_spending_rows,
+)
 from src.application.use_cases._shared.transactions import find_all_unmapped_categories
 from src.application.use_cases._shared.upload_status import (
     UploadStatus,
@@ -23,8 +27,7 @@ from src.application.use_cases._shared.upload_status import (
 from src.domain.budget import (
     BudgetOverviewInputs,
     HealthStatus,
-    compute_person_share,
-    compute_personal_budget_overview,
+    compute_budget_overview,
 )
 from src.domain.categories import build_category_lookup
 from src.domain.entities.category_group import CategoryGroup
@@ -32,8 +35,6 @@ from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.entities.person import Person
 from src.domain.entities.settlement import Settlement
 from src.domain.entities.transaction import Transaction
-from src.domain.exceptions import ValidationError
-from src.domain.filters import is_reconciliation_relevant
 from src.domain.ledger import (
     LedgerMonth,
     LedgerYear,
@@ -51,6 +52,12 @@ from src.domain.reconciliation import (
     reconcile_all_months,
 )
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
+from src.domain.spending_lens import (
+    AllRowsLens,
+    HouseholdLens,
+    PersonalLens,
+    total_spending,
+)
 
 
 @define(frozen=True, slots=True)
@@ -61,8 +68,7 @@ class GetDashboardCommand:
     person_id: UUID | None = None
 
     def __attrs_post_init__(self) -> None:
-        if self.scope == "personal" and self.person_id is None:
-            raise ValidationError("person_id is required for personal scope")
+        require_person_for_personal_scope(self.scope, self.person_id)
 
 
 @define(frozen=True, slots=True)
@@ -191,8 +197,8 @@ def _build_month_history(inputs: _MonthHistoryInputs) -> list[MonthHistoryEntry]
                 # True household metric (all household=true, including
                 # no-split rows) — the same figure the now-card uses, not
                 # reconcile()'s split-only total_household_spending.
-                total_household_spending=_compute_all_spending(
-                    inputs.by_month_household.get(month, [])
+                total_household_spending=total_spending(
+                    HouseholdLens(), inputs.by_month_household.get(month, [])
                 ),
                 settlement_amount=gross.amount if gross else Decimal(0),
                 settlement_remaining=balance.amount if balance else Decimal(0),
@@ -242,36 +248,12 @@ def _resolve_active_month(
 def _compute_personal_spending(
     txs: list[Transaction], person_id: UUID
 ) -> tuple[Decimal, Decimal, Decimal]:
-    """Compute (total, household_portion, own_spending) for one person.
-
-    Personal spending is this person's *share* of non-household rows — the
-    payer's percentage when they paid, or 100 - payer_percentage when their
-    partner fronted it and they owe some or all of it back (e.g. spotted).
-    """
-    household_portion = Decimal(0)
-    own_spending = Decimal(0)
-    for tx in txs:
-        if not is_reconciliation_relevant(tx):
-            continue
-        # Sign-aware in both branches: a refund subtracts the share instead
-        # of inflating it.
-        share = compute_person_share(tx, person_id)
-        if tx.household:
-            household_portion += share if tx.amount < 0 else -share
-        else:
-            own_spending += share if tx.amount < 0 else -share
+    """(total, household_portion, own_spending) for one person, through the
+    same lens Budget and Insights use."""
+    lens = PersonalLens(person_id)
+    household_portion = total_spending(lens, [tx for tx in txs if tx.household])
+    own_spending = total_spending(lens, [tx for tx in txs if not tx.household])
     return household_portion + own_spending, household_portion, own_spending
-
-
-def _compute_all_spending(txs: list[Transaction]) -> Decimal:
-    """Total absolute spending across all transaction types."""
-    total = Decimal(0)
-    for tx in txs:
-        if not is_reconciliation_relevant(tx):
-            continue
-        if tx.amount < 0:
-            total += abs(tx.amount)
-    return total
 
 
 def _build_budget_alerts(  # noqa: PLR0913, PLR0917
@@ -285,7 +267,7 @@ def _build_budget_alerts(  # noqa: PLR0913, PLR0917
     person_id: UUID,
 ) -> list[BudgetAlert]:
     """Compute personal budget overview and extract top alerts."""
-    overview = compute_personal_budget_overview(
+    overview = compute_budget_overview(
         BudgetOverviewInputs(
             month_budgets,
             year_budgets,
@@ -295,7 +277,7 @@ def _build_budget_alerts(  # noqa: PLR0913, PLR0917
             year,
             month,
         ),
-        person_id,
+        PersonalLens(person_id),
     )
     alert_statuses: set[HealthStatus] = {"near_limit", "over_budget"}
     alerts = [
@@ -341,9 +323,11 @@ class _PersonalScopeData:
 def _compute_all_scope_data(
     all_year_txs: list[Transaction], active_month: int
 ) -> _AllScopeData:
+    # Every row at full amount, refunds netted — the same rule as the
+    # household card, so "all" can never fall below "household".
     by_month_all = partition_by_month(all_year_txs, lambda tx: tx.date.month)
     spending_by_month = {
-        m: _compute_all_spending(txs) for m, txs in by_month_all.items()
+        m: total_spending(AllRowsLens(), txs) for m, txs in by_month_all.items()
     }
     ytd_spending = sum(
         (v for m, v in spending_by_month.items() if m <= active_month),
@@ -421,15 +405,14 @@ class GetDashboardUseCase:
         async with uow:
             ctx = await load_reconciliation_context(uow)
 
-            # Fetch transactions: household-only for household scope, all otherwise
-            if command.scope == "household":
-                all_year_txs = await uow.transactions.get_household_by_year(
-                    command.year
-                )
-                household_txs = all_year_txs
-            else:
-                all_year_txs = await uow.transactions.get_by_year(command.year)
-                household_txs = [tx for tx in all_year_txs if tx.household]
+            all_year_txs = await fetch_year_spending_rows(
+                uow, command.year, command.scope, ctx
+            )
+            household_txs = (
+                all_year_txs
+                if command.scope == "household"
+                else [tx for tx in all_year_txs if tx.household]
+            )
 
             by_month_household = partition_by_month(
                 household_txs, lambda tx: tx.date.month
@@ -498,11 +481,12 @@ class GetDashboardUseCase:
                 (row.charged for row in ytd_rows), ctx.person_ids
             )
 
-            # True household spending (all household=true, including no-split)
-            household_spending_month = _compute_all_spending(
-                by_month_household.get(active_month, [])
+            # True household spending (all household=true, including no-split),
+            # through the same lens Budget and Insights use; refunds net.
+            household_spending_month = total_spending(
+                HouseholdLens(), by_month_household.get(active_month, [])
             )
-            household_spending_ytd = _compute_all_spending(ytd_household_txs)
+            household_spending_ytd = total_spending(HouseholdLens(), ytd_household_txs)
 
             uploads = await uow.uploads.get_by_person_ids_with_transactions_in_period(
                 ctx.person_ids, command.year, active_month

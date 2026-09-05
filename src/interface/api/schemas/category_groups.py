@@ -4,16 +4,18 @@ from pydantic import BaseModel
 
 from src.application.use_cases.list_category_groups import CategoryGroupWithCategories
 from src.domain.entities.category import Category
-from src.domain.entities.category_group import CategoryGroup
+from src.domain.entities.category_group import CategoryGroup, GroupKind
 
 
 class CreateCategoryGroupRequest(BaseModel):
     name: str
     icon: str | None = None
+    kind: GroupKind = "expense"
 
 
 class UpdateCategoryGroupRequest(BaseModel):
     name: str
+    kind: GroupKind
     icon: str | None = None
 
 
@@ -43,6 +45,7 @@ class CategoryGroupResponse(BaseModel):
     id: UUID
     name: str
     icon: str | None
+    kind: GroupKind
     categories: list[CategoryResponse]
 
     @classmethod
@@ -51,6 +54,7 @@ class CategoryGroupResponse(BaseModel):
             id=item.group.id,
             name=item.group.name,
             icon=item.group.icon,
+            kind=item.group.kind,
             categories=sorted(
                 [CategoryResponse.from_domain(c) for c in item.categories],
                 key=lambda c: c.name,
@@ -59,4 +63,10 @@ class CategoryGroupResponse(BaseModel):
 
     @classmethod
     def from_group(cls, group: CategoryGroup) -> CategoryGroupResponse:
-        return cls(id=group.id, name=group.name, icon=group.icon, categories=[])
+        return cls(
+            id=group.id,
+            name=group.name,
+            icon=group.icon,
+            kind=group.kind,
+            categories=[],
+        )

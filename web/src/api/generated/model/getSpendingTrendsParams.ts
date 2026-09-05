@@ -4,9 +4,11 @@
  * Couplefins
  * OpenAPI spec version: 0.1.0
  */
+import type { GetSpendingTrendsScope } from './getSpendingTrendsScope';
 
 export type GetSpendingTrendsParams = {
 year?: number | null;
 month?: number | null;
 comparison_year?: number | null;
+scope?: GetSpendingTrendsScope;
 };

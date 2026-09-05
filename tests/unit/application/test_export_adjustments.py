@@ -9,7 +9,11 @@ from src.application.use_cases.export_adjustments import (
     PreviewAdjustmentsUseCase,
 )
 from src.domain.exceptions import NotFoundError, ValidationError
-from tests.fixtures.factories import make_person, make_transaction
+from tests.fixtures.factories import (
+    make_person,
+    make_transaction,
+    make_transfer_group,
+)
 from tests.fixtures.mocks import make_mock_uow
 
 
@@ -153,3 +157,29 @@ async def test_preview_empty_month_returns_empty_list() -> None:
 
     assert result.adjustment_count == 0
     assert result.adjustments == []
+
+
+async def test_split_transfer_row_produces_no_adjustment() -> None:
+    uow = make_mock_uow()
+    alice = make_person(name="Alice", adjustment_account="Alice Adjustments")
+    bob = make_person(name="Bob", adjustment_account="Bob Adjustments")
+    uow.persons.get_all.return_value = [alice, bob]
+    transfer, card_payment = make_transfer_group()
+    uow.category_groups.get_all.return_value = [transfer]
+    uow.categories.get_all.return_value = [
+        card_payment,
+    ]
+    uow.transactions.get_settlement_relevant_by_date_range.return_value = [
+        make_transaction(
+            category="Credit Card Payment",
+            amount=Decimal("-900.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+        )
+    ]
+
+    result = await ExportAdjustmentsUseCase().execute(
+        _make_command(person_id=alice.id), uow
+    )
+
+    assert result.adjustment_count == 0

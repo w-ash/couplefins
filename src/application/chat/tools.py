@@ -188,7 +188,10 @@ GET_SPENDING_TRENDS_SCHEMA: dict[str, object] = {
         "Gets monthly spending trends per category group across a full "
         "year. Returns each group's spending amount for every month that "
         "has transaction data. Optionally includes a comparison year for "
-        "year-over-year analysis. Does not include budget amounts — use "
+        "year-over-year analysis. Supports household scope (full amounts "
+        "of household rows) and personal scope (the current user's share "
+        "of household rows plus their personal spending and what their "
+        "partner spotted for them). Does not include budget amounts — use "
         "get_budget_overview for budget comparisons."
     ),
     "input_schema": {
@@ -202,6 +205,11 @@ GET_SPENDING_TRENDS_SCHEMA: dict[str, object] = {
             "comparison_year": {
                 "type": "integer",
                 "description": "Optional year to compare against (e.g. 2025).",
+            },
+            "scope": {
+                "type": "string",
+                "enum": ["household", "personal"],
+                "description": "Spending scope. Default 'household'.",
             },
         },
         "required": ["year"],
@@ -311,10 +319,12 @@ GET_CATEGORY_SETUP_SCHEMA: dict[str, object] = {
         "Call this when the user asks how their categories are organized, "
         "which group a category belongs to, which categories count personal "
         "spending toward the budget, or whether anything is unmapped. "
-        "Returns every category group with its member categories, the "
-        "categories flagged include_personal (their group's budget also "
-        "counts personal transactions), and the list of categories not yet "
-        "mapped to any group."
+        "Returns every category group with its kind ('expense' counts as "
+        "spending; 'transfer' is money movement such as credit card payments "
+        "and is excluded from spending, budgets, and settlement) and its "
+        "member categories, the categories flagged "
+        "include_personal (their group's budget also counts personal "
+        "transactions), and the list of categories not yet mapped to any group."
     ),
     "input_schema": {
         "type": "object",

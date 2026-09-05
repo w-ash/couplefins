@@ -16,6 +16,7 @@ const groups = [
     id: "g1",
     name: "Food & Dining",
     icon: "utensils-crossed",
+    kind: "expense",
     categories: [
       { name: "Groceries", include_personal: false },
       { name: "Dining Out", include_personal: false },
@@ -25,13 +26,26 @@ const groups = [
     id: "g2",
     name: "Home Expenses",
     icon: "home",
+    kind: "expense",
     categories: [{ name: "Rent", include_personal: false }],
   },
   {
     id: "g3",
     name: "Empty Group",
     icon: null,
+    kind: "expense",
     categories: [],
+  },
+  {
+    id: "g4",
+    name: "Money Movement",
+    icon: "arrow-left-right",
+    kind: "transfer",
+    categories: [
+      { name: "Credit Card Payment", include_personal: false },
+      { name: "Balance Adjustment", include_personal: false },
+      { name: "Wire", include_personal: false },
+    ],
   },
 ];
 
@@ -166,9 +180,9 @@ describe("CategoryMappingEditor", () => {
     });
 
     // All groups have action bar buttons in the DOM (CSS-hidden when collapsed)
-    expect(screen.getAllByText("Change Icon")).toHaveLength(3);
-    expect(screen.getAllByText("Rename")).toHaveLength(3);
-    expect(screen.getAllByText("Delete Group")).toHaveLength(3);
+    expect(screen.getAllByText("Change Icon")).toHaveLength(4);
+    expect(screen.getAllByText("Rename")).toHaveLength(4);
+    expect(screen.getAllByText("Delete Group")).toHaveLength(4);
   });
 
   it("shows rename input when Rename is clicked", async () => {
@@ -295,6 +309,113 @@ describe("CategoryMappingEditor", () => {
       expect(
         dialogContent.getByText(/budget will also be removed/),
       ).toBeInTheDocument();
+    });
+  });
+
+  it("marks a transfer group with a pill and caption", async () => {
+    renderWithProviders(<CategoryMappingEditor />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Money Movement")).toBeInTheDocument();
+    });
+
+    // Collapsed pill is visible; the caption lives in the expanded panel.
+    expect(
+      screen.getByTitle(/Transfer — money movement, not spending/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Excluded from spending, budgets, and settlement"),
+    ).toBeInTheDocument();
+  });
+
+  it("changing the kind PUTs name, icon, and kind together", async () => {
+    let body: unknown = null;
+    server.use(
+      http.put("/api/v1/category-groups/g1", async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({ ...groups[0], kind: "transfer" });
+      }),
+    );
+    renderWithProviders(<CategoryMappingEditor />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Food & Dining")).toBeInTheDocument();
+    });
+    await userEvent.click(screen.getByText("Food & Dining"));
+
+    // Each card has its own Spending/Transfer control; the first belongs to g1.
+    const transferRadios = screen.getAllByRole("radio", { name: "Transfer" });
+    await userEvent.click(transferRadios[0]);
+
+    await waitFor(() => {
+      expect(body).toEqual({
+        name: "Food & Dining",
+        icon: "utensils-crossed",
+        kind: "transfer",
+      });
+    });
+  });
+
+  it("rename keeps the group's kind", async () => {
+    let body: unknown = null;
+    server.use(
+      http.put("/api/v1/category-groups/g4", async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({ ...groups[3], name: "Transfers" });
+      }),
+    );
+    renderWithProviders(<CategoryMappingEditor />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Money Movement")).toBeInTheDocument();
+    });
+    await expandAndClickAction("Money Movement", "Rename");
+    const input = screen.getByLabelText("Group name");
+    await userEvent.clear(input);
+    await userEvent.type(input, "Transfers{Enter}");
+
+    await waitFor(() => {
+      expect(body).toEqual({
+        name: "Transfers",
+        icon: "arrow-left-right",
+        kind: "transfer",
+      });
+    });
+  });
+
+  it("add group form sends the chosen kind", async () => {
+    let body: unknown = null;
+    server.use(
+      http.post("/api/v1/category-groups", async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(
+          {
+            id: "g9",
+            name: "Card Payments",
+            icon: null,
+            kind: "transfer",
+            categories: [],
+          },
+          { status: 201 },
+        );
+      }),
+    );
+    renderWithProviders(<CategoryMappingEditor />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("New group name")).toBeInTheDocument();
+    });
+    await userEvent.type(
+      screen.getByLabelText("New group name"),
+      "Card Payments",
+    );
+    // The add form's control is the last Spending/Transfer control on the page.
+    const transferRadios = screen.getAllByRole("radio", { name: "Transfer" });
+    await userEvent.click(transferRadios[transferRadios.length - 1]);
+    await userEvent.click(screen.getByRole("button", { name: "Add Group" }));
+
+    await waitFor(() => {
+      expect(body).toEqual({ name: "Card Payments", kind: "transfer" });
     });
   });
 });

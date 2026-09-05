@@ -328,3 +328,35 @@ async def test_exec_split_batch_updates_every_entry() -> None:
         result, _entity = await execute_confirmed_action(action, user)
 
     assert result["updated_count"] == 2
+
+
+async def test_exec_rename_group_preserves_transfer_kind() -> None:
+    """A chat rename rebuilds the update command; it must carry the existing
+    kind or the Transfer group would silently become spending again."""
+    user = make_person(name="Alice")
+    group = make_category_group(name="Transfer", kind="transfer")
+    uow = make_mock_uow()
+    uow.category_groups.get_all.return_value = [group]
+    uow.categories.get_all.return_value = []
+    uow.category_groups.get_by_id.return_value = group
+
+    async def run_with_mock_uow(factory):
+        return await factory(uow)
+
+    action = _action(
+        "manage_category_group",
+        {
+            "action": "rename",
+            "group_id": str(group.id),
+            "group_name": group.name,
+            "new_name": "Transfers",
+        },
+    )
+    with patch(
+        "src.application.chat.confirmed_actions.execute_use_case",
+        run_with_mock_uow,
+    ):
+        await execute_confirmed_action(action, user)
+
+    saved = uow.category_groups.save.call_args.args[0]
+    assert (saved.name, saved.kind) == ("Transfers", "transfer")

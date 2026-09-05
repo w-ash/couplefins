@@ -1,3 +1,4 @@
+from collections.abc import Set
 from datetime import date
 from decimal import Decimal
 from uuid import UUID
@@ -295,7 +296,12 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
     async def update_all_fields(self, entity: Transaction) -> Transaction:
         return await self._update(entity, self._IMMUTABLE_KEYS)
 
-    async def get_latest_household_transaction_date(self) -> date | None:
+    async def get_latest_household_transaction_date(
+        self, *, excluding_categories: Set[str]
+    ) -> date | None:
+        """Date of the newest household spending row. Rows in the excluded
+        categories (transfers) do not count — a card payment must not open
+        a month with no spending in it."""
         stmt = (
             select(TransactionModel.date)
             .where(
@@ -305,6 +311,8 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             .order_by(TransactionModel.date.desc())
             .limit(1)
         )
+        if excluding_categories:
+            stmt = stmt.where(TransactionModel.category.not_in(excluding_categories))
         result = await self._session.execute(stmt)
         value = result.scalar_one_or_none()
         return date.fromisoformat(value) if value else None

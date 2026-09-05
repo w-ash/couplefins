@@ -5,14 +5,19 @@ from uuid import UUID
 from attrs import define, field
 
 from src.application.use_cases._shared.command_validators import (
+    PersonScope,
     optional_month_range,
     optional_positive_int,
     positive_int,
+    require_person_for_personal_scope,
 )
 from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
 from src.application.use_cases._shared.settlement_math import load_ledger
+from src.application.use_cases._shared.transaction_reads import (
+    fetch_year_spending_rows,
+)
 from src.domain.categories import build_category_lookup
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.entities.person import Person
@@ -35,6 +40,11 @@ class GetSpendingTrendsCommand:
     year: int = field(validator=positive_int)
     month: int | None = field(default=None, validator=optional_month_range)
     comparison_year: int | None = field(default=None, validator=optional_positive_int)
+    scope: PersonScope = "household"
+    person_id: UUID | None = None
+
+    def __attrs_post_init__(self) -> None:
+        require_person_for_personal_scope(self.scope, self.person_id)
 
 
 @define(frozen=True, slots=True)
@@ -96,38 +106,53 @@ class GetSpendingTrendsUseCase:
     ) -> GetSpendingTrendsResult:
         async with uow:
             ctx = await load_reconciliation_context(uow)
-            year_txs = await uow.transactions.get_household_by_year(command.year)
+            year_txs = await fetch_year_spending_rows(
+                uow, command.year, command.scope, ctx
+            )
             category_lookup = build_category_lookup(ctx.categories, ctx.category_groups)
 
             target_month, through_month = _resolve_months(command)
 
             trends = compute_spending_trends(
-                year_txs, category_lookup, command.year, through_month=through_month
+                year_txs,
+                category_lookup,
+                command.year,
+                through_month=through_month,
+                person_id=command.person_id,
             )
 
             comparison_cards = compute_comparison_cards(
-                year_txs, category_lookup, target_month
+                year_txs, category_lookup, target_month, person_id=command.person_id
             )
 
+            # Household budgets (person_id=None) or the person's own budgets.
             year_budgets = await uow.category_group_budgets.get_by_year(
-                command.year, None
+                command.year, command.person_id
             )
             budget_lines = _build_budget_lines(year_budgets)
 
-            ledger = (await load_ledger(uow, ctx)).ledger
-            settlement_trend = _build_settlement_trend(ledger, command.year)
-
-            monthly_person_paid = compute_person_paid_by_month(
-                year_txs, category_lookup
-            )
+            # "Who's paying" (who fronted the household money, settlement
+            # trend) is a couple-level fact with no personal reading; the
+            # personal page hides it, so skip the all-time ledger work.
+            settlement_trend: list[MonthlySettlement] = []
+            monthly_person_paid: list[MonthlyPersonPaid] = []
+            if command.scope == "household":
+                ledger = (await load_ledger(uow, ctx)).ledger
+                settlement_trend = _build_settlement_trend(ledger, command.year)
+                monthly_person_paid = compute_person_paid_by_month(
+                    year_txs, category_lookup
+                )
 
             comparison_monthly_group_spending: list[MonthlyGroupSpending] = []
             if command.comparison_year is not None:
-                comp_txs = await uow.transactions.get_household_by_year(
-                    command.comparison_year
+                comp_txs = await fetch_year_spending_rows(
+                    uow, command.comparison_year, command.scope, ctx
                 )
                 comp_trends = compute_spending_trends(
-                    comp_txs, category_lookup, command.comparison_year
+                    comp_txs,
+                    category_lookup,
+                    command.comparison_year,
+                    person_id=command.person_id,
                 )
                 comparison_monthly_group_spending = comp_trends.monthly_group_spending
 

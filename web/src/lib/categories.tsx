@@ -7,6 +7,7 @@ import {
 } from "@/api/generated/category-groups/category-groups";
 import type { CategoryGroupResponse } from "@/api/generated/model";
 import type { ComboboxOption } from "@/components/Combobox";
+import { ENTITY_QUERY_KEYS } from "@/hooks/useRealtimeSync";
 import { getCategoryGroupIcon } from "@/lib/category-icons";
 
 export function useGroupIconMap(): Map<string, string | null> {
@@ -38,11 +39,12 @@ export function useGroupOptions(
 export function useInvalidateCategories() {
   const queryClient = useQueryClient();
   return useCallback(() => {
-    queryClient.invalidateQueries({
-      queryKey: getGetCategoryGroupsQueryKey(),
-    });
-    queryClient.invalidateQueries({
-      queryKey: getGetUnmappedCategoriesQueryKey(),
-    });
+    for (const queryKey of [
+      getGetCategoryGroupsQueryKey(),
+      getGetUnmappedCategoriesQueryKey(),
+      ...ENTITY_QUERY_KEYS.category_groups,
+    ]) {
+      queryClient.invalidateQueries({ queryKey });
+    }
   }, [queryClient]);
 }

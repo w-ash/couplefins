@@ -1,6 +1,6 @@
 """Unit tests for the settlement ledger (v1.11.0 — explicit portions).
 
-Signed convention throughout: ALICE has the lower UUID, so positive signed
+Signed convention throughout: ALICE.id has the lower UUID, so positive signed
 amounts mean "Alice owes Bob". `month_debt(y, m, v)` builds one transaction
 whose gross settles to exactly `v` in that signed space.
 
@@ -27,16 +27,16 @@ from src.domain.ledger import (
 )
 from src.domain.reconciliation import SettlementResult
 from tests.fixtures.factories import (
+    ALICE,
+    BOB,
     make_settlement,
     make_settlement_portion,
     make_transaction,
 )
 
-ALICE = uuid.UUID("00000000-0000-0000-0000-0000000000aa")
-BOB = uuid.UUID("00000000-0000-0000-0000-0000000000bb")
-PERSONS = [ALICE, BOB]
+PERSONS = [ALICE.id, BOB.id]
 
-assert sorted(PERSONS) == [ALICE, BOB]  # positive signed == Alice owes Bob
+assert sorted(PERSONS) == [ALICE.id, BOB.id]  # positive signed == Alice owes Bob
 
 
 def month_debt(
@@ -44,7 +44,7 @@ def month_debt(
 ) -> Transaction:
     """One 50/50 transaction whose gross is exactly `alice_owes_bob` signed."""
     net = Decimal(alice_owes_bob)
-    payer = BOB if net > 0 else ALICE
+    payer = BOB.id if net > 0 else ALICE.id
     return make_transaction(
         date=date(year, month, day),
         payer_person_id=payer,
@@ -56,11 +56,11 @@ def month_debt(
 def payment(
     amount: str,
     *,
-    from_person: uuid.UUID = ALICE,
+    from_person: uuid.UUID = ALICE.id,
     settled: datetime | None = None,
     is_waived: bool = False,
 ) -> Settlement:
-    to_person = BOB if from_person == ALICE else ALICE
+    to_person = BOB.id if from_person == ALICE.id else ALICE.id
     settled_at = settled or datetime(2026, 2, 3, tzinfo=UTC)
     return make_settlement(
         amount=Decimal(amount),
@@ -89,7 +89,7 @@ def portions_for(
 def signed(result: SettlementResult | None) -> Decimal:
     if result is None or result.amount == 0:
         return Decimal(0)
-    return result.amount if result.from_person_id == ALICE else -result.amount
+    return result.amount if result.from_person_id == ALICE.id else -result.amount
 
 
 def month_row(ledger: SettlementLedger, year: int, month: int) -> LedgerMonth:
@@ -106,12 +106,12 @@ class TestEmptyAndDegenerate:
         assert ledger.span is None
 
     def test_wrong_person_count_yields_empty_ledger(self) -> None:
-        ledger = compute_ledger([month_debt(2026, 1, "100")], [], [], [ALICE])
+        ledger = compute_ledger([month_debt(2026, 1, "100")], [], [], [ALICE.id])
         assert ledger.outstanding is None
         assert ledger.months == ()
 
     def test_sum_settlement_results_requires_couple(self) -> None:
-        assert sum_settlement_results([], [ALICE]) is None
+        assert sum_settlement_results([], [ALICE.id]) is None
 
 
 class TestCharges:
@@ -130,7 +130,7 @@ class TestCharges:
     def test_refund_reduces_charges(self) -> None:
         refund = make_transaction(
             date=date(2026, 1, 20),
-            payer_person_id=BOB,
+            payer_person_id=BOB.id,
             payer_percentage=50,
             amount=Decimal(40),  # positive = refund; Alice's share drops 20
         )
@@ -140,14 +140,14 @@ class TestCharges:
     def test_settlement_transfers_and_full_share_rows_excluded(self) -> None:
         transfer = make_transaction(
             date=date(2026, 1, 5),
-            payer_person_id=ALICE,
+            payer_person_id=ALICE.id,
             payer_percentage=100,
             amount=Decimal(-50),
             is_settlement=True,
         )
         no_split = make_transaction(
             date=date(2026, 1, 6),
-            payer_person_id=ALICE,
+            payer_person_id=ALICE.id,
             payer_percentage=100,
             amount=Decimal(-80),
         )
@@ -208,11 +208,11 @@ class TestPortionApplication:
         row = month_row(ledger, 2026, 1)
         assert row.balance is not None
         assert row.balance.amount == Decimal("24.11")
-        assert row.balance.from_person_id == BOB  # direction flipped
+        assert row.balance.from_person_id == BOB.id  # direction flipped
         assert row.status is MonthSettlementStatus.PARTIALLY_SETTLED
 
     def test_reverse_direction_payment_adds_to_debt(self) -> None:
-        pay = payment("30", from_person=BOB)
+        pay = payment("30", from_person=BOB.id)
         ledger = compute_ledger(
             [month_debt(2026, 1, "100")],
             [pay],
@@ -337,7 +337,7 @@ class TestOutstandingInvariants:
 class TestPlanPortions:
     def test_single_covered_month_takes_full_amount(self) -> None:
         ledger = compute_ledger([month_debt(2026, 1, "1956.89")], [], [], PERSONS)
-        plans = plan_portions(ledger.months, Decimal("1981.00"), ALICE, [(2026, 1)])
+        plans = plan_portions(ledger.months, Decimal("1981.00"), ALICE.id, [(2026, 1)])
         assert [(p.year, p.month, p.amount) for p in plans] == [
             (2026, 1, Decimal("1981.00"))
         ]
@@ -349,7 +349,9 @@ class TestPlanPortions:
             [],
             PERSONS,
         )
-        plans = plan_portions(ledger.months, Decimal(80), ALICE, [(2026, 2), (2026, 1)])
+        plans = plan_portions(
+            ledger.months, Decimal(80), ALICE.id, [(2026, 2), (2026, 1)]
+        )
         assert [(p.year, p.month, p.amount) for p in plans] == [
             (2026, 1, Decimal(60)),
             (2026, 2, Decimal(20)),
@@ -363,7 +365,7 @@ class TestPlanPortions:
             PERSONS,
         )
         plans = plan_portions(
-            ledger.months, Decimal(100), ALICE, [(2026, 1), (2026, 2)]
+            ledger.months, Decimal(100), ALICE.id, [(2026, 1), (2026, 2)]
         )
         assert [(p.year, p.month, p.amount) for p in plans] == [
             (2026, 1, Decimal(60)),
@@ -378,15 +380,17 @@ class TestPlanPortions:
             [],
             PERSONS,
         )
-        plans = plan_portions(ledger.months, Decimal(50), ALICE, [(2026, 1), (2026, 2)])
+        plans = plan_portions(
+            ledger.months, Decimal(50), ALICE.id, [(2026, 1), (2026, 2)]
+        )
         assert [(p.year, p.month, p.amount) for p in plans] == [(2026, 2, Decimal(50))]
 
     def test_unknown_month_still_receives_remainder(self) -> None:
-        plans = plan_portions([], Decimal(25), ALICE, [(2026, 6)])
+        plans = plan_portions([], Decimal(25), ALICE.id, [(2026, 6)])
         assert [(p.year, p.month, p.amount) for p in plans] == [(2026, 6, Decimal(25))]
 
     def test_empty_covered_months_plans_nothing(self) -> None:
-        assert plan_portions([], Decimal(25), ALICE, []) == ()
+        assert plan_portions([], Decimal(25), ALICE.id, []) == ()
 
 
 class TestProductionFixture:
@@ -422,7 +426,7 @@ class TestProductionFixture:
             row = month_row(ledger, 2026, month)
             assert signed(row.balance) == value  # Bob (Kew) owes Alice (Ash)
             assert row.balance is not None
-            assert row.balance.from_person_id == BOB
+            assert row.balance.from_person_id == BOB.id
 
     def test_year_matches_production(self) -> None:
         year = self._ledger().years[0]
@@ -430,20 +434,20 @@ class TestProductionFixture:
         assert signed(year.paid) == Decimal("5943.00")
         assert year.balance is not None
         assert year.balance.amount == Decimal("1958.70")
-        assert year.balance.from_person_id == BOB  # Kew owes Ash
+        assert year.balance.from_person_id == BOB.id  # Kew owes Ash
 
     def test_catch_up_lump_zeroes_the_swung_months(self) -> None:
         """The planned Jan-Mar blanket lump brings every residual to zero."""
         ledger = self._ledger()
         covered = [(2026, 1), (2026, 2), (2026, 3)]
-        plans = plan_portions(ledger.months, Decimal("1958.70"), BOB, covered)
+        plans = plan_portions(ledger.months, Decimal("1958.70"), BOB.id, covered)
         assert [(p.year, p.month, p.amount) for p in plans] == [
             (2026, 1, Decimal("24.11")),
             (2026, 2, Decimal("1758.69")),
             (2026, 3, Decimal("175.90")),
         ]
         lump = payment(
-            "1958.70", from_person=BOB, settled=datetime(2026, 5, 1, tzinfo=UTC)
+            "1958.70", from_person=BOB.id, settled=datetime(2026, 5, 1, tzinfo=UTC)
         )
         transactions = [
             month_debt(int(label[:4]), int(label[5:7]), amount)

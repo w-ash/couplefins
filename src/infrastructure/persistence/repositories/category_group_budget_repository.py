@@ -66,6 +66,13 @@ class CategoryGroupBudgetRepository(
         result = await self._session.execute(stmt)
         return [self._to_domain(row) for row in result.scalars().all()]
 
+    async def get_by_group_id(self, group_id: UUID) -> list[CategoryGroupBudget]:
+        stmt = select(CategoryGroupBudgetModel).where(
+            CategoryGroupBudgetModel.group_id == str(group_id)
+        )
+        result = await self._session.execute(stmt)
+        return [self._to_domain(row) for row in result.scalars().all()]
+
     async def delete_by_group_id(self, group_id: UUID) -> int:
         stmt = sa_delete(CategoryGroupBudgetModel).where(
             CategoryGroupBudgetModel.group_id == str(group_id),

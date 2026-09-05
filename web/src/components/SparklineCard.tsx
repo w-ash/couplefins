@@ -14,6 +14,7 @@ import { Card } from "@/components/Card";
 import { ExpandChevron } from "@/components/ExpandChevron";
 import { getCategoryGroupIcon } from "@/lib/category-icons";
 import { formatCurrency, MONTHS, SHORT_MONTHS } from "@/lib/format";
+import type { PersonScope } from "@/lib/person-scope";
 
 interface DataPoint {
   month: number;
@@ -32,6 +33,19 @@ interface CategoryDetail {
   amount: number;
 }
 
+function transactionsParams(
+  year: number,
+  month: number,
+  scope: PersonScope | undefined,
+): string {
+  const params = new URLSearchParams({
+    year: String(year),
+    month: String(month),
+  });
+  if (scope && scope !== "household") params.set("scope", scope);
+  return params.toString();
+}
+
 interface SparklineCardProps {
   groupName: string;
   groupIcon: string | null;
@@ -46,6 +60,8 @@ interface SparklineCardProps {
   onToggle?: () => void;
   categories?: CategoryDetail[];
   selectedMonth?: number;
+  /** Carries the page's scope into the Transactions drill-down. */
+  scope?: PersonScope;
 }
 
 function detectCreep(
@@ -138,6 +154,7 @@ export function SparklineCard({
   onToggle,
   categories,
   selectedMonth,
+  scope,
 }: SparklineCardProps) {
   const Icon = getCategoryGroupIcon(groupIcon);
   const maxBudgetAmount = budgetAmounts?.length
@@ -292,7 +309,7 @@ export function SparklineCard({
           </div>
           {year && selectedMonth && (
             <Link
-              to={`/transactions?year=${year}&month=${selectedMonth}`}
+              to={`/transactions?${transactionsParams(year, selectedMonth, scope)}`}
               className="mt-3 inline-flex items-center gap-1 text-xs text-primary hover:underline"
             >
               View transactions <ArrowRight className="size-3" />

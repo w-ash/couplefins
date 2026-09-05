@@ -44,6 +44,7 @@ import {
 import { getHealthStyle } from "@/lib/health-styles";
 import { actionLinkClass } from "@/lib/input-styles";
 import { heroCardClass, PAGE_PADDING, tableHeaderRowClass } from "@/lib/layout";
+import { PERSON_SCOPE_OPTIONS } from "@/lib/person-scope";
 import { usePersonMaps } from "@/lib/persons";
 
 // --- Stats ---
@@ -518,8 +519,7 @@ function PersonalMonthHistory({
 // --- Page ---
 
 const SCOPE_OPTIONS: Array<{ value: DashboardScope; label: string }> = [
-  { value: "household", label: "Household" },
-  { value: "personal", label: "My Spending" },
+  ...PERSON_SCOPE_OPTIONS,
   { value: "all", label: "All" },
 ];
 

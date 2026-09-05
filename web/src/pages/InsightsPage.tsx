@@ -18,6 +18,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
 import { PersonPaidChart } from "@/components/PersonPaidChart";
 import { SectionHeader } from "@/components/SectionHeader";
+import { SegmentedControl } from "@/components/SegmentedControl";
 import { SettlementTrendChart } from "@/components/SettlementTrendChart";
 import { SparklineCard } from "@/components/SparklineCard";
 import { useGroupIconMap } from "@/lib/categories";
@@ -29,6 +30,11 @@ import {
   useMonthYear,
 } from "@/lib/format";
 import { PAGE_PADDING } from "@/lib/layout";
+import {
+  PERSON_SCOPE_OPTIONS,
+  type PersonScope,
+  usePersonScopeParam,
+} from "@/lib/person-scope";
 import { usePersonMaps } from "@/lib/persons";
 
 interface GroupChartData {
@@ -228,6 +234,8 @@ function filterPillClass(selected: boolean): string {
 
 export function InsightsPage() {
   const { year, month } = useMonthYear();
+  const [scope, setScope] = usePersonScopeParam();
+  const isPersonal = scope === "personal";
   const groupIconMap = useGroupIconMap();
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const [paidFilterGroups, setPaidFilterGroups] = useState<Set<string> | "all">(
@@ -243,6 +251,7 @@ export function InsightsPage() {
     year,
     month,
     comparison_year: year - 1,
+    scope,
   });
   const data = response?.status === 200 ? response.data : undefined;
 
@@ -321,12 +330,33 @@ export function InsightsPage() {
 
   const comparisonCards = data?.comparison_cards ?? [];
   const settlementTrend = data?.settlement_trend ?? [];
+  // Who fronted the household money is a couple-level fact with no "my"
+  // reading, so the section only appears in household scope.
+  const showWhoPays =
+    !isPersonal &&
+    (personPaidChartData.length > 0 || settlementTrend.length > 0);
 
   return (
     <div className={`mx-auto max-w-5xl ${PAGE_PADDING}`}>
       <PageHeader icon={<TrendingUp className="size-6" />} title="Insights">
         <MonthPicker />
       </PageHeader>
+
+      {/* Controls */}
+      <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+        <SegmentedControl<PersonScope>
+          options={PERSON_SCOPE_OPTIONS}
+          value={scope}
+          onChange={setScope}
+          size="sm"
+        />
+        {isPersonal && (
+          <p className="text-xs text-muted-foreground">
+            Your share of household spending, your personal spending, and what
+            your partner spotted for you
+          </p>
+        )}
+      </div>
 
       {isLoading && <PageLoading label="Loading spending trends..." />}
 
@@ -336,7 +366,11 @@ export function InsightsPage() {
         <PageEmpty
           icon={<TrendingUp />}
           heading="No spending data"
-          description={`No household expenses found for ${year}. Upload a CSV to get started.`}
+          description={
+            isPersonal
+              ? `No spending of yours found for ${year}. Upload a CSV to get started.`
+              : `No household expenses found for ${year}. Upload a CSV to get started.`
+          }
         />
       )}
 
@@ -502,12 +536,13 @@ export function InsightsPage() {
                   }
                   categories={categoryMap.get(group.groupId) ?? undefined}
                   selectedMonth={month}
+                  scope={scope}
                 />
               ))}
             </div>
           </section>
 
-          {(personPaidChartData.length > 0 || settlementTrend.length > 0) && (
+          {showWhoPays && (
             <section>
               <SectionHeader
                 title="Who's paying"

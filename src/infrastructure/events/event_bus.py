@@ -5,7 +5,12 @@ import json
 from typing import Literal
 
 type BroadcastEntity = Literal[
-    "settlements", "transactions", "uploads", "reconciliation", "budgets"
+    "settlements",
+    "transactions",
+    "uploads",
+    "reconciliation",
+    "budgets",
+    "category_groups",
 ]
 
 

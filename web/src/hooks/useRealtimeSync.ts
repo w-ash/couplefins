@@ -11,7 +11,10 @@ import { getGetSettleUpDataQueryKey } from "@/api/generated/settlements/settleme
 import { getGetTagsQueryKey } from "@/api/generated/transactions/transactions";
 import { subscribe } from "@/lib/event-source";
 
-const ENTITY_QUERY_KEYS: Record<string, readonly (readonly unknown[])[]> = {
+export const ENTITY_QUERY_KEYS: Record<
+  string,
+  readonly (readonly unknown[])[]
+> = {
   settlements: [
     getGetSettleUpDataQueryKey(),
     getGetDashboardQueryKey(),
@@ -37,6 +40,17 @@ const ENTITY_QUERY_KEYS: Record<string, readonly (readonly unknown[])[]> = {
     getGetDashboardQueryKey(),
   ],
   budgets: [getGetBudgetOverviewQueryKey(), getGetBudgetsQueryKey()],
+  // A group's kind and a category's group feed the server-side spending and
+  // settlement math, so every derived page refetches too. Served twice: by
+  // the SSE "category_groups" event a partner's edit broadcasts, and by the
+  // Settings page's own useInvalidateCategories after a local edit.
+  category_groups: [
+    getGetReconciliationQueryKey(),
+    getGetDashboardQueryKey(),
+    getGetBudgetOverviewQueryKey(),
+    getGetSpendingTrendsQueryKey(),
+    getGetSettleUpDataQueryKey(),
+  ],
 };
 
 export function useRealtimeSync(): void {

@@ -7,6 +7,10 @@ from src.application.use_cases._shared.command_validators import (
     positive_int,
 )
 from src.application.use_cases._shared.date_math import month_bounds
+from src.application.use_cases._shared.reconciliation_context import (
+    load_reconciliation_context,
+)
+from src.application.use_cases._shared.transaction_reads import fetch_settlement_rows
 from src.domain.constants import CoupleDefaults
 from src.domain.entities.person import Person
 from src.domain.exceptions import NotFoundError, ValidationError
@@ -41,7 +45,8 @@ async def _load_adjustments(
     command: ExportAdjustmentsCommand, uow: UnitOfWorkProtocol
 ) -> tuple[Person, list[Adjustment]]:
     """Validate person, load transactions, compute adjustments."""
-    persons = await uow.persons.get_all()
+    ctx = await load_reconciliation_context(uow)
+    persons = ctx.persons
     if len(persons) != CoupleDefaults.EXPECTED_PERSON_COUNT:
         raise ValidationError(
             f"Expected {CoupleDefaults.EXPECTED_PERSON_COUNT} persons, found {len(persons)}"
@@ -56,9 +61,8 @@ async def _load_adjustments(
 
     # Adjustments cover every settlement-relevant row (pct < 100), household
     # or not — spotted and personal-split expenses adjust Monarch too.
-    start, end = month_bounds(command.year, command.month)
-    transactions = await uow.transactions.get_settlement_relevant_by_date_range(
-        start, end
+    transactions = await fetch_settlement_rows(
+        uow, ctx, month_bounds(command.year, command.month)
     )
     adjustments = compute_adjustments(transactions, target)
     return target, adjustments

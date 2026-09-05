@@ -1,3 +1,4 @@
+from unittest.mock import AsyncMock
 import uuid
 
 import pytest
@@ -7,7 +8,11 @@ from src.application.use_cases.search_transactions import (
     SearchTransactionsUseCase,
 )
 from src.domain.exceptions import ValidationError
-from tests.fixtures.factories import make_category, make_transaction
+from tests.fixtures.factories import (
+    make_category,
+    make_transaction,
+    make_transfer_group,
+)
 from tests.fixtures.mocks import make_mock_uow
 
 ALICE_ID = uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
@@ -88,6 +93,42 @@ async def test_personal_scope_excludes_household_rows() -> None:
 def test_personal_scope_requires_person_id() -> None:
     with pytest.raises(ValidationError, match="person_id is required"):
         SearchTransactionsCommand(year=2026, month=3, scope="personal")
+
+
+def _with_transfer_group(uow: AsyncMock) -> None:
+    transfer, card_payment = make_transfer_group()
+    uow.category_groups.get_all.return_value = [transfer]
+    uow.categories.get_all.return_value = [card_payment]
+
+
+@pytest.mark.asyncio
+async def test_household_scope_drops_transfer_rows() -> None:
+    uow = make_mock_uow()
+    _with_transfer_group(uow)
+    uow.transactions.get_household_by_date_range.return_value = [
+        make_transaction(merchant="Chase", category="Credit Card Payment"),
+        make_transaction(merchant="Whole Foods", category="Groceries"),
+    ]
+
+    command = SearchTransactionsCommand(year=2026, month=3, scope="household")
+    result = await SearchTransactionsUseCase().execute(command, uow)
+
+    assert [t.merchant for t in result.transactions] == ["Whole Foods"]
+
+
+@pytest.mark.asyncio
+async def test_all_scope_keeps_transfer_rows() -> None:
+    uow = make_mock_uow()
+    _with_transfer_group(uow)
+    uow.transactions.get_by_date_range.return_value = [
+        make_transaction(merchant="Chase", category="Credit Card Payment"),
+    ]
+
+    command = SearchTransactionsCommand(year=2026, month=3)
+    result = await SearchTransactionsUseCase().execute(command, uow)
+
+    assert result.total_count == 1
+    uow.category_groups.get_all.assert_not_called()
 
 
 @pytest.mark.asyncio

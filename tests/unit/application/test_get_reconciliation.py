@@ -10,6 +10,7 @@ from tests.fixtures.factories import (
     make_category_group,
     make_person,
     make_transaction,
+    make_transfer_group,
     make_upload,
 )
 from tests.fixtures.mocks import make_mock_uow
@@ -273,3 +274,48 @@ def test_from_range_detects_single_month() -> None:
 def test_from_range_multi_month_no_single() -> None:
     command = GetReconciliationCommand.from_range(date(2026, 1, 15), date(2026, 2, 15))
     assert command.single_month is None
+
+
+async def test_transfer_rows_listed_but_left_out_of_the_math() -> None:
+    """The Transactions page still shows card payments (with a badge); the
+    summary, breakdowns, and settlement figure ignore them."""
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    uow.persons.get_all.return_value = [alice, bob]
+    food = make_category_group(name="Food & Dining")
+    transfer, card_payment = make_transfer_group()
+    uow.category_groups.get_all.return_value = [food, transfer]
+    uow.categories.get_all.return_value = [
+        make_category(name="Dining Out", group_id=food.id),
+        card_payment,
+    ]
+    dinner = make_transaction(
+        category="Dining Out",
+        amount=Decimal("-100.00"),
+        payer_person_id=alice.id,
+        payer_percentage=50,
+    )
+    payment = make_transaction(
+        category="Credit Card Payment",
+        amount=Decimal("-900.00"),
+        payer_person_id=alice.id,
+        payer_percentage=50,
+    )
+    uow.transactions.get_household_by_date_range.return_value = [dinner, payment]
+    uow.transactions.get_settlement_relevant_by_date_range.return_value = [
+        dinner,
+        payment,
+    ]
+    uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = []
+
+    result = await GetReconciliationUseCase().execute(_make_command(), uow)
+
+    assert len(result.transactions) == 2
+    assert result.summary.transaction_count == 1
+    assert result.summary.total_household_spending == Decimal("100.00")
+    assert [b.group_name for b in result.summary.category_group_breakdowns] == [
+        "Food & Dining"
+    ]
+    assert result.summary.settlement is not None
+    assert result.summary.settlement.amount == Decimal("50.00")

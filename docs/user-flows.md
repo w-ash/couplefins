@@ -60,7 +60,7 @@ Seven top-level pages in the sidebar, ordered by workflow, plus a chat assistant
 | **Transactions** | Shared transaction table with search, filtering, bulk editing, category breakdown | v0.2.0 |
 | **Settle Up** | Link settlement transactions, waive balances, finalization controls | v0.6.0 |
 | **Budget** | Category group budgets, monthly + YTD views, progress indicators, spending charts | v0.4.0 |
-| **Insights** | Spending trend sparklines per category group, comparison cards, budget overlays, settlement balance trend, YoY comparison | v0.7.0 |
+| **Insights** | Spending trend sparklines per category group, comparison cards, budget overlays, settlement balance trend, YoY comparison. Household / My Spending scope toggle (v1.12.0) | v0.7.0 |
 | **Upload** | CSV import: preview, confirm, re-upload. Drag-and-drop in v0.8.x | v0.1.1 |
 | **Settings** | Person config, category-to-group mappings, adjustment accounts, theme | v0.1.3 |
 | **Ask** *(panel)* | Chat assistant — natural language queries about spending, budgets, settlements. Right-edge panel on desktop, full-screen page on mobile. Optional (requires API key). | v1.5.0 |
@@ -172,6 +172,7 @@ Making sure the data is right before settling. This is solo prep work — each p
 **US-REVIEW-7** (v0.9.x): As a partner, I want to filter transactions by classification type.
 
 - Given the transaction table, then I can filter by type: All / Shared / Spotted / Household / Personal
+- Given a row in a transfer-kind category (credit card payment, account transfer), then it appears only under All, with a "Transfer" badge, and the header-card totals leave it out (v1.12.1)
 - Given the spotted filter, then I see only transactions I fronted for my partner (or they fronted for me)
 - Given the household filter, then I see transactions relevant to the couple but not split — shared experiences paid individually
 
@@ -378,6 +379,7 @@ Are we on track for the month and the year? The couple reviews this together.
 - Given I toggle to "Household" scope, then I see only household budgets — personal budgets are not visible
 - Given I toggle to "My Budget" scope, then I see only my personal budgets — household budgets are not visible
 - Given a category group has `include_personal` categories, then the household budget's spending and average hint include personal transactions, with a "(incl. personal)" indicator so I set the target appropriately
+- Given "My Budget", then a household row where my share is $0 (my partner's own ticket, tagged household) does not appear at all, and a refund reduces the month's spending and the average hint (v1.12.2)
 
 **US-BUDGET-8** (v1.3.x): As a partner, I want to see budget lines on spending trend charts.
 
@@ -398,6 +400,18 @@ Are we on track for the month and the year? The couple reviews this together.
 - Given the next month already has budgets, then no prompt is shown
 
 ---
+
+**US-BUDGET-11** (v1.12.x): As a partner, I want Insights to show either the household's spending or my own, so I can see where *my* money went without the numbers being inflated by my partner's share.
+
+- Given the Insights page, then I see a Household / My Spending toggle that defaults to Household and lives in the URL (`?scope=personal`), like Budget's
+- Given Household scope, then every number is unchanged from before: household rows at their full amount
+- Given My Spending scope, then every number (year to date, selected month, comparison cards, sparklines, drill-down categories, YoY overlay) is my share of household rows + my personal rows + what my partner spotted for me — the same rule as Budget's "My Budget" and the Dashboard's "My spending"
+- Given My Spending scope, then my partner's personal rows, rows I spotted for them, and household rows where my share is $0 do not appear at all
+- Given My Spending scope, then the budget overlay lines are my personal budgets, not the household budgets
+- Given My Spending scope, then the "Who's paying" section (who fronted the household money, settlement trend) is hidden — it has no "my" reading
+- Given both partners view My Spending for the same month, then their totals add up to the Household total for that month, to the cent
+- Given a refund in either scope, then it reduces that month's spending rather than being ignored — the same signed-amount rule Budget and the Dashboard use (v1.12.2)
+- Given a sparkline's "View transactions" link in My Spending scope, then Transactions opens with `scope=personal`. Known gap: that page's personal scope lists non-household rows only, so its list does not reconcile to the Insights total (see backlog v1.12.x)
 
 ### Closing the Month
 
@@ -451,6 +465,16 @@ Setup and maintenance tasks that happen occasionally, not monthly.
 - Given I record a settlement, then the method dropdown is populated from configured merchants (plus "Other" as a freeform fallback)
 
 ---
+
+**US-CONFIG-5** (v1.12.x): As a partner, I want credit card payments and account transfers to stop counting as spending, because the purchases they pay for were already counted.
+
+- Given Settings → Category Groups, then each group shows whether it counts as Spending or is a Transfer, and I can switch it; a Transfer group shows a "Transfer" pill and the caption "Excluded from spending, budgets, and settlement"
+- Given a Transfer group, then none of its rows appear in Budget, Dashboard, Insights, or reconciliation totals, in any scope, and both legs of a card payment are excluded
+- Given a Transfer group, then it has no Budget row, adding a budget to it is rejected, and a group that still has budgets cannot be switched to Transfer
+- Given the seeded "Transfer" group (Transfer, Credit Card Payment, Balance Adjustment), then it is a Transfer group on deploy without a settings visit
+- Given a Transfer row on the Transactions page, then it is listed under All with a "Transfer" badge and left out of the In view total; Household / Personal / Spotted omit it
+- Given a Venmo leg categorized as a transfer, then Settle Up still offers it as a settlement candidate
+- Given a transfer that is really an expense, then I change that row's category to a spending category in the editor, as today
 
 ### Asking Questions (v1.5.x)
 

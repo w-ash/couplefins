@@ -569,3 +569,44 @@ class TestFinalizationWarnings:
             GetSettleUpDataCommand(year=2026, month=1), uow
         )
         assert result.finalization_warnings == []
+
+
+async def test_split_transfer_row_does_not_enter_the_ledger() -> None:
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    food = make_category_group(name="Food & Dining")
+    transfer = make_category_group(name="Transfer", kind="transfer")
+    uow = _setup_uow(
+        alice,
+        bob,
+        groups=[food, transfer],
+        categories=[
+            make_category(name="Dining Out", group_id=food.id),
+            make_category(name="Credit Card Payment", group_id=transfer.id),
+        ],
+        transactions=[
+            make_transaction(
+                date=date(2026, 1, 5),
+                category="Dining Out",
+                amount=Decimal("-40.00"),
+                payer_person_id=alice.id,
+                payer_percentage=50,
+            ),
+            make_transaction(
+                date=date(2026, 1, 6),
+                category="Credit Card Payment",
+                amount=Decimal("-900.00"),
+                payer_person_id=alice.id,
+                payer_percentage=50,
+            ),
+        ],
+    )
+
+    result = await GetSettleUpDataUseCase().execute(
+        GetSettleUpDataCommand(year=2026, month=1), uow
+    )
+
+    year = next(y for y in result.years if y.year == 2026)
+    assert year.balance is not None
+    assert year.balance.amount == Decimal("20.00")
+    assert year.balance.from_person_id == bob.id

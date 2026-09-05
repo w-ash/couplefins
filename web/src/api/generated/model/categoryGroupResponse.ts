@@ -4,11 +4,13 @@
  * Couplefins
  * OpenAPI spec version: 0.1.0
  */
+import type { CategoryGroupResponseKind } from './categoryGroupResponseKind';
 import type { CategoryResponse } from './categoryResponse';
 
 export interface CategoryGroupResponse {
   id: string;
   name: string;
   icon: string | null;
+  kind: CategoryGroupResponseKind;
   categories: CategoryResponse[];
 }

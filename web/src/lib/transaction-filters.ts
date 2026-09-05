@@ -9,21 +9,28 @@ export function hasDiscussTag(tx: TransactionResponse): boolean {
   return tx.tags.some((t) => t.toLowerCase() === DISCUSS_TAG);
 }
 
-// Household spending, excluding linked settlement transfers (money movement,
-// not spending).
+// Money movement, not spending: a linked settlement leg or a transfer-kind
+// row (credit card payment, account transfer — the server marks these).
+function isMoneyMovement(tx: TransactionResponse): boolean {
+  return tx.is_settlement || tx.is_transfer;
+}
+
+// Household spending. Money movement — linked settlement legs and
+// transfer-kind rows — is never spending, so the three spending-scope
+// predicates all drop it; only the "all" scope keeps it visible.
 export function isInHouseholdScope(tx: TransactionResponse): boolean {
-  return tx.household && !tx.is_settlement;
+  return tx.household && !isMoneyMovement(tx);
 }
 
 // A non-household transaction is in the current user's Personal scope only
 // when their share of the cost (derived from payer_percentage) is greater than
-// zero. Linked settlement transfers are money movement, not spending. Falls
-// back to !household when identity isn't yet hydrated.
+// zero. Money movement is never spending. Falls back to !household when
+// identity isn't yet hydrated.
 export function isInPersonalScope(
   tx: TransactionResponse,
   currentPersonId: string | null,
 ): boolean {
-  if (tx.is_settlement) return false;
+  if (isMoneyMovement(tx)) return false;
   if (tx.household) return false;
   if (!currentPersonId) return true;
   const myShare =
@@ -38,23 +45,23 @@ export function isInPersonalScope(
 // share is 0%. The household flag is irrelevant — `household, bob` rows drive
 // settlement the same way. Returns false when identity isn't hydrated —
 // there's no sensible default for an ownership-based scope.
-//
-// Note: the backend `get_reconciliation` use case (scope=all) returns
-// `household ∪ {tx where current user is the payer}`, so this filter only
-// surfaces "I spotted them"; rows where my partner spotted me (they paid, I
-// owe 100%) are not in the dataset. Showing both directions requires a
-// backend change.
 export function isInSpottedScope(
   tx: TransactionResponse,
   currentPersonId: string | null,
 ): boolean {
   if (!currentPersonId) return false;
-  if (tx.is_settlement) return false;
+  if (isMoneyMovement(tx)) return false;
   return tx.payer_person_id === currentPersonId && tx.payer_percentage === 0;
 }
 
 export function isSettlementLinked(tx: TransactionResponse): boolean {
   return tx.is_settlement === true;
+}
+
+/** A row that counts toward spending totals: not a linked settlement leg,
+ * not excluded, not money movement (the server marks transfer-kind rows). */
+export function isSpendingRow(tx: TransactionResponse): boolean {
+  return !isSettlementLinked(tx) && !tx.is_excluded && !tx.is_transfer;
 }
 
 // Upload-preview classification. Preview rows are always paid by the
@@ -106,6 +113,7 @@ export interface ReconciliationBuckets {
   partnerPaid: BucketStat;
   settlement: BucketStat;
   excluded: BucketStat;
+  transfer: BucketStat;
 }
 
 function emptyStat(): BucketStat {
@@ -133,6 +141,7 @@ export function bucketTransactions(
     partnerPaid: emptyStat(),
     settlement: emptyStat(),
     excluded: emptyStat(),
+    transfer: emptyStat(),
   };
 
   for (const tx of transactions) {
@@ -146,6 +155,13 @@ export function bucketTransactions(
 
     if (tx.is_settlement) {
       add(buckets.settlement, abs);
+      continue;
+    }
+
+    // Money movement (credit card payments, account transfers) is neither
+    // household nor personal spending.
+    if (tx.is_transfer) {
+      add(buckets.transfer, abs);
       continue;
     }
 
@@ -440,7 +456,7 @@ export function useTransactionFilters(
   const filtered = useMemo(() => {
     let result = transactions;
 
-    // Scope filter (household / personal / spotted)
+    // Scope filter (household / personal / spotted); "all" keeps every row.
     if (state.scope === "household") {
       result = result.filter((tx) => isInHouseholdScope(tx));
     } else if (state.scope === "personal") {

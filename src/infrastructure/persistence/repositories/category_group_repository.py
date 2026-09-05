@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from src.domain.entities.category_group import CategoryGroup
+from src.domain.entities.category_group import CategoryGroup, parse_group_kind
 from src.infrastructure.persistence.models.category_group_model import (
     CategoryGroupModel,
 )
@@ -16,6 +16,7 @@ class CategoryGroupRepository(BaseRepository[CategoryGroup, CategoryGroupModel])
             id=UUID(model.id),
             name=model.name,
             icon=model.icon,
+            kind=parse_group_kind(model.kind),
         )
 
     @staticmethod
@@ -24,4 +25,5 @@ class CategoryGroupRepository(BaseRepository[CategoryGroup, CategoryGroupModel])
             id=str(entity.id),
             name=entity.name,
             icon=entity.icon,
+            kind=entity.kind,
         )

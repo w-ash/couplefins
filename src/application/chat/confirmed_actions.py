@@ -297,6 +297,7 @@ async def exec_category_group(
             id=group_id,
             name=cast(str, details["new_name"]),
             icon=existing.icon,
+            kind=existing.kind,
         )
         await execute_use_case(
             lambda uow: UpdateCategoryGroupUseCase().execute(update_command, uow)

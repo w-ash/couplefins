@@ -221,6 +221,59 @@ describe("InsightsPage", () => {
     });
   });
 
+  it("renders the scope toggle defaulting to household", () => {
+    renderWithProviders(<InsightsPage />);
+    expect(screen.getByRole("radio", { name: "Household" })).toBeChecked();
+    expect(
+      screen.getByRole("radio", { name: "My Spending" }),
+    ).not.toBeChecked();
+  });
+
+  it("sends the scope from the URL to the API", async () => {
+    let requestedScope: string | null = null;
+    server.use(
+      http.get("/api/v1/insights/spending-trends", ({ request }) => {
+        requestedScope = new URL(request.url).searchParams.get("scope");
+        return HttpResponse.json({ ...emptyResponse, scope: "personal" });
+      }),
+    );
+
+    renderWithProviders(<InsightsPage />, {
+      routerProps: { initialEntries: ["/?scope=personal"] },
+    });
+
+    await waitFor(() => {
+      expect(requestedScope).toBe("personal");
+    });
+    expect(screen.getByRole("radio", { name: "My Spending" })).toBeChecked();
+    expect(
+      screen.getByRole("heading", { name: "No spending data" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/No spending of yours found for 2026/),
+    ).toBeInTheDocument();
+  });
+
+  it("hides who's paying in personal scope", async () => {
+    server.use(
+      http.get("/api/v1/insights/spending-trends", () =>
+        HttpResponse.json({ ...populatedResponse, scope: "personal" }),
+      ),
+    );
+
+    renderWithProviders(<InsightsPage />, {
+      routerProps: { initialEntries: ["/?scope=personal"] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Food & Dining").length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByText("Who's paying")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Your share of household spending/),
+    ).toBeInTheDocument();
+  });
+
   it("renders who's paying section", async () => {
     server.use(
       http.get("/api/v1/insights/spending-trends", () =>

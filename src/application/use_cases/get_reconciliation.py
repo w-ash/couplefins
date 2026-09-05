@@ -14,9 +14,13 @@ from src.application.use_cases._shared.finalization import load_period_status
 from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
+from src.application.use_cases._shared.transaction_reads import (
+    fetch_latest_spending_month,
+    fetch_scoped_rows,
+    fetch_settlement_rows,
+)
 from src.application.use_cases._shared.transactions import (
     find_all_unmapped_categories,
-    get_latest_transaction_month,
 )
 from src.application.use_cases._shared.upload_status import (
     UploadStatus,
@@ -94,6 +98,11 @@ class GetReconciliationResult:
     year: int | None
     month: int | None
     latest_transaction_month: tuple[int, int] | None
+    # `transactions` keeps transfer rows for display (badged via
+    # `transfer_categories`); `spending_transactions` is the same fetch with
+    # money movement dropped — what the summary was computed over.
+    spending_transactions: list[Transaction]
+    transfer_categories: frozenset[str]
 
 
 @define(slots=True)
@@ -103,7 +112,11 @@ class GetReconciliationUseCase:
     ) -> GetReconciliationResult:
         async with uow:
             ctx = await load_reconciliation_context(uow)
-            transactions = await self._fetch_transactions(command, uow)
+            window = (command.start_date, command.end_date)
+            rows = await fetch_scoped_rows(
+                uow, ctx, window, command.scope, command.person_id, tags=command.tags
+            )
+            transactions = rows.listed
             uploads = (
                 await uow.uploads.get_by_person_ids_with_transactions_in_date_range(
                     ctx.person_ids, command.start_date, command.end_date
@@ -118,7 +131,7 @@ class GetReconciliationUseCase:
                 )
 
             summary = reconcile(
-                transactions,
+                rows.spending,
                 ctx.persons,
                 ctx.categories,
                 ctx.category_groups,
@@ -130,10 +143,8 @@ class GetReconciliationUseCase:
             # rows, not the scoped display set above — both partners and every
             # scope see the same number, matching the Settle Up page.
             # summary.split_transactions still describes the display set.
-            settlement_txs = (
-                await uow.transactions.get_settlement_relevant_by_date_range(
-                    command.start_date, command.end_date, tags=command.tags
-                )
+            settlement_txs = await fetch_settlement_rows(
+                uow, ctx, window, tags=command.tags
             )
             summary = evolve(
                 summary,
@@ -144,7 +155,7 @@ class GetReconciliationUseCase:
             tx_categories = {tx.category for tx in transactions}
             unmapped = find_all_unmapped_categories(ctx.categories, tx_categories)
 
-            latest_month = await get_latest_transaction_month(uow)
+            latest_month = await fetch_latest_spending_month(uow, ctx)
 
             return GetReconciliationResult(
                 summary=summary,
@@ -157,35 +168,6 @@ class GetReconciliationUseCase:
                 year=command.single_month[0] if command.single_month else None,
                 month=command.single_month[1] if command.single_month else None,
                 latest_transaction_month=latest_month,
+                spending_transactions=rows.spending,
+                transfer_categories=ctx.transfer_categories,
             )
-
-    @staticmethod
-    async def _fetch_transactions(
-        command: GetReconciliationCommand, uow: UnitOfWorkProtocol
-    ) -> list[Transaction]:
-        tags = command.tags
-
-        if command.scope == "personal" and command.person_id is not None:
-            txs = await uow.transactions.get_by_person_and_date_range(
-                command.person_id, command.start_date, command.end_date, tags=tags
-            )
-            return [tx for tx in txs if not tx.household]
-
-        if command.scope == "all" and command.person_id is not None:
-            household_txs = await uow.transactions.get_household_by_date_range(
-                command.start_date, command.end_date, tags=tags
-            )
-            person_txs = await uow.transactions.get_by_person_and_date_range(
-                command.person_id, command.start_date, command.end_date, tags=tags
-            )
-            household_ids = {tx.id for tx in household_txs}
-            personal_non_household = [
-                tx
-                for tx in person_txs
-                if not tx.household and tx.id not in household_ids
-            ]
-            return household_txs + personal_non_household
-
-        return await uow.transactions.get_household_by_date_range(
-            command.start_date, command.end_date, tags=tags
-        )

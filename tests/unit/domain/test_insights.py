@@ -2,6 +2,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID, uuid4
 
+from src.domain.entities.transaction import Transaction
 from src.domain.insights import (
     compute_comparison_cards,
     compute_person_paid_by_month,
@@ -9,6 +10,8 @@ from src.domain.insights import (
     compute_trailing_average,
 )
 from tests.fixtures.factories import (
+    ALICE,
+    BOB,
     make_transaction,
 )
 
@@ -123,7 +126,8 @@ class TestComputeSpendingTrends:
         assert result.group_summaries[0].group_id is None
         assert result.group_summaries[0].group_name == "Uncategorized"
 
-    def test_refunds_excluded(self) -> None:
+    def test_refunds_net_against_spending(self) -> None:
+        """Signed-amount convention, same as Budget and Dashboard."""
         _, _, lookup = _setup_groups()
         txs = [
             make_transaction(
@@ -137,7 +141,7 @@ class TestComputeSpendingTrends:
         result = compute_spending_trends(txs, lookup, 2026)
 
         assert len(result.monthly_totals) == 1
-        assert result.monthly_totals[0].total_amount == Decimal("50.00")
+        assert result.monthly_totals[0].total_amount == Decimal("30.00")
 
     def test_non_household_excluded(self) -> None:
         _, _, lookup = _setup_groups()
@@ -605,6 +609,29 @@ class TestComputePersonPaidByMonth:
         assert by_group[None] == Decimal("25.00")
 
 
+class TestPersonPaidRefunds:
+    def test_refund_nets_against_what_the_payer_fronted(self) -> None:
+        food_id, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                date=date(2026, 1, 5),
+                category="Dining Out",
+                amount=Decimal("-100.00"),
+                payer_person_id=ALICE.id,
+            ),
+            make_transaction(
+                date=date(2026, 1, 9),
+                category="Dining Out",
+                amount=Decimal("20.00"),
+                payer_person_id=ALICE.id,
+            ),
+        ]
+        paid = compute_person_paid_by_month(txs, lookup)
+        assert [(p.person_id, p.group_id, p.amount_paid) for p in paid] == [
+            (ALICE.id, food_id, Decimal("80.00"))
+        ]
+
+
 class TestExcludedTransactions:
     def test_excluded_not_in_spending_trends(self) -> None:
         _, _, lookup = _setup_groups()
@@ -644,3 +671,182 @@ class TestExcludedTransactions:
 
         cards = compute_comparison_cards(txs, lookup, target_month=2)
         assert cards[0].current_month_amount == Decimal("50.00")
+
+
+class TestPersonalScope:
+    """`person_id` switches every computation to that person's share."""
+
+    @staticmethod
+    def _ytd(
+        txs: list[Transaction], lookup: dict[str, tuple[UUID, str]], pid: UUID | None
+    ) -> dict[UUID | None, Decimal]:
+        result = compute_spending_trends(txs, lookup, 2026, person_id=pid)
+        return {g.group_id: g.ytd_total for g in result.group_summaries}
+
+    def test_household_split_gives_each_person_their_share(self) -> None:
+        food_id, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                category="Dining Out",
+                amount=Decimal("-100.00"),
+                payer_person_id=ALICE.id,
+                payer_percentage=50,
+            ),
+            make_transaction(
+                category="Groceries",
+                amount=Decimal("-200.00"),
+                payer_person_id=BOB.id,
+                payer_percentage=70,
+            ),
+        ]
+        assert self._ytd(txs, lookup, ALICE.id) == {food_id: Decimal("110.00")}
+        assert self._ytd(txs, lookup, BOB.id) == {food_id: Decimal("190.00")}
+        assert self._ytd(txs, lookup, None) == {food_id: Decimal("300.00")}
+
+    def test_personal_row_counts_only_for_its_owner(self) -> None:
+        food_id, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                category="Dining Out",
+                amount=Decimal("-40.00"),
+                payer_person_id=ALICE.id,
+                payer_percentage=100,
+                household=False,
+                tags=(),
+            )
+        ]
+        assert self._ytd(txs, lookup, ALICE.id) == {food_id: Decimal("40.00")}
+        assert self._ytd(txs, lookup, BOB.id) == {}
+        assert self._ytd(txs, lookup, None) == {}
+
+    def test_spotted_row_lands_on_beneficiary(self) -> None:
+        food_id, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                category="Dining Out",
+                amount=Decimal("-30.00"),
+                payer_person_id=ALICE.id,
+                payer_percentage=0,
+                household=False,
+                tags=("bob",),
+            )
+        ]
+        assert self._ytd(txs, lookup, BOB.id) == {food_id: Decimal("30.00")}
+        assert self._ytd(txs, lookup, ALICE.id) == {}
+
+    def test_zero_share_household_row_is_dropped_entirely(self) -> None:
+        """A partner-paid `s100` household row must not surface as a group
+        with a transaction count but no amount (which would also make
+        comparison cards flag it as new)."""
+        _, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                date=date(2026, 3, 5),
+                category="Dining Out",
+                amount=Decimal("-60.00"),
+                payer_person_id=ALICE.id,
+                payer_percentage=100,
+            )
+        ]
+        result = compute_spending_trends(txs, lookup, 2026, person_id=BOB.id)
+        assert result.group_summaries == []
+        assert result.monthly_totals == []
+        assert compute_comparison_cards(txs, lookup, 3, person_id=BOB.id) == []
+
+    def test_refund_nets_the_persons_share(self) -> None:
+        food_id, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                category="Dining Out", amount=Decimal("25.00"), payer_person_id=ALICE.id
+            )
+        ]
+        assert self._ytd(txs, lookup, ALICE.id) == {food_id: Decimal("-12.50")}
+        assert self._ytd(txs, lookup, BOB.id) == {food_id: Decimal("-12.50")}
+
+    def test_settlements_and_excluded_rows_ignored(self) -> None:
+        _, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                category="Dining Out",
+                amount=Decimal("-25.00"),
+                payer_person_id=ALICE.id,
+                is_settlement=True,
+            ),
+            make_transaction(
+                category="Dining Out",
+                amount=Decimal("-25.00"),
+                payer_person_id=ALICE.id,
+                is_excluded=True,
+            ),
+        ]
+        assert self._ytd(txs, lookup, ALICE.id) == {}
+
+    def test_partners_personal_views_sum_to_household_view(self) -> None:
+        """Per-row shares are complementary, so the two personal views add
+        up to the household view exactly — including odd cents."""
+        food_id, travel_id, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                category="Dining Out",
+                amount=Decimal("-33.33"),
+                payer_person_id=ALICE.id,
+                payer_percentage=50,
+            ),
+            make_transaction(
+                category="Flights",
+                amount=Decimal("-99.99"),
+                payer_person_id=BOB.id,
+                payer_percentage=33,
+            ),
+        ]
+        alice = self._ytd(txs, lookup, ALICE.id)
+        bob = self._ytd(txs, lookup, BOB.id)
+        household = self._ytd(txs, lookup, None)
+        for gid in (food_id, travel_id):
+            assert alice[gid] + bob[gid] == household[gid]
+
+    def test_comparison_cards_and_trailing_average_use_the_lens(self) -> None:
+        food_id, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                date=date(2026, m, 5),
+                category="Dining Out",
+                amount=Decimal("-100.00"),
+                payer_person_id=ALICE.id,
+                payer_percentage=70,
+            )
+            for m in (1, 2, 3)
+        ]
+        avg = compute_trailing_average(txs, lookup, 3, person_id=BOB.id)
+        assert avg == {food_id: Decimal("30.00")}
+
+        cards = compute_comparison_cards(txs, lookup, 3, person_id=BOB.id)
+        assert len(cards) == 1
+        assert cards[0].current_month_amount == Decimal("30.00")
+        assert cards[0].trailing_average == Decimal("30.00")
+        assert cards[0].delta_amount == Decimal("0.00")
+
+    def test_person_paid_stays_household_lens(self) -> None:
+        """Who fronted the household money is a couple-level fact; personal
+        rows never enter it even when the caller is scoped to a person."""
+        food_id, _, lookup = _setup_groups()
+        txs = [
+            make_transaction(
+                category="Dining Out",
+                amount=Decimal("-100.00"),
+                payer_person_id=ALICE.id,
+                payer_percentage=50,
+            ),
+            make_transaction(
+                category="Dining Out",
+                amount=Decimal("-40.00"),
+                payer_person_id=ALICE.id,
+                payer_percentage=100,
+                household=False,
+                tags=(),
+            ),
+        ]
+        paid = compute_person_paid_by_month(txs, lookup)
+        assert [(p.person_id, p.group_id, p.amount_paid) for p in paid] == [
+            (ALICE.id, food_id, Decimal("100.00"))
+        ]

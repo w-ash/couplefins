@@ -27,3 +27,13 @@ async def test_creates_groups_and_categories_when_empty() -> None:
     categories = uow.categories.save_batch.call_args[0][0]
     assert len(groups) == 16
     assert len(categories) == 83
+
+
+async def test_seed_marks_only_the_transfer_group_as_transfer() -> None:
+    uow = make_mock_uow()
+    uow.category_groups.count.return_value = 0
+
+    await seed_category_groups(uow)
+
+    groups = uow.category_groups.save_batch.call_args[0][0]
+    assert {g.name for g in groups if g.kind == "transfer"} == {"Transfer"}

@@ -1,9 +1,12 @@
-from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 
 from src.application.runner import execute_use_case
+from src.application.use_cases._shared.command_validators import (
+    PersonScope,
+    person_for_scope,
+)
 from src.application.use_cases.copy_budgets import (
     CopyBudgetsCommand,
     CopyBudgetsUseCase,
@@ -40,10 +43,10 @@ router = APIRouter(tags=["budgets"], dependencies=[Depends(get_current_user)])
 async def get_budget_overview(
     year: int = Query(...),
     month: int = Query(...),
-    scope: Literal["household", "personal"] = Query("household"),
+    scope: PersonScope = Query("household"),
     current_user: Person = Depends(get_current_user),
 ) -> BudgetOverviewResponse:
-    person_id = current_user.id if scope == "personal" else None
+    person_id = person_for_scope(scope, current_user)
     command = GetBudgetOverviewCommand(
         year=year, month=month, scope=scope, person_id=person_id
     )

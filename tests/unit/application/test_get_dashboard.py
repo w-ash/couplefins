@@ -4,6 +4,7 @@ from decimal import Decimal
 from src.application.use_cases.get_dashboard import (
     GetDashboardCommand,
     GetDashboardUseCase,
+    PersonalMonthHistoryEntry,
     _resolve_active_month,
 )
 from src.application.use_cases.record_waived_settlement import (
@@ -976,3 +977,197 @@ async def test_no_settlements_yields_zero_ytd_total() -> None:
     result = await GetDashboardUseCase().execute(_make_command(), uow)
 
     assert result.ytd_total_settled == Decimal(0)
+
+
+async def test_transfer_rows_excluded_from_dashboard_spending_and_ledger() -> None:
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    uow = make_mock_uow()
+    food = make_category_group(name="Food & Dining")
+    transfer = make_category_group(name="Transfer", kind="transfer")
+    _setup_uow_base(
+        uow,
+        alice,
+        bob,
+        groups=[food, transfer],
+        categories=[
+            make_category(name="Dining Out", group_id=food.id),
+            make_category(name="Credit Card Payment", group_id=transfer.id),
+        ],
+    )
+    _set_transactions(
+        uow,
+        [
+            make_transaction(
+                date=date(2026, 3, 5),
+                category="Dining Out",
+                amount=Decimal("-100.00"),
+                payer_person_id=alice.id,
+                payer_percentage=50,
+            ),
+            make_transaction(
+                date=date(2026, 3, 6),
+                category="Credit Card Payment",
+                amount=Decimal("-900.00"),
+                payer_person_id=alice.id,
+                payer_percentage=50,
+            ),
+        ],
+    )
+    _set_settlements(uow)
+
+    result = await GetDashboardUseCase().execute(_make_command(2026, 3), uow)
+
+    assert result.household_spending_month == Decimal("100.00")
+    assert result.settlement_year.balance is not None
+    assert result.settlement_year.balance.amount == Decimal("50.00")
+
+
+async def test_personal_scope_figures_come_from_the_shared_lens() -> None:
+    """My spending = my share of household + my personal + what my partner
+    spotted for me; excluded rows never count."""
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    uow = make_mock_uow()
+    _setup_uow_base(uow, alice, bob)
+    txs = [
+        make_transaction(
+            date=date(2026, 3, 5),
+            amount=Decimal("-200.00"),
+            payer_person_id=alice.id,
+            payer_percentage=50,
+            household=True,
+        ),
+        make_transaction(
+            date=date(2026, 3, 6),
+            amount=Decimal("-40.00"),
+            payer_person_id=alice.id,
+            payer_percentage=100,
+            household=False,
+            tags=(),
+        ),
+        make_transaction(
+            date=date(2026, 3, 7),
+            amount=Decimal("-30.00"),
+            payer_person_id=bob.id,
+            payer_percentage=0,
+            household=False,
+            tags=("alice",),
+        ),
+        make_transaction(
+            date=date(2026, 3, 8),
+            amount=Decimal("-999.00"),
+            payer_person_id=alice.id,
+            household=True,
+            is_excluded=True,
+        ),
+    ]
+    uow.transactions.get_by_year.return_value = txs
+    uow.transactions.get_settlement_relevant_by_date_range.return_value = (
+        filter_split_transactions(txs)
+    )
+    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+    uow.category_group_budgets.get_by_year.return_value = []
+
+    result = await GetDashboardUseCase().execute(
+        GetDashboardCommand(year=2026, month=3, scope="personal", person_id=alice.id),
+        uow,
+    )
+
+    assert result.my_household_share_month == Decimal("100.00")
+    assert result.my_personal_spending_month == Decimal("70.00")
+    assert result.my_spending_month == Decimal("170.00")
+    assert result.my_spending_ytd == Decimal("170.00")
+    assert result.personal_month_history == [
+        PersonalMonthHistoryEntry(
+            2026, 3, Decimal("170.00"), Decimal("100.00"), Decimal("70.00")
+        )
+    ]
+
+
+async def test_household_card_nets_refunds() -> None:
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    uow = make_mock_uow()
+    _setup_uow_base(uow, alice, bob)
+    _set_transactions(
+        uow,
+        [
+            make_transaction(
+                date=date(2026, 3, 5),
+                amount=Decimal("-100.00"),
+                payer_person_id=alice.id,
+                payer_percentage=50,
+                household=True,
+            ),
+            make_transaction(
+                date=date(2026, 3, 9),
+                amount=Decimal("30.00"),
+                payer_person_id=alice.id,
+                payer_percentage=50,
+                household=True,
+            ),
+        ],
+    )
+    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+
+    result = await GetDashboardUseCase().execute(_make_command(2026, 3), uow)
+
+    march = next(m for m in result.month_history if m.month == 3)
+    assert result.household_spending_month == Decimal("70.00")
+    assert march.total_household_spending == Decimal("70.00")
+
+
+async def test_all_scope_nets_refunds_and_never_reads_below_household() -> None:
+    """A household refund lowers both cards by the same amount, so the gap
+    between "all" and "household" is exactly the personal rows."""
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    uow = make_mock_uow()
+    _setup_uow_base(uow, alice, bob)
+    txs = [
+        make_transaction(
+            date=date(2026, 3, 5),
+            amount=Decimal("-500.00"),
+            payer_person_id=alice.id,
+            household=True,
+        ),
+        make_transaction(
+            date=date(2026, 3, 9),
+            amount=Decimal("50.00"),
+            payer_person_id=alice.id,
+            household=True,
+        ),
+        make_transaction(
+            date=date(2026, 3, 12),
+            amount=Decimal("-100.00"),
+            payer_person_id=bob.id,
+            payer_percentage=100,
+            household=False,
+            tags=(),
+        ),
+        make_transaction(
+            date=date(2026, 3, 13),
+            amount=Decimal("-999.00"),
+            payer_person_id=alice.id,
+            household=True,
+            is_excluded=True,
+        ),
+    ]
+    uow.transactions.get_by_year.return_value = txs
+    uow.transactions.get_settlement_relevant_by_date_range.return_value = (
+        filter_split_transactions(txs)
+    )
+    uow.uploads.get_by_person_ids_with_transactions_in_period.return_value = []
+
+    result = await GetDashboardUseCase().execute(
+        GetDashboardCommand(year=2026, month=3, scope="all"), uow
+    )
+
+    assert result.household_spending_month == Decimal("450.00")
+    assert result.total_all_spending_month == Decimal("550.00")
+    assert result.total_all_spending_ytd == Decimal("550.00")
+    assert result.total_all_spending_month >= result.household_spending_month
+    march = next(m for m in result.month_history if m.month == 3)
+    assert march.total_all_spending == Decimal("550.00")
+    assert march.total_household_spending == Decimal("450.00")

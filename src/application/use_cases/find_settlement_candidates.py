@@ -12,6 +12,7 @@ from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
 from src.application.use_cases._shared.settlement_math import load_ledger
+from src.application.use_cases._shared.transaction_reads import fetch_listed_rows
 from src.domain.date_math import month_bounds
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 from src.domain.settlement_matching import (
@@ -54,9 +55,7 @@ class FindSettlementCandidatesUseCase:
                 return FindSettlementCandidatesResult(candidates=[])
             start, end = window
 
-            transactions = await uow.transactions.get_by_date_range(
-                start, end + _DATE_PADDING
-            )
+            transactions = await fetch_listed_rows(uow, (start, end + _DATE_PADDING))
             merchants = await uow.settlement_merchants.get_all()
 
             candidates = find_settlement_candidates(

@@ -131,3 +131,6 @@ if TYPE_CHECKING:
     BLACKLISTED_USE_CASES
     INTERNAL_USE_CASES
     MECHANICALLY_EXCLUDED_USE_CASES
+    from src.interface.api.schemas.reconciliation import TransactionResponse
+
+    TransactionResponse.is_transfer  # response field — serialized, read by the web client

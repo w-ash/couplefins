@@ -1,11 +1,29 @@
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
+from uuid import UUID
 
 from attrs import Attribute
 
+from src.domain.entities.person import Person
+from src.domain.exceptions import ValidationError
 from src.domain.month_key import MAX_MONTH, assert_month_key
 
 Scope = Literal["household", "personal", "all"]
+# Pages with no "all" view: a person-scoped variant of the household page.
+PersonScope = Literal["household", "personal"]
+
+
+def require_person_for_personal_scope(scope: Scope, person_id: UUID | None) -> None:
+    """Call from a scoped command's `__attrs_post_init__`."""
+    if scope == "personal" and person_id is None:
+        raise ValidationError("person_id is required for personal scope")
+
+
+def person_for_scope(scope: Scope, user: Person) -> UUID | None:
+    """The person a scoped request is about: the caller for `personal`,
+    nobody for the couple-level scopes. Entry points derive it here so the
+    rule guarded by `require_person_for_personal_scope` lives once."""
+    return user.id if scope == "personal" else None
 
 
 def quantize_cents(value: Decimal) -> Decimal:

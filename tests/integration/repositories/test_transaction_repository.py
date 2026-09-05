@@ -363,3 +363,43 @@ async def test_get_all_settlement_relevant_spans_months_and_types(
 async def test_get_all_settlement_relevant_empty_db(db_session: AsyncSession) -> None:
     repo = TransactionRepository(db_session)
     assert await repo.get_all_settlement_relevant() == []
+
+
+async def test_latest_household_date_skips_excluded_categories(
+    db_session: AsyncSession,
+) -> None:
+    """A household card payment dated after the last dinner must not move
+    the latest date once its category is excluded; with nothing excluded
+    it is the newest row."""
+    repo = TransactionRepository(db_session)
+    alice = make_person(name="Alice")
+    upload = make_upload(person_id=alice.id)
+    await PersonRepository(db_session).save(alice)
+    await UploadRepository(db_session).save(upload)
+
+    dinner = make_transaction(
+        upload_id=upload.id, date=date(2026, 1, 20), payer_person_id=alice.id
+    )
+    card_payment = make_transaction(
+        upload_id=upload.id,
+        date=date(2026, 2, 3),
+        category="Credit Card Payment",
+        payer_person_id=alice.id,
+    )
+    await repo.save_batch([dinner, card_payment])
+    await db_session.commit()
+
+    assert await repo.get_latest_household_transaction_date(
+        excluding_categories={"Credit Card Payment"}
+    ) == date(2026, 1, 20)
+    assert await repo.get_latest_household_transaction_date(
+        excluding_categories=frozenset()
+    ) == date(2026, 2, 3)
+
+
+async def test_latest_household_date_empty_db(db_session: AsyncSession) -> None:
+    repo = TransactionRepository(db_session)
+    assert (
+        await repo.get_latest_household_transaction_date(excluding_categories=set())
+        is None
+    )
