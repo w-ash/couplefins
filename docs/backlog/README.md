@@ -186,11 +186,11 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.12.0 | Insights scope toggle — Household / My Spending, one person-share rule across Budget, Dashboard, Insights ([spec](v1.12.x.md)) | Completed (2026-09-03) | M |
 | v1.12.1 | Transfer-kind category groups — credit card payments and transfers are money movement, not spending ([spec](v1.12.x.md)) | Completed (2026-09-03) | M |
 | v1.12.2 | One source of truth — transaction reads module with grep gates, one spending lens for Budget/Insights/Dashboard ([spec](v1.12.x.md)) | Completed (2026-09-05) | M |
-| v1.13.0 | Transactions personal scope matches the share rule — personal deep links reconcile ([spec](v1.13.x.md)) | Completed (2026-09-05) | M |
-| v1.13.1 | Spending flow dataset (source → group → category), category comparisons, one Transactions link builder ([spec](v1.13.x.md)) | Completed (2026-09-05) | M |
-| v1.13.2 | Insights redesign — Sankey / donut / bars with drill-down, monthly stack, group table, notable list, every figure deep-linked ([spec](v1.13.x.md)) | Completed (2026-09-05) | L |
-| v1.13.3 | Income-kind category groups — paychecks are income, not spending ([spec](v1.13.x.md)) | Completed (2026-09-05) | M |
-| v1.13.4 | Category setup parity with Monarch — four groups, 21 mappings, seed fixture regenerated ([spec](v1.13.x.md)) | Completed (2026-09-05) | S |
+| v1.13.0 | Transactions personal scope matches the share rule — personal deep links reconcile ([spec](completed/v1.13.x.md)) | Completed (2026-09-05) | M |
+| v1.13.1 | Spending flow dataset (source → group → category), category comparisons, one Transactions link builder ([spec](completed/v1.13.x.md)) | Completed (2026-09-05) | M |
+| v1.13.2 | Insights redesign — Sankey / donut / bars with drill-down, monthly stack, group table, notable list, every figure deep-linked ([spec](completed/v1.13.x.md)) | Completed (2026-09-05) | L |
+| v1.13.3 | Income-kind category groups — paychecks are income, not spending ([spec](completed/v1.13.x.md)) | Completed (2026-09-05) | M |
+| v1.13.4 | Category setup parity with Monarch — four groups, 21 mappings, seed fixture regenerated ([spec](completed/v1.13.x.md)) | Completed (2026-09-05) | S |
 
 ## Infrastructure Readiness
 
