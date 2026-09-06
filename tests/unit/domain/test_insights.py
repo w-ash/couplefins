@@ -706,11 +706,7 @@ class TestComputeSpendingFlow:
     def test_empty_input(self) -> None:
         _, _, lookup = _setup_groups()
         flow = compute_spending_flow([], lookup, months={1})
-        assert (flow.cells, flow.top_merchants, flow.largest_transactions) == (
-            [],
-            [],
-            [],
-        )
+        assert (flow.cells, flow.top_merchants) == ([], [])
 
     def test_household_cells_are_keyed_by_payer_and_category(self) -> None:
         food_id, travel_id, lookup = _setup_groups()
@@ -808,34 +804,6 @@ class TestComputeSpendingFlow:
         assert (sushi.category, sushi.group_id) == ("Dining Out", food_id)
         unlimited = compute_spending_flow(txs, lookup, months={1})
         assert "Refunder" not in {m.merchant for m in unlimited.top_merchants}
-
-    def test_largest_transactions_use_the_lens_contribution(self) -> None:
-        _, travel_id, lookup = _setup_groups()
-        txs = [
-            _row(category="Flights", amount="-300.00", payer=BOB.id, pct=50),
-            _row(amount="-80.00", payer=ALICE.id, pct=100, household=False),
-            _row(amount="20.00", day=20),
-        ]
-
-        household = compute_spending_flow(txs, lookup, months={1}, largest_limit=1)
-        [largest] = household.largest_transactions
-        assert (
-            largest.merchant,
-            largest.amount,
-            largest.group_id,
-            largest.payer_person_id,
-        ) == (
-            "Sushi Place",
-            Decimal("300.00"),
-            travel_id,
-            BOB.id,
-        )
-
-        personal = compute_spending_flow(txs, lookup, person_id=ALICE.id, months={1})
-        assert [t.amount for t in personal.largest_transactions] == [
-            Decimal("150.00"),
-            Decimal("80.00"),
-        ]
 
 
 class TestComputeCategoryComparisons:

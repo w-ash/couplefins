@@ -465,7 +465,6 @@ async def test_flows_cover_the_month_and_year_to_date() -> None:
         result.trends.group_summaries[0].ytd_total
     )
     assert [m.merchant for m in result.ytd_flow.top_merchants] == ["Sushi", "Pizza"]
-    assert result.month_flow.largest_transactions[0].merchant == "Pizza"
     assert all(c.group_id == food_group.id for c in result.ytd_flow.cells)
 
 

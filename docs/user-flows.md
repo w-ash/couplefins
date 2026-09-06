@@ -447,10 +447,10 @@ The Insights page is the together-session's "where did the money go?" view. One 
 - Given a month period, then a "Notable" list names the biggest category increase and decrease against the 3-month average, up to two categories that are new this month, any group that has moved the same way three or more months in a row, and a category that netted a refund — at most five lines, each a link
 - Given year to date, then the section is hidden
 
-**US-INSIGHTS-5** (v1.13.x): As a partner, I want the headline numbers to answer "how are we doing?" in one glance.
+**US-INSIGHTS-5** (v1.13.x): As a partner, I want the headline number to answer "how are we doing?" in one glance.
 
-- Given the headline strip, then I see the period total with a one-line comparison ("$212 more than January"; for January, December of the prior year; for year to date, the same span last year), the average per day (month) or per complete month (year to date), the top group with its share, and the largest single transaction
-- Given the top group or largest transaction tile, then it links to its transactions
+- Given the headline, then I see the period total with a one-line comparison ("$212 more than January"; for January, December of the prior year; for year to date, the same span last year) and the year's months as small bars
+- *(Superseded 2026-09-05: the average, top group, and largest transaction tiles were dropped as noise; the flow and the group table already answer those.)*
 
 ### Closing the Month
 

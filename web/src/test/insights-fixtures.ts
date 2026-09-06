@@ -41,7 +41,7 @@ export function cell(
 }
 
 export function emptyFlow(): SpendingFlowItem {
-  return { cells: [], top_merchants: [], largest_transactions: [] };
+  return { cells: [], top_merchants: [] };
 }
 
 /** February 2026, two groups, both partners paying. */
@@ -79,17 +79,6 @@ export const MONTH_FLOW: SpendingFlowItem = {
       group_id: "g1",
     },
   ],
-  largest_transactions: [
-    {
-      id: "t1",
-      date: "2026-02-14",
-      merchant: "Airline",
-      category: "Flights",
-      group_id: "g2",
-      amount: 200,
-      payer_person_id: ALICE.id,
-    },
-  ],
 };
 
 export const YTD_FLOW: SpendingFlowItem = {
@@ -117,17 +106,6 @@ export const YTD_FLOW: SpendingFlowItem = {
       transaction_count: 2,
       category: "Flights",
       group_id: "g2",
-    },
-  ],
-  largest_transactions: [
-    {
-      id: "t0",
-      date: "2026-01-09",
-      merchant: "Airline",
-      category: "Flights",
-      group_id: "g2",
-      amount: 300,
-      payer_person_id: ALICE.id,
     },
   ],
 };

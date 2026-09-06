@@ -21,29 +21,21 @@ describe("periodLabel", () => {
 });
 
 describe("buildHeadline", () => {
-  it("compares the month with the previous month and finds the top group", () => {
-    const h = buildHeadline(data, "month", ctx);
-    expect(h.label).toBe("February 2026");
-    expect(h.total).toBe(650);
-    expect(h.comparison).toEqual({
-      text: "less than January",
-      deltaPct: ((650 - 700) / 700) * 100,
-      deltaAmount: -50,
+  it("compares the month with the previous month", () => {
+    const h = buildHeadline(data, "month");
+    expect(h).toEqual({
+      label: "February 2026",
+      total: 650,
+      comparison: {
+        text: "less than January",
+        deltaPct: ((650 - 700) / 700) * 100,
+        deltaAmount: -50,
+      },
     });
-    expect(h.average?.unit).toBe("day");
-    expect(h.average?.value).toBeCloseTo(650 / 28);
-    expect(h.topGroup).toMatchObject({
-      name: "Food & Dining",
-      amount: 450,
-      share: 450 / 650,
-    });
-    expect(h.topGroup?.link.categoryNames).toEqual(["Dining Out", "Groceries"]);
-    expect(h.largest).toMatchObject({ merchant: "Airline", amount: 200 });
-    expect(h.largest?.link.query).toBe("Airline");
   });
 
   it("compares January with the prior December", () => {
-    const h = buildHeadline({ ...data, month: 1 }, "month", ctx);
+    const h = buildHeadline({ ...data, month: 1 }, "month");
     expect(h.comparison).toEqual({
       text: "more than December 2025",
       deltaPct: ((700 - 500) / 500) * 100,
@@ -52,25 +44,16 @@ describe("buildHeadline", () => {
   });
 
   it("compares year to date with the same span last year", () => {
-    const h = buildHeadline(
-      data,
-      "ytd",
-      makeFlowContext({
-        range: { startDate: "2026-01-01", endDate: "2026-02-28" },
-      }),
-    );
+    const h = buildHeadline(data, "ytd");
     expect(h.label).toBe("Jan–Feb 2026");
     expect(h.total).toBe(1350);
     expect(h.comparison?.text).toBe("more than Jan–Feb 2025");
-    expect(h.average).toEqual({ value: 675, unit: "month" });
-    expect(h.topGroup?.name).toBe("Food & Dining");
   });
 
   it("has no comparison when nothing came before", () => {
     const h = buildHeadline(
       { ...data, month: 1, comparison_monthly_group_spending: [] },
       "month",
-      ctx,
     );
     expect(h.comparison).toBeNull();
   });

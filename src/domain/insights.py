@@ -1,6 +1,5 @@
 from collections import defaultdict
 from collections.abc import Container
-from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
@@ -86,25 +85,13 @@ class TopMerchant:
 
 
 @define(frozen=True, slots=True)
-class LargestTransaction:
-    id: UUID
-    date: date
-    merchant: str
-    category: str
-    group_id: UUID | None
-    amount: Decimal
-    payer_person_id: UUID
-
-
-@define(frozen=True, slots=True)
 class SpendingFlow:
-    """Where a period's money went: flow cells plus the merchants and single
-    rows that dominated it. Every amount is the lens contribution (expense
-    positive, refund negative), so cells sum to the period's spending."""
+    """Where a period's money went: flow cells plus the merchants that
+    dominated it. Every amount is the lens contribution (expense positive,
+    refund negative), so cells sum to the period's spending."""
 
     cells: list[SpendingFlowCell]
     top_merchants: list[TopMerchant]
-    largest_transactions: list[LargestTransaction]
 
 
 @define(frozen=True, slots=True)
@@ -324,7 +311,6 @@ def compute_spending_flow(
     person_id: UUID | None = None,
     months: Container[int],
     merchant_limit: int = 10,
-    largest_limit: int = 5,
 ) -> SpendingFlow:
     """Where the money went in `months` (one month, or January through the
     selected month for year to date), under the household or a person's lens.
@@ -384,27 +370,9 @@ def compute_spending_flow(
         for dominant in [_dominant_category(merchant_categories[merchant])]
     ][:merchant_limit]
 
-    largest = sorted(
-        (tx for tx in rows if lens.contribution(tx) > 0),
-        key=lambda tx: (-lens.contribution(tx), tx.date, tx.merchant),
-    )[:largest_limit]
-    largest_transactions = [
-        LargestTransaction(
-            id=tx.id,
-            date=tx.date,
-            merchant=tx.merchant,
-            category=tx.category,
-            group_id=_group_of(category_lookup, tx.category)[0],
-            amount=lens.contribution(tx),
-            payer_person_id=tx.payer_person_id,
-        )
-        for tx in largest
-    ]
-
     return SpendingFlow(
         cells=cells,
         top_merchants=top_merchants,
-        largest_transactions=largest_transactions,
     )
 
 

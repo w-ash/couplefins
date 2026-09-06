@@ -16,11 +16,9 @@ import { PageHeader } from "@/components/PageHeader";
 import { PageEmpty, PageError, PageLoading } from "@/components/PageStates";
 import { SectionHeader } from "@/components/SectionHeader";
 import { SegmentedControl } from "@/components/SegmentedControl";
-import { StatsGrid } from "@/components/StatsGrid";
 import { useGroupIconMap } from "@/lib/categories";
 import {
   formatCurrency,
-  formatShortDate,
   getDeltaColorClass,
   MONTHS,
   useMonthYear,
@@ -55,7 +53,6 @@ import {
   foldSlices,
   type SliceDatum,
 } from "@/lib/spending-flow";
-import { buildTransactionsUrl } from "@/lib/transaction-links";
 
 const EMPTY_ICON_MAP = new Map<string, string | null>();
 
@@ -130,8 +127,8 @@ export function InsightsPage() {
       : data.ytd_flow
     : null;
   const headline = useMemo(
-    () => (data ? buildHeadline(data, period, ctx) : null),
-    [data, period, ctx],
+    () => (data ? buildHeadline(data, period) : null),
+    [data, period],
   );
   const sankey = useMemo(
     () => (flow ? buildSankeyData(flow.cells, ctx) : null),
@@ -227,31 +224,16 @@ export function InsightsPage() {
 
       {data && hasYearData && headline && (
         <div className="space-y-8">
-          <StatsGrid
-            stats={[
-              {
-                label: headline.label,
-                value: formatCurrency(headline.total),
-                accent:
-                  sortedMonthlyTotals.length > 0 ? (
-                    <div className="mt-2" data-testid="ytd-mini-chart">
-                      <ResponsiveContainer width="100%" height={32}>
-                        <BarChart
-                          data={sortedMonthlyTotals}
-                          margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
-                        >
-                          <Bar
-                            dataKey="total_amount"
-                            fill="var(--color-primary)"
-                            fillOpacity={0.25}
-                            radius={[2, 2, 0, 0]}
-                            isAnimationActive={false}
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  ) : undefined,
-                description: headline.comparison ? (
+          <Card className="flex flex-col gap-4 rounded-lg p-5 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">
+                {headline.label}
+              </p>
+              <p className="mt-1 text-3xl font-semibold tabular-nums text-foreground">
+                {formatCurrency(headline.total)}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {headline.comparison ? (
                   <span
                     className={`font-medium ${getDeltaColorClass(headline.comparison.deltaPct)}`}
                   >
@@ -260,44 +242,28 @@ export function InsightsPage() {
                   </span>
                 ) : (
                   "First period on record"
-                ),
-              },
-              {
-                label: "Average",
-                value: headline.average
-                  ? formatCurrency(headline.average.value)
-                  : "—",
-                description: headline.average
-                  ? headline.average.unit === "day"
-                    ? "per day"
-                    : "per complete month"
-                  : "No complete month yet",
-              },
-              {
-                label: "Top group",
-                value: headline.topGroup?.name ?? "None",
-                valueClassName: "text-foreground text-base truncate",
-                description: headline.topGroup
-                  ? `${formatCurrency(headline.topGroup.amount)} · ${Math.round(headline.topGroup.share * 100)}% of the period`
-                  : undefined,
-                href: headline.topGroup
-                  ? buildTransactionsUrl(headline.topGroup.link)
-                  : undefined,
-              },
-              {
-                label: "Largest transaction",
-                value: headline.largest
-                  ? formatCurrency(headline.largest.amount)
-                  : "—",
-                description: headline.largest
-                  ? `${headline.largest.merchant} · ${formatShortDate(headline.largest.date)}`
-                  : undefined,
-                href: headline.largest
-                  ? buildTransactionsUrl(headline.largest.link)
-                  : undefined,
-              },
-            ]}
-          />
+                )}
+              </p>
+            </div>
+            {sortedMonthlyTotals.length > 0 && (
+              <div className="w-full sm:w-64" data-testid="ytd-mini-chart">
+                <ResponsiveContainer width="100%" height={44}>
+                  <BarChart
+                    data={sortedMonthlyTotals}
+                    margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
+                  >
+                    <Bar
+                      dataKey="total_amount"
+                      fill="var(--color-primary)"
+                      fillOpacity={0.3}
+                      radius={[2, 2, 0, 0]}
+                      isAnimationActive={false}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </Card>
 
           <section aria-labelledby="where-heading">
             <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">

@@ -60,7 +60,6 @@ async def test_spending_trends_empty_year(client: AsyncClient) -> None:
     assert data["month_flow"] == {
         "cells": [],
         "top_merchants": [],
-        "largest_transactions": [],
     }
 
 
@@ -169,7 +168,6 @@ async def test_spending_trends_flow_household_sources_are_payers(
         "Gas Station",
         "Sushi Place",
     ]
-    assert data["month_flow"]["largest_transactions"][0]["merchant"] == "Grocery Store"
 
 
 async def test_spending_trends_category_comparisons(client: AsyncClient) -> None:

@@ -4,12 +4,10 @@
  * Couplefins
  * OpenAPI spec version: 0.1.0
  */
-import type { LargestTransactionItem } from './largestTransactionItem';
 import type { SpendingFlowCellItem } from './spendingFlowCellItem';
 import type { TopMerchantItem } from './topMerchantItem';
 
 export interface SpendingFlowItem {
   cells: SpendingFlowCellItem[];
   top_merchants: TopMerchantItem[];
-  largest_transactions: LargestTransactionItem[];
 }

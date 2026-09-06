@@ -63,7 +63,6 @@ export * from './groupSummaryItem';
 export * from './healthResponse';
 export * from './hTTPValidationError';
 export * from './importEventResponse';
-export * from './largestTransactionItem';
 export * from './ledgerMonthResponse';
 export * from './ledgerSettlementResponse';
 export * from './ledgerYearResponse';

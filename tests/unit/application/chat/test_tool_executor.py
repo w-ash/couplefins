@@ -1237,8 +1237,8 @@ async def test_spending_trends_scope_resolves_current_user(
             ),
             comparison_cards=[],
             category_comparisons=[],
-            month_flow=SpendingFlow([], [], []),
-            ytd_flow=SpendingFlow([], [], []),
+            month_flow=SpendingFlow([], []),
+            ytd_flow=SpendingFlow([], []),
             persons=PERSONS,
         )
     )

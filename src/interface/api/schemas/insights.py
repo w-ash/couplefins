@@ -1,4 +1,3 @@
-from datetime import date
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -70,20 +69,9 @@ class TopMerchantItem(BaseModel):
     group_id: UUID | None
 
 
-class LargestTransactionItem(BaseModel):
-    id: UUID
-    date: date
-    merchant: str
-    category: str
-    group_id: UUID | None
-    amount: MoneyField
-    payer_person_id: UUID
-
-
 class SpendingFlowItem(BaseModel):
     cells: list[SpendingFlowCellItem]
     top_merchants: list[TopMerchantItem]
-    largest_transactions: list[LargestTransactionItem]
 
     @classmethod
     def from_domain(cls, flow: SpendingFlow) -> SpendingFlowItem:
@@ -109,18 +97,6 @@ class SpendingFlowItem(BaseModel):
                     group_id=m.group_id,
                 )
                 for m in flow.top_merchants
-            ],
-            largest_transactions=[
-                LargestTransactionItem(
-                    id=t.id,
-                    date=t.date,
-                    merchant=t.merchant,
-                    category=t.category,
-                    group_id=t.group_id,
-                    amount=t.amount,
-                    payer_person_id=t.payer_person_id,
-                )
-                for t in flow.largest_transactions
             ],
         )
 

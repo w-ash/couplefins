@@ -2,7 +2,7 @@ import type {
   MonthlyGroupSpendingItem,
   SpendingTrendsResponse,
 } from "@/api/generated/model";
-import { currentMonth, currentYear, MONTHS, SHORT_MONTHS } from "@/lib/format";
+import { MONTHS, SHORT_MONTHS } from "@/lib/format";
 import type { InsightsPeriod } from "@/lib/insights-filters";
 import {
   type FlowContext,
@@ -34,15 +34,6 @@ export function periodLabel(
   return `${SHORT_MONTHS[0]}–${SHORT_MONTHS[month - 1]} ${year}`;
 }
 
-function isCurrentMonth(year: number, month: number): boolean {
-  return year === currentYear() && month === currentMonth();
-}
-
-function daysElapsed(year: number, month: number): number {
-  if (isCurrentMonth(year, month)) return new Date().getDate();
-  return new Date(year, month, 0).getDate();
-}
-
 // ─── Headline ───
 
 export interface Headline {
@@ -50,21 +41,6 @@ export interface Headline {
   total: number;
   /** Spoken comparison to the previous period, when one exists. */
   comparison: { text: string; deltaPct: number; deltaAmount: number } | null;
-  average: { value: number; unit: "day" | "month" } | null;
-  topGroup: {
-    name: string;
-    groupKey: string;
-    share: number;
-    amount: number;
-    link: TransactionsLink;
-  } | null;
-  largest: {
-    merchant: string;
-    amount: number;
-    date: string;
-    category: string;
-    link: TransactionsLink;
-  } | null;
 }
 
 function comparisonSentence(
@@ -85,19 +61,17 @@ function comparisonSentence(
 export function buildHeadline(
   data: SpendingTrendsResponse,
   period: InsightsPeriod,
-  ctx: FlowContext,
 ): Headline {
   const { year, month } = data;
-  const flow = period === "month" ? data.month_flow : data.ytd_flow;
-  const cells = flow.cells;
   const total =
     period === "month"
       ? (data.monthly_totals.find((t) => t.month === month)?.total_amount ?? 0)
       : data.group_summaries.reduce((s, g) => s + g.ytd_total, 0);
 
-  let comparison: Headline["comparison"] = null;
-  let average: Headline["average"] = null;
+  let comparison: Headline["comparison"];
   if (period === "month") {
+    // January compares with last December; year to date with the same span
+    // of the prior year.
     const previous =
       month > 1
         ? (data.monthly_totals.find((t) => t.month === month - 1)
@@ -106,83 +80,15 @@ export function buildHeadline(
     const previousLabel =
       month > 1 ? MONTHS[month - 2] : `${MONTHS[11]} ${year - 1}`;
     comparison = comparisonSentence(total, previous, previousLabel ?? "");
-    const days = daysElapsed(year, month);
-    average = days > 0 ? { value: total / days, unit: "day" } : null;
   } else {
-    const priorYtd = sumMonths(
-      data.comparison_monthly_group_spending,
-      (m) => m <= month,
-    );
     comparison = comparisonSentence(
       total,
-      priorYtd,
+      sumMonths(data.comparison_monthly_group_spending, (m) => m <= month),
       periodLabel(year - 1, month, "ytd"),
     );
-    // A month still in progress would drag the average down.
-    const complete = isCurrentMonth(year, month) ? month - 1 : month;
-    const completeTotal = data.monthly_totals
-      .filter((t) => t.month <= complete)
-      .reduce((s, t) => s + t.total_amount, 0);
-    average =
-      complete > 0 ? { value: completeTotal / complete, unit: "month" } : null;
   }
 
-  const byGroup = new Map<
-    string,
-    { name: string; amount: number; categories: string[] }
-  >();
-  for (const cell of cells) {
-    const key = groupKey(cell.group_id);
-    const entry = byGroup.get(key);
-    if (entry) {
-      entry.amount += cell.amount;
-      if (!entry.categories.includes(cell.category))
-        entry.categories.push(cell.category);
-    } else {
-      byGroup.set(key, {
-        name: cell.group_name,
-        amount: cell.amount,
-        categories: [cell.category],
-      });
-    }
-  }
-  const top = [...byGroup.entries()].sort(
-    (a, b) => b[1].amount - a[1].amount,
-  )[0];
-  const topGroup =
-    top && total > 0 && top[1].amount > 0
-      ? {
-          name: top[1].name,
-          groupKey: top[0],
-          share: top[1].amount / total,
-          amount: top[1].amount,
-          link: {
-            range: ctx.range,
-            scope: ctx.scope,
-            categoryNames: top[1].categories,
-          },
-        }
-      : null;
-
-  const big = flow.largest_transactions[0];
-  const largest = big
-    ? {
-        merchant: big.merchant,
-        amount: big.amount,
-        date: big.date,
-        category: big.category,
-        link: { range: ctx.range, scope: ctx.scope, query: big.merchant },
-      }
-    : null;
-
-  return {
-    label: periodLabel(year, month, period),
-    total,
-    comparison,
-    average,
-    topGroup,
-    largest,
-  };
+  return { label: periodLabel(year, month, period), total, comparison };
 }
 
 // ─── Monthly stack ───

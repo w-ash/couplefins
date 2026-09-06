@@ -64,22 +64,11 @@ describe("InsightsPage", () => {
     });
   });
 
-  it("shows the headline strip with a comparison sentence and links", async () => {
+  it("shows the period total with a comparison sentence", async () => {
     await renderPopulated();
     expect(screen.getByText("$650.00")).toBeInTheDocument();
     expect(screen.getByText("$50.00 less than January")).toBeInTheDocument();
     expect(screen.getByTestId("ytd-mini-chart")).toBeInTheDocument();
-    expect(screen.getByText("per day")).toBeInTheDocument();
-    const topGroup = screen.getByRole("link", { name: /Top group/ });
-    expect(topGroup).toHaveAttribute(
-      "href",
-      "/transactions?year=2026&month=2&scope=household&cat=Dining+Out&cat=Groceries",
-    );
-    const largest = screen.getByRole("link", { name: /Largest transaction/ });
-    expect(largest).toHaveAttribute(
-      "href",
-      "/transactions?year=2026&month=2&scope=household&q=Airline",
-    );
   });
 
   it("defaults to the flow chart and lists groups in the breakdown table", async () => {
