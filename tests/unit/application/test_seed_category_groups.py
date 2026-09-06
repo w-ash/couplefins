@@ -26,7 +26,7 @@ async def test_creates_groups_and_categories_when_empty() -> None:
     groups = uow.category_groups.save_batch.call_args[0][0]
     categories = uow.categories.save_batch.call_args[0][0]
     assert len(groups) == 20
-    assert len(categories) == 109
+    assert len(categories) == 110
 
 
 async def test_seed_marks_only_the_transfer_group_as_transfer() -> None:
