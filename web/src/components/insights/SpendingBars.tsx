@@ -14,7 +14,8 @@ export function SpendingBars({
   canDrill?: (slice: SliceDatum) => boolean;
   onDrill?: (slice: SliceDatum) => void;
 }) {
-  const max = slices[0]?.amount ?? 0;
+  // "Everything else" comes last but can outweigh the largest single slice.
+  const max = Math.max(0, ...slices.map((s) => s.amount));
   return (
     <ul className="space-y-2" data-testid="spending-bars">
       {slices.map((slice) => {
