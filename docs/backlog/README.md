@@ -194,6 +194,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.14.0 | Fly.io hosting — one container serving API + SPA same-origin, tag-triggered deploy, CI ([spec](v1.14.x.md)) | Completed (2026-09-06) | M |
 | v1.14.1 | Signed settlement portions — one payment settles the net of the months it covers ([spec](v1.11.x.md)) | Completed (2026-09-06) | M |
 | v1.14.2 | Pages open on the latest month with data; prompt caching left to the API ([spec](v1.14.x.md)) | Completed (2026-09-06) | M |
+| v1.14.3 | Settlement History as a table — each fact stated once, detail behind disclosure ([spec](v1.14.x.md)) | Completed (2026-09-06) | S |
 
 ## Infrastructure Readiness
 

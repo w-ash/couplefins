@@ -10,6 +10,14 @@ deploy. There is no `[Unreleased]` section.
 Versions before 1.14.0 predate this file. Their scope is recorded per series in
 `docs/backlog/completed/` and in the version matrix in `docs/backlog/README.md`.
 
+## [1.14.3] - 2026-09-06
+
+### Changed
+
+- Settlement History reads as a table: one row per payment or waiver, stating the months it covers, who paid, when and how, and the amount. A monthly rent transfer previously repeated its own amount four times and its method three times across a card and two mirrored bank legs.
+- A settlement covering several months, or carrying a note, expands to show the amount allocated to each month. A payment covering one month no longer restates that amount beside the month name.
+- A settlement's linked bank transfers are now reached from its row, which states how many there are and opens the dialog that lists them with the option to unlink.
+
 ## [1.14.2] - 2026-09-06
 
 ### Changed

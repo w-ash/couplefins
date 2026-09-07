@@ -367,17 +367,26 @@ describe("SettleUpPage", () => {
     expect(screen.getByText(/Kew owes Ash \$24\.11/)).toBeInTheDocument();
   });
 
-  it("shows each settlement with its recorded portions", async () => {
+  it("states each settlement once: the months it covers, the payer, the amount", async () => {
     renderWithProviders(<SettleUpPage />);
 
     await waitFor(() => {
       expect(screen.getByText("Settlement History")).toBeInTheDocument();
     });
 
-    expect(screen.getAllByText(/Ash paid Kew/)).toHaveLength(3);
-    expect(screen.getByText("$1,981.00 → January")).toBeInTheDocument();
-    expect(screen.getByText("$1,981.00 → February")).toBeInTheDocument();
-    expect(screen.getByText("$1,981.00 → March")).toBeInTheDocument();
+    const history = within(
+      screen.getByRole("table", { name: "Settlement History" }),
+    );
+    expect(history.getByText("January")).toBeInTheDocument();
+    expect(history.getByText("February")).toBeInTheDocument();
+    expect(history.getByText("March")).toBeInTheDocument();
+    // Three rows, each stating its amount and payer exactly once.
+    expect(history.getAllByText("$1,981.00")).toHaveLength(3);
+    expect(history.getAllByText("Ash")).toHaveLength(3);
+    // A lone portion equals the settlement, so it carries no amount of its own.
+    expect(history.queryByText(/→/)).not.toBeInTheDocument();
+    // Nor is a single-portion row expandable.
+    expect(history.queryByRole("button", { expanded: false })).toBeNull();
   });
 
   it("shows a catch-up lump's portions month by month", async () => {
@@ -396,13 +405,16 @@ describe("SettleUpPage", () => {
     };
     serveSettleUp(withLump);
 
+    const user = userEvent.setup();
     renderWithProviders(<SettleUpPage />);
 
-    await waitFor(() => {
-      expect(
-        screen.getByText("$500.00 → Jan + $300.00 → Feb"),
-      ).toBeInTheDocument();
-    });
+    const period = await screen.findByRole("button", { name: "Jan, Feb" });
+    expect(period).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(period);
+
+    expect(screen.getByText("$500.00 → Jan")).toBeInTheDocument();
+    expect(screen.getByText("$300.00 → Feb")).toBeInTheDocument();
   });
 
   it("points a negative portion back at the month it took value from", async () => {
@@ -421,13 +433,13 @@ describe("SettleUpPage", () => {
     };
     serveSettleUp(withMixedLump);
 
+    const user = userEvent.setup();
     renderWithProviders(<SettleUpPage />);
 
-    await waitFor(() => {
-      expect(
-        screen.getByText("$900.00 → Jan + $100.00 ← Feb"),
-      ).toBeInTheDocument();
-    });
+    await user.click(await screen.findByRole("button", { name: "Jan, Feb" }));
+
+    expect(screen.getByText("$900.00 → Jan")).toBeInTheDocument();
+    expect(screen.getByText("$100.00 ← Feb")).toBeInTheDocument();
   });
 
   it("rescopes the hero, months, and history when another year is selected", async () => {

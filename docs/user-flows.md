@@ -263,12 +263,12 @@ Linking bank transactions to show that the balance has been paid. The payment it
 **US-SETTLE-3**: As a partner, I want to link transactions to an existing settlement after the fact.
 
 - Given a settlement in payment history without linked transactions, then I can open a link dialog and select matching transfers
-- Given a linked transaction, then it appears beneath its settlement in payment history
+- Given a settlement with linked transactions, then its row shows how many, and opening it lists each with the option to unlink (v1.14.3)
 
 **US-SETTLE-4**: As a partner, I want to see all past settlements.
 
-- Given the Settle Up page, then Settlement History lists the selected year's payments and waivers chronologically with amounts and dates (v1.11.0)
-- Given a settlement in history, then its row shows the months its portions cover (v1.11.0)
+- Given the Settle Up page, then Settlement History is a table listing the selected year's payments and waivers chronologically — one row each, stating the months covered, the payer, the date and method, and the amount (v1.14.3)
+- Given a settlement in history, then its row names the months its portions cover, collapsing three or more consecutive months to a span; a payment covering several months expands to show the amount allocated to each (v1.14.3)
 - Given a settlement, then its portions determine which year lists it — a January transfer portioned to the previous December appears under the old year (v1.11.0)
 - Given a mistake, then I can delete a settlement (which unlinks the transactions) — deletion works regardless of month locks
 

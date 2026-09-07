@@ -17,6 +17,7 @@ import type {
   LedgerSettlementResponse,
   LedgerYearResponse,
   MonthReference,
+  SettlementPortionResponse,
   SettleUpDataResponse,
 } from "@/api/generated/model";
 import {
@@ -42,11 +43,11 @@ import {
 } from "@/components/CandidateChecklist";
 import { Card } from "@/components/Card";
 import { Dialog, DialogFooter, DialogHeader } from "@/components/Dialog";
+import { ExpandChevron } from "@/components/ExpandChevron";
 import { FinalizationBanner } from "@/components/FinalizationBanner";
 import { InlineError } from "@/components/InlineError";
 import { InlineSuccess } from "@/components/InlineSuccess";
 import { LedgerMonthList, ledgerMonthKey } from "@/components/LedgerMonthList";
-import { LinkedTransactionSubrows } from "@/components/LinkedTransactionSubrows";
 import { PageHeader } from "@/components/PageHeader";
 import {
   EmptyStateActions,
@@ -67,13 +68,15 @@ import {
   formatMonthSpan,
   formatShortDate,
   MONTHS,
+  plural,
   SHORT_MONTHS,
   useMonthYear,
 } from "@/lib/format";
-import { heroCardClass, PAGE_PADDING } from "@/lib/layout";
+import { heroCardClass, PAGE_PADDING, tableHeaderRowClass } from "@/lib/layout";
 import {
   defaultLedgerYear,
   findMonth,
+  formatPortionPeriod,
   ledgerYears,
   settlementsTouching,
 } from "@/lib/ledger";
@@ -437,102 +440,121 @@ function WaiveAction({
   );
 }
 
-// "$1,981.00 → January" for a single portion; "$500.00 → Jan + $300.00 → Feb"
-// for a lump. Months outside the payment's own year carry the year. A negative
-// portion covers a month that ran the other way, so it points back: "← Jun".
-function portionsLabel(s: LedgerSettlementResponse): string | null {
-  const portions = s.portions ?? [];
-  if (portions.length === 0) return null;
-  const settledYear = Number(s.settled_at.slice(0, 4));
-  const names = portions.length === 1 ? MONTHS : SHORT_MONTHS;
-  return portions
-    .map((p) => {
-      const month = names[p.month - 1];
-      const year = p.year === settledYear ? "" : ` ${p.year}`;
-      const arrow = p.amount < 0 ? "←" : "→";
-      return `${formatCurrency(Math.abs(p.amount))} ${arrow} ${month}${year}`;
-    })
-    .join(" + ");
+// One line per portion: "$500.00 → Jan", or "$100.00 ← Feb" for a month the
+// payment took value back from. Shown only when expanded — a lone portion
+// always equals the settlement amount, which the Amount column already states.
+function PortionBreakdown({
+  portions,
+  viewYear,
+}: {
+  portions: SettlementPortionResponse[];
+  viewYear: number;
+}) {
+  return (
+    <ul className="space-y-0.5 tabular-nums">
+      {portions.map((p) => (
+        <li key={`${p.year}-${p.month}`}>
+          {formatCurrency(Math.abs(p.amount))} {p.amount < 0 ? "←" : "→"}{" "}
+          {SHORT_MONTHS[p.month - 1]}
+          {p.year === viewYear ? "" : ` ${p.year}`}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
+// A pair of rows: the settlement, and its detail when expanded.
 function SettlementHistoryRow({
   settlement,
+  year,
   getPersonName,
   getPersonColor,
   onDelete,
   isDeleting,
   onOpenLinkDialog,
+  isExpanded,
+  onToggleExpand,
 }: {
   settlement: LedgerSettlementResponse;
+  year: number;
   getPersonName: (id: string) => string;
   getPersonColor: (id: string) => string;
   onDelete: () => void;
   isDeleting: boolean;
   onOpenLinkDialog: () => void;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
 }) {
   const s = settlement;
   const fromName = getPersonName(s.from_person_id);
-  const toName = getPersonName(s.to_person_id);
-  const settledDate = formatShortDate(s.settled_at);
-  const hasLinks = (s.linked_transactions?.length ?? 0) > 0;
-  const coverage = portionsLabel(s);
+  const portions = s.portions ?? [];
+  const period = formatPortionPeriod(portions, year);
+  const linkCount = s.linked_transactions?.length ?? 0;
+  // A lone portion needs no breakdown; notes are the other thing worth a look.
+  const hasDetail = portions.length > 1 || s.notes !== "";
 
-  return (
-    <div>
-      <div className="flex items-start justify-between gap-2 rounded-lg border border-border-muted px-4 py-3">
-        <div className="flex items-center gap-3">
-          <div>
-            <p className="text-sm font-medium text-foreground">
-              {s.is_waived ? (
-                <>
-                  Balance waived{" "}
-                  <span className="tabular-nums">
-                    {formatCurrency(s.amount)}
-                  </span>
-                </>
-              ) : (
-                <>
-                  {fromName} paid {toName}{" "}
-                  <span className="tabular-nums">
-                    {formatCurrency(s.amount)}
-                  </span>
-                </>
-              )}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {settledDate}
-              {s.method && (
-                <span className="ml-1.5 capitalize">via {s.method}</span>
-              )}
-              {s.notes && (
-                <span className="ml-1.5 text-muted-foreground/70">
-                  — {s.notes}
-                </span>
-              )}
-            </p>
-            {coverage && (
-              <p className="text-xs text-muted-foreground tabular-nums">
-                {coverage}
-              </p>
-            )}
-            {!s.is_waived && !hasLinks && (
-              <button
-                type="button"
-                onClick={onOpenLinkDialog}
-                className="mt-1 inline-flex items-center gap-1 text-xs text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Link2 className="size-3" />
-                Link bank transaction
-              </button>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
+  return [
+    <tr
+      key="settlement"
+      className="border-b border-border-muted transition-colors hover:bg-muted/50"
+    >
+      <td className="py-2 pr-4 whitespace-nowrap">
+        {hasDetail ? (
+          <button
+            type="button"
+            onClick={onToggleExpand}
+            aria-expanded={isExpanded}
+            className="flex min-h-11 items-center gap-1.5 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0"
+          >
+            <ExpandChevron expanded={isExpanded} className="size-3.5" />
+            {period}
+          </button>
+        ) : (
+          <span className="ml-5">{period}</span>
+        )}
+      </td>
+      <td className="py-2 pr-4">
+        {s.is_waived ? (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+            Waived
+          </span>
+        ) : (
+          <PersonBadge
+            name={fromName}
+            accentColor={getPersonColor(s.from_person_id)}
+            size="xs"
+          />
+        )}
+      </td>
+      <td className="py-2 pr-4 whitespace-nowrap text-muted-foreground">
+        {formatShortDate(s.settled_at)}
+        {s.method && <span className="capitalize"> · {s.method}</span>}
+      </td>
+      <td className="py-2 pr-4 text-right tabular-nums whitespace-nowrap">
+        {formatCurrency(s.amount)}
+      </td>
+      <td className="py-2">
+        <div className="flex items-center justify-end gap-1">
+          {!s.is_waived && (
+            <button
+              type="button"
+              onClick={onOpenLinkDialog}
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={
+                linkCount > 0
+                  ? `View ${plural("linked transaction", linkCount)}`
+                  : `Link a bank transaction to ${fromName} payment of ${formatCurrency(s.amount)}`
+              }
+            >
+              <Link2 className="size-3.5" />
+              {linkCount > 0 ? linkCount : "Link"}
+            </button>
+          )}
           <button
             type="button"
             onClick={onDelete}
             disabled={isDeleting}
-            className="rounded-md p-2.5 sm:p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="rounded-md p-2.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-1.5"
             aria-label={
               s.is_waived
                 ? "Delete waiver"
@@ -546,16 +568,21 @@ function SettlementHistoryRow({
             )}
           </button>
         </div>
-      </div>
-      {hasLinks && s.linked_transactions && (
-        <LinkedTransactionSubrows
-          linkedTransactions={s.linked_transactions}
-          getPersonName={getPersonName}
-          getPersonColor={getPersonColor}
-        />
-      )}
-    </div>
-  );
+      </td>
+    </tr>,
+    hasDetail && isExpanded && (
+      <tr key="detail" className="border-b border-border-muted bg-muted/30">
+        <td colSpan={5} className="py-2 pl-5">
+          <div className="editor-enter space-y-1 text-xs text-muted-foreground">
+            {portions.length > 1 && (
+              <PortionBreakdown portions={portions} viewYear={year} />
+            )}
+            {s.notes && <p>{s.notes}</p>}
+          </div>
+        </td>
+      </tr>
+    ),
+  ];
 }
 
 function SettlementHistory({
@@ -584,6 +611,7 @@ function SettlementHistory({
 }) {
   const [linkDialogSettlement, setLinkDialogSettlement] =
     useState<LedgerSettlementResponse | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   if (settlements.length === 0) return null;
 
@@ -594,21 +622,47 @@ function SettlementHistory({
   return (
     <Card>
       <SectionHeader
+        id="settlement-history"
         title="Settlement History"
         description={`Every payment and waiver covering ${year}, oldest first`}
       />
-      <div className="space-y-3">
-        {oldestFirst.map((s) => (
-          <SettlementHistoryRow
-            key={s.id}
-            settlement={s}
-            getPersonName={getPersonName}
-            getPersonColor={getPersonColor}
-            onDelete={() => onDelete(s.id)}
-            isDeleting={deletingId === s.id && isDeletionPending}
-            onOpenLinkDialog={() => setLinkDialogSettlement(s)}
-          />
-        ))}
+      <div className="overflow-x-auto">
+        <table
+          aria-labelledby="settlement-history"
+          className="w-full border-spacing-0 text-sm"
+        >
+          <thead>
+            <tr className={tableHeaderRowClass}>
+              <th className="pb-2 pr-4 font-medium whitespace-nowrap">
+                Period
+              </th>
+              <th className="pb-2 pr-4 font-medium">Payer</th>
+              <th className="pb-2 pr-4 font-medium whitespace-nowrap">Paid</th>
+              <th className="pb-2 pr-4 text-right font-medium">Amount</th>
+              <th className="pb-2">
+                <span className="sr-only">Actions</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {oldestFirst.map((s) => (
+              <SettlementHistoryRow
+                key={s.id}
+                settlement={s}
+                year={year}
+                getPersonName={getPersonName}
+                getPersonColor={getPersonColor}
+                onDelete={() => onDelete(s.id)}
+                isDeleting={deletingId === s.id && isDeletionPending}
+                onOpenLinkDialog={() => setLinkDialogSettlement(s)}
+                isExpanded={expandedId === s.id}
+                onToggleExpand={() =>
+                  setExpandedId(expandedId === s.id ? null : s.id)
+                }
+              />
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {linkDialogSettlement && (

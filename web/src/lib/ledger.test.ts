@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LedgerYearResponse } from "@/api/generated/model";
-import { defaultLedgerYear, ledgerYears } from "./ledger";
+import { defaultLedgerYear, formatPortionPeriod, ledgerYears } from "./ledger";
 
 const Y = new Date().getFullYear();
 
@@ -74,5 +74,60 @@ describe("defaultLedgerYear", () => {
 
   it("defaults to the current year when there is no data", () => {
     expect(defaultLedgerYear([])).toBe(Y);
+  });
+});
+
+describe("formatPortionPeriod", () => {
+  const p = (month: number, year = Y, amount = 100) => ({
+    year,
+    month,
+    amount,
+  });
+
+  it("names a single covered month in full", () => {
+    expect(formatPortionPeriod([p(1)], Y)).toBe("January");
+  });
+
+  it("collapses three or more consecutive months to a span", () => {
+    expect(formatPortionPeriod([p(1), p(2), p(3)], Y)).toBe("Jan – Mar");
+  });
+
+  it("collapses a whole waived year to one span", () => {
+    const all = Array.from({ length: 12 }, (_, i) => p(i + 1));
+    expect(formatPortionPeriod(all, Y)).toBe("Jan – Dec");
+  });
+
+  it("lists two consecutive months rather than spanning them", () => {
+    expect(formatPortionPeriod([p(1), p(2)], Y)).toBe("Jan, Feb");
+  });
+
+  it("caps a scattered set at three months and counts the rest", () => {
+    expect(formatPortionPeriod([p(1), p(3), p(5), p(7), p(9)], Y)).toBe(
+      "Jan, Mar, May +2",
+    );
+  });
+
+  it("carries the year for a month outside the year being viewed", () => {
+    expect(formatPortionPeriod([p(12, Y - 1)], Y)).toBe(`Dec ${Y - 1}`);
+  });
+
+  it("spans a year boundary", () => {
+    expect(formatPortionPeriod([p(11, Y - 1), p(12, Y - 1), p(1)], Y)).toBe(
+      `Nov ${Y - 1} – Jan`,
+    );
+  });
+
+  it("orders portions the API sent out of sequence", () => {
+    expect(formatPortionPeriod([p(3), p(1), p(2)], Y)).toBe("Jan – Mar");
+  });
+
+  it("ignores the sign — a negative portion still covers its month", () => {
+    expect(formatPortionPeriod([p(1, Y, 900), p(2, Y, -100)], Y)).toBe(
+      "Jan, Feb",
+    );
+  });
+
+  it("falls back to a dash when nothing was recorded", () => {
+    expect(formatPortionPeriod([], Y)).toBe("—");
   });
 });
