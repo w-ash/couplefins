@@ -1,0 +1,75 @@
+# fly.toml — couplefins, served at https://couplefins.fly.dev
+# No custom domain; Fly's proxy terminates TLS and the app speaks plain HTTP.
+
+app = 'couplefins'
+
+# The Neon compute is in us-west-2 (Oregon) and every statement pays the
+# distance. sjc is Fly's closest live North American region: sea is deprecated
+# and refuses new resources, and lax/dfw/ord/iad/ewr are all further away.
+primary_region = 'sjc'
+
+# SIGTERM rather than Fly's SIGINT default, so uvicorn runs its graceful
+# shutdown. 60s leaves headroom over uvicorn's own 30s drain bound (see the
+# Dockerfile CMD) — long enough that shutdown always completes on its own,
+# short enough that a stuck process is not waited on for minutes.
+kill_signal = 'SIGTERM'
+kill_timeout = '60s'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+# No [build.args]: nothing under web/src reads build-time env, so the bundle is
+# identical in every environment.
+#
+# No [deploy] release_command: migrations already run in the app's lifespan on
+# every boot. A failed migration fails startup, the health check never passes,
+# and Fly aborts the release with the old machine still serving — the same
+# protection, without a second migration path to keep in step. Revisit if this
+# ever runs on more than one machine.
+
+[env]
+  PYTHONUNBUFFERED = '1'
+  LOGGING__OUTPUT = 'json'
+  LOGGING__LEVEL = 'INFO'
+  # LOGGING__FILE_PATH is deliberately unset: stdout is what Fly captures, and
+  # a rotating file on an ephemeral disk is write-only.
+  #
+  # The SPA is served from this same origin, so the session cookie can be both
+  # Secure (guaranteed by force_https below) and SameSite=Lax.
+  AUTH__COOKIE_SECURE = 'true'
+  AUTH__COOKIE_SAMESITE = 'lax'
+  # Same-origin means CORS never comes into play. An empty list also stops the
+  # dev default (http://localhost:5174) being a credentialed origin here.
+  CORS_ORIGINS = '[]'
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  # Never 'stop'. One machine is a hard requirement, not a cost choice: the SSE
+  # event bus fans out in-process and the chat rate limiter is an in-process
+  # counter, so a second machine would split both. Keep `fly scale count 1`.
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = 'connections'
+    hard_limit = 25
+    soft_limit = 20
+
+  # /api/v1/health/live, not /api/v1/health: the latter queries the database.
+  # Probing that every 30s would hold the Neon compute out of autosuspend
+  # permanently, and a brief database outage would restart the machine into a
+  # startup path that needs the same database.
+  [[http_service.checks]]
+    interval = '30s'
+    timeout = '5s'
+    # Startup runs migrations to head plus two seed passes, against a Neon
+    # compute that may be cold.
+    grace_period = '60s'
+    method = 'GET'
+    path = '/api/v1/health/live'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '1gb'

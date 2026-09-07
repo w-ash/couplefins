@@ -1,0 +1,171 @@
+[
+  {
+    "name": "Income",
+    "kind": "income",
+    "icon": "wallet",
+    "categories": [
+      "Paychecks",
+      "Interest",
+      "Business Income",
+      "Dividends & Capital Gains",
+      "Tax Refund",
+      "Other Income"
+    ]
+  },
+  {
+    "name": "Housing",
+    "icon": "home",
+    "categories": [
+      "Mortgage",
+      "Rent",
+      "Home Improvement",
+      "Other Housing"
+    ]
+  },
+  {
+    "name": "Bills & Utilities",
+    "icon": "key",
+    "categories": [
+      "Garbage",
+      "Water",
+      "Gas & Electric",
+      "Internet & Cable",
+      "Phone",
+      "Other Bills & Utilities"
+    ]
+  },
+  {
+    "name": "Auto & Transport",
+    "icon": "car",
+    "categories": [
+      "Auto Payment",
+      "Auto Maintenance",
+      "Gas",
+      "Parking & Tolls",
+      "Public Transit",
+      "Ride Shares",
+      "Car & Renters Insurance",
+      "Other Auto & Transport"
+    ]
+  },
+  {
+    "name": "Food & Dining",
+    "icon": "utensils-crossed",
+    "categories": [
+      "Groceries",
+      "Restaurants & Bars",
+      "Coffee Shops",
+      "Fast Food",
+      "Food Delivery",
+      "Other Food & Dining"
+    ]
+  },
+  {
+    "name": "Shopping",
+    "icon": "shopping-bag",
+    "categories": [
+      "Shopping",
+      "Clothing",
+      "Furniture & Housewares",
+      "Electronics",
+      "Other Shopping"
+    ]
+  },
+  {
+    "name": "Travel & Lifestyle",
+    "icon": "plane",
+    "categories": [
+      "Travel & Vacation",
+      "Entertainment & Recreation",
+      "Personal",
+      "Pets",
+      "Fun Money",
+      "Other Travel & Lifestyle"
+    ]
+  },
+  {
+    "name": "Health & Wellness",
+    "icon": "heart-pulse",
+    "categories": [
+      "Medical",
+      "Dentist",
+      "Vision",
+      "Fitness",
+      "Other Health & Wellness"
+    ]
+  },
+  {
+    "name": "Children",
+    "icon": "sparkles",
+    "categories": [
+      "Child Care",
+      "Child Activities",
+      "Other Children"
+    ]
+  },
+  {
+    "name": "Education",
+    "icon": "tag",
+    "categories": [
+      "Education",
+      "Student Loans",
+      "Other Education"
+    ]
+  },
+  {
+    "name": "Gifts & Donations",
+    "icon": "gift",
+    "categories": [
+      "Charity",
+      "Gifts"
+    ]
+  },
+  {
+    "name": "Financial",
+    "icon": "landmark",
+    "categories": [
+      "Financial & Legal Services",
+      "Financial Fees",
+      "Cash & ATM",
+      "Insurance",
+      "Taxes",
+      "Other Financial"
+    ]
+  },
+  {
+    "name": "Business",
+    "icon": "briefcase",
+    "categories": [
+      "Advertising & Promotion",
+      "Business Auto Expenses",
+      "Business Insurance",
+      "Business Travel & Meals",
+      "Business Utilities & Communication",
+      "Employee Wages & Contract Labor",
+      "Office Rent",
+      "Office Supplies & Expenses",
+      "Postage & Shipping",
+      "Other Business Expenses"
+    ]
+  },
+  {
+    "name": "Other",
+    "icon": "package",
+    "categories": [
+      "Uncategorized",
+      "Check",
+      "Miscellaneous"
+    ]
+  },
+  {
+    "name": "Transfers",
+    "kind": "transfer",
+    "icon": "arrow-left-right",
+    "categories": [
+      "Transfer",
+      "Credit Card Payment",
+      "Balance Adjustments",
+      "Loan Repayment"
+    ]
+  }
+]

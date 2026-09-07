@@ -60,6 +60,17 @@ def _configure_root(*handlers: logging.Handler, level: int | str) -> None:
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 
 
+def _make_file_handler(path: Path) -> logging.Handler:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handler = RotatingFileHandler(
+        path,
+        maxBytes=10 * 1024 * 1024,  # 10 MB
+        backupCount=5,
+    )
+    handler.setFormatter(_make_formatter(structlog.processors.JSONRenderer()))
+    return handler
+
+
 def setup_logging() -> None:
     settings = get_settings().logging
 
@@ -71,16 +82,11 @@ def setup_logging() -> None:
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(_make_formatter(console_renderer))
 
-    log_dir = Path("logs")
-    log_dir.mkdir(exist_ok=True)
-    file_handler = RotatingFileHandler(
-        log_dir / "couplefins.log",
-        maxBytes=10 * 1024 * 1024,  # 10 MB
-        backupCount=5,
-    )
-    file_handler.setFormatter(_make_formatter(structlog.processors.JSONRenderer()))
+    handlers: list[logging.Handler] = [console_handler]
+    if settings.file_path is not None:
+        handlers.append(_make_file_handler(settings.file_path))
 
-    _configure_root(console_handler, file_handler, level=settings.level)
+    _configure_root(*handlers, level=settings.level)
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 

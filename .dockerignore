@@ -1,0 +1,45 @@
+# Allowlist: exclude everything, then re-include exactly what the Dockerfile
+# copies. Patterns match the full relative path, so a directory rule never
+# matches the files inside it — each tree needs both `dir` and `dir/**`. Last
+# match wins, so re-exclusions come after the re-include that covered them.
+*
+
+# --- Python build inputs (python-builder, runtime) ---
+!pyproject.toml
+!uv.lock
+!alembic.ini
+!src
+!src/**
+!alembic
+!alembic/**
+
+
+# --- Frontend build inputs (node-builder does `COPY web/ ./`) ---
+!web
+!web/**
+
+# Dev-only trees inside web/. web/tsconfig.json includes "src" only, and
+# nothing under web/src imports from these.
+web/node_modules
+web/node_modules/**
+web/dist
+web/dist/**
+web/e2e
+web/e2e/**
+web/screenshots
+web/screenshots/**
+web/test-results
+web/test-results/**
+web/playwright-report
+web/playwright-report/**
+web/openapi.json
+web/orval.config.ts
+web/playwright.config.ts
+web/vitest.config.ts
+web/**/*.log
+
+# --- Junk that would otherwise ride along inside the allowlisted trees ---
+**/__pycache__
+**/__pycache__/**
+**/*.py[cod]
+**/.DS_Store

@@ -1,9 +1,12 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from anthropic import AsyncAnthropic
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from structlog.stdlib import get_logger
 
 from src.application.runner import execute_use_case
@@ -14,6 +17,7 @@ from src.application.use_cases.seed_settlement_merchants import (
 from src.config.constants import AppConfig
 from src.config.logging import setup_logging
 from src.config.settings import get_settings
+from src.domain.exceptions import NotFoundError
 from src.infrastructure.chat.anthropic_adapter import AnthropicAdapter
 from src.infrastructure.persistence.database.db_connection import (
     dispose_engine,
@@ -39,6 +43,10 @@ from src.interface.api.routes.uploads import router as uploads_router
 
 logger = get_logger()
 
+# This module is src/interface/api/app.py, so parents[3] is the repo root —
+# the same anchoring idiom seed_category_groups uses for its fixture.
+_WEB_DIST = Path(__file__).resolve().parents[3] / "web" / "dist"
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
@@ -59,6 +67,51 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     yield
     logger.info("application_shutting_down")
     await dispose_engine()
+
+
+def _mount_static(app: FastAPI, dist: Path | None = None) -> None:
+    """Serve the built single-page app from the API's own origin.
+
+    Same-origin serving is what lets the session cookie and the frontend's
+    relative /api paths work unchanged in production. A no-op when no build
+    exists, which is the case during `pnpm dev` (Vite serves the app itself)
+    and in CI. ``dist`` overrides the default location; it is read at call
+    time so tests can point the whole app at a temporary tree.
+    """
+    dist = _WEB_DIST if dist is None else dist
+    index_html = dist / "index.html"
+    if not index_html.is_file():
+        return
+
+    assets_dir = dist / "assets"
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+    resolved_dist = dist.resolve()
+
+    async def spa_catchall(path: str) -> FileResponse:
+        # Never answer for the API surface. NotFoundError rather than
+        # HTTPException so the response carries the {"error": {"code": ...}}
+        # envelope the frontend's customFetch reads.
+        if path.startswith("api/"):
+            raise NotFoundError("Not found")
+
+        # A real file wins (favicon.svg and anything else shipped in the build).
+        # resolve() plus is_relative_to() rejects traversal and symlink escapes.
+        candidate = dist / path
+        if (
+            path
+            and candidate.resolve().is_relative_to(resolved_dist)
+            and candidate.is_file()
+        ):
+            return FileResponse(str(candidate))
+
+        # Everything else is a client-side route; React Router owns it.
+        return FileResponse(str(index_html))
+
+    # Registered by calling the decorator rather than applying it, so the
+    # handler is referenced as an argument and reads as used.
+    app.get("/{path:path}", include_in_schema=False)(spa_catchall)
 
 
 def create_app() -> FastAPI:
@@ -95,6 +148,10 @@ def create_app() -> FastAPI:
     app.include_router(insights_router, prefix=AppConfig.API_V1_PREFIX)
     app.include_router(events_router, prefix=AppConfig.API_V1_PREFIX)
     app.include_router(chat_router, prefix=AppConfig.API_V1_PREFIX)
+
+    # Last: the SPA catch-all matches every path, so any route registered after
+    # it would be unreachable.
+    _mount_static(app)
 
     return app
 

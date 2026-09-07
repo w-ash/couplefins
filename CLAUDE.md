@@ -19,6 +19,7 @@ Read these on demand — they are not preloaded:
 
 - `docs/user-flows.md` — user stories, acceptance criteria, the monthly ritual. Read before planning or implementing any feature.
 - `docs/backlog/README.md` — version matrix, roadmap, setup instructions. Read when shipping a version or checking what landed when.
+- `docs/deployment.md` — hosting on Fly.io, the deploy flow, configuration and secrets. Read when touching the Dockerfile, fly.toml, CI workflows, or anything about how the app runs in production.
 
 ## Core Principles (YOU MUST FOLLOW)
 

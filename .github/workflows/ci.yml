@@ -1,0 +1,175 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  python:
+    name: Python
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # docs/dev-setup-guide is a docs-only submodule; cloning it would add auth
+      # plumbing for something no job reads.
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+
+      # TTL backstop: push branches expire in 1 day, PR branches in 7.
+      # neon-cleanup.yml only covers PR close; expiry catches everything else.
+      - name: Compute Neon branch expiry
+        id: neon-expiry
+        run: |
+          days=$([ "${{ github.event_name }}" = "push" ] && echo 1 || echo 7)
+          echo "expires_at=$(date -u -d "+${days} days" +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Create Neon branch
+        id: neon-branch
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch_name: ci/pr-${{ github.event.number || github.sha }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+          database: neondb
+          expires_at: ${{ steps.neon-expiry.outputs.expires_at }}
+
+      # Both variables, and both non-pooled: settings reads DATABASE__URL, while
+      # the integration suite reads TEST_DATABASE__URL and refuses any URL
+      # containing "-pooler" (it TRUNCATEs every table on teardown). The suite
+      # then points DATABASE__URL at its own value, so they must agree.
+      - name: Set database URLs
+        run: |
+          URL="${DB_URL/postgresql:\/\//postgresql+asyncpg://}"
+          URL="${URL/postgres:\/\//postgresql+asyncpg://}"
+          echo "DATABASE__URL=$URL"      >> "$GITHUB_ENV"
+          echo "TEST_DATABASE__URL=$URL" >> "$GITHUB_ENV"
+        env:
+          DB_URL: ${{ steps.neon-branch.outputs.db_url }}
+
+      # Full version, not `@v9` — setup-uv stopped publishing major/minor tags
+      # at v8.0.0, deliberately, as a supply-chain measure after the tj-actions
+      # compromise. A shortened tag fails at "Unable to resolve action".
+      - uses: astral-sh/setup-uv@v9.0.0
+
+      # --locked, not --frozen: assert uv.lock is current for pyproject.toml.
+      # --frozen installs a stale lock happily, deferring the failure to the
+      # Dockerfile's own `uv sync --locked` at deploy — after the release tag is
+      # already published.
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Run migrations
+        run: uv run alembic upgrade head
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Type check
+        run: uv run basedpyright src/
+
+      - name: Dead code
+        run: uv run vulture
+
+      # Plain `pytest`: addopts already deselects slow/performance/diagnostic.
+      - name: Test
+        run: uv run pytest
+
+      - name: Check for migration changes
+        if: github.event_name == 'pull_request'
+        id: migration-check
+        run: echo "changed=$(git diff --name-only origin/main -- alembic/ | head -1)" >> "$GITHUB_OUTPUT"
+
+      - name: Schema diff
+        if: github.event_name == 'pull_request' && steps.migration-check.outputs.changed != ''
+        uses: neondatabase/schema-diff-action@v1
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          compare_branch: ci/pr-${{ github.event.number }}
+          base_branch: main
+          api_key: ${{ secrets.NEON_API_KEY }}
+          database: neondb
+
+      # Push-to-main runs have no PR-close event to trigger neon-cleanup.yml,
+      # so delete the branch as soon as this job is done with it.
+      - name: Delete Neon branch (push runs)
+        if: always() && github.event_name == 'push' && steps.neon-branch.outcome == 'success'
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: ci/pr-${{ github.sha }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+  web:
+    name: Web
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # Reads the pnpm version from web/package.json's `packageManager` field.
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # `pnpm check` is biome + tsc --noEmit + vite build, so this covers the
+      # production build too — no separate build step.
+      - name: Lint, type check and build
+        run: pnpm check
+
+      - name: Test
+        run: pnpm test
+
+  # Without this, the Dockerfile's first real exercise is `flyctl deploy` in
+  # release.yml — which runs *after* the GitHub Release is published, so a
+  # broken build would leave a public tag pointing at undeployable code.
+  # ubuntu-latest is amd64 natively, matching Fly, so no `platforms:` is needed.
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      # Built, never pushed — Fly builds the real image at deploy.
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: runtime
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -12,6 +12,21 @@ from src.interface.api.dependencies import is_chat_available
 router = APIRouter(tags=["health"])
 
 
+class LivenessResponse(BaseModel):
+    status: str
+
+
+# Process liveness only — deliberately no DB round trip. The Fly health check
+# probes this every 30s; a query here would reset Neon's autosuspend timer
+# forever, and a transient DB outage would restart a machine whose startup path
+# (init_db -> alembic upgrade) needs that same database.
+# include_in_schema=False keeps it out of the OpenAPI spec and the generated
+# client — this endpoint is for the platform, not the app.
+@router.get("/health/live", include_in_schema=False)
+async def liveness() -> LivenessResponse:
+    return LivenessResponse(status="ok")
+
+
 class HealthResponse(BaseModel):
     status: str
     version: str

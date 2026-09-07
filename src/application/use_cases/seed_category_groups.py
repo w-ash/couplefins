@@ -12,11 +12,25 @@ from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 logger = get_logger()
 
-FIXTURE_PATH = (
+# The taxonomy a brand-new database starts with: Monarch's default groups,
+# shipped with the code so any fresh environment can boot.
+DEFAULT_FIXTURE_PATH = (
+    Path(__file__).resolve().parent / "seed_data" / "category_groups.json"
+)
+
+# An optional local override, gitignored because it mirrors one household's own
+# Monarch settings. Present on the couple's laptops, absent everywhere else.
+LOCAL_FIXTURE_PATH = (
     Path(__file__).resolve().parent.parent.parent.parent
     / "data"
     / "category_groups.json"
 )
+
+
+def _fixture_path() -> Path:
+    if LOCAL_FIXTURE_PATH.is_file():
+        return LOCAL_FIXTURE_PATH
+    return DEFAULT_FIXTURE_PATH
 
 
 class _CategoryGroupFixture(TypedDict):
@@ -54,7 +68,7 @@ class SeedCategoryGroupsUseCase:
                     groups_created=0, categories_created=0, skipped=True
                 )
 
-            fixture_text = FIXTURE_PATH.read_bytes()
+            fixture_text = _fixture_path().read_bytes()
             fixture_data = _fixture_adapter.validate_json(fixture_text)
 
             groups: list[CategoryGroup] = []

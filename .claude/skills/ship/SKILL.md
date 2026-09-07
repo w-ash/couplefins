@@ -71,6 +71,21 @@ Also update `src/config/constants.py`:
 - `APP_VERSION` must match `pyproject.toml` version.
 - `SCHEMA_VERSION` must match the current Alembic head. Check with `ls alembic/versions/` — the highest-numbered migration is the head. If a new migration was added in this version, update `SCHEMA_VERSION` to match.
 
+## Step 5b: Write the changelog entry
+
+`CHANGELOG.md` is in `release-per-ship` mode: the ship session writes the dated
+entry, never a later reconstruction from git history. `release.yml` refuses to
+publish a tag whose version has no section, so a missing entry fails the deploy.
+
+- Add `## [X.Y.Z] - YYYY-MM-DD` at the top of the version list, matching the
+  version from Step 5.
+- Categories in this order, present only when non-empty: Added, Changed,
+  Deprecated, Removed, Fixed, Security.
+- One line per entry, imperative, describing the observable effect rather than
+  the implementation. Noteworthy, not exhaustive — pure refactors, CI, and
+  docs-only changes usually get nothing.
+- No `[Unreleased]` section.
+
 ## Step 6: Sync lockfile
 
 Run `uv sync` to update `uv.lock` — but only if Step 5 changed `pyproject.toml`. Otherwise skip.
@@ -113,3 +128,16 @@ A version is not shipped until it's on the remote — both laptops pull from `or
 - `git push origin main`. If SSH auth fails (no identities in `ssh-add -l`), fall back to a one-off HTTPS push via gh: `git -c credential.helper='!gh auth git-credential' push https://github.com/<owner>/<repo>.git main` — do not rewrite the remote or git config.
 - Verify against the remote itself, not the local ref (it can be stale when fetch is broken): `git ls-remote --heads <remote-url> main` must show the new commit hash.
 - Report the pushed hash to the user.
+
+## Step 10: Tag to deploy
+
+The tag is the deploy: `release.yml` fires on `v*`, publishes a GitHub Release
+from the `CHANGELOG.md` section written in Step 5b, then runs `flyctl deploy`.
+
+- Ask the user before tagging — shipping to the remote and deploying to
+  production are separate decisions.
+- `git tag vX.Y.Z && git push origin main --tags`.
+- Watch the run (`gh run watch`) and confirm <https://couplefins.fly.dev> is
+  serving the new version — `/api/v1/health` reports `version` and
+  `schema_current`.
+- See `docs/deployment.md` for the rest.

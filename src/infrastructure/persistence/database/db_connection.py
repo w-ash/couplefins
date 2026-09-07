@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from alembic.config import Config
 from sqlalchemy.ext.asyncio import (
@@ -13,6 +14,11 @@ from sqlalchemy.pool import NullPool
 
 from alembic import command
 from src.config.settings import get_settings
+
+# This module sits four levels below the repo root. Resolving the migration
+# directory absolutely keeps `run_migrations` working from any cwd, not just a
+# checkout root.
+_ALEMBIC_DIR = Path(__file__).resolve().parents[4] / "alembic"
 
 _engine_cache: list[AsyncEngine] = []
 _session_factory_cache: list[async_sessionmaker[AsyncSession]] = []
@@ -54,7 +60,7 @@ async def get_session() -> AsyncGenerator[AsyncSession]:
 
 def run_migrations(sync_url: str) -> None:
     alembic_cfg = Config()
-    alembic_cfg.set_main_option("script_location", "alembic")
+    alembic_cfg.set_main_option("script_location", str(_ALEMBIC_DIR))
     alembic_cfg.set_main_option("sqlalchemy.url", sync_url)
     command.upgrade(alembic_cfg, "head")
 

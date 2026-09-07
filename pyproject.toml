@@ -1,6 +1,6 @@
 [project]
 name = "couplefins"
-version = "1.13.4"
+version = "1.14.0"
 description = "Household finance tool for couples"
 requires-python = ">=3.14,<4.0"
 dependencies = [
@@ -35,6 +35,10 @@ dev = [
 
 [tool.uv]
 package = false
+# Single source of truth for the uv version. The Dockerfile's uv image tag must
+# stay in step: uv refuses a uv.lock whose schema is newer than it understands,
+# and that failure surfaces at deploy time, long after CI has gone green.
+required-version = ">=0.12,<0.13"
 
 # ── Ruff ───────────────────────────────────────
 [tool.ruff]

@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Literal
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
@@ -12,6 +13,11 @@ _CACHE_KEY = "settings"
 class LoggingConfig(BaseModel):
     output: Literal["json", "console"] = "console"
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    # Opt-in rotating file sink. Unset means console only, which is what a
+    # container wants: the platform captures stdout and a file on an ephemeral
+    # disk is write-only. `None` rather than a default-on flag because an empty
+    # env value would parse to Path("."), which is truthy and wrong.
+    file_path: Path | None = None
 
 
 class DatabaseConfig(BaseModel):

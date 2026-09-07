@@ -30,4 +30,11 @@ Ideas and features without version assignment. Move to a version file when ready
 - PWA manifest + service worker — installable on mobile, push notification for "time to export your CSV" on the 1st
 
 ## Infrastructure
-- Docker containerization (if deploying beyond local laptops)
+- Rethink cold start — what should a fresh database actually get? v1.14.0 made
+  a fresh database bootable by committing a generic default taxonomy, with the
+  household's own as a gitignored override. That fixed the blocker but left the
+  shape unexamined: seeding still happens at every boot behind a row count, the
+  two fixtures can drift, and a new household gets 77 categories it never chose
+  rather than being asked. Worth considering: seed on first setup instead of at
+  boot, let the first CSV upload propose the taxonomy, or make the default
+  editable in Settings before any data lands.

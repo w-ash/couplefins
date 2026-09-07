@@ -191,6 +191,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.13.2 | Insights redesign — Sankey / donut / bars with drill-down, monthly stack, group table, notable list, every figure deep-linked ([spec](completed/v1.13.x.md)) | Completed (2026-09-05) | L |
 | v1.13.3 | Income-kind category groups — paychecks are income, not spending ([spec](completed/v1.13.x.md)) | Completed (2026-09-05) | M |
 | v1.13.4 | Category setup parity with Monarch — four groups, 21 mappings, seed fixture regenerated ([spec](completed/v1.13.x.md)) | Completed (2026-09-05) | S |
+| v1.14.0 | Fly.io hosting — one container serving API + SPA same-origin, tag-triggered deploy, CI ([spec](v1.14.x.md)) | Completed (2026-09-06) | M |
 
 ## Infrastructure Readiness
 
@@ -264,7 +265,9 @@ pnpm --prefix web check && pnpm --prefix web test
 
 ## Key Technical Decisions
 
-- **Database**: SQLite via aiosqlite (v0.1–v0.11). PostgreSQL 18 on Neon via asyncpg (v1.0+). JSONB+GIN for tag storage. Runs locally, connects to Neon over the network.
+- **Database**: SQLite via aiosqlite (v0.1–v0.11). PostgreSQL 18 on Neon via asyncpg (v1.0+). JSONB+GIN for tag storage.
+- **Deployment**: Hosted on Fly.io since v1.14.0 — one machine, one container, FastAPI serving the built SPA from its own origin against the same Neon database. Single instance is required (the SSE event bus and chat rate limiter are in-process). Migrations run in the app lifespan, not a release command. Deploys are triggered by a `vX.Y.Z` tag. Before v1.14.0: each laptop ran the app locally against Neon over the network. See `docs/deployment.md`.
+- **Changelog**: Root `CHANGELOG.md` in `release-per-ship` mode since v1.14.0 — every shipped version gets a dated entry, a version bump, and a tag, which is what deploys it. No `[Unreleased]` section. Versions before 1.14.0 are recorded in `docs/backlog/completed/` instead.
 - **Backend**: FastAPI with Clean Architecture (domain / application / infrastructure / interface)
 - **Frontend**: React 19 + Tailwind v4 + Tanstack Query, Orval codegen from OpenAPI
 - **Auth**: Name + password with argon2id hashing + JWT httpOnly cookies (v0.11.0). No email infrastructure, no OAuth. Password recovery via partner reset from Settings + CLI fallback. Prior to v0.11.0: no auth, two named profiles selected on upload.

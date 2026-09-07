@@ -42,6 +42,9 @@ coverage.xml
 logs/
 
 # Data (DB + personal fixture files)
+# data/category_groups.json is this household's own Monarch taxonomy and stays
+# local. The generic seed a fresh database uses is committed under
+# src/application/use_cases/seed_data/ instead.
 *.db
 data/
 

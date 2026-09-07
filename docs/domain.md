@@ -159,7 +159,14 @@ Monarch Money has ~75 transaction categories (e.g., "Groceries & Home Supplies",
 - **Work** and **Professional**: Work reimbursable expenses; coding tools and networking
 - **Other**, **Business**, **Children**, **Education**: Monarch's remaining default groups, seeded so a new category never lands unmapped
 
-Each Monarch category maps to exactly one group. The initial mapping is seeded from a JSON fixture file (`data/category_groups.json`), kept in step with the couple's Monarch category settings (last reconciled 2026-09-05), and can be updated via the app as new categories appear.
+Each Monarch category maps to exactly one group. The mapping is seeded once, only when the database has no groups at all, and can be updated via the app as new categories appear.
+
+Two fixtures back that seed:
+
+- `src/application/use_cases/seed_data/category_groups.json` — committed. Monarch's 15 default groups and their standard categories, deliberately generic. This is what a fresh database gets: a new environment, a CI branch, or anyone else running the project.
+- `data/category_groups.json` — gitignored, and takes precedence when it exists. This household's own Monarch taxonomy (last reconciled 2026-09-05), including groups that mean nothing to anyone else (Playa, Festivals). It lives on the couple's laptops and is deliberately absent from the repository and the deployed image.
+
+Seeding never touches an existing database, so neither fixture can alter a taxonomy already in use.
 
 ## Category Group Budgets
 
