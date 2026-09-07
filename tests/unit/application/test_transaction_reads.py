@@ -1,7 +1,7 @@
 """The reads module is the only place use cases read transaction lists,
 and the only place the transfer rule is applied. Two grep gates enforce it."""
 
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 import re
@@ -16,6 +16,7 @@ from src.application.use_cases._shared.transaction_reads import (
     fetch_scoped_rows,
     fetch_settlement_rows,
     fetch_year_spending_rows,
+    resolve_period,
 )
 from src.domain.repositories.transaction_repository import (
     TransactionRepositoryProtocol,
@@ -133,9 +134,39 @@ async def test_latest_spending_month_excludes_transfer_categories() -> None:
 
     assert await fetch_latest_spending_month(uow, ctx) == (2026, 2)
     uow.transactions.get_latest_household_transaction_date.assert_called_once_with(
-        excluding_categories=ctx.non_spending_categories
+        excluding_categories=ctx.non_spending_categories, year=None
     )
     assert "Credit Card Payment" in ctx.non_spending_categories
+
+
+async def test_resolve_period_anchors_within_a_named_year() -> None:
+    """One rule for both branches: the latest month with spending. A named
+    year scopes the anchor to itself rather than borrowing today's month."""
+    uow, ctx = await _ctx()
+    uow.transactions.get_latest_household_transaction_date.return_value = date(
+        2024, 11, 4
+    )
+
+    assert await resolve_period(uow, ctx, 2024, None) == (2024, 11)
+    uow.transactions.get_latest_household_transaction_date.assert_called_once_with(
+        excluding_categories=ctx.non_spending_categories, year=2024
+    )
+
+
+async def test_resolve_period_takes_an_explicit_month_without_asking() -> None:
+    """Both named leaves nothing to resolve, so the anchor query is skipped."""
+    uow, ctx = await _ctx()
+
+    assert await resolve_period(uow, ctx, 2024, 3) == (2024, 3)
+    uow.transactions.get_latest_household_transaction_date.assert_not_called()
+
+
+async def test_resolve_period_falls_back_to_today_in_an_empty_year() -> None:
+    uow, ctx = await _ctx()
+    uow.transactions.get_latest_household_transaction_date.return_value = None
+
+    year, month = await resolve_period(uow, ctx, 2024, None)
+    assert (year, month) == (2024, datetime.now(UTC).month)
 
 
 async def test_latest_spending_month_is_none_without_rows() -> None:

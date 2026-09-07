@@ -12,7 +12,7 @@ _MAX_PAGE_HINT_LENGTH = 64
 
 class ChatMessageInput(BaseModel):
     role: Literal["user", "assistant"]
-    content: str = Field(..., max_length=_MAX_CONTENT_PER_MESSAGE)
+    content: str = Field(..., min_length=1, max_length=_MAX_CONTENT_PER_MESSAGE)
 
 
 class ConfirmationInput(BaseModel):

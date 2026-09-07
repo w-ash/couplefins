@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from httpx import AsyncClient
 import pytest
 
@@ -433,3 +435,32 @@ async def test_overview_has_no_transfer_row(client: AsyncClient) -> None:
     names = {s["group_name"] for s in response.json()["group_statuses"]}
     assert "Transfer" not in names
     assert "Food & Dining" in names
+
+
+async def test_overview_defaults_to_the_latest_month_with_spending(
+    client: AsyncClient,
+) -> None:
+    persons, cookies = await setup_and_login(client)
+    csv = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        "2026-01-10,Coffee Shop,Coffee Shops & Treats,Chase,,,-20.00,shared\n"
+        "2026-02-15,Restaurant,Dining Out,Chase,,,-50.00,shared\n"
+    )
+    await upload_csv(client, persons[0]["id"], csv, auth=cookies)
+
+    response = await client.get("/api/v1/budgets/overview", auth=cookies)
+    assert response.status_code == 200
+
+    data = response.json()
+    assert (data["year"], data["month"]) == (2026, 2)
+
+
+async def test_overview_with_no_data_defaults_to_today(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
+
+    response = await client.get("/api/v1/budgets/overview", auth=cookies)
+    assert response.status_code == 200
+
+    now = datetime.now(UTC)
+    data = response.json()
+    assert (data["year"], data["month"]) == (now.year, now.month)

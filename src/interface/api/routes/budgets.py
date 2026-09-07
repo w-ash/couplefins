@@ -41,8 +41,8 @@ router = APIRouter(tags=["budgets"], dependencies=[Depends(get_current_user)])
 
 @router.get("/budgets/overview")
 async def get_budget_overview(
-    year: int = Query(...),
-    month: int = Query(...),
+    year: int | None = Query(None),
+    month: int | None = Query(None),
     scope: PersonScope = Query("household"),
     current_user: Person = Depends(get_current_user),
 ) -> BudgetOverviewResponse:

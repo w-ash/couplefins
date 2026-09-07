@@ -55,6 +55,73 @@ describe("InsightsPage", () => {
     expect(screen.getByRole("radio", { name: "Month" })).toBeChecked();
   });
 
+  it("takes the month from the response when the URL names none", async () => {
+    let requested: URLSearchParams | undefined;
+    server.use(
+      http.get("/api/v1/insights/spending-trends", ({ request }) => {
+        requested = new URL(request.url).searchParams;
+        return HttpResponse.json(populatedResponse);
+      }),
+    );
+
+    renderWithProviders(<InsightsPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Select month" }),
+      ).toHaveTextContent("February 2026");
+    });
+    // The period must be omitted, never sent as "null".
+    expect(requested?.has("year")).toBe(false);
+    expect(requested?.has("month")).toBe(false);
+    expect(requested?.has("comparison_year")).toBe(false);
+  });
+
+  it("sends the URL's period and lets the server pick the comparison year", async () => {
+    let requested: URLSearchParams | undefined;
+    server.use(
+      http.get("/api/v1/insights/spending-trends", ({ request }) => {
+        requested = new URL(request.url).searchParams;
+        return HttpResponse.json(populatedResponse);
+      }),
+    );
+
+    renderWithProviders(<InsightsPage />, {
+      routerProps: { initialEntries: ["/?year=2026&month=2"] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("group-breakdown")).toBeInTheDocument();
+    });
+    expect(requested?.get("year")).toBe("2026");
+    expect(requested?.get("month")).toBe("2");
+    // The "compare against year - 1" rule lives in the use case alone.
+    expect(requested?.has("comparison_year")).toBe(false);
+  });
+
+  it("leaves the month picker inert until the month is known", async () => {
+    renderWithProviders(<InsightsPage />);
+
+    expect(screen.getByRole("button", { name: "Select month" })).toBeDisabled();
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Select month" }),
+      ).toBeEnabled();
+    });
+  });
+
+  it("shows a month named by the URL alone straight away", async () => {
+    // year and month are read independently, so a shared link naming only
+    // the month already determines what the picker will show.
+    renderWithProviders(<InsightsPage />, {
+      routerProps: { initialEntries: ["/?month=5"] },
+    });
+
+    const trigger = screen.getByRole("button", { name: "Select month" });
+    expect(trigger).toBeEnabled();
+    expect(trigger).toHaveTextContent("May");
+  });
+
   it("shows the empty state when the year has no data", async () => {
     renderWithProviders(<InsightsPage />);
     await waitFor(() => {

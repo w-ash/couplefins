@@ -209,10 +209,44 @@ export function formatMonthSpan(span: MonthSpanShape): string {
   return `${SHORT_MONTHS[start.month - 1]} ${start.year} – ${SHORT_MONTHS[end.month - 1]} ${end.year}`;
 }
 
-export function useMonthYear(): { year: number; month: number } {
+/** The period named in the URL, `undefined` where it names none. Never null:
+ * the generated client serializes null as the string "null". */
+export function useMonthYearParams(): { year?: number; month?: number } {
   const [searchParams] = useSearchParams();
   return {
-    year: Number(searchParams.get("year")) || currentYear(),
-    month: Number(searchParams.get("month")) || currentMonth(),
+    year: Number(searchParams.get("year")) || undefined,
+    month: Number(searchParams.get("month")) || undefined,
+  };
+}
+
+export function useMonthYear(): { year: number; month: number } {
+  const { year, month } = useMonthYearParams();
+  return { year: year ?? currentYear(), month: month ?? currentMonth() };
+}
+
+/** The period a page shows: the URL's when it names one, otherwise the month
+ * the server resolved — the latest month with household spending. The URL wins
+ * so the label tracks the click through the keyed refetch, while the response
+ * is briefly undefined; the two never disagree once it lands, because
+ * `resolve_period` echoes back the period the URL named. Today's date only
+ * completes a half-named period (a `?month=5` link), so the picker has a label
+ * to render until the response fills in the other half. `pickerValue` stays
+ * null while the month is unknown, so the picker sits inert instead of
+ * flashing today's date. */
+export function useResolvedPeriod(resolved?: { year: number; month: number }): {
+  year: number;
+  month: number;
+  pickerValue: { year: number; month: number } | null;
+} {
+  const { year: urlYear, month: urlMonth } = useMonthYearParams();
+  const year = urlYear ?? resolved?.year ?? currentYear();
+  const month = urlMonth ?? resolved?.month ?? currentMonth();
+  return {
+    year,
+    month,
+    pickerValue:
+      urlYear !== undefined || urlMonth !== undefined || resolved
+        ? { year, month }
+        : null,
   };
 }

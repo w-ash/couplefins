@@ -522,8 +522,9 @@ def build_tools(
 
     CACHE-BREAKPOINT BUDGET (API cap: 4, fully spent — never add a fifth):
     tools prefix (1) + promoted segment (1, promoting pages only) + system
-    primer (1, system_prompt.py) + incremental message stamp (1,
-    anthropic_adapter.py).
+    primer (1, system_prompt.py) + the automatic message breakpoint (1,
+    top-level cache_control in anthropic_adapter.py — it spends a slot like
+    any explicit stamp, and the API rejects the request once five are set).
     """
     promoted_names = _promoted_tool_names(page)
     prefix: list[dict[str, object]] = []  # always-hot, cached, page-invariant

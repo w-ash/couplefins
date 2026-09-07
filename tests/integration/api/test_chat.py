@@ -400,6 +400,30 @@ async def test_invalid_effort_rejected(client: AsyncClient) -> None:
     assert resp.status_code == 422
 
 
+async def test_empty_message_content_rejected(client: AsyncClient) -> None:
+    """The web client appends an empty assistant placeholder before streaming;
+    it must never reach the model. An empty trailing assistant turn is a
+    prefill, which Opus 4.8 rejects, and an empty text block cannot carry the
+    automatic cache breakpoint — both surface upstream as an opaque 400."""
+    _, cookies = await setup_and_login(client)
+    _override_llm(client, FakeLLMClient([_text_only_script()]))
+    try:
+        resp = await client.post(
+            "/api/v1/chat",
+            json={
+                "messages": [
+                    {"role": "user", "content": "Hello"},
+                    {"role": "assistant", "content": ""},
+                ]
+            },
+            auth=cookies,
+        )
+    finally:
+        _clear_llm_override(client)
+
+    assert resp.status_code == 422
+
+
 # --- Test 4: Unauthenticated → 401 ---
 
 

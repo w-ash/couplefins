@@ -63,7 +63,7 @@ export type getBudgetOverviewResponseError = (getBudgetOverviewResponse422) & {
 
 export type getBudgetOverviewResponse = (getBudgetOverviewResponseSuccess | getBudgetOverviewResponseError)
 
-export const getGetBudgetOverviewUrl = (params: GetBudgetOverviewParams,) => {
+export const getGetBudgetOverviewUrl = (params?: GetBudgetOverviewParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -78,7 +78,7 @@ export const getGetBudgetOverviewUrl = (params: GetBudgetOverviewParams,) => {
   return stringifiedParams.length > 0 ? `/api/v1/budgets/overview?${stringifiedParams}` : `/api/v1/budgets/overview`
 }
 
-export const getBudgetOverview = async (params: GetBudgetOverviewParams, options?: RequestInit): Promise<getBudgetOverviewResponse> => {
+export const getBudgetOverview = async (params?: GetBudgetOverviewParams, options?: RequestInit): Promise<getBudgetOverviewResponse> => {
 
   return customFetch<getBudgetOverviewResponse>(getGetBudgetOverviewUrl(params),
   {
@@ -100,7 +100,7 @@ export const getGetBudgetOverviewQueryKey = (params?: GetBudgetOverviewParams,) 
     }
 
 
-export const getGetBudgetOverviewQueryOptions = <TData = Awaited<ReturnType<typeof getBudgetOverview>>, TError = HTTPValidationError>(params: GetBudgetOverviewParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBudgetOverview>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+export const getGetBudgetOverviewQueryOptions = <TData = Awaited<ReturnType<typeof getBudgetOverview>>, TError = HTTPValidationError>(params?: GetBudgetOverviewParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBudgetOverview>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -123,7 +123,7 @@ export type GetBudgetOverviewQueryError = HTTPValidationError
 
 
 export function useGetBudgetOverview<TData = Awaited<ReturnType<typeof getBudgetOverview>>, TError = HTTPValidationError>(
- params: GetBudgetOverviewParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBudgetOverview>>, TError, TData>> & Pick<
+ params: undefined |  GetBudgetOverviewParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBudgetOverview>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getBudgetOverview>>,
           TError,
@@ -133,7 +133,7 @@ export function useGetBudgetOverview<TData = Awaited<ReturnType<typeof getBudget
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useGetBudgetOverview<TData = Awaited<ReturnType<typeof getBudgetOverview>>, TError = HTTPValidationError>(
- params: GetBudgetOverviewParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBudgetOverview>>, TError, TData>> & Pick<
+ params?: GetBudgetOverviewParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBudgetOverview>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getBudgetOverview>>,
           TError,
@@ -143,7 +143,7 @@ export function useGetBudgetOverview<TData = Awaited<ReturnType<typeof getBudget
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useGetBudgetOverview<TData = Awaited<ReturnType<typeof getBudgetOverview>>, TError = HTTPValidationError>(
- params: GetBudgetOverviewParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBudgetOverview>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ params?: GetBudgetOverviewParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBudgetOverview>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
@@ -151,7 +151,7 @@ export function useGetBudgetOverview<TData = Awaited<ReturnType<typeof getBudget
  */
 
 export function useGetBudgetOverview<TData = Awaited<ReturnType<typeof getBudgetOverview>>, TError = HTTPValidationError>(
- params: GetBudgetOverviewParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBudgetOverview>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ params?: GetBudgetOverviewParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBudgetOverview>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 

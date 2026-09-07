@@ -306,8 +306,8 @@ function LinkSettlementSection({
                     to_person_id: derived.to_person_id,
                     method,
                     linked_transaction_ids: selectedIds,
-                    // The backend allocates the amount across these months
-                    // oldest-first and stores the portions.
+                    // The backend settles each of these months and stores
+                    // the resulting portions.
                     covered_months: coveredMonths,
                   },
                 });
@@ -438,7 +438,8 @@ function WaiveAction({
 }
 
 // "$1,981.00 → January" for a single portion; "$500.00 → Jan + $300.00 → Feb"
-// for a lump. Months outside the payment's own year carry the year.
+// for a lump. Months outside the payment's own year carry the year. A negative
+// portion covers a month that ran the other way, so it points back: "← Jun".
 function portionsLabel(s: LedgerSettlementResponse): string | null {
   const portions = s.portions ?? [];
   if (portions.length === 0) return null;
@@ -448,7 +449,8 @@ function portionsLabel(s: LedgerSettlementResponse): string | null {
     .map((p) => {
       const month = names[p.month - 1];
       const year = p.year === settledYear ? "" : ` ${p.year}`;
-      return `${formatCurrency(p.amount)} → ${month}${year}`;
+      const arrow = p.amount < 0 ? "←" : "→";
+      return `${formatCurrency(Math.abs(p.amount))} ${arrow} ${month}${year}`;
     })
     .join(" + ");
 }

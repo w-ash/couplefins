@@ -397,6 +397,40 @@ async def test_latest_household_date_skips_excluded_categories(
     ) == date(2026, 2, 3)
 
 
+async def test_latest_household_date_scoped_to_a_year(
+    db_session: AsyncSession,
+) -> None:
+    """A named year anchors on its own latest month, not the newest overall."""
+    repo = TransactionRepository(db_session)
+    alice = make_person(name="Alice")
+    upload = make_upload(person_id=alice.id)
+    await PersonRepository(db_session).save(alice)
+    await UploadRepository(db_session).save(upload)
+
+    await repo.save_batch([
+        make_transaction(
+            upload_id=upload.id, date=date(2024, 11, 4), payer_person_id=alice.id
+        ),
+        make_transaction(
+            upload_id=upload.id, date=date(2026, 1, 20), payer_person_id=alice.id
+        ),
+    ])
+    await db_session.commit()
+
+    assert await repo.get_latest_household_transaction_date(
+        excluding_categories=set(), year=2024
+    ) == date(2024, 11, 4)
+    assert await repo.get_latest_household_transaction_date(
+        excluding_categories=set()
+    ) == date(2026, 1, 20)
+    assert (
+        await repo.get_latest_household_transaction_date(
+            excluding_categories=set(), year=2025
+        )
+        is None
+    )
+
+
 async def test_latest_household_date_empty_db(db_session: AsyncSession) -> None:
     repo = TransactionRepository(db_session)
     assert (

@@ -41,10 +41,18 @@ function pageSection(pathname: string): string | undefined {
   return SECTION_BY_SEGMENT[segment];
 }
 
+// The in-flight assistant message is appended to the store before the
+// stream starts, and a stopped stream can leave one with no text. Neither
+// may reach the API: the request rejects an empty content field, and an
+// empty trailing assistant turn is a prefill, which the model rejects.
+// Nothing is lost — only text is ever sent, so a turn with none carries
+// no history, and tool calls and code blocks are never serialized here.
 function buildApiMessages() {
   return useChatStore
     .getState()
-    .messages.filter((m) => !m.error)
+    .messages.filter(
+      (m) => !m.error && !(m.role === "assistant" && !m.content.trim()),
+    )
     .map((m) => ({ role: m.role, content: m.content }));
 }
 
@@ -176,7 +184,7 @@ export function ChatPanel({ fullScreen = false }: { fullScreen?: boolean }) {
 
   const handleStop = useCallback(() => {
     abortController?.abort();
-    useChatStore.getState().setAbortController(null);
+    useChatStore.getState().stopStreaming();
   }, [abortController]);
 
   // Escape closes the panel (not on full-screen mobile)

@@ -204,10 +204,6 @@ GET_SPENDING_TRENDS_SCHEMA: dict[str, object] = {
                 "type": "integer",
                 "description": "The year to analyze (e.g. 2026).",
             },
-            "comparison_year": {
-                "type": "integer",
-                "description": "Optional year to compare against (e.g. 2025).",
-            },
             "scope": {
                 "type": "string",
                 "enum": ["household", "personal"],
@@ -880,10 +876,12 @@ RECORD_SETTLEMENT_SCHEMA: dict[str, object] = {
         "paid Bob back', 'record the $500 Venmo'. Proposes recording the "
         "payment; nothing is applied until the user confirms. The payment "
         "covers the months in covered_months (omit to cover the month it "
-        "was paid in): per-month portions are allocated oldest-first and "
-        "stored — they are the math. Optionally link the matching bank "
-        "transaction(s) using IDs from get_settlement_activity's "
-        "candidates, which excludes them from settlement math."
+        "was paid in): a per-month portion is allocated for each covered "
+        "month at record time and stored — they are the math, and they "
+        "settle the covered months whichever way each one runs. Optionally "
+        "link the matching bank transaction(s) using IDs from "
+        "get_settlement_activity's candidates, which excludes them from "
+        "settlement math."
     ),
     "input_schema": {
         "type": "object",

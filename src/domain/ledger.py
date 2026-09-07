@@ -1,9 +1,11 @@
 """Settlement ledger — explicit per-month portions (v1.11.0).
 
 Every settlement records exactly which months it covers and with how much:
-portions of (year, month, amount) summing to the settlement amount. They
-are allocated once, at record time (see ``plan_portions``); display math
-only ever adds them up:
+portions of (year, month, amount) summing to the settlement amount. An
+amount is signed — a payment covering a span whose months run both ways
+zeroes each of them, taking value back from the months owed to the payer.
+They are allocated once, at record time (see ``plan_portions``); display
+math only ever adds them up:
 
 - Month balance = net of its charges' shares - portions applied to it.
 - Year = sum of its months. Outstanding = sum of all months.
@@ -117,6 +119,23 @@ def sum_settlement_results(
     return _result_from_signed(signed, person_a, person_b)
 
 
+def _covered_needs(
+    months: Iterable[LedgerMonth],
+    from_person_id: UUID,
+    covered: Sequence[MonthKey],
+) -> dict[MonthKey, Decimal]:
+    """What each covered month needs from the payer to reach zero.
+
+    Positive where the payer is the one owing, negative where the month is
+    owed *to* them. Months with no balance, and months the ledger does not
+    know at all, need nothing.
+    """
+    balance_by_key = {(m.year, m.month): m.balance for m in months}
+    return {
+        key: _signed_result(balance_by_key.get(key), from_person_id) for key in covered
+    }
+
+
 def plan_portions(
     months: Iterable[LedgerMonth],
     amount: Decimal,
@@ -125,31 +144,32 @@ def plan_portions(
 ) -> tuple[PortionPlan, ...]:
     """Split a payment across its covered months, at record time.
 
-    Clears each covered month's balance oldest first (only months where the
-    payer is the one owing); the remainder lands on the newest covered
-    month, swinging it if need be. The portions sum to ``amount`` exactly.
+    A month owed *to* the payer takes a negative portion, handing its value
+    back to fund the rest, so a payment sized to the span's net zeroes every
+    covered month whichever way they run. The months the payer owes are then
+    paid oldest first out of what is available: a payment short of the span
+    leaves the newest months partly or wholly unpaid rather than swinging
+    them, and any surplus lands on the newest covered month. The portions
+    sum to ``amount`` exactly.
     """
     if not covered_months or amount <= _ZERO:
         return ()
-    balance_by_key = {(m.year, m.month): m.balance for m in months}
     covered = sorted(set(covered_months))
-    remaining = amount
-    portions: dict[MonthKey, Decimal] = {}
+    needs = _covered_needs(months, from_person_id, covered)
+    portions = {key: need for key, need in needs.items() if need < _ZERO}
+    available = amount - sum(portions.values(), _ZERO)
     for key in covered:
-        if remaining == _ZERO:
-            break
-        balance = balance_by_key.get(key)
-        if balance is None or balance.from_person_id != from_person_id:
-            continue
-        take = min(remaining, balance.amount)
-        portions[key] = take
-        remaining -= take
-    if remaining > _ZERO:
+        paid = min(needs.get(key, _ZERO), available)
+        if paid > _ZERO:
+            portions[key] = paid
+            available -= paid
+    if available > _ZERO:
         newest = covered[-1]
-        portions[newest] = portions.get(newest, _ZERO) + remaining
+        portions[newest] = portions.get(newest, _ZERO) + available
     return tuple(
-        PortionPlan(year=year, month=month, amount=portions[year, month])
-        for year, month in sorted(portions)
+        PortionPlan(year=year, month=month, amount=amount)
+        for (year, month), amount in sorted(portions.items())
+        if amount != _ZERO
     )
 
 
@@ -283,7 +303,9 @@ class _Books:
         balance_signed = self.balance(key)
         if balance_signed == _ZERO:
             status = MonthSettlementStatus.SETTLED
-        elif paid_signed == _ZERO:
+        # Membership, not a non-zero `paid`: opposite-direction portions
+        # landing on one month can cancel to zero.
+        elif key not in self.paid:
             status = MonthSettlementStatus.CARRIED_FORWARD
         else:
             status = MonthSettlementStatus.PARTIALLY_SETTLED

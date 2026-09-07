@@ -7,7 +7,7 @@
 import type { GetBudgetOverviewScope } from './getBudgetOverviewScope';
 
 export type GetBudgetOverviewParams = {
-year: number;
-month: number;
+year?: number | null;
+month?: number | null;
 scope?: GetBudgetOverviewScope;
 };

@@ -313,8 +313,10 @@ Linking bank transactions to show that the balance has been paid. The payment it
 
 **US-SETTLE-10** (v1.11.0): As a partner, I want one catch-up lump to settle the months we're behind on.
 
-- Given several unsettled months, when I record one payment covering Jan/Feb/Mar, then it is split into one portion per covered month at record time — oldest covered month first, remainder on the last covered month — and the portions are stored
+- Given several unsettled months, when I record one payment covering Jan/Feb/Mar, then it is split into one portion per covered month at record time — each covered month brought to zero, any surplus landing on the newest covered month — and the portions are stored
+- Given covered months that run in opposite directions, when I pay the net of the span, then every covered month settles: the months owed to me take negative portions, and the signed portions still sum to the payment (v1.14.1)
 - Given covered months whose residuals have swung toward the payer (rent already settled directly), then the lump's portions settle each covered month's net, whichever direction it runs
+- Given a payment smaller than its covered span's net, when I record it, then the oldest covered months are paid first and the newest are left standing — no month is reported settled that was not paid, and none swings against me (v1.14.2)
 - Given a January payment with a portion covering the previous December, then that portion counts toward the old year
 
 **US-SETTLE-11** (v1.11.0): As a partner, I want the Settle Up page to answer for one year at a time.
@@ -341,6 +343,7 @@ Are we on track for the month and the year? The couple reviews this together.
 
 **US-BUDGET-2**: As a partner, I want to see spending vs budget for the current month and year-to-date.
 
+- Given the Budget page with no month in the URL, then it opens on the latest month with household spending, the same month Insights does — the current month when there is none (v1.14.2)
 - Given the Budget page, then I can toggle between Monthly and YTD views
 - Given either view, then I see per-group: budget amount, actual spending, and a health indicator
 - Given a group approaching or over budget, then the indicator communicates urgency without alarm (teal → amber → coral)
@@ -423,6 +426,7 @@ The Insights page is the together-session's "where did the money go?" view. One 
 **US-INSIGHTS-1** (v1.13.x): As a partner, I want the Insights view I am looking at to live in the URL, so I can share it and come back to it.
 
 - Given the Insights page, then `year`, `month`, `scope`, `period` (month | ytd), `chart` (flow | donut | bars), and `by` (group | category | merchant) are URL params with sensible defaults, and defaults are omitted from the URL
+- Given no `year` in the URL, then the page opens on the latest month with household spending — the same month Settle Up and Transactions anchor on — and on the current month when there is none; the month picker sits inert until that month is known, and picking a month writes it to the URL (v1.14.2)
 - Given I follow a link from the page and press Back, then I return to the same view
 - Given I click a bar in the monthly chart, then that month becomes the selected month, the same as picking it in the month picker
 

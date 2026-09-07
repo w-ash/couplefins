@@ -297,11 +297,11 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         return await self._update(entity, self._IMMUTABLE_KEYS)
 
     async def get_latest_household_transaction_date(
-        self, *, excluding_categories: Set[str]
+        self, *, excluding_categories: Set[str], year: int | None = None
     ) -> date | None:
-        """Date of the newest household spending row. Rows in the excluded
-        categories (transfers) do not count — a card payment must not open
-        a month with no spending in it."""
+        """Date of the newest household spending row, within `year` when
+        given. Rows in the excluded categories (transfers) do not count — a
+        card payment must not open a month with no spending in it."""
         stmt = (
             select(TransactionModel.date)
             .where(
@@ -311,6 +311,8 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             .order_by(TransactionModel.date.desc())
             .limit(1)
         )
+        if year is not None:
+            stmt = stmt.where(TransactionModel.date.startswith(date_year_prefix(year)))
         if excluding_categories:
             stmt = stmt.where(TransactionModel.category.not_in(excluding_categories))
         result = await self._session.execute(stmt)

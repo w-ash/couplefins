@@ -405,6 +405,31 @@ describe("SettleUpPage", () => {
     });
   });
 
+  it("points a negative portion back at the month it took value from", async () => {
+    const withMixedLump = {
+      ...productionResponse,
+      settlements: [
+        ...productionResponse.settlements,
+        rentSettlement("mixed", 1, {
+          amount: 800.0,
+          portions: [
+            { year: Y, month: 1, amount: 900.0 },
+            { year: Y, month: 2, amount: -100.0 },
+          ],
+        }),
+      ],
+    };
+    serveSettleUp(withMixedLump);
+
+    renderWithProviders(<SettleUpPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("$900.00 → Jan + $100.00 ← Feb"),
+      ).toBeInTheDocument();
+    });
+  });
+
   it("rescopes the hero, months, and history when another year is selected", async () => {
     const user = userEvent.setup();
     serveSettleUp(crossYearResponse);

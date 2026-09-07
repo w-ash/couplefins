@@ -166,8 +166,11 @@ async def test_comparison_cards_computed() -> None:
 
 async def test_past_year_ytd_spans_full_year() -> None:
     uow, alice, _bob, _food_group = _setup_uow()
-    # A completed past year with no month specified includes spend from every
-    # month in the YTD summaries — not just up to the current calendar month.
+    # A named year with no month opens on that year's latest month with
+    # spending, so the YTD summaries reach it — not today's calendar month.
+    uow.transactions.get_latest_household_transaction_date.return_value = date(
+        2000, 11, 10
+    )
     txs = [
         make_transaction(
             date=date(2000, 1, 10),
@@ -238,11 +241,13 @@ async def test_comparison_year_returns_both_years() -> None:
     assert result.comparison_monthly_group_spending[0].amount == Decimal("60.00")
 
 
-async def test_comparison_year_none_returns_empty() -> None:
+async def test_comparison_year_defaults_to_the_year_before() -> None:
+    """A caller naming no comparison year gets the resolved year minus one —
+    the rule lives here alone, so the chart's dotted series is never absent."""
     uow, alice, _, _ = _setup_uow()
-    uow.transactions.get_household_by_year.return_value = [
+    uow.transactions.get_household_by_year.side_effect = lambda year: [
         make_transaction(
-            date=date(2026, 1, 10),
+            date=date(year, 1, 10),
             category="Dining Out",
             amount=Decimal("-50.00"),
             payer_person_id=alice.id,
@@ -252,7 +257,26 @@ async def test_comparison_year_none_returns_empty() -> None:
     command = GetSpendingTrendsCommand(year=2026)
     result = await GetSpendingTrendsUseCase().execute(command, uow)
 
+    assert [m.year for m in result.comparison_monthly_group_spending] == [2025]
+
+
+async def test_with_comparison_false_skips_the_second_year() -> None:
+    """The chat tool reports one year, so it does not pay for the other."""
+    uow, alice, _, _ = _setup_uow()
+    uow.transactions.get_household_by_year.side_effect = lambda year: [
+        make_transaction(
+            date=date(year, 1, 10),
+            category="Dining Out",
+            amount=Decimal("-50.00"),
+            payer_person_id=alice.id,
+        ),
+    ]
+
+    command = GetSpendingTrendsCommand(year=2026, with_comparison=False)
+    result = await GetSpendingTrendsUseCase().execute(command, uow)
+
     assert result.comparison_monthly_group_spending == []
+    uow.transactions.get_household_by_year.assert_awaited_once_with(2026)
 
 
 async def test_comparison_year_no_data() -> None:
@@ -495,3 +519,148 @@ async def test_category_comparisons_computed() -> None:
     assert comparison.current_month_amount == Decimal("20.00")
     assert comparison.trailing_average == Decimal("70.00")
     assert comparison.is_new is False
+
+
+# --- default period (no year named) ---
+
+
+async def test_no_year_anchors_on_the_latest_spending_month() -> None:
+    uow, alice, _, _ = _setup_uow()
+    uow.transactions.get_latest_household_transaction_date.return_value = date(
+        2026, 8, 14
+    )
+    uow.transactions.get_household_by_year.return_value = [
+        make_transaction(
+            date=date(2026, 8, 3),
+            category="Dining Out",
+            amount=Decimal("-80.00"),
+            payer_person_id=alice.id,
+        ),
+    ]
+
+    result = await GetSpendingTrendsUseCase().execute(GetSpendingTrendsCommand(), uow)
+
+    assert (result.year, result.month) == (2026, 8)
+    # The row fetch must run on the resolved year, not the calendar one.
+    assert uow.transactions.get_household_by_year.await_args_list[0].args == (2026,)
+
+
+async def test_no_year_anchors_on_a_previous_year() -> None:
+    """A December anchor in a closed year covers the whole year, because
+    December is the month being viewed — not because the year is closed."""
+    uow, alice, _, _ = _setup_uow()
+    uow.transactions.get_latest_household_transaction_date.return_value = date(
+        2020, 12, 3
+    )
+    uow.transactions.get_household_by_year.side_effect = lambda year: (
+        [
+            make_transaction(
+                date=date(2020, 12, 3),
+                category="Dining Out",
+                amount=Decimal("-40.00"),
+                payer_person_id=alice.id,
+            ),
+        ]
+        if year == 2020
+        else []
+    )
+
+    result = await GetSpendingTrendsUseCase().execute(GetSpendingTrendsCommand(), uow)
+
+    assert (result.year, result.month) == (2020, 12)
+    assert result.trends.group_summaries[0].ytd_total == Decimal("40.00")
+
+
+async def test_ytd_stops_at_the_viewed_month_in_a_past_year() -> None:
+    """Year to date means the same thing in every year: through the month
+    being viewed. The page labels it "Jan-Mar" and compares it against the
+    same span of the prior year, and Budget and Dashboard bound theirs the
+    same way — a closed year is no exception."""
+    uow, alice, _, _ = _setup_uow()
+    uow.transactions.get_household_by_year.side_effect = lambda year: (
+        [
+            make_transaction(
+                date=date(2020, 3, 5),
+                category="Dining Out",
+                amount=Decimal("-40.00"),
+                payer_person_id=alice.id,
+            ),
+            make_transaction(
+                date=date(2020, 9, 5),
+                category="Dining Out",
+                amount=Decimal("-500.00"),
+                payer_person_id=alice.id,
+            ),
+        ]
+        if year == 2020
+        else []
+    )
+
+    command = GetSpendingTrendsCommand(year=2020, month=3)
+    result = await GetSpendingTrendsUseCase().execute(command, uow)
+
+    # The sparklines still see September; the YTD total does not.
+    assert len(result.trends.monthly_totals) == 2
+    assert result.trends.group_summaries[0].ytd_total == Decimal("40.00")
+    assert sum(c.amount for c in result.ytd_flow.cells) == Decimal("40.00")
+
+
+async def test_no_year_falls_back_to_today_when_there_are_no_transactions() -> None:
+    uow, _, _, _ = _setup_uow()
+    uow.transactions.get_household_by_year.return_value = []
+
+    result = await GetSpendingTrendsUseCase().execute(GetSpendingTrendsCommand(), uow)
+
+    now = datetime.now(UTC)
+    assert (result.year, result.month) == (now.year, now.month)
+
+
+async def test_no_year_compares_against_the_year_before_the_anchor() -> None:
+    uow, alice, _, _ = _setup_uow()
+    uow.transactions.get_latest_household_transaction_date.return_value = date(
+        2026, 3, 9
+    )
+    uow.transactions.get_household_by_year.side_effect = lambda year: (
+        [
+            make_transaction(
+                date=date(year, 3, 1),
+                category="Dining Out",
+                amount=Decimal("-50.00"),
+                payer_person_id=alice.id,
+            ),
+        ]
+        if year in {2025, 2026}
+        else []
+    )
+
+    result = await GetSpendingTrendsUseCase().execute(GetSpendingTrendsCommand(), uow)
+
+    assert result.comparison_monthly_group_spending[0].year == 2025
+
+
+async def test_a_named_year_never_reaches_for_the_anchor() -> None:
+    uow, _, _, _ = _setup_uow()
+    uow.transactions.get_household_by_year.return_value = []
+
+    result = await GetSpendingTrendsUseCase().execute(
+        GetSpendingTrendsCommand(year=2026, month=2), uow
+    )
+
+    assert (result.year, result.month) == (2026, 2)
+    uow.transactions.get_latest_household_transaction_date.assert_not_called()
+    # Naming a year opts out of the default comparison.
+    assert result.comparison_monthly_group_spending == []
+
+
+async def test_a_month_without_a_year_keeps_the_month() -> None:
+    uow, _, _, _ = _setup_uow()
+    uow.transactions.get_latest_household_transaction_date.return_value = date(
+        2025, 11, 20
+    )
+    uow.transactions.get_household_by_year.return_value = []
+
+    result = await GetSpendingTrendsUseCase().execute(
+        GetSpendingTrendsCommand(month=3), uow
+    )
+
+    assert (result.year, result.month) == (2025, 3)

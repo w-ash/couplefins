@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from httpx import AsyncClient
 import pytest
 
@@ -11,6 +13,10 @@ ALICE_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Ta
 
 ALICE_2025_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags
 2025-01-15,Taco Truck,Dining Out,Chase,TACO TRUCK,,-25.00,"shared"
+"""
+
+LATER_CARD_PAYMENT_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags
+2026-03-15,Chase Card,Credit Card Payment,Checking,CHASE PAYMENT,,-900.00,"shared"
 """
 
 BOB_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags
@@ -63,12 +69,64 @@ async def test_spending_trends_empty_year(client: AsyncClient) -> None:
     }
 
 
-async def test_spending_trends_defaults_to_current_year(client: AsyncClient) -> None:
+async def test_spending_trends_defaults_to_the_latest_month_with_spending(
+    client: AsyncClient,
+) -> None:
+    persons, cookies = await setup_and_login(client)
+    await upload_csv(client, persons[0]["id"], ALICE_CSV, auth=cookies)
+    await upload_csv(client, persons[0]["id"], ALICE_2025_CSV, auth=cookies)
+
+    resp = await client.get("/api/v1/insights/spending-trends", auth=cookies)
+    assert resp.status_code == 200
+
+    data = resp.json()
+    assert (data["year"], data["month"]) == (2026, 2)
+    # A year-less request is the default view: it compares against 2025.
+    assert [m["year"] for m in data["comparison_monthly_group_spending"]] == [2025]
+
+
+async def test_spending_trends_default_ignores_transfer_rows(
+    client: AsyncClient,
+) -> None:
+    """A March card payment must not open a month with no spending in it."""
+    persons, cookies = await setup_and_login(client)
+    await upload_csv(client, persons[0]["id"], ALICE_CSV, auth=cookies)
+    await upload_csv(
+        client,
+        persons[0]["id"],
+        LATER_CARD_PAYMENT_CSV,
+        auth=cookies,
+    )
+
+    resp = await client.get("/api/v1/insights/spending-trends", auth=cookies)
+    assert resp.status_code == 200
+    assert (resp.json()["year"], resp.json()["month"]) == (2026, 2)
+
+
+async def test_spending_trends_with_no_data_defaults_to_today(
+    client: AsyncClient,
+) -> None:
     _, cookies = await setup_and_login(client)
 
     resp = await client.get("/api/v1/insights/spending-trends", auth=cookies)
     assert resp.status_code == 200
-    assert resp.json()["year"] > 0
+
+    now = datetime.now(UTC)
+    data = resp.json()
+    assert (data["year"], data["month"]) == (now.year, now.month)
+
+
+async def test_spending_trends_month_without_year_resolves_the_year(
+    client: AsyncClient,
+) -> None:
+    persons, cookies = await setup_and_login(client)
+    await upload_csv(client, persons[0]["id"], ALICE_CSV, auth=cookies)
+
+    resp = await client.get(
+        "/api/v1/insights/spending-trends", params={"month": 1}, auth=cookies
+    )
+    assert resp.status_code == 200
+    assert (resp.json()["year"], resp.json()["month"]) == (2026, 1)
 
 
 async def test_spending_trends_with_month_param(client: AsyncClient) -> None:

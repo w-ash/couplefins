@@ -342,7 +342,7 @@ class TestPlanPortions:
             (2026, 1, Decimal("1981.00"))
         ]
 
-    def test_lump_clears_covered_months_oldest_first(self) -> None:
+    def test_lump_zeroes_covered_months_and_shorts_the_newest(self) -> None:
         ledger = compute_ledger(
             [month_debt(2026, 1, "60"), month_debt(2026, 2, "30")],
             [],
@@ -373,7 +373,10 @@ class TestPlanPortions:
         ]
         assert sum(p.amount for p in plans) == Decimal(100)
 
-    def test_skips_months_owed_in_the_other_direction(self) -> None:
+    def test_month_owed_to_the_payer_takes_a_negative_portion(self) -> None:
+        """Bob owes Alice 40 in January, Alice owes Bob 50 in February: Alice
+        pays 50 covering both, so January gives 40 back and the 40 she
+        overpaid swings February her way."""
         ledger = compute_ledger(
             [month_debt(2026, 1, "-40"), month_debt(2026, 2, "50")],
             [],
@@ -383,7 +386,122 @@ class TestPlanPortions:
         plans = plan_portions(
             ledger.months, Decimal(50), ALICE.id, [(2026, 1), (2026, 2)]
         )
-        assert [(p.year, p.month, p.amount) for p in plans] == [(2026, 2, Decimal(50))]
+        assert [(p.year, p.month, p.amount) for p in plans] == [
+            (2026, 1, Decimal(-40)),
+            (2026, 2, Decimal(90)),
+        ]
+        assert sum(p.amount for p in plans) == Decimal(50)
+
+    def test_payment_sized_to_the_span_net_settles_every_covered_month(self) -> None:
+        """The bug this replaced: a span running both ways could never be
+        settled by one payment, because the months owed to the payer were
+        skipped and the money ran out early."""
+        charges = [
+            month_debt(2026, 1, "-100"),
+            month_debt(2026, 2, "30"),
+            month_debt(2026, 3, "-250"),
+        ]
+        covered = [(2026, 1), (2026, 2), (2026, 3)]
+        ledger = compute_ledger(charges, [], [], PERSONS)
+        # Bob owes 100 + 250, Alice owes 30 — Bob sends the net, 320.
+        plans = plan_portions(ledger.months, Decimal(320), BOB.id, covered)
+        assert [(p.year, p.month, p.amount) for p in plans] == [
+            (2026, 1, Decimal(100)),
+            (2026, 2, Decimal(-30)),
+            (2026, 3, Decimal(250)),
+        ]
+        assert sum(p.amount for p in plans) == Decimal(320)
+
+        pay = payment("320", from_person=BOB.id)
+        settled = compute_ledger(
+            charges,
+            [pay],
+            portions_for(pay, *[(p.year, p.month, str(p.amount)) for p in plans]),
+            PERSONS,
+        )
+        for year, month in covered:
+            row = month_row(settled, year, month)
+            assert row.balance is None
+            assert row.status is MonthSettlementStatus.SETTLED
+        assert settled.outstanding is None
+
+    def test_shortfall_lands_on_the_newest_covered_month(self) -> None:
+        ledger = compute_ledger(
+            [month_debt(2026, 1, "60"), month_debt(2026, 2, "60")],
+            [],
+            [],
+            PERSONS,
+        )
+        plans = plan_portions(
+            ledger.months, Decimal(100), ALICE.id, [(2026, 1), (2026, 2)]
+        )
+        assert [(p.year, p.month, p.amount) for p in plans] == [
+            (2026, 1, Decimal(60)),
+            (2026, 2, Decimal(40)),
+        ]
+
+    def test_payment_far_short_of_the_span_pays_the_oldest_months_only(self) -> None:
+        """The Settle Up flow lets the amount come from the linked bank legs
+        while the covered months are ticked freely. A rent-sized transfer
+        ticked across three rent-sized debts must not swing the newest month
+        against the payer, nor report the others as settled."""
+        charges = [
+            month_debt(y, m, "2000") for y, m in [(2026, 1), (2026, 2), (2026, 3)]
+        ]
+        covered = [(2026, 1), (2026, 2), (2026, 3)]
+        ledger = compute_ledger(charges, [], [], PERSONS)
+        plans = plan_portions(ledger.months, Decimal("1981.00"), ALICE.id, covered)
+        assert [(p.year, p.month, p.amount) for p in plans] == [
+            (2026, 1, Decimal("1981.00"))
+        ]
+        assert sum(p.amount for p in plans) == Decimal("1981.00")
+
+        pay = payment("1981.00")
+        settled = compute_ledger(
+            charges,
+            [pay],
+            portions_for(pay, *[(p.year, p.month, str(p.amount)) for p in plans]),
+            PERSONS,
+        )
+        january = month_row(settled, 2026, 1)
+        assert january.status is MonthSettlementStatus.PARTIALLY_SETTLED
+        assert signed(january.balance) == Decimal("19.00")
+        for month in (2, 3):
+            row = month_row(settled, 2026, month)
+            assert row.status is not MonthSettlementStatus.SETTLED
+            assert signed(row.balance) == Decimal(2000)
+
+    def test_shortfall_over_a_mixed_span_never_swings_a_month(self) -> None:
+        """A month owed to the payer still gives its value back, funding the
+        months they owe; the shortfall stops the fill instead of reversing
+        the newest month."""
+        ledger = compute_ledger(
+            [
+                month_debt(2026, 1, "100"),
+                month_debt(2026, 2, "-40"),
+                month_debt(2026, 3, "300"),
+            ],
+            [],
+            [],
+            PERSONS,
+        )
+        covered = [(2026, 1), (2026, 2), (2026, 3)]
+        # Alice owes 400 net; she sends 200.
+        plans = plan_portions(ledger.months, Decimal(200), ALICE.id, covered)
+        assert [(p.year, p.month, p.amount) for p in plans] == [
+            (2026, 1, Decimal(100)),
+            (2026, 2, Decimal(-40)),
+            (2026, 3, Decimal(140)),
+        ]
+        assert sum(p.amount for p in plans) == Decimal(200)
+
+    def test_covered_month_already_at_zero_gets_no_portion(self) -> None:
+        """A zero portion is not a portion — the entity rejects one."""
+        ledger = compute_ledger([month_debt(2026, 2, "40")], [], [], PERSONS)
+        plans = plan_portions(
+            ledger.months, Decimal(40), ALICE.id, [(2026, 1), (2026, 2)]
+        )
+        assert [(p.year, p.month, p.amount) for p in plans] == [(2026, 2, Decimal(40))]
 
     def test_unknown_month_still_receives_remainder(self) -> None:
         plans = plan_portions([], Decimal(25), ALICE.id, [(2026, 6)])
@@ -471,3 +589,114 @@ class TestProductionFixture:
         assert all(m.status is MonthSettlementStatus.SETTLED for m in after.months)
         year = after.years[0]
         assert year.balance is None
+
+
+class TestMixedDirectionCatchUp:
+    """The Jan-Aug 2026 lump that landed wrong on production.
+
+    Each month carried its rent transfer already, leaving residuals running
+    *both* ways. The couple sent the net of Jan-Jul, $4,715.23. The old
+    allocation skipped the months owed to the payer, so it ran out at April
+    and left May, June and July untouched.
+    """
+
+    # Signed charges (positive = Ash owes Kew), before the rent transfers.
+    charges: ClassVar[list[tuple[int, str]]] = [
+        (1, "1956.87"),
+        (2, "222.27"),
+        (3, "1788.60"),
+        (4, "-774.14"),
+        (5, "1987.06"),
+        (6, "2374.64"),
+        (7, "1596.31"),
+    ]
+    covered: ClassVar[list[tuple[int, int]]] = [(2026, m) for m, _ in charges]
+
+    def _before_lump(
+        self,
+    ) -> tuple[list[Transaction], list[Settlement], list[SettlementPortion]]:
+        transactions = [
+            month_debt(2026, month, amount) for month, amount in self.charges
+        ]
+        rents: list[Settlement] = []
+        portions: list[SettlementPortion] = []
+        for month, _ in self.charges:
+            rent = payment("1981.00", settled=datetime(2026, month, 1, tzinfo=UTC))
+            rents.append(rent)
+            portions.extend(portions_for(rent, (2026, month, "1981.00")))
+        return transactions, rents, portions
+
+    def test_residuals_run_both_ways_before_the_lump(self) -> None:
+        transactions, rents, portions = self._before_lump()
+        ledger = compute_ledger(transactions, rents, portions, PERSONS)
+        assert {m.month: signed(m.balance) for m in ledger.months} == {
+            1: Decimal("-24.13"),
+            2: Decimal("-1758.73"),
+            3: Decimal("-192.40"),
+            4: Decimal("-2755.14"),
+            5: Decimal("6.06"),  # runs the other way
+            6: Decimal("393.64"),  # runs the other way
+            7: Decimal("-384.69"),
+        }
+
+    def test_net_payment_settles_the_whole_span(self) -> None:
+        transactions, rents, portions = self._before_lump()
+        ledger = compute_ledger(transactions, rents, portions, PERSONS)
+        plans = plan_portions(ledger.months, Decimal("4715.23"), BOB.id, self.covered)
+
+        assert [(p.month, p.amount) for p in plans] == [
+            (1, Decimal("24.13")),
+            (2, Decimal("1758.73")),
+            (3, Decimal("192.40")),
+            (4, Decimal("2755.14")),
+            (
+                5,
+                Decimal("-6.06"),
+            ),  # value taken back from a month that ran the other way
+            (6, Decimal("-393.64")),
+            (7, Decimal("384.53")),  # the $0.16 the payment fell short lands here
+        ]
+        assert sum(p.amount for p in plans) == Decimal("4715.23")
+
+        lump = payment(
+            "4715.23", from_person=BOB.id, settled=datetime(2026, 8, 27, tzinfo=UTC)
+        )
+        after = compute_ledger(
+            transactions,
+            [*rents, lump],
+            [
+                *portions,
+                *portions_for(lump, *[(p.year, p.month, str(p.amount)) for p in plans]),
+            ],
+            PERSONS,
+        )
+        for month in (1, 2, 3, 4, 5, 6):
+            row = month_row(after, 2026, month)
+            assert row.balance is None
+            assert row.status is MonthSettlementStatus.SETTLED
+        july = month_row(after, 2026, 7)
+        assert july.balance is not None
+        assert july.balance.amount == Decimal("0.16")
+        assert july.balance.from_person_id == BOB.id  # Kew owes Ash the shortfall
+
+    def test_year_total_is_conserved_by_the_lump(self) -> None:
+        transactions, rents, portions = self._before_lump()
+        before = compute_ledger(transactions, rents, portions, PERSONS)
+        assert signed(before.years[0].balance) == Decimal("-4715.39")
+
+        plans = plan_portions(before.months, Decimal("4715.23"), BOB.id, self.covered)
+        lump = payment(
+            "4715.23", from_person=BOB.id, settled=datetime(2026, 8, 27, tzinfo=UTC)
+        )
+        after = compute_ledger(
+            transactions,
+            [*rents, lump],
+            [
+                *portions,
+                *portions_for(lump, *[(p.year, p.month, str(p.amount)) for p in plans]),
+            ],
+            PERSONS,
+        )
+        assert signed(after.years[0].balance) == Decimal("-4715.39") + Decimal(
+            "4715.23"
+        )

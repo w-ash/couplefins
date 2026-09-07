@@ -9,7 +9,6 @@ on models with adaptive thinking.
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-import copy
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -38,7 +37,6 @@ from src.infrastructure.chat.anthropic_adapter import (
     _AdapterStream,
     _content_block_to_dict,
     _server_tool_result_event,
-    _with_incremental_cache,
 )
 
 
@@ -298,155 +296,7 @@ class TestBetaSurfaceParams:
         assert captured["container"] == "cont_9"
         assert captured["output_config"] == {"effort": "high"}
         assert captured["thinking"] == {"type": "adaptive"}
-
-
-_EPHEMERAL = {"type": "ephemeral"}
-
-
-class TestIncrementalCache:
-    """One breakpoint on the last block of the last message, on copies only."""
-
-    def test_string_content_wrapped_and_stamped(self) -> None:
-        result = _with_incremental_cache([{"role": "user", "content": "hi"}])
-        assert result == [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "hi", "cache_control": _EPHEMERAL}
-                ],
-            }
-        ]
-
-    def test_only_last_block_of_last_message_stamped(self) -> None:
-        result = _with_incremental_cache([
-            {"role": "user", "content": "hi"},
-            {
-                "role": "assistant",
-                "content": [
-                    {"type": "text", "text": "a"},
-                    {"type": "tool_use", "id": "tu_1", "name": "t", "input": {}},
-                ],
-            },
-        ])
-        assert result[0]["content"] == "hi"
-        first_block, last_block = result[1]["content"]
-        assert "cache_control" not in first_block
-        assert last_block["cache_control"] == _EPHEMERAL
-
-    def test_prior_stamps_are_stripped(self) -> None:
-        stale = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "old", "cache_control": _EPHEMERAL}
-                ],
-            },
-            {"role": "user", "content": [{"type": "text", "text": "new"}]},
-        ]
-        result = _with_incremental_cache(stale)
-        assert "cache_control" not in result[0]["content"][0]
-        assert result[1]["content"][0]["cache_control"] == _EPHEMERAL
-
-    def test_caller_messages_are_not_mutated(self) -> None:
-        messages = [
-            {"role": "user", "content": "hi"},
-            {"role": "assistant", "content": [{"type": "text", "text": "a"}]},
-        ]
-        snapshot = copy.deepcopy(messages)
-        _with_incremental_cache(messages)
-        assert messages == snapshot
-
-    def test_idempotent(self) -> None:
-        once = _with_incremental_cache([
-            {"role": "user", "content": [{"type": "text", "text": "hi"}]}
-        ])
-        twice = _with_incremental_cache(once)
-        assert twice == once
-        stamps = [
-            block
-            for message in twice
-            for block in message["content"]
-            if "cache_control" in block
-        ]
-        assert len(stamps) == 1
-
-    def test_empty_messages_pass_through(self) -> None:
-        assert _with_incremental_cache([]) == []
-
-    def test_sandbox_called_tool_blocks_are_never_stamped(self) -> None:
-        """Live-verified 400s: neither a sandbox-called tool_use block nor
-        its tool_result may carry cache_control ("not rendered in Claude's
-        context"). The stamp walks back to the nearest stampable block."""
-        result = _with_incremental_cache([
-            {
-                "role": "assistant",
-                "content": [
-                    {"type": "text", "text": "computing"},
-                    {
-                        "type": "tool_use",
-                        "id": "toolu_1",
-                        "name": "search_transactions",
-                        "input": {},
-                        "caller": {
-                            "type": "code_execution_20260120",
-                            "tool_id": "srvtoolu_1",
-                        },
-                    },
-                ],
-            },
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": "toolu_1",
-                        "content": "{}",
-                    }
-                ],
-            },
-        ])
-        assert all("cache_control" not in block for block in result[1]["content"])
-        text_block, tool_use_block = result[0]["content"]
-        assert "cache_control" not in tool_use_block
-        assert text_block["cache_control"] == _EPHEMERAL
-
-    def test_direct_tool_result_still_stamped(self) -> None:
-        result = _with_incremental_cache([
-            {
-                "role": "assistant",
-                "content": [
-                    {
-                        "type": "tool_use",
-                        "id": "toolu_1",
-                        "name": "get_tags",
-                        "input": {},
-                        "caller": {"type": "direct"},
-                    }
-                ],
-            },
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": "toolu_1",
-                        "content": "{}",
-                    }
-                ],
-            },
-        ])
-        assert result[1]["content"][0]["cache_control"] == _EPHEMERAL
-
-    def test_thinking_block_is_never_stamped(self) -> None:
-        result = _with_incremental_cache([
-            {
-                "role": "assistant",
-                "content": [
-                    {"type": "text", "text": "answer"},
-                    {"type": "thinking", "thinking": "…", "signature": "sig"},
-                ],
-            },
-        ])
-        text_block, thinking_block = result[0]["content"]
-        assert "cache_control" not in thinking_block
-        assert text_block["cache_control"] == _EPHEMERAL
+        # Automatic caching: the server places the incremental breakpoint and
+        # skips blocks it rejects a stamp on, so messages go through untouched.
+        assert captured["cache_control"] == {"type": "ephemeral"}
+        assert captured["messages"] == [{"role": "user", "content": "hi"}]

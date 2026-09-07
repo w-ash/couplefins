@@ -409,7 +409,8 @@ async def handle_spending_trends(
     scope = _person_scope(tool_input)
     command = GetSpendingTrendsCommand(
         year=cast(int, tool_input["year"]),
-        comparison_year=cast(int | None, tool_input.get("comparison_year")),
+        # The answer reports one year; skip the comparison year's fetch.
+        with_comparison=False,
         scope=scope,
         person_id=person_for_scope(scope, ctx.current_user),
     )

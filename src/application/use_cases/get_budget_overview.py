@@ -7,8 +7,8 @@ from structlog.stdlib import get_logger
 from src.application.use_cases._shared.command_validators import (
     PersonScope,
     Scope,
-    month_range,
-    positive_int,
+    optional_month_range,
+    optional_positive_int,
     require_person_for_personal_scope,
 )
 from src.application.use_cases._shared.reconciliation_context import (
@@ -16,6 +16,7 @@ from src.application.use_cases._shared.reconciliation_context import (
 )
 from src.application.use_cases._shared.transaction_reads import (
     fetch_year_spending_rows,
+    resolve_period,
 )
 from src.domain.budget import (
     BudgetOverview,
@@ -39,8 +40,8 @@ logger = get_logger()
 
 @define(frozen=True, slots=True)
 class GetBudgetOverviewCommand:
-    year: int = field(validator=positive_int)
-    month: int = field(validator=month_range)
+    year: int | None = field(default=None, validator=optional_positive_int)
+    month: int | None = field(default=None, validator=optional_month_range)
     scope: PersonScope = "household"
     person_id: UUID | None = None
 
@@ -93,6 +94,7 @@ class GetBudgetOverviewUseCase:
     ) -> GetBudgetOverviewResult:
         async with uow:
             ctx = await load_reconciliation_context(uow)
+            year, month = await resolve_period(uow, ctx, command.year, command.month)
             category_lookup = build_category_lookup(ctx.categories, ctx.category_groups)
 
             if command.scope == "personal" and command.person_id is not None:
@@ -106,12 +108,10 @@ class GetBudgetOverviewUseCase:
                 budget_owner = None
 
             year_budgets = await uow.category_group_budgets.get_by_year(
-                command.year, budget_owner
+                year, budget_owner
             )
-            month_budgets = [b for b in year_budgets if b.month == command.month]
-            year_txs = await fetch_year_spending_rows(
-                uow, command.year, fetch_scope, ctx
-            )
+            month_budgets = [b for b in year_budgets if b.month == month]
+            year_txs = await fetch_year_spending_rows(uow, year, fetch_scope, ctx)
             overview = compute_budget_overview(
                 BudgetOverviewInputs(
                     month_budgets,
@@ -119,8 +119,8 @@ class GetBudgetOverviewUseCase:
                     year_txs,
                     category_lookup,
                     ctx.category_groups,
-                    command.year,
-                    command.month,
+                    year,
+                    month,
                 ),
                 lens,
             )
@@ -130,15 +130,13 @@ class GetBudgetOverviewUseCase:
                 logger.warning(
                     "budget_spending_drift",
                     drift=str(overview.spending_drift),
-                    year=command.year,
-                    month=command.month,
+                    year=year,
+                    month=month,
                     scope=command.scope,
                 )
 
             all_budgets = await uow.category_group_budgets.get_all()
-            ci = _compute_copy_indicators(
-                all_budgets, command.year, command.month, command.person_id
-            )
+            ci = _compute_copy_indicators(all_budgets, year, month, command.person_id)
 
             return GetBudgetOverviewResult(
                 overview=overview,

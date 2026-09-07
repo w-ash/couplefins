@@ -73,6 +73,7 @@ interface ChatState {
     returnCode: number,
   ) => void;
   completeMessage: (id: string) => void;
+  stopStreaming: () => void;
   setMessageError: (id: string, code: string, message: string) => void;
   removeLastAssistantMessage: () => void;
   setAbortController: (c: AbortController | null) => void;
@@ -173,6 +174,18 @@ export const useChatStore = create<ChatState>()((set) => ({
         ...m,
         isStreaming: false,
       })),
+      isStreaming: false,
+      abortController: null,
+    })),
+
+  // Aborting is swallowed by the SSE reader, so neither `completeMessage`
+  // nor `setMessageError` runs — the stop button has to settle the message
+  // itself, keeping whatever text had already streamed in.
+  stopStreaming: () =>
+    set((s) => ({
+      messages: s.messages.map((m) =>
+        m.isStreaming ? { ...m, isStreaming: false } : m,
+      ),
       isStreaming: false,
       abortController: null,
     })),

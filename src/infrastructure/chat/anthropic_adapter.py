@@ -53,116 +53,6 @@ def _to_message_params(messages: list[dict[str, object]]) -> list[BetaMessagePar
     return cast(list[BetaMessageParam], messages)
 
 
-def _strip_cache_control(content: object) -> object:
-    if not isinstance(content, list):
-        return content
-    stripped: list[object] = []
-    for block in cast(list[object], content):
-        if isinstance(block, dict):
-            block_dict = cast(dict[str, object], block)
-            stripped.append({
-                k: v for k, v in block_dict.items() if k != "cache_control"
-            })
-        else:
-            stripped.append(block)
-    return stripped
-
-
-# Block types that accept a cache_control stamp. Thinking and server-tool
-# blocks reject it, and so do sandbox-called tool_use blocks and their
-# tool_results (neither is rendered in model context) — live-verified 400s.
-_STAMPABLE_BLOCK_TYPES = frozenset({"text", "tool_use", "tool_result"})
-
-
-def _code_called_tool_ids(messages: list[dict[str, object]]) -> set[object]:
-    """IDs of tool_use blocks invoked by the sandbox, not the model.
-
-    Round-tripped assistant turns carry the API's `caller` field on each
-    tool_use block; anything not explicitly direct came from code execution.
-    """
-    ids: set[object] = set()
-    for message in messages:
-        content = message.get("content")
-        if not isinstance(content, list):
-            continue
-        for block in cast(list[object], content):
-            if not isinstance(block, dict):
-                continue
-            block_dict = cast(dict[str, object], block)
-            if block_dict.get("type") != "tool_use":
-                continue
-            caller = block_dict.get("caller")
-            if not isinstance(caller, dict):
-                continue
-            caller_dict = cast(dict[str, object], caller)
-            if caller_dict.get("type") != "direct":
-                ids.add(block_dict.get("id"))
-    return ids
-
-
-def _is_stampable(block_dict: dict[str, object], code_called: set[object]) -> bool:
-    block_type = block_dict.get("type")
-    if block_type not in _STAMPABLE_BLOCK_TYPES:
-        return False
-    if block_type == "tool_use":
-        return block_dict.get("id") not in code_called
-    if block_type == "tool_result":
-        return block_dict.get("tool_use_id") not in code_called
-    return True
-
-
-def _with_incremental_cache(
-    messages: list[dict[str, object]],
-) -> list[dict[str, object]]:
-    """Copy messages with one cache breakpoint on the last stampable block.
-
-    The tool loop re-sends the whole growing history every turn; stamping
-    near the end turns all prior turns into cache reads. The 4-breakpoint
-    budget is fully spent since v1.9.0 — tools prefix + promoted page
-    segment (registry.build_tools) + system primer + this stamp — so
-    nothing may ever add a fifth. The stamp walks
-    backwards past blocks the API rejects cache_control on (thinking,
-    server-tool blocks, tool_results for sandbox-called tools). Works on
-    copies only: the use case reuses one list (and re-echoes raw_content on
-    pause_turn), so stamps must never leak into or accumulate on the
-    caller's dicts. Stripping stale stamps first makes this idempotent. The
-    20-block cache lookback is safe here — each turn appends at most 2
-    messages.
-    """
-    if not messages:
-        return messages
-    result = [
-        {**message, "content": _strip_cache_control(message.get("content"))}
-        for message in messages
-    ]
-    code_called = _code_called_tool_ids(result)
-    for message in reversed(result):
-        content = message["content"]
-        if isinstance(content, str):
-            message["content"] = [
-                {
-                    "type": "text",
-                    "text": content,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ]
-            return result
-        if not isinstance(content, list):
-            continue
-        blocks = list(cast(list[object], content))
-        for i in range(len(blocks) - 1, -1, -1):
-            block = blocks[i]
-            if not isinstance(block, dict):
-                continue
-            block_dict = cast(dict[str, object], block)
-            if not _is_stampable(block_dict, code_called):
-                continue
-            blocks[i] = {**block_dict, "cache_control": {"type": "ephemeral"}}
-            message["content"] = blocks
-            return result
-    return result
-
-
 def _to_tool_params(tools: list[dict[str, object]]) -> list[BetaToolUnionParam]:
     return cast(list[BetaToolUnionParam], tools)
 
@@ -312,14 +202,23 @@ class AnthropicAdapter:
         # when the parameter is omitted. The beta surface is required for
         # context_management; everything else it accepts is a superset of
         # the stable stream.
+        #
+        # Top-level cache_control is automatic caching: the server places the
+        # incremental breakpoint on the last cacheable block of the growing
+        # history and walks backwards itself past anything ineligible (empty
+        # text, thinking, server-tool and sandbox-called tool blocks),
+        # skipping the write when nothing qualifies. It spends the fourth and
+        # last breakpoint slot — see the budget in registry.build_tools —
+        # so nothing may add a fifth. Messages pass through untouched.
         async with self._client.beta.messages.stream(
             model=request.model,
             max_tokens=request.max_tokens,
             thinking={"type": "adaptive"},
             output_config={"effort": request.effort},
+            cache_control={"type": "ephemeral"},
             system=_to_system_params(request.system),
             tools=_to_tool_params(request.tools),
-            messages=_to_message_params(_with_incremental_cache(request.messages)),
+            messages=_to_message_params(request.messages),
             container=request.container,
             context_management=_CONTEXT_MANAGEMENT,
             betas=[_CONTEXT_MANAGEMENT_BETA],

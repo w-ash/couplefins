@@ -196,6 +196,60 @@ describe("BudgetPage", () => {
     expect(screen.getByRole("heading", { name: "Budget" })).toBeInTheDocument();
   });
 
+  it("takes the month from the response when the URL names none", async () => {
+    let requested: URLSearchParams | undefined;
+    server.use(
+      http.get("/api/v1/budgets/overview", ({ request }) => {
+        requested = new URL(request.url).searchParams;
+        return HttpResponse.json(emptyOverview);
+      }),
+    );
+
+    renderWithProviders(<BudgetPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Select month" }),
+      ).toHaveTextContent("March 2026");
+    });
+    // The period must be omitted, never sent as "null".
+    expect(requested?.has("year")).toBe(false);
+    expect(requested?.has("month")).toBe(false);
+  });
+
+  it("sends the URL's month when it names one", async () => {
+    let requested: URLSearchParams | undefined;
+    server.use(
+      http.get("/api/v1/budgets/overview", ({ request }) => {
+        requested = new URL(request.url).searchParams;
+        return HttpResponse.json(emptyOverview);
+      }),
+    );
+
+    renderWithProviders(<BudgetPage />, {
+      routerProps: { initialEntries: ["/?year=2025&month=7"] },
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Select month" }),
+      ).toHaveTextContent("July 2025");
+    });
+    expect(requested?.get("year")).toBe("2025");
+    expect(requested?.get("month")).toBe("7");
+  });
+
+  it("leaves the month picker inert until the month is known", async () => {
+    renderWithProviders(<BudgetPage />);
+
+    expect(screen.getByRole("button", { name: "Select month" })).toBeDisabled();
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Select month" }),
+      ).toBeEnabled();
+    });
+  });
+
   it("shows empty state when no budgets exist", async () => {
     renderWithProviders(<BudgetPage />);
 
@@ -398,24 +452,10 @@ describe("BudgetPage", () => {
 
     fireEvent.click(screen.getByText("Remove budget"));
 
-    // Month comes from useMonthYear() (current date), not the response fixture
-    const now = new Date();
-    const monthNames = [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
-    ];
-    const expected = `Remove Food & Dining budget for ${monthNames[now.getMonth()]} ${now.getFullYear()}?`;
-    expect(screen.getByText(expected)).toBeInTheDocument();
+    // The URL names no month, so the page shows the one the server resolved.
+    expect(
+      screen.getByText("Remove Food & Dining budget for March 2026?"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText("Monthly tracking for this group will stop."),
     ).toBeInTheDocument();

@@ -8,6 +8,9 @@ import type { ChatMessageInputRole } from './chatMessageInputRole';
 
 export interface ChatMessageInput {
   role: ChatMessageInputRole;
-  /** @maxLength 20480 */
+  /**
+     * @minLength 1
+     * @maxLength 20480
+     */
   content: string;
 }

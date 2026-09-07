@@ -13,6 +13,10 @@ class SettlementPortion:
     A settlement's portions record exactly which months it covers and with
     how much — they sum to the settlement amount and are allocated once, at
     record time. Display math only ever adds them up.
+
+    The amount is signed: negative where the payment covers a month that ran
+    the other way, taking value back from it to settle the covered span as a
+    whole.
     """
 
     id: UUID
@@ -23,5 +27,5 @@ class SettlementPortion:
 
     def __attrs_post_init__(self) -> None:
         assert_month_key(self.year, self.month)
-        if self.amount <= 0:
-            raise ValueError(f"amount must be positive, got {self.amount}")
+        if self.amount == 0:
+            raise ValueError("amount must be non-zero")

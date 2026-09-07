@@ -49,7 +49,8 @@ import {
   currentYear,
   formatCurrency,
   MONTHS,
-  useMonthYear,
+  useMonthYearParams,
+  useResolvedPeriod,
 } from "@/lib/format";
 import { getHealthStyle } from "@/lib/health-styles";
 import { baseInputClass } from "@/lib/input-styles";
@@ -723,15 +724,17 @@ const SORT_OPTIONS: { value: SortMode; label: string }[] = [
 ];
 
 export function BudgetPage() {
-  const { year, month } = useMonthYear();
+  const { year: urlYear, month: urlMonth } = useMonthYearParams();
   const queryClient = useQueryClient();
 
   const { scope, setScope, viewMode, setViewMode, sortMode, setSortMode } =
     useBudgetFilters();
 
+  // A URL without a month asks for the default view: the server answers with
+  // the latest month that has spending.
   const budgetOverviewParams = useMemo(
-    () => ({ year, month, scope }),
-    [year, month, scope],
+    () => ({ year: urlYear, month: urlMonth, scope }),
+    [urlYear, urlMonth, scope],
   );
   const queryKey = getGetBudgetOverviewQueryKey(budgetOverviewParams);
 
@@ -742,6 +745,7 @@ export function BudgetPage() {
     refetch,
   } = useGetBudgetOverview(budgetOverviewParams);
   const data = budgetResponse?.status === 200 ? budgetResponse.data : undefined;
+  const { year, month, pickerValue } = useResolvedPeriod(data);
 
   const groupIconMap = useGroupIconMap();
   const { data: personsResponse } = useGetPersons();
@@ -857,7 +861,7 @@ export function BudgetPage() {
                 </Link>
               );
             })()}
-          <MonthPicker />
+          <MonthPicker value={pickerValue} />
         </div>
       </PageHeader>
 

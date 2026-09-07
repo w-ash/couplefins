@@ -6,7 +6,7 @@ cannot forget it. A grep gate in tests/unit/application/test_transaction_reads.p
 forbids list reads on `uow.transactions` anywhere else under src/application.
 """
 
-from datetime import date
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from attrs import define
@@ -112,14 +112,38 @@ async def fetch_scoped_rows(
 
 
 async def fetch_latest_spending_month(
-    uow: UnitOfWorkProtocol, ctx: ReconciliationContext
+    uow: UnitOfWorkProtocol, ctx: ReconciliationContext, year: int | None = None
 ) -> tuple[int, int] | None:
-    """(year, month) of the newest household spending row, or None. Transfer
-    rows are excluded so a card payment cannot point at an empty month."""
+    """(year, month) of the newest household spending row, within `year` when
+    given, or None. Transfer rows are excluded so a card payment cannot point
+    at an empty month."""
     latest = await uow.transactions.get_latest_household_transaction_date(
-        excluding_categories=ctx.non_spending_categories
+        excluding_categories=ctx.non_spending_categories, year=year
     )
     return (latest.year, latest.month) if latest else None
+
+
+async def resolve_period(
+    uow: UnitOfWorkProtocol,
+    ctx: ReconciliationContext,
+    year: int | None,
+    month: int | None,
+) -> tuple[int, int]:
+    """The (year, month) a spending page reports on. An explicit month always
+    wins; otherwise the page opens on the latest month with household
+    spending — within the named year, or the newest month overall when no
+    year is named — and on the current calendar month when there is none.
+    Household-anchored on purpose: Settle Up and Transactions reach the same
+    anchor through `fetch_latest_spending_month`, so every page opens on the
+    same month."""
+    if year is not None and month is not None:
+        return year, month
+    now = datetime.now(UTC)
+    anchor = await fetch_latest_spending_month(uow, ctx, year) or (
+        year or now.year,
+        now.month,
+    )
+    return anchor[0], month or anchor[1]
 
 
 async def fetch_listed_rows(

@@ -154,7 +154,7 @@ async def allocate_and_save_portions(
     """Plan a saved settlement's per-month portions and persist them.
 
     No covered months recorded defaults to the settled_at month. Pass a
-    ledger computed *before* the settlement was saved — the plan clears the
+    ledger computed *before* the settlement was saved — the plan zeroes the
     pre-payment balances.
     """
     covered = covered_months or [

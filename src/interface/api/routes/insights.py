@@ -1,5 +1,3 @@
-from datetime import UTC, datetime
-
 from fastapi import APIRouter, Depends, Query
 
 from src.application.runner import execute_use_case
@@ -27,7 +25,7 @@ async def get_spending_trends(
     current_user: Person = Depends(get_current_user),
 ) -> SpendingTrendsResponse:
     command = GetSpendingTrendsCommand(
-        year=year or datetime.now(UTC).year,
+        year=year,
         month=month,
         comparison_year=comparison_year,
         scope=scope,

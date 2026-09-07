@@ -119,19 +119,26 @@ function FlowLinkShape({
   );
 }
 
-function FlowTooltip({
+/** What the tooltip reads: the domain datum, without the layout geometry
+ * the node and link shapes draw with. Recharts resolves a link's source and
+ * target indices to the node objects before it hands them over. */
+type TooltipDatum =
+  | FlowNodeDatum
+  | { source: FlowNodeDatum; target: FlowNodeDatum; value: number };
+
+export function FlowTooltip({
   active,
   payload,
   total,
 }: {
   active?: boolean;
-  payload?: Array<{ payload?: unknown }>;
+  // Recharts wraps the Sankey datum one level deeper than its other charts:
+  // the tooltip entry's payload is `{ payload, name, value }`, for a node and
+  // a link alike.
+  payload?: Array<{ payload?: { payload?: TooltipDatum } }>;
   total: number;
 }) {
-  const item = payload?.[0]?.payload as
-    | FlowNode
-    | { source: FlowNode; target: FlowNode; value: number }
-    | undefined;
+  const item = payload?.[0]?.payload?.payload;
   if (!active || !item) return null;
   if ("source" in item) {
     return (
@@ -165,7 +172,7 @@ const MIN_HEIGHT = 360;
 const MAX_HEIGHT = 760;
 
 /** Enough height for the busiest column to label every node. */
-export function flowChartHeight(dataset: SankeyDataset): number {
+function flowChartHeight(dataset: SankeyDataset): number {
   const counts = { source: 0, group: 0, category: 0 };
   for (const n of dataset.nodes)
     counts[n.kind === "other" ? "category" : n.kind]++;
@@ -173,15 +180,9 @@ export function flowChartHeight(dataset: SankeyDataset): number {
   return Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, busiest * ROW_HEIGHT + 60));
 }
 
-export function SpendingFlowChart({
-  dataset,
-  height,
-}: {
-  dataset: SankeyDataset;
-  height?: number;
-}) {
+export function SpendingFlowChart({ dataset }: { dataset: SankeyDataset }) {
   const navigate = useNavigate();
-  const chartHeight = height ?? flowChartHeight(dataset);
+  const chartHeight = flowChartHeight(dataset);
   const total = dataset.nodes
     .filter((n) => n.kind === "source")
     .reduce((s, n) => s + n.amount, 0);

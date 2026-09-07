@@ -1,21 +1,18 @@
 import { within } from "@testing-library/react";
+import { useSearchParams } from "react-router";
 import { describe, expect, it } from "vitest";
 import { renderWithProviders, screen, userEvent } from "../test/test-utils";
 import { MonthPicker } from "./MonthPicker";
 
-describe("MonthPicker", () => {
-  it("renders button with current month label", () => {
-    renderWithProviders(<MonthPicker />);
-    const now = new Date();
-    const monthName = now.toLocaleString("en-US", { month: "long" });
-    expect(
-      screen.getByRole("button", { name: "Select month" }),
-    ).toHaveTextContent(`${monthName} ${now.getFullYear()}`);
-  });
+function UrlProbe() {
+  const [params] = useSearchParams();
+  return <span data-testid="url">{params.toString()}</span>;
+}
 
-  it("reads month/year from URL search params", () => {
-    renderWithProviders(<MonthPicker />, {
-      routerProps: { initialEntries: ["/?month=3&year=2025"] },
+describe("MonthPicker", () => {
+  it("labels the trigger with the month it was given", () => {
+    renderWithProviders(<MonthPicker value={{ year: 2025, month: 3 }} />, {
+      routerProps: { initialEntries: ["/?month=9&year=2020"] },
     });
     expect(
       screen.getByRole("button", { name: "Select month" }),
@@ -24,7 +21,7 @@ describe("MonthPicker", () => {
 
   it("opens popover on click and shows month grid", async () => {
     const user = userEvent.setup();
-    renderWithProviders(<MonthPicker />, {
+    renderWithProviders(<MonthPicker value={{ year: 2026, month: 6 }} />, {
       routerProps: { initialEntries: ["/?month=6&year=2026"] },
     });
 
@@ -38,7 +35,7 @@ describe("MonthPicker", () => {
 
   it("navigates years with chevron buttons", async () => {
     const user = userEvent.setup();
-    renderWithProviders(<MonthPicker />, {
+    renderWithProviders(<MonthPicker value={{ year: 2026, month: 1 }} />, {
       routerProps: { initialEntries: ["/?month=1&year=2026"] },
     });
 
@@ -58,9 +55,39 @@ describe("MonthPicker", () => {
     expect(within(dialog).getByText("2026")).toBeInTheDocument();
   });
 
+  it("sits inert while the month is unresolved", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<MonthPicker value={null} />);
+
+    const trigger = screen.getByRole("button", { name: "Select month" });
+    expect(trigger).toBeDisabled();
+
+    await user.click(trigger);
+    expect(
+      screen.queryByRole("dialog", { name: "Choose month" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("still writes the URL when controlled", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <>
+        <MonthPicker value={{ year: 2026, month: 6 }} />
+        <UrlProbe />
+      </>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Select month" }));
+    const dialog = screen.getByRole("dialog", { name: "Choose month" });
+    await user.click(within(dialog).getByText("Mar"));
+
+    // Picking is what makes a resolved month explicit and shareable.
+    expect(screen.getByTestId("url")).toHaveTextContent("year=2026&month=3");
+  });
+
   it("closes popover after selecting a month", async () => {
     const user = userEvent.setup();
-    renderWithProviders(<MonthPicker />, {
+    renderWithProviders(<MonthPicker value={{ year: 2026, month: 6 }} />, {
       routerProps: { initialEntries: ["/?month=6&year=2026"] },
     });
 
@@ -71,8 +98,9 @@ describe("MonthPicker", () => {
     expect(
       screen.queryByRole("dialog", { name: "Choose month" }),
     ).not.toBeInTheDocument();
+    // The label follows the value the page hands back, not the pick itself.
     expect(
       screen.getByRole("button", { name: "Select month" }),
-    ).toHaveTextContent("March 2026");
+    ).toHaveTextContent("June 2026");
   });
 });

@@ -78,6 +78,32 @@ describe("ChatPanel", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("frees the panel when the user stops a stream", () => {
+    // Aborting is swallowed by the SSE reader, so nothing else clears the
+    // streaming flag — leave it set and the composer stays disabled for good.
+    seedMessages([
+      { role: "user", content: "Hi" },
+      { role: "assistant", content: "partial", isStreaming: true },
+    ]);
+    useChatStore.setState({
+      isStreaming: true,
+      abortController: new AbortController(),
+    });
+    renderWithProviders(<ChatPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: /stop generating/i }));
+
+    const state = useChatStore.getState();
+    expect(state.isStreaming).toBe(false);
+    expect(state.abortController).toBeNull();
+    expect(state.messages.at(-1)?.isStreaming).toBe(false);
+    // The text that did arrive is kept.
+    expect(state.messages.at(-1)?.content).toBe("partial");
+    expect(
+      screen.queryByRole("button", { name: /stop generating/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("regenerates by removing the last assistant message and streaming a new one", () => {
     seedMessages([
       { role: "user", content: "Hi" },
@@ -96,6 +122,35 @@ describe("ChatPanel", () => {
     expect(state.messages[1].id).not.toBe("assistant-1");
     expect(state.messages[1].isStreaming).toBe(true);
     expect(sendChatMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("omits the in-flight assistant placeholder from the request", () => {
+    renderWithProviders(<ChatPanel />);
+
+    const textarea = screen.getByPlaceholderText(/ask about your finances/i);
+    fireEvent.change(textarea, { target: { value: "what did we spend?" } });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+
+    // startAssistantMessage appends an empty assistant message before the
+    // stream opens. Sending it is an empty trailing prefill, which the API
+    // rejects outright and which poisons every later turn in the thread.
+    expect(vi.mocked(sendChatMessage).mock.calls[0][0]).toEqual([
+      { role: "user", content: "what did we spend?" },
+    ]);
+  });
+
+  it("omits the placeholder when regenerating too", () => {
+    seedMessages([
+      { role: "user", content: "Hi" },
+      { role: "assistant", content: "wrong", id: "assistant-1" },
+    ]);
+
+    renderWithProviders(<ChatPanel />);
+    fireEvent.click(screen.getByRole("button", { name: /regenerate/i }));
+
+    expect(vi.mocked(sendChatMessage).mock.calls[0][0]).toEqual([
+      { role: "user", content: "Hi" },
+    ]);
   });
 
   it("sends the selected effort with each request", () => {

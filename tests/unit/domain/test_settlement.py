@@ -49,6 +49,12 @@ class TestSettlementPortionEntity:
         with pytest.raises(ValueError, match="year must be >= 1"):
             make_settlement_portion(year=0)
 
-    def test_non_positive_amount_raises(self) -> None:
-        with pytest.raises(ValueError, match="amount must be positive"):
+    def test_zero_amount_raises(self) -> None:
+        with pytest.raises(ValueError, match="amount must be non-zero"):
             make_settlement_portion(amount=Decimal(0))
+
+    def test_negative_amount_is_allowed(self) -> None:
+        """A payment covering a span whose months run both ways takes value
+        back from the months owed to the payer."""
+        p = make_settlement_portion(amount=Decimal("-393.64"))
+        assert p.amount == Decimal("-393.64")

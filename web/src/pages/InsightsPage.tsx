@@ -21,7 +21,8 @@ import {
   formatCurrency,
   getDeltaColorClass,
   MONTHS,
-  useMonthYear,
+  useMonthYearParams,
+  useResolvedPeriod,
 } from "@/lib/format";
 import { useIdentityStore } from "@/lib/identity";
 import {
@@ -57,7 +58,7 @@ import {
 const EMPTY_ICON_MAP = new Map<string, string | null>();
 
 export function InsightsPage() {
-  const { year, month } = useMonthYear();
+  const { year: urlYear, month: urlMonth } = useMonthYearParams();
   const [, setSearchParams] = useSearchParams();
   const {
     scope,
@@ -81,13 +82,12 @@ export function InsightsPage() {
     isLoading,
     error,
     refetch,
-  } = useGetSpendingTrends({
-    year,
-    month,
-    comparison_year: year - 1,
-    scope,
-  });
+    // A URL without a month asks for the default view: the server answers
+    // with the latest month that has spending. The comparison year is the
+    // server's to pick — always the year before the one it resolved.
+  } = useGetSpendingTrends({ year: urlYear, month: urlMonth, scope });
   const data = response?.status === 200 ? response.data : undefined;
+  const { year, month, pickerValue } = useResolvedPeriod(data);
   const { personNames, personIndexMap } = usePersonMaps(data?.persons);
 
   // A drill-down belongs to one view; leave it when the view changes.
@@ -182,7 +182,7 @@ export function InsightsPage() {
   return (
     <div className={`mx-auto max-w-5xl ${PAGE_PADDING}`}>
       <PageHeader icon={<TrendingUp className="size-6" />} title="Insights">
-        <MonthPicker />
+        <MonthPicker value={pickerValue} />
       </PageHeader>
 
       <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">

@@ -192,6 +192,8 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.13.3 | Income-kind category groups — paychecks are income, not spending ([spec](completed/v1.13.x.md)) | Completed (2026-09-05) | M |
 | v1.13.4 | Category setup parity with Monarch — four groups, 21 mappings, seed fixture regenerated ([spec](completed/v1.13.x.md)) | Completed (2026-09-05) | S |
 | v1.14.0 | Fly.io hosting — one container serving API + SPA same-origin, tag-triggered deploy, CI ([spec](v1.14.x.md)) | Completed (2026-09-06) | M |
+| v1.14.1 | Signed settlement portions — one payment settles the net of the months it covers ([spec](v1.11.x.md)) | Completed (2026-09-06) | M |
+| v1.14.2 | Pages open on the latest month with data; prompt caching left to the API ([spec](v1.14.x.md)) | Completed (2026-09-06) | M |
 
 ## Infrastructure Readiness
 

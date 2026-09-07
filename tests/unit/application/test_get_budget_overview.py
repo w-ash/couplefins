@@ -1,3 +1,4 @@
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
@@ -236,3 +237,72 @@ async def test_transfer_rows_never_reach_the_budget() -> None:
     assert household.overview.total_ytd_spent == Decimal("80.00")
     assert [s.group_name for s in personal.overview.group_statuses] == ["Food & Dining"]
     assert personal.overview.total_ytd_spent == Decimal("40.00")
+
+
+# --- default period (no year named) ---
+
+
+async def test_no_year_anchors_on_the_latest_spending_month() -> None:
+    uow = make_mock_uow()
+    uow.category_group_budgets.get_by_year.return_value = []
+    uow.category_group_budgets.get_all.return_value = []
+    uow.categories.get_all.return_value = []
+    uow.category_groups.get_all.return_value = []
+    uow.transactions.get_household_by_year.return_value = []
+    uow.transactions.get_latest_household_transaction_date.return_value = date(
+        2026, 8, 14
+    )
+
+    result = await GetBudgetOverviewUseCase().execute(GetBudgetOverviewCommand(), uow)
+
+    assert (result.overview.year, result.overview.month) == (2026, 8)
+    uow.category_group_budgets.get_by_year.assert_called_once_with(2026, None)
+    uow.transactions.get_household_by_year.assert_called_once_with(2026)
+
+
+async def test_no_year_falls_back_to_today_when_there_are_no_transactions() -> None:
+    uow = make_mock_uow()
+    uow.category_group_budgets.get_by_year.return_value = []
+    uow.category_group_budgets.get_all.return_value = []
+    uow.categories.get_all.return_value = []
+    uow.category_groups.get_all.return_value = []
+    uow.transactions.get_household_by_year.return_value = []
+
+    result = await GetBudgetOverviewUseCase().execute(GetBudgetOverviewCommand(), uow)
+
+    now = datetime.now(UTC)
+    assert (result.overview.year, result.overview.month) == (now.year, now.month)
+
+
+async def test_a_named_year_never_reaches_for_the_anchor() -> None:
+    uow = make_mock_uow()
+    uow.category_group_budgets.get_by_year.return_value = []
+    uow.category_group_budgets.get_all.return_value = []
+    uow.categories.get_all.return_value = []
+    uow.category_groups.get_all.return_value = []
+    uow.transactions.get_household_by_year.return_value = []
+
+    result = await GetBudgetOverviewUseCase().execute(
+        GetBudgetOverviewCommand(year=2026, month=2), uow
+    )
+
+    assert (result.overview.year, result.overview.month) == (2026, 2)
+    uow.transactions.get_latest_household_transaction_date.assert_not_called()
+
+
+async def test_a_month_without_a_year_keeps_the_month() -> None:
+    uow = make_mock_uow()
+    uow.category_group_budgets.get_by_year.return_value = []
+    uow.category_group_budgets.get_all.return_value = []
+    uow.categories.get_all.return_value = []
+    uow.category_groups.get_all.return_value = []
+    uow.transactions.get_household_by_year.return_value = []
+    uow.transactions.get_latest_household_transaction_date.return_value = date(
+        2025, 11, 20
+    )
+
+    result = await GetBudgetOverviewUseCase().execute(
+        GetBudgetOverviewCommand(month=3), uow
+    )
+
+    assert (result.overview.year, result.overview.month) == (2025, 3)
