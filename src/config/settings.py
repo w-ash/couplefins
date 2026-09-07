@@ -20,6 +20,13 @@ class LoggingConfig(BaseModel):
     file_path: Path | None = None
 
 
+# Query parameters libpq accepts but asyncpg does not. `sslmode` is translated
+# into the `ssl` connect arg below; `channel_binding` is simply dropped, since
+# asyncpg negotiates SCRAM channel binding itself. psycopg understands both, so
+# `sync_url` keeps them for Alembic.
+_LIBPQ_ONLY_PARAMS = frozenset({"sslmode", "channel_binding"})
+
+
 class DatabaseConfig(BaseModel):
     url: str = "postgresql+asyncpg://localhost:5432/couplefins"
     echo: bool = False
@@ -34,12 +41,18 @@ class DatabaseConfig(BaseModel):
 
     @property
     def async_url(self) -> str:
-        """URL with sslmode stripped — asyncpg uses the ssl connect_arg instead."""
-        if "sslmode=" not in self.url:
-            return self.url
+        """URL with libpq-only parameters removed.
+
+        asyncpg passes unknown query parameters straight to ``connect()`` as
+        keyword arguments and raises TypeError on the ones only libpq
+        understands. Neon's connection strings carry both of them.
+        """
         parsed = urlparse(self.url)
         params = parse_qs(parsed.query)
-        params.pop("sslmode", None)
+        if not _LIBPQ_ONLY_PARAMS & params.keys():
+            return self.url
+        for name in _LIBPQ_ONLY_PARAMS:
+            params.pop(name, None)
         return urlunparse(parsed._replace(query=urlencode(params, doseq=True)))
 
     @property

@@ -21,45 +21,44 @@ jobs:
   python:
     name: Python
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+
+    # A Postgres container, not a Neon branch. The integration suite drops and
+    # re-migrates the schema once and then TRUNCATEs every table after each
+    # test; over a network link to Neon that is latency-bound to the point of
+    # uselessness (measured: 39s locally, still no result after 20 minutes
+    # against a Neon branch in us-west-2). A service container also keeps real
+    # financial data out of CI entirely. Neon is used only for schema-diff, in
+    # its own job below.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: couplefins_test
+          POSTGRES_USER: couplefins
+          POSTGRES_PASSWORD: couplefins
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U couplefins"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Both, and identical: settings reads DATABASE__URL, while the
+      # integration suite reads TEST_DATABASE__URL and then points
+      # DATABASE__URL at its own value. The suite also refuses any URL
+      # containing "-pooler", since it truncates every table on teardown.
+      DATABASE__URL: postgresql+asyncpg://couplefins:couplefins@localhost:5432/couplefins_test
+      TEST_DATABASE__URL: postgresql+asyncpg://couplefins:couplefins@localhost:5432/couplefins_test
 
     steps:
-      # docs/dev-setup-guide is a docs-only submodule; cloning it would add auth
-      # plumbing for something no job reads.
+      # docs/dev-setup-guide is a docs-only submodule; cloning it would add
+      # auth plumbing for something no job reads.
       - uses: actions/checkout@v7
         with:
           submodules: false
-
-      # TTL backstop: push branches expire in 1 day, PR branches in 7.
-      # neon-cleanup.yml only covers PR close; expiry catches everything else.
-      - name: Compute Neon branch expiry
-        id: neon-expiry
-        run: |
-          days=$([ "${{ github.event_name }}" = "push" ] && echo 1 || echo 7)
-          echo "expires_at=$(date -u -d "+${days} days" +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-
-      - name: Create Neon branch
-        id: neon-branch
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ vars.NEON_PROJECT_ID }}
-          branch_name: ci/pr-${{ github.event.number || github.sha }}
-          api_key: ${{ secrets.NEON_API_KEY }}
-          database: neondb
-          expires_at: ${{ steps.neon-expiry.outputs.expires_at }}
-
-      # Both variables, and both non-pooled: settings reads DATABASE__URL, while
-      # the integration suite reads TEST_DATABASE__URL and refuses any URL
-      # containing "-pooler" (it TRUNCATEs every table on teardown). The suite
-      # then points DATABASE__URL at its own value, so they must agree.
-      - name: Set database URLs
-        run: |
-          URL="${DB_URL/postgresql:\/\//postgresql+asyncpg://}"
-          URL="${URL/postgres:\/\//postgresql+asyncpg://}"
-          echo "DATABASE__URL=$URL"      >> "$GITHUB_ENV"
-          echo "TEST_DATABASE__URL=$URL" >> "$GITHUB_ENV"
-        env:
-          DB_URL: ${{ steps.neon-branch.outputs.db_url }}
 
       # Full version, not `@v9` — setup-uv stopped publishing major/minor tags
       # at v8.0.0, deliberately, as a supply-chain measure after the tj-actions
@@ -68,11 +67,13 @@ jobs:
 
       # --locked, not --frozen: assert uv.lock is current for pyproject.toml.
       # --frozen installs a stale lock happily, deferring the failure to the
-      # Dockerfile's own `uv sync --locked` at deploy — after the release tag is
-      # already published.
+      # Dockerfile's own `uv sync --locked` at deploy — after the release tag
+      # is already published.
       - name: Install dependencies
         run: uv sync --locked
 
+      # Exercises the alembic CLI path, which reads DATABASE__URL only because
+      # alembic.ini deliberately leaves sqlalchemy.url unset.
       - name: Run migrations
         run: uv run alembic upgrade head
 
@@ -91,31 +92,6 @@ jobs:
       # Plain `pytest`: addopts already deselects slow/performance/diagnostic.
       - name: Test
         run: uv run pytest
-
-      - name: Check for migration changes
-        if: github.event_name == 'pull_request'
-        id: migration-check
-        run: echo "changed=$(git diff --name-only origin/main -- alembic/ | head -1)" >> "$GITHUB_OUTPUT"
-
-      - name: Schema diff
-        if: github.event_name == 'pull_request' && steps.migration-check.outputs.changed != ''
-        uses: neondatabase/schema-diff-action@v1
-        with:
-          project_id: ${{ vars.NEON_PROJECT_ID }}
-          compare_branch: ci/pr-${{ github.event.number }}
-          base_branch: main
-          api_key: ${{ secrets.NEON_API_KEY }}
-          database: neondb
-
-      # Push-to-main runs have no PR-close event to trigger neon-cleanup.yml,
-      # so delete the branch as soon as this job is done with it.
-      - name: Delete Neon branch (push runs)
-        if: always() && github.event_name == 'push' && steps.neon-branch.outcome == 'success'
-        uses: neondatabase/delete-branch-action@v3
-        with:
-          project_id: ${{ vars.NEON_PROJECT_ID }}
-          branch: ci/pr-${{ github.sha }}
-          api_key: ${{ secrets.NEON_API_KEY }}
 
   web:
     name: Web
@@ -173,3 +149,64 @@ jobs:
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Isolated from the test job on purpose: this is the only thing that needs
+  # Neon, it only runs when a PR touches migrations, and a Neon outage or a
+  # missing API key must never be able to redden the main gate.
+  schema-diff:
+    name: Schema diff
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: false
+
+      - name: Check for migration changes
+        id: migration-check
+        run: echo "changed=$(git diff --name-only origin/main -- alembic/ | head -1)" >> "$GITHUB_OUTPUT"
+
+      # Branches from the project default. Neon branches are copy-on-write and
+      # isolated; this one only ever has migrations applied to it, never the
+      # test suite, and is removed by neon-cleanup.yml at PR close or by the
+      # expiry below. Secrets are unavailable to fork PRs, so an outside pull
+      # request fails here rather than reaching any data.
+      - name: Create Neon branch
+        id: neon-branch
+        if: steps.migration-check.outputs.changed != ''
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch_name: ci/pr-${{ github.event.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+          database: neondb
+          expires_at: ${{ github.event.pull_request.updated_at }}
+
+      - uses: astral-sh/setup-uv@v9.0.0
+        if: steps.migration-check.outputs.changed != ''
+
+      - name: Apply the PR's migrations to the branch
+        if: steps.migration-check.outputs.changed != ''
+        run: |
+          uv sync --locked
+          URL="${DB_URL/postgresql:\/\//postgresql+asyncpg://}"
+          URL="${URL/postgres:\/\//postgresql+asyncpg://}"
+          DATABASE__URL="$URL" uv run alembic upgrade head
+        env:
+          DB_URL: ${{ steps.neon-branch.outputs.db_url }}
+
+      # base_branch is Neon's default branch, named `production` here — not a
+      # git branch. The diff shows what the new migration does to the real
+      # schema.
+      - name: Diff against production
+        if: steps.migration-check.outputs.changed != ''
+        uses: neondatabase/schema-diff-action@v1
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          compare_branch: ci/pr-${{ github.event.number }}
+          base_branch: production
+          api_key: ${{ secrets.NEON_API_KEY }}
+          database: neondb
