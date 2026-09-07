@@ -14,7 +14,7 @@ from tests.integration.conftest import setup_and_login, upload_csv
 
 _SIMPLE_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags
 2026-03-01,Grocery Store,Groceries,Checking,,,-50.00,shared
-2026-03-02,Electric Co,Utilities,Checking,,,-120.00,shared
+2026-03-02,Electric Co,Gas & Electric,Checking,,,-120.00,shared
 """
 
 

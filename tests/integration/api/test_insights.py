@@ -6,13 +6,13 @@ import pytest
 from tests.integration.conftest import login_as_bob, setup_and_login, upload_csv
 
 ALICE_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags
-2026-01-10,Sushi Place,Dining Out,Chase,SUSHI PLACE,,-40.00,"shared"
-2026-01-20,Grocery Store,Groceries & Home Supplies,Chase,GROCERY STORE,,-60.00,"shared"
-2026-02-05,Pizza Joint,Dining Out,Chase,PIZZA JOINT,,-30.00,"shared"
+2026-01-10,Sushi Place,Restaurants & Bars,Chase,SUSHI PLACE,,-40.00,"shared"
+2026-01-20,Grocery Store,Groceries,Chase,GROCERY STORE,,-60.00,"shared"
+2026-02-05,Pizza Joint,Restaurants & Bars,Chase,PIZZA JOINT,,-30.00,"shared"
 """
 
 ALICE_2025_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags
-2025-01-15,Taco Truck,Dining Out,Chase,TACO TRUCK,,-25.00,"shared"
+2025-01-15,Taco Truck,Restaurants & Bars,Chase,TACO TRUCK,,-25.00,"shared"
 """
 
 LATER_CARD_PAYMENT_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags
@@ -21,7 +21,7 @@ LATER_CARD_PAYMENT_CSV = """Date,Merchant,Category,Account,Original Statement,No
 
 BOB_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags
 2026-01-15,Gas Station,Gas,Chase,GAS STATION,,-50.00,"shared"
-2026-02-10,Coffee Shop,Coffee Shops & Treats,Chase,COFFEE SHOP,,-15.00,"shared"
+2026-02-10,Coffee Shop,Coffee Shops,Chase,COFFEE SHOP,,-15.00,"shared"
 """
 
 
@@ -212,8 +212,8 @@ async def test_spending_trends_flow_household_sources_are_payers(
         persons[1]["id"],
     }
     assert {c["category"] for c in cells} == {
-        "Dining Out",
-        "Groceries & Home Supplies",
+        "Restaurants & Bars",
+        "Groceries",
         "Gas",
     }
     assert sum(c["amount"] for c in cells) == pytest.approx(
@@ -239,9 +239,11 @@ async def test_spending_trends_category_comparisons(client: AsyncClient) -> None
     )
     assert resp.status_code == 200
     comparisons = {c["category"]: c for c in resp.json()["category_comparisons"]}
-    assert comparisons["Dining Out"]["current_month_amount"] == pytest.approx(30)
-    assert comparisons["Dining Out"]["trailing_average"] == pytest.approx(40)
-    assert comparisons["Groceries & Home Supplies"]["current_month_amount"] == 0
+    assert comparisons["Restaurants & Bars"]["current_month_amount"] == pytest.approx(
+        30
+    )
+    assert comparisons["Restaurants & Bars"]["trailing_average"] == pytest.approx(40)
+    assert comparisons["Groceries"]["current_month_amount"] == 0
 
 
 # --- scope ---
@@ -249,9 +251,9 @@ async def test_spending_trends_category_comparisons(client: AsyncClient) -> None
 # Alice's export: a 70/30 split she paid, her own personal row, and a
 # spot for Bob (his personal spending, fronted by her).
 ALICE_SCOPED_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags
-2026-01-10,Sushi Place,Dining Out,Chase,SUSHI PLACE,,-100.00,"shared, s70"
-2026-01-11,Book Store,Dining Out,Chase,BOOK STORE,,-40.00,
-2026-01-12,Parking Meter,Dining Out,Chase,PARKING METER,,-30.00,"bob"
+2026-01-10,Sushi Place,Restaurants & Bars,Chase,SUSHI PLACE,,-100.00,"shared, s70"
+2026-01-11,Book Store,Restaurants & Bars,Chase,BOOK STORE,,-40.00,
+2026-01-12,Parking Meter,Restaurants & Bars,Chase,PARKING METER,,-30.00,"bob"
 """
 
 
@@ -325,7 +327,7 @@ async def test_spending_trends_rejects_unknown_scope(client: AsyncClient) -> Non
 
 
 CARD_PAYMENT_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags
-2026-01-10,Sushi Place,Dining Out,Chase,SUSHI PLACE,,-100.00,"shared"
+2026-01-10,Sushi Place,Restaurants & Bars,Chase,SUSHI PLACE,,-100.00,"shared"
 2026-01-15,Chase Card,Credit Card Payment,Checking,CHASE PAYMENT,,-4000.00,"shared"
 2026-01-15,Chase Card,Credit Card Payment,Chase,PAYMENT THANK YOU,,4000.00,
 2026-01-20,Amex,Credit Card Payment,Checking,AMEX PAYMENT,,-900.00,
@@ -352,7 +354,7 @@ async def test_credit_card_payments_are_not_spending(client: AsyncClient) -> Non
 
 PAYCHECK_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags
 2026-01-05,Employer,Paychecks,Chase,PAYROLL,,5000.00,
-2026-01-11,Book Store,Dining Out,Chase,BOOK STORE,,-40.00,
+2026-01-11,Book Store,Restaurants & Bars,Chase,BOOK STORE,,-40.00,
 """
 
 
@@ -368,4 +370,6 @@ async def test_paychecks_are_not_personal_spending(client: AsyncClient) -> None:
     assert resp.status_code == 200
     data = resp.json()
     assert data["monthly_totals"] == [{"year": 2026, "month": 1, "total_amount": 40.0}]
-    assert [c["category"] for c in data["month_flow"]["cells"]] == ["Dining Out"]
+    assert [c["category"] for c in data["month_flow"]["cells"]] == [
+        "Restaurants & Bars"
+    ]

@@ -4,7 +4,7 @@ from tests.integration.conftest import setup_and_login, upload_csv
 
 SHARED_CSV = (
     "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
-    '2026-01-15,Restaurant,Dining Out,Chase,RESTAURANT,,"-80.00","shared,s50"\n'
+    '2026-01-15,Restaurant,Restaurants & Bars,Chase,RESTAURANT,,"-80.00","shared,s50"\n'
 )
 
 
@@ -37,7 +37,7 @@ async def test_patch_updates_category(client: AsyncClient) -> None:
     assert body["id"] == tx_id
     assert len(body["edits"]) == 1
     assert body["edits"][0]["field_name"] == "category"
-    assert body["edits"][0]["old_value"] == "Dining Out"
+    assert body["edits"][0]["old_value"] == "Restaurants & Bars"
     assert body["edits"][0]["new_value"] == "Fast Food"
 
 

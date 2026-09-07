@@ -8,7 +8,7 @@ from tests.integration.conftest import login_as_bob, setup_and_login, upload_csv
 SHARED_CSV_ALICE = (
     "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
     '2026-01-15,Grocery Store,Groceries,Chase,GROCERY STORE,,"-100.00",shared\n'
-    '2026-01-16,Restaurant,Dining Out,Amex,RESTAURANT,,"-60.00","shared,s70"\n'
+    '2026-01-16,Restaurant,Restaurants & Bars,Amex,RESTAURANT,,"-60.00","shared,s70"\n'
 )
 
 SHARED_CSV_BOB = (

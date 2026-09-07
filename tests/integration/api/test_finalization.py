@@ -102,7 +102,7 @@ async def test_upload_to_finalized_month_returns_409(client: AsyncClient) -> Non
 
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
-        "2026-01-15,Restaurant,Dining Out,Chase,,,-50.00,shared\n"
+        "2026-01-15,Restaurant,Restaurants & Bars,Chase,,,-50.00,shared\n"
     )
     import io
 

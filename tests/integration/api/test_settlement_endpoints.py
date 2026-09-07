@@ -73,7 +73,7 @@ async def test_multi_month_catch_up_settles_both_months(client: AsyncClient) -> 
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
         '2026-01-15,Grocery Store,Groceries,Chase,GROCERY STORE,,"-100.00",shared\n'
-        '2026-02-10,Restaurant,Dining Out,Chase,RESTAURANT,,"-60.00",shared\n'
+        '2026-02-10,Restaurant,Restaurants & Bars,Chase,RESTAURANT,,"-60.00",shared\n'
     )
     await upload_csv(client, alice_id, csv, auth=cookies)
 
@@ -121,7 +121,7 @@ async def test_month_paid_past_charges_swings_and_flags_direction(
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
         '2026-01-15,Grocery Store,Groceries,Chase,GROCERY STORE,,"-100.00",shared\n'
-        '2026-02-10,Restaurant,Dining Out,Chase,RESTAURANT,,"-300.00",shared\n'
+        '2026-02-10,Restaurant,Restaurants & Bars,Chase,RESTAURANT,,"-300.00",shared\n'
     )
     await upload_csv(client, alice_id, csv, auth=cookies)
 

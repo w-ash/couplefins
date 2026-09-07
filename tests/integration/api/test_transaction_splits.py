@@ -4,7 +4,7 @@ from tests.integration.conftest import setup_and_login, upload_csv
 
 SHARED_CSV = (
     "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
-    '2026-01-15,Restaurant,Dining Out,Chase,RESTAURANT,,"-80.00","shared,s50"\n'
+    '2026-01-15,Restaurant,Restaurants & Bars,Chase,RESTAURANT,,"-80.00","shared,s50"\n'
     '2026-01-16,Grocery Store,Groceries,Chase,GROCERY,,"-60.00",shared\n'
 )
 

@@ -51,7 +51,7 @@ async def test_create_budget(client: AsyncClient) -> None:
 
 async def test_update_budget(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
-    group_id = await _get_group_id(client, "Home Expenses", cookies)
+    group_id = await _get_group_id(client, "Housing", cookies)
 
     create_resp = await client.post(
         "/api/v1/budgets",
@@ -141,7 +141,7 @@ async def test_overview_with_budget_and_spending(client: AsyncClient) -> None:
 
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
-        "2026-01-15,Restaurant,Dining Out,Chase,,,-50.00,shared\n"
+        "2026-01-15,Restaurant,Restaurants & Bars,Chase,,,-50.00,shared\n"
     )
     await upload_csv(client, alice_id, csv, auth=cookies)
 
@@ -171,8 +171,8 @@ async def test_ytd_categories_include_earlier_month_only_category(
 
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
-        "2026-01-10,Coffee Shop,Coffee Shops & Treats,Chase,,,-20.00,shared\n"
-        "2026-02-15,Restaurant,Dining Out,Chase,,,-50.00,shared\n"
+        "2026-01-10,Coffee Shop,Coffee Shops,Chase,,,-20.00,shared\n"
+        "2026-02-15,Restaurant,Restaurants & Bars,Chase,,,-50.00,shared\n"
     )
     await upload_csv(client, alice_id, csv, auth=cookies)
 
@@ -187,8 +187,8 @@ async def test_ytd_categories_include_earlier_month_only_category(
     )
     monthly_cats = {c["category"] for c in food_status["categories"]}
     ytd_cats = {c["category"] for c in food_status["ytd_categories"]}
-    assert monthly_cats == {"Dining Out"}
-    assert ytd_cats == {"Dining Out", "Coffee Shops & Treats"}
+    assert monthly_cats == {"Restaurants & Bars"}
+    assert ytd_cats == {"Restaurants & Bars", "Coffee Shops"}
 
 
 async def test_overview_surfaces_uncategorized_row(client: AsyncClient) -> None:
@@ -260,7 +260,7 @@ async def test_personal_budget_overview(client: AsyncClient) -> None:
     # Upload shared transaction (Alice pays $100 shared 50/50)
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
-        "2026-01-15,Restaurant,Dining Out,Chase,,,-100.00,shared\n"
+        "2026-01-15,Restaurant,Restaurants & Bars,Chase,,,-100.00,shared\n"
     )
     await upload_csv(client, alice_id, csv, auth=cookies)
 
@@ -337,7 +337,7 @@ async def test_copy_budgets_end_to_end(client: AsyncClient) -> None:
 
 async def test_copy_skips_existing_targets(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
-    group_id = await _get_group_id(client, "Travel", cookies)
+    group_id = await _get_group_id(client, "Travel & Lifestyle", cookies)
 
     # Create budget in Jan and Feb for same group
     for month in (1, 2):
@@ -391,7 +391,7 @@ async def test_copy_to_finalized_month_returns_409(client: AsyncClient) -> None:
 
 async def test_overview_includes_copyable_source(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
-    group_id = await _get_group_id(client, "Lifestyle", cookies)
+    group_id = await _get_group_id(client, "Travel & Lifestyle", cookies)
 
     await client.post(
         "/api/v1/budgets",
@@ -416,7 +416,7 @@ async def test_overview_includes_copyable_source(client: AsyncClient) -> None:
 
 async def test_budget_on_transfer_group_rejected(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
-    group_id = await _get_group_id(client, "Transfer", cookies)
+    group_id = await _get_group_id(client, "Transfers", cookies)
 
     response = await client.post(
         "/api/v1/budgets",
@@ -443,8 +443,8 @@ async def test_overview_defaults_to_the_latest_month_with_spending(
     persons, cookies = await setup_and_login(client)
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
-        "2026-01-10,Coffee Shop,Coffee Shops & Treats,Chase,,,-20.00,shared\n"
-        "2026-02-15,Restaurant,Dining Out,Chase,,,-50.00,shared\n"
+        "2026-01-10,Coffee Shop,Coffee Shops,Chase,,,-20.00,shared\n"
+        "2026-02-15,Restaurant,Restaurants & Bars,Chase,,,-50.00,shared\n"
     )
     await upload_csv(client, persons[0]["id"], csv, auth=cookies)
 

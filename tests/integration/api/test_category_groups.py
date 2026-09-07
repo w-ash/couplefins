@@ -99,7 +99,7 @@ async def test_bulk_update_mappings(client: AsyncClient) -> None:
         json={
             "mappings": [
                 {"category": "Groceries", "group_id": group_id},
-                {"category": "Dining Out", "group_id": group_id},
+                {"category": "Restaurants & Bars", "group_id": group_id},
             ]
         },
         auth=cookies,
@@ -121,7 +121,7 @@ async def test_seeded_groups_carry_their_kind(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
     groups = (await client.get("/api/v1/category-groups", auth=cookies)).json()
     kinds = {g["name"]: g["kind"] for g in groups}
-    assert kinds["Transfer"] == "transfer"
+    assert kinds["Transfers"] == "transfer"
     assert kinds["Income"] == "income"
     assert kinds["Food & Dining"] == "expense"
 

@@ -6,7 +6,7 @@ from tests.integration.conftest import login_as_bob, setup_and_login, upload_csv
 SHARED_CSV = (
     "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
     '2026-01-15,Grocery Store,Groceries,Chase,GROCERY STORE,,"-100.00",shared\n'
-    '2026-01-16,Restaurant,Dining Out,Amex,RESTAURANT,,"-60.00","shared,s70"\n'
+    '2026-01-16,Restaurant,Restaurants & Bars,Amex,RESTAURANT,,"-60.00","shared,s70"\n'
 )
 
 SHARED_CSV_BOB = (
@@ -85,7 +85,7 @@ async def test_settlement_math(client: AsyncClient) -> None:
     # Alice pays $100 at 50/50 → Bob owes $50
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
-        '2026-02-15,Test,Dining Out,Chase,TEST,,"-100.00",shared\n'
+        '2026-02-15,Test,Restaurants & Bars,Chase,TEST,,"-100.00",shared\n'
     )
     await upload_csv(client, alice_id, csv, auth=cookies)
 
@@ -106,11 +106,11 @@ async def test_date_range_query(client: AsyncClient) -> None:
 
     csv_jan = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
-        '2026-01-15,Test,Dining Out,Chase,TEST,,"-100.00",shared\n'
+        '2026-01-15,Test,Restaurants & Bars,Chase,TEST,,"-100.00",shared\n'
     )
     csv_feb = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
-        '2026-02-10,Test2,Dining Out,Chase,TEST2,,"-60.00",shared\n'
+        '2026-02-10,Test2,Restaurants & Bars,Chase,TEST2,,"-60.00",shared\n'
     )
     await upload_csv(client, alice_id, csv_jan, auth=cookies)
     await upload_csv(client, alice_id, csv_feb, auth=cookies)
@@ -153,7 +153,7 @@ async def test_partial_range_returns_422(client: AsyncClient) -> None:
 
 PERSONAL_CSV = (
     "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
-    '2026-01-15,Coffee,Dining Out,Chase,COFFEE,,"-5.00",\n'
+    '2026-01-15,Coffee,Restaurants & Bars,Chase,COFFEE,,"-5.00",\n'
 )
 
 
@@ -164,8 +164,8 @@ async def test_reconciliation_personal_scope(client: AsyncClient) -> None:
     # Upload shared + personal transactions for Alice
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
-        '2026-01-15,Restaurant,Dining Out,Chase,REST,,"-100.00",shared\n'
-        '2026-01-16,Coffee,Dining Out,Chase,COFFEE,,"-5.00",\n'
+        '2026-01-15,Restaurant,Restaurants & Bars,Chase,REST,,"-100.00",shared\n'
+        '2026-01-16,Coffee,Restaurants & Bars,Chase,COFFEE,,"-5.00",\n'
     )
     await upload_csv(client, alice_id, csv, auth=cookies)
 
@@ -187,8 +187,8 @@ async def test_reconciliation_all_scope(client: AsyncClient) -> None:
 
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
-        '2026-01-15,Restaurant,Dining Out,Chase,REST,,"-100.00",shared\n'
-        '2026-01-16,Coffee,Dining Out,Chase,COFFEE,,"-5.00",\n'
+        '2026-01-15,Restaurant,Restaurants & Bars,Chase,REST,,"-100.00",shared\n'
+        '2026-01-16,Coffee,Restaurants & Bars,Chase,COFFEE,,"-5.00",\n'
     )
     await upload_csv(client, alice_id, csv, auth=cookies)
 
@@ -208,8 +208,8 @@ async def test_reconciliation_default_scope_unchanged(client: AsyncClient) -> No
 
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
-        '2026-01-15,Restaurant,Dining Out,Chase,REST,,"-100.00",shared\n'
-        '2026-01-16,Coffee,Dining Out,Chase,COFFEE,,"-5.00",\n'
+        '2026-01-15,Restaurant,Restaurants & Bars,Chase,REST,,"-100.00",shared\n'
+        '2026-01-16,Coffee,Restaurants & Bars,Chase,COFFEE,,"-5.00",\n'
     )
     await upload_csv(client, alice_id, csv, auth=cookies)
 
@@ -329,7 +329,7 @@ async def test_income_rows_are_listed_with_a_badge_but_not_counted(
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
         '2026-01-05,Employer,Paychecks,Chase,PAYROLL,,"5000.00",\n'
-        '2026-01-15,Restaurant,Dining Out,Chase,REST,,"-100.00",shared\n'
+        '2026-01-15,Restaurant,Restaurants & Bars,Chase,REST,,"-100.00",shared\n'
     )
     await upload_csv(client, alice_id, csv, auth=cookies)
 

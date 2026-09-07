@@ -135,13 +135,13 @@ THREE_ROW_SHARED_CSV = (
     "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
     "2026-01-15,Grocery Store,Groceries,Chase,GROCERY STORE,,-50.00,shared\n"
     "2026-01-16,Gas Station,Gas,Chase,GAS STATION,,-30.00,shared\n"
-    "2026-01-17,Restaurant,Dining Out,Chase,RESTAURANT,,-80.00,shared\n"
+    "2026-01-17,Restaurant,Restaurants & Bars,Chase,RESTAURANT,,-80.00,shared\n"
 )
 # Same window (Jan 15-17), Gas Station row deleted in Monarch.
 TWO_ROW_SHARED_CSV = (
     "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
     "2026-01-15,Grocery Store,Groceries,Chase,GROCERY STORE,,-50.00,shared\n"
-    "2026-01-17,Restaurant,Dining Out,Chase,RESTAURANT,,-80.00,shared\n"
+    "2026-01-17,Restaurant,Restaurants & Bars,Chase,RESTAURANT,,-80.00,shared\n"
 )
 
 
@@ -330,7 +330,7 @@ async def test_upload_nan_amount_returns_422(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
     nan_csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
-        "2026-01-15,Starbucks,Dining Out,Chase,STARBUCKS,,NaN,shared\n"
+        "2026-01-15,Starbucks,Restaurants & Bars,Chase,STARBUCKS,,NaN,shared\n"
     )
     response = await client.post(
         "/api/v1/uploads/",
