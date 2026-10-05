@@ -41,7 +41,7 @@ Ideas and features without version assignment. Move to a version file when ready
 
 ## External read interface
 
-Epic. Ash (2026-10-03): couplefins is the source of truth for the couple's finances, and other
+Epic. The maintainer (2026-10-03): couplefins is the source of truth for the couple's finances, and other
 tools read it through one generic interface. Monarch CSVs are how data arrives for now, not the
 model: a bank's own statement, a direct bank feed, or another aggregator can replace them. The
 first consumer is frigg, which fills the House account tab of the private house sheet
@@ -52,7 +52,7 @@ house-specific: the house account is one joint account, and a budget line is one
 
 | Option | For | Against |
 |---|---|---|
-| HTTP JSON under `/api/ext/v1` on the deployed app | Already hosted at couplefins.fly.dev with one instance and one database; a consumer needs a URL and a token, nothing else; works the same from Ash's Mac and from a hub; FastAPI generates the OpenAPI schema per version; routes stay 5-10 lines over existing use cases | Needs non-browser auth (story below); each call wakes Neon |
+| HTTP JSON under `/api/ext/v1` on the deployed app | Already hosted at couplefins.fly.dev with one instance and one database; a consumer needs a URL and a token, nothing else; works the same from the maintainer's Mac and from a hub; FastAPI generates the OpenAPI schema per version; routes stay 5-10 lines over existing use cases | Needs non-browser auth (story below); each call wakes Neon |
 | CLI with JSON stdout (`python -m src.interface.cli`, huginn-style) | Matches how frigg already shells out to huginn | Every consumer machine needs a checkout, Python 3.14, and `DATABASE__URL`, which brings back the version drift the v1.1.1 schema guard exists for |
 | Python package import | No transport | Couples consumers to `src/` internals and async SQLAlchemy; consumer holds database credentials |
 | The MCP server (v1.9.3) | Already exists and exposes reads and writes | Shaped for agents: chat-shaped results, two-phase confirmation, no versioned contract. It stays the surface for Claude sessions |

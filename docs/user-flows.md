@@ -247,7 +247,7 @@ Linking bank transactions to show that the balance has been paid. The payment it
 
 **US-SETTLE-1**: As a partner, I want to see who owes whom and link matching bank transactions as the settlement.
 
-- Given the Settle Up page, then I see a hero card with the selected year's balance ("Alice owes Bob $842") (v1.11.0)
+- Given the Settle Up page, then I see a hero card with the selected year's balance ("Alice owes Bob $420") (v1.11.0)
 - Given both partners have uploaded, then I see matching transfer pairs (e.g., Venmo debit + credit) sorted by amount, searched within the selected year (v1.11.0)
 - Given I select a matching pair, when I click "Mark as settlement", then both transactions are linked, excluded from spending, and the selected year's balance updates (v1.11.0)
 - Given the app has configurable settlement merchants (Venmo, Zelle, etc. — set in Settings), then candidates are scored by merchant match, amount match, and category
@@ -307,8 +307,8 @@ Linking bank transactions to show that the balance has been paid. The payment it
 
 **US-SETTLE-9** (v1.11.0): As a partner, I want my monthly rent transfer to settle its rent month directly.
 
-- Given the rent charge (one Check of −$3,962, split 50/50) and both Venmo transfer legs (−$1,981 out, +$1,981 in), when I record the settlement, then both legs are linked and excluded from spending, and the settlement carries one portion: $1,981 covering the rent month
-- Given the recorded portion, then the rent month's balance drops by $1,981 — the counterparty's exact half of the rent charge
+- Given the rent charge (one Check of −$3,000, split 50/50) and both Venmo transfer legs (−$1,500 out, +$1,500 in), when I record the settlement, then both legs are linked and excluded from spending, and the settlement carries one portion: $1,500 covering the rent month
+- Given the recorded portion, then the rent month's balance drops by $1,500 — the counterparty's exact half of the rent charge
 - Given rent is settled this way, then the month's remaining balance reflects only its other charges — even when that residual runs in the payer's favor, which is the normal state
 
 **US-SETTLE-10** (v1.11.0): As a partner, I want one catch-up lump to settle the months we're behind on.
@@ -654,7 +654,7 @@ A natural language assistant for quick answers without page-hopping. Optional �
 
 - Given an open month, when I ask to finalize it, then the assistant proposes the lock with the same advisory warnings the app shows (missing uploads, outstanding balance, unmapped categories), and only confirming locks the month
 - Given a finalized month, when I ask to unlock it, then the assistant proposes the unlock and confirming reopens the month
-- Given I tell the assistant "I paid Kew back $500 via Venmo", then it proposes recording the settlement (amount, direction, method), and confirming records it identically to the Settle Up page — a settlement recorded without explicit coverage covers its settled-at month (v1.11.0)
+- Given I tell the assistant "I paid Bob back $500 via Venmo", then it proposes recording the settlement (amount, direction, method), and confirming records it identically to the Settle Up page — a settlement recorded without explicit coverage covers its settled-at month (v1.11.0)
 - Given an outstanding balance, when I say "let's call it even", then the assistant proposes waiving the total outstanding balance with its amount and direction on the card
 - Given a recorded settlement from get_settlement_activity, when I ask to delete it or to link/unlink its bank transaction, then the assistant proposes the change with the concrete transaction and settlement details, and confirming applies it with the same month-lock guards as the app
 - Given a settlement proposal I don't confirm, then nothing is recorded and the ledger is unchanged

@@ -28,7 +28,7 @@ Read these on demand — they are not preloaded:
 - **Immutable Domain** — pure transformations, no side effects in domain layer
 - **Batch-First** — design for collections, single items are degenerate cases
 - **Validate at Boundaries** — typed models at entry points, trust internals
-- **Public repo** — everything committed here is public: no home address, account numbers, real financial figures, or details from Ash's vault, house project, or private repos, in code, docs, backlog notes, or commit messages
+- **Public repo** — everything committed here is public: no home address, account numbers, real financial figures, or details from the maintainer's private life, notes, or repos, in code, docs, backlog notes, or commit messages
 
 ## Architecture
 
