@@ -44,21 +44,21 @@ Ideas and features without version assignment. Move to a version file when ready
 Epic. The maintainer (2026-10-03): couplefins is the source of truth for the couple's finances, and other
 tools read it through one generic interface. Monarch CSVs are how data arrives for now, not the
 model: a bank's own statement, a direct bank feed, or another aggregator can replace them. The
-first consumer is frigg, which fills the House account tab of the private house sheet
-from couplefins (frigg backlog, "House account log from couplefins"). Nothing here is
-house-specific: the house account is one joint account, and a budget line is one tag namespace.
+first consumer is a private sync tool that fills a joint account's log in a spreadsheet from
+couplefins. Nothing here is specific to that consumer: the account is one joint account, and a
+budget line is one tag namespace.
 
 **Shape options**
 
 | Option | For | Against |
 |---|---|---|
 | HTTP JSON under `/api/ext/v1` on the deployed app | Already hosted at couplefins.fly.dev with one instance and one database; a consumer needs a URL and a token, nothing else; works the same from the maintainer's Mac and from a hub; FastAPI generates the OpenAPI schema per version; routes stay 5-10 lines over existing use cases | Needs non-browser auth (story below); each call wakes Neon |
-| CLI with JSON stdout (`python -m src.interface.cli`, huginn-style) | Matches how frigg already shells out to huginn | Every consumer machine needs a checkout, Python 3.14, and `DATABASE__URL`, which brings back the version drift the v1.1.1 schema guard exists for |
+| CLI with JSON stdout (`python -m src.interface.cli`) | Matches how a sync tool shells out to other CLIs | Every consumer machine needs a checkout, Python 3.14, and `DATABASE__URL`, which brings back the version drift the v1.1.1 schema guard exists for |
 | Python package import | No transport | Couples consumers to `src/` internals and async SQLAlchemy; consumer holds database credentials |
 | The MCP server (v1.9.3) | Already exists and exposes reads and writes | Shaped for agents: chat-shaped results, two-phase confirmation, no versioned contract. It stays the surface for Claude sessions |
 
 **Recommendation: HTTP.** It is the only option where the consumer holds no database
-credentials and no copy of the code, and the only one that already runs where a future frigg hub
+credentials and no copy of the code, and the only one that already runs where a future hub
 could reach it.
 
 **Shared rules for every story here**
@@ -119,8 +119,8 @@ could reach it.
           token (it is high-entropy), never the token.
         - Create and revoke from a CLI run with `DATABASE__URL`:
           ```sh
-          uv run python -m src.interface.cli tokens create frigg --scope read   # prints the token once
-          uv run python -m src.interface.cli tokens revoke frigg
+          uv run python -m src.interface.cli tokens create sync-tool --scope read   # prints the token once
+          uv run python -m src.interface.cli tokens revoke sync-tool
           uv run python -m src.interface.cli tokens list
           ```
         - Header `Authorization: Bearer cf_<token>`. A token never authenticates `/api/v1`, and a
@@ -166,7 +166,7 @@ could reach it.
     - Effort: M
     - What: Read-only endpoints for accounts, transactions (with split, payer, and per-person
       shares), settlements with their portions, and per-person balances, over a date range.
-    - Why: One stable contract that frigg, a vault session, or any later tool reads, so none of
+    - Why: One stable contract that a sync tool, an agent session, or any later tool reads, so none of
       them reaches into the database or the web UI's routes.
     - Dependencies: Service tokens for non-browser consumers; Jointly owned accounts
     - Status: Not Started
@@ -212,7 +212,7 @@ could reach it.
     - What: Tags of the form `<namespace>:<value>` (for example `line:mortgage`) are labels for
       consumers: never treated as split, reserved, or person-name tags, kept across re-imports,
       and filterable with `tag_prefix` in the ext API.
-    - Why: The house account needs each row's budget line. A generic label lets any consumer
+    - Why: A joint account's log needs each row's budget line. A generic label lets any consumer
       group rows without couplefins knowing what a line is.
     - Dependencies: None
     - Status: Not Started
