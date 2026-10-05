@@ -74,7 +74,7 @@ ROWS = [
     _household(3, "Dining Out", "33.33", ALICE.id, 50),  # household refund
     _personal(3, "Groceries", "10.00", ALICE.id, 100),  # personal refund
     make_transaction(date=date(2026, 3, 5), amount=D("-99.00"), is_excluded=True),
-    make_transaction(date=date(2026, 3, 6), amount=D("-1981.00"), is_settlement=True),
+    make_transaction(date=date(2026, 3, 6), amount=D("-1500.00"), is_settlement=True),
     _household(3, "Mystery", "-12.34", BOB.id, 50),  # unmapped category
 ]
 LENSES = [HouseholdLens(), PersonalLens(ALICE.id), PersonalLens(BOB.id)]

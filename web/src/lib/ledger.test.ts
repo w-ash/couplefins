@@ -4,8 +4,8 @@ import { defaultLedgerYear, formatPortionPeriod, ledgerYears } from "./ledger";
 
 const Y = new Date().getFullYear();
 
-const ASH = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
-const KEW = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+const ALICE = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const BOB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
 function makeYear(overrides: Partial<LedgerYearResponse>): LedgerYearResponse {
   return {
@@ -20,8 +20,8 @@ function makeYear(overrides: Partial<LedgerYearResponse>): LedgerYearResponse {
 
 const owed = (amount: number) => ({
   amount,
-  from_person_id: KEW,
-  to_person_id: ASH,
+  from_person_id: BOB,
+  to_person_id: ALICE,
 });
 
 describe("ledgerYears", () => {

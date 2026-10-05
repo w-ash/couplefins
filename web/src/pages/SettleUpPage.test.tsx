@@ -17,24 +17,24 @@ import {
 import { SettleUpPage } from "./SettleUpPage";
 
 // Fixtures ride the current year so the year-scoped hero resolves the same
-// way every year the suite runs. The numbers mirror production 2026: rent
-// settled 1:1 each month, so every month swings to Ash's favor.
+// way every year the suite runs. The figures are illustrative: rent is
+// settled 1:1 each month, so every month swings to Alice's favor.
 const Y = new Date().getFullYear();
 
-const ASH = "p1";
-const KEW = "p2";
+const ALICE = "p1";
+const BOB = "p2";
 
 const persons = [
   {
-    id: ASH,
-    name: "Ash",
+    id: ALICE,
+    name: "Alice",
     adjustment_account: "",
     theme_preference: "system",
     chat_voice: "fiona",
   },
   {
-    id: KEW,
-    name: "Kew",
+    id: BOB,
+    name: "Bob",
     adjustment_account: "",
     theme_preference: "system",
     chat_voice: "fiona",
@@ -42,22 +42,27 @@ const persons = [
 ];
 
 const uploadedStatuses = [
-  { person_id: ASH, person_name: "Ash", has_uploaded: true, upload_count: 1 },
-  { person_id: KEW, person_name: "Kew", has_uploaded: true, upload_count: 1 },
+  {
+    person_id: ALICE,
+    person_name: "Alice",
+    has_uploaded: true,
+    upload_count: 1,
+  },
+  { person_id: BOB, person_name: "Bob", has_uploaded: true, upload_count: 1 },
 ];
 
-const ashOwesKew = (amount: number) => ({
+const aliceOwesBob = (amount: number) => ({
   amount,
-  from_person_id: ASH,
-  to_person_id: KEW,
+  from_person_id: ALICE,
+  to_person_id: BOB,
 });
-const kewOwesAsh = (amount: number) => ({
+const bobOwesAlice = (amount: number) => ({
   amount,
-  from_person_id: KEW,
-  to_person_id: ASH,
+  from_person_id: BOB,
+  to_person_id: ALICE,
 });
 
-// One $1,981 rent settlement (Ash's half of the rent Check), one portion at
+// One $1,500 rent settlement (Alice's half of the rent Check), one portion at
 // its rent month.
 function rentSettlement(
   id: string,
@@ -66,13 +71,13 @@ function rentSettlement(
 ): LedgerSettlementResponse {
   return makeLedgerSettlement({
     id,
-    amount: 1981.0,
-    from_person_id: ASH,
-    to_person_id: KEW,
+    amount: 1500.0,
+    from_person_id: ALICE,
+    to_person_id: BOB,
     method: "venmo",
     settled_at: `${Y}-04-26T12:00:00Z`,
     created_at: `${Y}-04-26T12:00:00Z`,
-    portions: [{ year: Y, month, amount: 1981.0 }],
+    portions: [{ year: Y, month, amount: 1500.0 }],
     ...overrides,
   });
 }
@@ -83,8 +88,8 @@ function makeMonth(
   return makeLedgerMonth({ year: Y, month: 1, ...overrides });
 }
 
-// The production acceptance numbers: Jan 24.11 / Feb 1,758.69 / Mar 175.90,
-// year 1,958.70 — every month's direction matches the year's, so no row
+// The acceptance numbers: Jan 25.00 / Feb 1,200.00 / Mar 150.00,
+// year 1,375.00 — every month's direction matches the year's, so no row
 // names a person.
 const productionResponse = {
   year: Y,
@@ -92,32 +97,32 @@ const productionResponse = {
   years: [
     {
       year: Y,
-      charged: ashOwesKew(3984.3),
-      paid: ashOwesKew(5943.0),
-      balance: kewOwesAsh(1958.7),
+      charged: aliceOwesBob(3125.0),
+      paid: aliceOwesBob(4500.0),
+      balance: bobOwesAlice(1375.0),
       span: { start: { year: Y, month: 1 }, end: { year: Y, month: 3 } },
     },
   ],
   months: [
     makeMonth({
       month: 1,
-      charged: ashOwesKew(1956.89),
-      paid: ashOwesKew(1981.0),
-      balance: kewOwesAsh(24.11),
+      charged: aliceOwesBob(1475.0),
+      paid: aliceOwesBob(1500.0),
+      balance: bobOwesAlice(25.0),
       status: "partially_settled",
     }),
     makeMonth({
       month: 2,
-      charged: ashOwesKew(222.31),
-      paid: ashOwesKew(1981.0),
-      balance: kewOwesAsh(1758.69),
+      charged: aliceOwesBob(300.0),
+      paid: aliceOwesBob(1500.0),
+      balance: bobOwesAlice(1200.0),
       status: "partially_settled",
     }),
     makeMonth({
       month: 3,
-      charged: ashOwesKew(1805.1),
-      paid: ashOwesKew(1981.0),
-      balance: kewOwesAsh(175.9),
+      charged: aliceOwesBob(1350.0),
+      paid: aliceOwesBob(1500.0),
+      balance: bobOwesAlice(150.0),
       status: "partially_settled",
     }),
   ],
@@ -128,8 +133,8 @@ const productionResponse = {
   ],
   upload_statuses: uploadedStatuses,
   persons: [
-    { id: ASH, name: "Ash" },
-    { id: KEW, name: "Kew" },
+    { id: ALICE, name: "Alice" },
+    { id: BOB, name: "Bob" },
   ],
   is_finalized: false,
   finalized_at: null,
@@ -138,17 +143,17 @@ const productionResponse = {
   finalization_warnings: [],
   payer_splits: [
     {
-      payer_person_id: KEW,
-      fronted: 3962.0,
-      their_share: 1981.0,
-      partner_share: 1981.0,
+      payer_person_id: BOB,
+      fronted: 3000.0,
+      their_share: 1500.0,
+      partner_share: 1500.0,
       transaction_count: 1,
     },
     {
-      payer_person_id: ASH,
-      fronted: 48.22,
-      their_share: 24.11,
-      partner_share: 24.11,
+      payer_person_id: ALICE,
+      fronted: 50.0,
+      their_share: 25.0,
+      partner_share: 25.0,
       transaction_count: 2,
     },
   ],
@@ -161,9 +166,9 @@ const crossYearResponse = {
   years: [
     {
       year: Y - 1,
-      charged: ashOwesKew(80.0),
+      charged: aliceOwesBob(80.0),
       paid: null,
-      balance: ashOwesKew(80.0),
+      balance: aliceOwesBob(80.0),
       span: {
         start: { year: Y - 1, month: 12 },
         end: { year: Y - 1, month: 12 },
@@ -175,8 +180,8 @@ const crossYearResponse = {
     makeMonth({
       year: Y - 1,
       month: 12,
-      charged: ashOwesKew(80.0),
-      balance: ashOwesKew(80.0),
+      charged: aliceOwesBob(80.0),
+      balance: aliceOwesBob(80.0),
       status: "carried_forward",
     }),
     ...productionResponse.months,
@@ -189,8 +194,8 @@ const allSettledResponse = {
   years: [
     {
       year: Y,
-      charged: ashOwesKew(3984.3),
-      paid: ashOwesKew(3984.3),
+      charged: aliceOwesBob(3125.0),
+      paid: aliceOwesBob(3125.0),
       balance: null,
       span: { start: { year: Y, month: 1 }, end: { year: Y, month: 3 } },
     },
@@ -209,14 +214,14 @@ const emptyResponse = {
   settlements: [],
   upload_statuses: [
     {
-      person_id: ASH,
-      person_name: "Ash",
+      person_id: ALICE,
+      person_name: "Alice",
       has_uploaded: false,
       upload_count: 0,
     },
     {
-      person_id: KEW,
-      person_name: "Kew",
+      person_id: BOB,
+      person_name: "Bob",
       has_uploaded: false,
       upload_count: 0,
     },
@@ -256,7 +261,7 @@ function monthsCard() {
 
 describe("SettleUpPage", () => {
   beforeEach(() => {
-    useIdentityStore.setState({ currentPersonId: ASH });
+    useIdentityStore.setState({ currentPersonId: ALICE });
     server.use(http.get("/api/v1/persons/", () => HttpResponse.json(persons)));
     server.use(
       http.get("/api/v1/settlements/candidates", () => HttpResponse.json([])),
@@ -274,12 +279,12 @@ describe("SettleUpPage", () => {
     const hero = within(
       screen.getByRole("region", { name: "Settlement summary" }),
     );
-    expect(hero.getByText("$1,958.70")).toBeInTheDocument();
-    expect(hero.getByText("Kew")).toBeInTheDocument();
-    expect(hero.getByText("Ash")).toBeInTheDocument();
+    expect(hero.getByText("$1,375.00")).toBeInTheDocument();
+    expect(hero.getByText("Bob")).toBeInTheDocument();
+    expect(hero.getByText("Alice")).toBeInTheDocument();
     expect(hero.getByText("covers Jan–Mar")).toBeInTheDocument();
     expect(
-      hero.getByText(`$3,984.30 charged, $5,943.00 paid in ${Y}`),
+      hero.getByText(`$3,125.00 charged, $4,500.00 paid in ${Y}`),
     ).toBeInTheDocument();
   });
 
@@ -301,10 +306,10 @@ describe("SettleUpPage", () => {
 
     // Every month runs with the year's direction — bare amounts, no names.
     const january = rows[0];
-    expect(january.textContent).toContain("$24.11");
+    expect(january.textContent).toContain("$25.00");
     expect(january.textContent).not.toContain("owes");
-    expect(rows[1].textContent).toContain("$1,758.69");
-    expect(rows[2].textContent).toContain("$175.90");
+    expect(rows[1].textContent).toContain("$1,200.00");
+    expect(rows[2].textContent).toContain("$150.00");
   });
 
   it("names the person only on a month that runs against the year", async () => {
@@ -314,8 +319,8 @@ describe("SettleUpPage", () => {
         ...productionResponse.months,
         makeMonth({
           month: 4,
-          charged: ashOwesKew(120.0),
-          balance: ashOwesKew(120.0),
+          charged: aliceOwesBob(120.0),
+          balance: aliceOwesBob(120.0),
           status: "carried_forward",
           runs_against_year: true,
         }),
@@ -334,7 +339,7 @@ describe("SettleUpPage", () => {
     const april = screen.getByRole("button", {
       name: new RegExp(`April ${Y}`),
     });
-    expect(april.textContent).toContain("Ash");
+    expect(april.textContent).toContain("Alice");
     expect(april.textContent).toContain("owes");
     expect(april.textContent).toContain("$120.00");
     // The other rows stay bare.
@@ -358,13 +363,13 @@ describe("SettleUpPage", () => {
     const january = screen.getByRole("button", {
       name: new RegExp(`January ${Y}`),
     });
-    expect(january.textContent).toContain("$24.11");
+    expect(january.textContent).toContain("$25.00");
 
     // The Summary narrative reads the same months[] entry as the row.
     await waitFor(() => {
       expect(screen.getByText("Summary")).toBeInTheDocument();
     });
-    expect(screen.getByText(/Kew owes Ash \$24\.11/)).toBeInTheDocument();
+    expect(screen.getByText(/Bob owes Alice \$25\.00/)).toBeInTheDocument();
   });
 
   it("states each settlement once: the months it covers, the payer, the amount", async () => {
@@ -381,8 +386,8 @@ describe("SettleUpPage", () => {
     expect(history.getByText("February")).toBeInTheDocument();
     expect(history.getByText("March")).toBeInTheDocument();
     // Three rows, each stating its amount and payer exactly once.
-    expect(history.getAllByText("$1,981.00")).toHaveLength(3);
-    expect(history.getAllByText("Ash")).toHaveLength(3);
+    expect(history.getAllByText("$1,500.00")).toHaveLength(3);
+    expect(history.getAllByText("Alice")).toHaveLength(3);
     // A lone portion equals the settlement, so it carries no amount of its own.
     expect(history.queryByText(/→/)).not.toBeInTheDocument();
     // Nor is a single-portion row expandable.
@@ -459,7 +464,7 @@ describe("SettleUpPage", () => {
     );
     expect(hero.getByText("$80.00")).toBeInTheDocument();
     expect(hero.getByText("covers December")).toBeInTheDocument();
-    expect(hero.queryByText("$1,958.70")).not.toBeInTheDocument();
+    expect(hero.queryByText("$1,375.00")).not.toBeInTheDocument();
 
     expect(
       screen.getByRole("button", { name: new RegExp(`December ${Y - 1}`) }),
@@ -488,11 +493,11 @@ describe("SettleUpPage", () => {
     renderWithProviders(<SettleUpPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(`Waive Kew's ${Y} balance`)).toBeInTheDocument();
+      expect(screen.getByText(`Waive Bob's ${Y} balance`)).toBeInTheDocument();
     });
     expect(
       screen.getByText(
-        `Clears $1,958.70 from ${Y} only. Undo by deleting the waiver.`,
+        `Clears $1,375.00 from ${Y} only. Undo by deleting the waiver.`,
       ),
     ).toBeInTheDocument();
     // Rejected vocabulary never appears.
@@ -503,7 +508,7 @@ describe("SettleUpPage", () => {
     const dialog = screen.getByRole("dialog");
     expect(
       within(dialog).getByText(
-        `Kew owes Ash $1,958.70 for ${Y}. Waiving clears it; other years stay open.`,
+        `Bob owes Alice $1,375.00 for ${Y}. Waiving clears it; other years stay open.`,
       ),
     ).toBeInTheDocument();
     expect(waived).toBeNull();
@@ -525,8 +530,8 @@ describe("SettleUpPage", () => {
     });
     expect(waived).toMatchObject({
       waive_year: Y,
-      from_person_id: KEW,
-      to_person_id: ASH,
+      from_person_id: BOB,
+      to_person_id: ALICE,
     });
   });
 
@@ -540,8 +545,8 @@ describe("SettleUpPage", () => {
             id: "t1",
             date: `${Y}-04-26`,
             merchant: "Venmo",
-            amount: -1958.7,
-            payer_person_id: KEW,
+            amount: -1375.0,
+            payer_person_id: BOB,
             category: "Transfers",
             score: 90,
             match_reasons: ["amount match"],
@@ -550,8 +555,8 @@ describe("SettleUpPage", () => {
             id: "t2",
             date: `${Y}-04-26`,
             merchant: "Venmo",
-            amount: 1958.7,
-            payer_person_id: ASH,
+            amount: 1375.0,
+            payer_person_id: ALICE,
             category: "Transfers",
             score: 90,
             match_reasons: ["amount match"],
@@ -593,8 +598,8 @@ describe("SettleUpPage", () => {
       expect(recorded).not.toBeNull();
     });
     expect(recorded).toMatchObject({
-      from_person_id: KEW,
-      to_person_id: ASH,
+      from_person_id: BOB,
+      to_person_id: ALICE,
       covered_months: [
         { year: Y, month: 1 },
         { year: Y, month: 2 },
@@ -603,8 +608,8 @@ describe("SettleUpPage", () => {
   });
 
   it("sends the legs' sender and recipient, not the outstanding direction", async () => {
-    // Regression: the year balance says Kew owes Ash, but the selected
-    // Venmo legs show Ash sent the money — the POST and the success copy
+    // Regression: the year balance says Bob owes Alice, but the selected
+    // Venmo legs show Alice sent the money — the POST and the success copy
     // must follow the legs.
     const user = userEvent.setup();
     let recorded: Record<string, unknown> | null = null;
@@ -615,8 +620,8 @@ describe("SettleUpPage", () => {
             id: "t1",
             date: `${Y}-07-06`,
             merchant: "Venmo",
-            amount: -1981.0,
-            payer_person_id: ASH,
+            amount: -1500.0,
+            payer_person_id: ALICE,
             category: "Transfers",
             score: 90,
             match_reasons: ["amount match"],
@@ -625,8 +630,8 @@ describe("SettleUpPage", () => {
             id: "t2",
             date: `${Y}-07-06`,
             merchant: "Venmo",
-            amount: 1981.0,
-            payer_person_id: KEW,
+            amount: 1500.0,
+            payer_person_id: BOB,
             category: "Transfers",
             score: 90,
             match_reasons: ["amount match"],
@@ -661,11 +666,11 @@ describe("SettleUpPage", () => {
       expect(recorded).not.toBeNull();
     });
     expect(recorded).toMatchObject({
-      from_person_id: ASH,
-      to_person_id: KEW,
+      from_person_id: ALICE,
+      to_person_id: BOB,
     });
     expect(
-      await screen.findByText(/Settlement linked — Ash paid Kew \$1,981\.00/),
+      await screen.findByText(/Settlement linked — Alice paid Bob \$1,500\.00/),
     ).toBeInTheDocument();
   });
 
@@ -696,8 +701,8 @@ describe("SettleUpPage", () => {
         productionResponse.months[1],
         makeMonth({
           month: 5,
-          charged: ashOwesKew(400.0),
-          balance: ashOwesKew(400.0),
+          charged: aliceOwesBob(400.0),
+          balance: aliceOwesBob(400.0),
           status: "carried_forward",
         }),
       ],

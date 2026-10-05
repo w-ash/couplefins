@@ -139,15 +139,15 @@ describe("SettleUpAuditTable", () => {
   });
 
   it("states the API's month balance in both the Summary and the Total row", async () => {
-    // The month entry says Bob owes Alice $24.11 — the same entry the month
+    // The month entry says Bob owes Alice $25.00 — the same entry the month
     // row renders, so the two surfaces can never diverge.
     const data = makeData({
       payer_splits: [
         makePayerSplit({
           payer_person_id: ALICE_ID,
-          fronted: 3913.78,
-          their_share: 1956.89,
-          partner_share: 1956.89,
+          fronted: 2950.0,
+          their_share: 1475.0,
+          partner_share: 1475.0,
           transaction_count: 12,
         }),
         makePayerSplit({ payer_person_id: BOB_ID }),
@@ -155,7 +155,7 @@ describe("SettleUpAuditTable", () => {
       months: [
         makeMonth({
           balance: {
-            amount: 24.11,
+            amount: 25.0,
             from_person_id: BOB_ID,
             to_person_id: ALICE_ID,
           },
@@ -164,7 +164,7 @@ describe("SettleUpAuditTable", () => {
       ],
       settlements: [
         makeSettlement({
-          amount: 1981,
+          amount: 1500,
           from_person_id: BOB_ID,
           to_person_id: ALICE_ID,
           method: "venmo",
@@ -176,13 +176,13 @@ describe("SettleUpAuditTable", () => {
       <SettleUpAuditTable data={data} personNames={PERSON_NAMES} />,
     );
 
-    expect(screen.getByText(/Bob owes Alice \$24\.11/)).toBeInTheDocument();
+    expect(screen.getByText(/Bob owes Alice \$25\.00/)).toBeInTheDocument();
 
     await expandLedger();
 
     // + in Net favors persons[0] (Alice); Bob owing Alice renders positive.
     const totalRow = screen.getByText("Total").closest("tr") as HTMLElement;
-    expect(totalRow.textContent).toContain("+$24.11");
+    expect(totalRow.textContent).toContain("+$25.00");
   });
 
   it("renders bills with positive Net when persons[0] paid", async () => {

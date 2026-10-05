@@ -42,7 +42,7 @@ class TestBlockStructure:
         """Block A must contain zero per-request values, or the model-side
         prompt cache dies on every request."""
         a = _blocks(person_name="Alice", today=date(2026, 1, 1), groups=["Food"])
-        b = _blocks(person_name="Kew", today=date(2027, 12, 31), groups=["Travel"])
+        b = _blocks(person_name="Bob", today=date(2027, 12, 31), groups=["Travel"])
         assert _primer_text(a) == _primer_text(b)
 
     def test_primer_meets_cache_activation_floor(self) -> None:

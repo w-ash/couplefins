@@ -187,9 +187,9 @@ class TestGetSettleUpData:
             amount=Decimal("-100.00"),
             payer_percentage=50,
         )
-        # Bob owes Alice $50, but pays $1981 covering January.
+        # Bob owes Alice $50, but pays $1500 covering January.
         settlement = make_settlement(
-            amount=Decimal("1981.00"),
+            amount=Decimal("1500.00"),
             from_person_id=bob.id,
             to_person_id=alice.id,
             settled_at=datetime(2026, 4, 26, tzinfo=UTC),
@@ -198,7 +198,7 @@ class TestGetSettleUpData:
             settlement_id=settlement.id,
             year=2026,
             month=1,
-            amount=Decimal("1981.00"),
+            amount=Decimal("1500.00"),
         )
         uow = _setup_uow(
             alice, bob, transactions=[tx], settlements=[settlement], portions=[portion]
@@ -212,12 +212,12 @@ class TestGetSettleUpData:
         assert jan.charged is not None
         assert jan.charged.amount == Decimal("50.00")
         assert jan.balance is not None
-        assert jan.balance.amount == Decimal("1931.00")
+        assert jan.balance.amount == Decimal("1450.00")
         assert jan.balance.from_person_id == alice.id  # swung
         assert jan.status is MonthSettlementStatus.PARTIALLY_SETTLED
         year = _year(result, 2026)
         assert year.balance is not None
-        assert year.balance.amount == Decimal("1931.00")
+        assert year.balance.amount == Decimal("1450.00")
         assert year.balance.from_person_id == alice.id
 
     async def test_multi_portion_settlement_covers_several_months(self) -> None:

@@ -941,7 +941,7 @@ async def test_get_reconciliation_report_largest_lists_spending_rows_only() -> N
         make_transaction(
             merchant="Chase", amount=Decimal(-5000), category="Credit Card Payment"
         ),
-        make_transaction(merchant="Venmo", amount=Decimal(-1981), is_settlement=True),
+        make_transaction(merchant="Venmo", amount=Decimal(-1500), is_settlement=True),
         make_transaction(merchant="Refund me", amount=Decimal(-900), is_excluded=True),
         make_transaction(merchant="Whole Foods", amount=Decimal(-120)),
     ]

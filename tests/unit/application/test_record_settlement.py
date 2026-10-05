@@ -179,8 +179,8 @@ class TestRecordSettlement:
         show Alice sent the money — the stored direction is Alice → Bob."""
         alice = make_person(name="Alice")
         bob = make_person(name="Bob")
-        sent = make_transaction(payer_person_id=alice.id, amount=Decimal("-1981.00"))
-        received = make_transaction(payer_person_id=bob.id, amount=Decimal("1981.00"))
+        sent = make_transaction(payer_person_id=alice.id, amount=Decimal("-1500.00"))
+        received = make_transaction(payer_person_id=bob.id, amount=Decimal("1500.00"))
         uow = make_mock_uow()
         uow.persons.get_by_ids.return_value = [alice, bob]
         uow.persons.get_all.return_value = [alice, bob]
@@ -189,7 +189,7 @@ class TestRecordSettlement:
         uow.transactions.update_mutable_fields.return_value = sent
 
         command = RecordSettlementCommand(
-            amount=Decimal("1981.00"),
+            amount=Decimal("1500.00"),
             from_person_id=bob.id,
             to_person_id=alice.id,
             method="Venmo",

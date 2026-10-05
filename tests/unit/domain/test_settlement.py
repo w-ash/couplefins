@@ -56,5 +56,5 @@ class TestSettlementPortionEntity:
     def test_negative_amount_is_allowed(self) -> None:
         """A payment covering a span whose months run both ways takes value
         back from the months owed to the payer."""
-        p = make_settlement_portion(amount=Decimal("-393.64"))
-        assert p.amount == Decimal("-393.64")
+        p = make_settlement_portion(amount=Decimal("-300.00"))
+        assert p.amount == Decimal("-300.00")

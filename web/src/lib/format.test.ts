@@ -64,7 +64,7 @@ describe("formatSignedCurrency", () => {
 
   it("prefixes negative amounts with a true minus sign (U+2212)", () => {
     expect(formatSignedCurrency(-50)).toBe("−$50.00");
-    expect(formatSignedCurrency(-73.4)).toBe("−$73.40");
+    expect(formatSignedCurrency(-42.5)).toBe("−$42.50");
   });
 });
 

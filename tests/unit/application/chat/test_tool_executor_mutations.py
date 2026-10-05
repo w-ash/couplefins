@@ -627,8 +627,8 @@ async def test_record_settlement_returns_pending_with_covered_months() -> None:
 async def test_record_settlement_linked_legs_correct_direction() -> None:
     """The card shows the legs' true sender and recipient, not the model's
     stated direction — the user confirms what actually happened."""
-    sent = make_transaction(payer_person_id=ALICE.id, amount=Decimal("-1981.00"))
-    received = make_transaction(payer_person_id=BOB.id, amount=Decimal("1981.00"))
+    sent = make_transaction(payer_person_id=ALICE.id, amount=Decimal("-1500.00"))
+    received = make_transaction(payer_person_id=BOB.id, amount=Decimal("1500.00"))
     with patch(
         "src.application.chat.tool_executor.execute_use_case",
         new_callable=AsyncMock,
@@ -639,7 +639,7 @@ async def test_record_settlement_linked_legs_correct_direction() -> None:
             {
                 "from_person": "Bob",
                 "to_person": "Alice",
-                "amount": 1981,
+                "amount": 1500,
                 "linked_transaction_ids": [str(sent.id), str(received.id)],
             },
             CTX,

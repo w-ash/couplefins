@@ -596,11 +596,11 @@ def test_net_position_overpayment_reverses_direction() -> None:
         amount=Decimal("212.65"), from_person_id=alice.id, to_person_id=bob.id
     )
     settlement = make_settlement(
-        amount=Decimal("1981.00"), from_person_id=alice.id, to_person_id=bob.id
+        amount=Decimal("1500.00"), from_person_id=alice.id, to_person_id=bob.id
     )
     result = compute_net_position(gross, [settlement])
     assert result is not None
-    assert result.amount == Decimal("1768.35")
+    assert result.amount == Decimal("1287.35")
     assert result.from_person_id == bob.id
     assert result.to_person_id == alice.id
 

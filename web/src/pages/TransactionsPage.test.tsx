@@ -240,7 +240,7 @@ describe("TransactionsPage", () => {
   });
 
   it("Settlement card shows the month's balance after payments, not its charges", async () => {
-    // A $1,000 payment against January's $1,805.10 in charges leaves $805.10.
+    // A $1,000 payment against January's $1,350.00 in charges leaves $350.00.
     server.use(
       http.get("/api/v1/settle-up", () =>
         HttpResponse.json({
@@ -250,7 +250,7 @@ describe("TransactionsPage", () => {
               year: 2026,
               month: 1,
               charged: {
-                amount: 1805.1,
+                amount: 1350.0,
                 from_person_id: "p1",
                 to_person_id: "p2",
               },
@@ -260,7 +260,7 @@ describe("TransactionsPage", () => {
                 to_person_id: "p2",
               },
               balance: {
-                amount: 805.1,
+                amount: 350.0,
                 from_person_id: "p1",
                 to_person_id: "p2",
               },
@@ -285,13 +285,13 @@ describe("TransactionsPage", () => {
     renderWithProviders(<TransactionsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Alice owes Bob \$805\.10/)).toBeInTheDocument();
+      expect(screen.getByText(/Alice owes Bob \$350\.00/)).toBeInTheDocument();
     });
     expect(
-      screen.queryByText(/Alice owes Bob \$1,805\.10/),
+      screen.queryByText(/Alice owes Bob \$1,350\.00/),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByText(/\$1,805\.10 charged · \$1,000\.00 paid/),
+      screen.getByText(/\$1,350\.00 charged · \$1,000\.00 paid/),
     ).toBeInTheDocument();
   });
 
