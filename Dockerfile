@@ -14,7 +14,7 @@
 # Keep this tag in step with `required-version` under [tool.uv] in
 # pyproject.toml. uv refuses a uv.lock whose schema is newer than it
 # understands, and a stale tag fails `uv sync --locked` here at deploy time.
-FROM ghcr.io/astral-sh/uv:0.12-python3.14-trixie-slim AS python-builder
+FROM ghcr.io/astral-sh/uv:0.13-python3.14-trixie-slim AS python-builder
 
 WORKDIR /app
 
