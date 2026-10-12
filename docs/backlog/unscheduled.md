@@ -129,48 +129,17 @@ could reach it.
           401; a `read` token on a future write route gets 403; `/api/v1/*` with a bearer token
           and no cookie gets 401; `last_used_at` moves on use.
 
-- [ ] **Jointly owned accounts**
-    - Effort: L
-    - What: An account is a first-class couplefins entity, personal (one owner) or joint (both).
-      A joint account's transactions are imported straight into it, belong to no person's
-      upload, never enter settlement, and split between its owners (50/50 by default).
-    - Why: Today a transaction exists only as a row in one person's upload, with that person as
-      `payer_person_id`. A joint account's mortgage payment has no such payer: forcing one makes
-      it that person's personal spending, or, split, a debt the other owes, though both funded
-      the account.
-    - Dependencies: Importers behind one interface
-    - Status: Not Started
-    - Notes:
-        - Table `accounts (id, name, kind: personal | joint, owner_person_id null for joint,
-          default_split, importer, column_map)`; Alembic migration plus `SCHEMA_VERSION` bump.
-          `Transaction` gains `account_id`; `payer_person_id` is null on a joint row. Existing
-          Monarch rows map to a personal account per uploader and per Monarch `Account` string, so
-          their figures do not move.
-        - A joint row's shares come from the account's default split unless the row overrides it.
-          It is excluded from settlement at read time, as `exclude_non_spending` in
-          `src/domain/filters.py` does for transfers. Payments are household; each person's
-          personal lens (`src/domain/spending_lens.py`) takes their share.
-        - Deposits: a joint row with a positive amount from an owner carries
-          `depositor_person_id`. A per-account rule matches the memo to a person (the house
-          account's deposit memos name the depositor); a deposit no rule matches is listed for
-          the couple to assign in the app.
-        - The depositor's own side of a deposit, if it comes in through their personal import,
-          stays a transfer-kind row, so it never counts as spending.
-        - Acceptance: a bank statement CSV for a joint account imports with no person's upload
-          involved; its rows add nothing to any settlement balance; a 50/50 payment adds half its
-          amount to each person's personal spending; a deposit whose memo names a person has that
-          person as depositor; Monarch-imported figures on every page are unchanged by the
-          migration.
-
 - [ ] **Read API v1**
     - Effort: M
     - What: Read-only endpoints for accounts, transactions (with split, payer, and per-person
       shares), settlements with their portions, and per-person balances, over a date range.
     - Why: One stable contract that a sync tool, an agent session, or any later tool reads, so none of
       them reaches into the database or the web UI's routes.
-    - Dependencies: Service tokens for non-browser consumers; Jointly owned accounts
+    - Dependencies: Service tokens for non-browser consumers; Jointly owned accounts (Co-owned
+      home epic)
     - Status: Not Started
     - Notes:
+        - Owner shares (Co-owned home epic) reach the API later as an additive v1 change.
         - Endpoints:
           ```
           GET /api/ext/v1/meta
@@ -229,3 +198,171 @@ could reach it.
           added in couplefins survives a re-import of a source without it;
           `GET /api/ext/v1/transactions?tag_prefix=line:` returns only rows carrying a `line:`
           tag.
+
+## Co-owned home
+
+Epic, an outline. The maintainer (2026-10-12): two people who co-own a home pay its costs from
+joint bank accounts, and couplefins becomes where those payments are logged, with a spreadsheet
+backup through the Read API. It also tracks each owner's share in the home as it grows, and any
+transaction can be tagged as counting toward a share. These stories sketch the shape of that
+work; they are not a spec.
+
+**Before building anything here**
+
+- Learn the owners' actual financial setup for the home first, from the maintainer and from the
+  maintainer's private notes on it (ask where they are; nothing from them comes into this repo):
+  the accounts, the loans and where each stands, the co-ownership agreement as signed, the
+  decisions about who pays what, and what is already logged elsewhere.
+- Don't assume these stories capture every requirement, or the situation as it stands when the
+  work starts. They were written before the agreement was signed, while the purchase was financed
+  by short-term loans awaiting a refinance, so both will have moved on.
+- Revise the stories with the maintainer, then build. Where the setup and a story disagree, the
+  setup wins.
+- Keep the model generic, a co-owned asset with a capital account per owner, so it works for any
+  couple. The household's rules, names, and figures are data entered in the app, never code,
+  docs, fixtures, or commit messages (CLAUDE.md: public repo). Examples use Alice and Bob.
+
+**The setup as understood on 2026-10-12** (confirm every point)
+
+- Two joint accounts: checking, which pays the bills and the renovation (each owner has a debit
+  card), and savings, whose named buckets set money aside (property tax, insurance, a repair
+  reserve, renovation money not yet spent).
+- Each owner deposits into checking from their own bank. Money given to one owner belongs to
+  that owner wherever it sits, and some of it pays house costs.
+- The co-ownership agreement sets each owner's share as their qualifying contributions divided
+  by both owners' totals, dollar for dollar, with no interest or timing adjustment.
+    - Qualifying: down payment and closing costs; interest and principal on loans both owners
+      approved; property tax; insurance; necessary repairs above a threshold; other work only when
+      both owners agreed its scope and cost split before it started. Nothing else counts unless
+      both agree.
+    - Not qualifying: utilities (split, but credited to no one), rent, and moving costs.
+    - Each bill splits 50/50 by default. Either owner may pay more of a bill when both agree, and
+      the extra counts toward the payer. An owner who covers the other's missed payment is
+      credited with it.
+    - On a sale or buyout, what is left after costs and loans splits by share.
+- Money sitting in the accounts (the float, the set-asides, the reserve) is not a contribution
+  until it pays a qualifying cost, and on a sale each owner gets back their unspent deposits. This
+  was a proposed rule; check whether the signed agreement has it.
+- Some qualifying payments never pass through the joint accounts: the closing, through escrow; a
+  loan paydown wired from one owner's own account; a premium paid before the accounts opened; a
+  house cost on a personal card.
+- The owners cap how much of their own money goes into the renovation, apart from gifts and
+  loans, so a contribution's source matters as well as its owner.
+- Undecided at writing: whether refunds (a returned deposit, a rebate, an insurance refund) and
+  payments a lender returns reduce credits, and how a loan settled for less than its face amount
+  counts.
+
+- [ ] **Jointly owned accounts**
+    - Effort: L
+    - What: An account is a first-class couplefins entity, personal (one owner) or joint. A joint
+      account's transactions are imported straight into it, belong to no person's upload, never
+      enter settlement, and carry per-owner shares set by rule or by hand.
+    - Why: Today a transaction exists only as a row in one person's upload, with that person as
+      `payer_person_id`. A payment from a joint account has no such payer: forcing one makes it
+      that person's personal spending, or, split, a debt the other owes, though both funded the
+      account.
+    - Dependencies: Importers behind one interface
+    - Status: Not Started
+    - Notes:
+        - The maintainer (2026-10-12): the earlier draft of this story is not the design to
+          follow; work out what the setup needs (epic preface). The parts kept below are a
+          starting point.
+        - Table `accounts (id, name, kind: personal | joint, owner_person_id null for joint,
+          importer, column_map)`; Alembic migration plus `SCHEMA_VERSION` bump. `Transaction`
+          gains `account_id`; `payer_person_id` is null on a joint row. Existing Monarch rows map
+          to a personal account per uploader and per Monarch `Account` string, so their figures do
+          not move.
+        - Joint rows are excluded from settlement at read time, as `exclude_non_spending` in
+          `src/domain/filters.py` does for transfers.
+        - A joint row's split can't come from the account alone: it follows whose money paid. A
+          bill funded by both owners' deposits splits 50/50; work paid with money given to Alice
+          is Alice's when both owners agreed it. So a split resolves from a rule (by tag or
+          category), then the account default, and a row can override both (Funding sources and
+          pots).
+        - Transfers between the two joint accounts are transfer-kind on both legs, and so is an
+          owner's personal leg of a deposit. Whether the bank's statement export shows moves
+          between savings buckets: not checked.
+        - Deposits carry `depositor_person_id`, matched by rule: the sending account where the
+          statement shows it, else memo text, else assigned by hand in the app. The earlier draft
+          assumed deposit memos name the depositor; check a real statement first. The sender is
+          not always the owner: money given to Alice and passed on by her is hers.
+        - The earlier draft had each person's lens (`src/domain/spending_lens.py`) take their
+          share of every joint payment. Loan principal and improvements build equity rather than
+          being spent; which joint rows count as spending is the maintainer's call.
+        - Acceptance, to revise with the setup: a joint account's statement imports with no
+          person's upload involved; its rows add nothing to any settlement balance; a row's shares
+          come from its override, else its rule, else the account default; an unmatched deposit is
+          listed for assignment; transfers between the joint accounts count as spending nowhere;
+          Monarch-imported figures on every page are unchanged by the migration.
+
+- [ ] **Funding sources and pots**
+    - Effort: M
+    - What: Each deposit into a joint account records whose money it is and its source (the
+      owner's own money, or money given to that owner), and the money in the joint accounts is
+      tracked by pot (bills, set-asides, renovation), so each payment traces to the money that
+      paid it.
+    - Why: A share credit goes to the owner whose money paid; an owner's cap on their own money
+      leaves gifts out; unspent deposits go back to their depositor on a sale; and a bank's
+      statement export may not show bucket balances.
+    - Dependencies: Jointly owned accounts
+    - Status: Not Started
+    - Notes:
+        - The simplest form may be namespaced tags on deposits and payments (`source:`, `pot:`)
+          with balances computed, as adjustments are ("Why adjustments are computed, not stored",
+          `docs/domain.md`). Confirm against the setup before choosing.
+        - A payment from a pot takes the pot's owners unless the row says otherwise, and its
+          credit follows the split both owners agreed for that cost.
+        - Acceptance, to revise: per owner, deposits less their share of payments equals their
+          unspent balance; each pot's computed balance matches the bucket balance the owners
+          enter from the bank.
+
+- [ ] **Owner shares in a co-owned asset**
+    - Effort: L
+    - What: Any transaction can be tagged as a qualifying contribution of a given kind; each
+      owner's credit is their share of it; couplefins keeps each owner's running capital account
+      and share percentage (their total divided by both totals) over time.
+    - Why: The maintainer (2026-10-12): couplefins must track each owner's share in the home as
+      it grows, and spending that goes to a share must be taggable. The agreement sets the share
+      from these credits, and a sale or buyout splits by it.
+    - Dependencies: Jointly owned accounts; Funding sources and pots; Namespaced tags for
+      consumer labels
+    - Status: Not Started
+    - Notes:
+        - Tags such as `share:closing`, `share:loan-interest`, `share:loan-principal`,
+          `share:property-tax`, `share:insurance`, `share:repair`, `share:agreed-work`, and
+          `share:none`. Namespaced, so a share tag never changes a split. Which kinds count, and
+          the repair threshold, are settings, not code.
+        - A row credits each owner with their share of its amount, whatever account it came
+          from. A cost one owner pays from a personal account as an agreed extra contribution is
+          `s100` or `household` (no settlement) and credits the payer in full.
+        - Agreed work: the record shows the job, the split both owners agreed, and the date they
+          agreed, which comes before the work starts. The repair threshold may apply to a whole
+          repair billed over several invoices rather than to each invoice; confirm.
+        - Reversals: a refund or returned payment, linked to the row it reverses, lowers that
+          credit, if the owners decide refunds work that way (undecided at writing).
+        - Shares are computed from rows, never stored, as settlement balances are.
+        - Owner credits, capital accounts, and percentages reach the Read API as an additive v1
+          change, for the spreadsheet backup.
+        - Acceptance, to revise: a tagged row adds each owner's share of it to their capital
+          account; the percentages sum to 100; an untagged or `share:none` row adds nothing; a
+          utility bill split 50/50 adds nothing; each month's capital accounts equal the sum of
+          credits through that month.
+
+- [ ] **Share credits from outside the joint accounts**
+    - Effort: M
+    - What: Contributions that never pass through an imported account (a closing paid through
+      escrow, a premium paid before the accounts opened, a payment from an account no one
+      imports) are entered by hand, each with its date, amount, owner, kind, and the document
+      that shows it.
+    - Why: Some of the largest credits, the down payment and closing costs among them, come
+      before the joint accounts exist or outside them.
+    - Dependencies: Owner shares in a co-owned asset
+    - Status: Not Started
+    - Notes:
+        - A manual entry could be a row in an account of its own (for example, "Escrow"), so every
+          credit is still a row and shares have one computation path.
+        - A payment from an owner's bank that their Monarch import already has is tagged there,
+          not entered twice.
+        - Acceptance, to revise: a manual credit with its document reference appears in the
+          owner's capital account; deleting it removes the credit; no manual row enters
+          settlement or budgets.
