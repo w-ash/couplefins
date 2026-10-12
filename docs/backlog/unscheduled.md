@@ -75,34 +75,8 @@ could reach it.
 - Money is a decimal string (`"-5299.00"`), signed per the existing convention (negative = out).
   Dates are ISO `YYYY-MM-DD`.
 
-- [ ] **Importers behind one interface**
-    - Effort: M
-    - What: Every import goes into a couplefins account through one `Importer` protocol that
-      turns a source into source-neutral rows. Monarch CSV is the first importer and a bank
-      statement CSV the second; a direct bank feed or another aggregator is a later one.
-    - Why: `upload_csv.py` calls `parse_monarch_csv` directly and every `Upload` belongs to a
-      person, so couplefins can only learn what one person's Monarch saw. A joint account has no
-      such person, and Monarch may not stay the source.
-    - Dependencies: None
-    - Status: Not Started
-    - Notes:
-        - `src/domain/parsing/importer.py`: `Importer` protocol, `parse(data: bytes, ctx:
-          ImportContext) -> ParseResult`, with rows carrying date, amount, merchant,
-          original statement, notes, tags, and the account they belong to.
-          `src/domain/parsing/monarch_csv.py` becomes `MonarchCsvImporter` unchanged in behaviour;
-          its tag rules (`_classify`) stay Monarch-specific.
-        - `BankStatementCsvImporter`: one column map per account (date, amount or debit/credit,
-          description, memo), stored with the account, so a new bank is configuration, not code.
-        - `Upload` gains `account_id`, `importer`, and `content_sha256`. Importing a file whose
-          hash this account already has is refused with the earlier import's date, so the same
-          statement never lands twice. An overlapping statement (a new file that repeats some
-          rows) is matched row by row on the account's natural key, as `src/domain/dedup.py`
-          does today.
-        - The existing "Automatic CSV format detection" idea under Data & Import builds on this.
-        - Acceptance: a Monarch CSV imports with results identical to today's (the existing
-          upload tests pass unchanged); a bank statement CSV imports into its account through its
-          column map; the same file imported twice is refused; a statement overlapping the last
-          one adds only its new rows.
+Importers behind one interface and Namespaced tags for consumer labels moved to
+[v1.15.x](v1.15.x.md), which needs them first.
 
 - [ ] **Service tokens for non-browser consumers**
     - Effort: S
@@ -129,48 +103,16 @@ could reach it.
           401; a `read` token on a future write route gets 403; `/api/v1/*` with a bearer token
           and no cookie gets 401; `last_used_at` moves on use.
 
-- [ ] **Jointly owned accounts**
-    - Effort: L
-    - What: An account is a first-class couplefins entity, personal (one owner) or joint (both).
-      A joint account's transactions are imported straight into it, belong to no person's
-      upload, never enter settlement, and split between its owners (50/50 by default).
-    - Why: Today a transaction exists only as a row in one person's upload, with that person as
-      `payer_person_id`. A joint account's mortgage payment has no such payer: forcing one makes
-      it that person's personal spending, or, split, a debt the other owes, though both funded
-      the account.
-    - Dependencies: Importers behind one interface
-    - Status: Not Started
-    - Notes:
-        - Table `accounts (id, name, kind: personal | joint, owner_person_id null for joint,
-          default_split, importer, column_map)`; Alembic migration plus `SCHEMA_VERSION` bump.
-          `Transaction` gains `account_id`; `payer_person_id` is null on a joint row. Existing
-          Monarch rows map to a personal account per uploader and per Monarch `Account` string, so
-          their figures do not move.
-        - A joint row's shares come from the account's default split unless the row overrides it.
-          It is excluded from settlement at read time, as `exclude_non_spending` in
-          `src/domain/filters.py` does for transfers. Payments are household; each person's
-          personal lens (`src/domain/spending_lens.py`) takes their share.
-        - Deposits: a joint row with a positive amount from an owner carries
-          `depositor_person_id`. A per-account rule matches the memo to a person (the house
-          account's deposit memos name the depositor); a deposit no rule matches is listed for
-          the couple to assign in the app.
-        - The depositor's own side of a deposit, if it comes in through their personal import,
-          stays a transfer-kind row, so it never counts as spending.
-        - Acceptance: a bank statement CSV for a joint account imports with no person's upload
-          involved; its rows add nothing to any settlement balance; a 50/50 payment adds half its
-          amount to each person's personal spending; a deposit whose memo names a person has that
-          person as depositor; Monarch-imported figures on every page are unchanged by the
-          migration.
-
 - [ ] **Read API v1**
     - Effort: M
     - What: Read-only endpoints for accounts, transactions (with split, payer, and per-person
       shares), settlements with their portions, and per-person balances, over a date range.
     - Why: One stable contract that a sync tool, an agent session, or any later tool reads, so none of
       them reaches into the database or the web UI's routes.
-    - Dependencies: Service tokens for non-browser consumers; Jointly owned accounts
+    - Dependencies: Service tokens for non-browser consumers; Jointly owned accounts (v1.15.0)
     - Status: Not Started
     - Notes:
+        - Owner shares (v1.15.2) reach the API as an additive v1 change.
         - Endpoints:
           ```
           GET /api/ext/v1/meta
@@ -206,26 +148,3 @@ could reach it.
             - A range over 366 days, or `from` after `to`, gets 422.
             - Removing a field from a v1 schema fails the contract test.
             - Full quality gate green.
-
-- [ ] **Namespaced tags for consumer labels**
-    - Effort: S
-    - What: Tags of the form `<namespace>:<value>` (for example `line:mortgage`) are labels for
-      consumers: never treated as split, reserved, or person-name tags, kept across re-imports,
-      and filterable with `tag_prefix` in the ext API.
-    - Why: A joint account's log needs each row's budget line. A generic label lets any consumer
-      group rows without couplefins knowing what a line is.
-    - Dependencies: None
-    - Status: Not Started
-    - Notes:
-        - The Monarch parser splits tags on commas only and lowercases them
-          (`src/domain/parsing/monarch_csv.py`), so `line:mortgage` already survives a Monarch
-          import. A bank statement has no tags, so its rows are tagged in couplefins: the bulk tag
-          editor, or MCP `bulk_modify_tags`.
-        - `tags` is in `_MUTABLE_FIELDS` (`src/domain/dedup.py`), so a re-import whose source
-          lacks a tag added in couplefins proposes removing it. An import never removes a
-          namespaced tag; v1.7.1's flag preservation is the precedent, so find its mechanism
-          before choosing one.
-        - Acceptance: `line:mortgage` on an `s50` row leaves the split at 50; a namespaced tag
-          added in couplefins survives a re-import of a source without it;
-          `GET /api/ext/v1/transactions?tag_prefix=line:` returns only rows carrying a `line:`
-          tag.
