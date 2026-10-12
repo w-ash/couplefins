@@ -203,9 +203,9 @@ could reach it.
 
 Epic, an outline. The maintainer (2026-10-12): two people who co-own a home pay its costs from
 joint bank accounts, and couplefins becomes where those payments are logged, with a spreadsheet
-backup through the Read API. It also tracks each owner's share in the home as it grows, and any
-transaction can be tagged as counting toward a share. These stories sketch the shape of that
-work; they are not a spec.
+backup through the Read API. It also tracks each owner's share in the home as it grows, any
+transaction can be tagged as counting toward a share, and the home gets a page of its own (House
+page). These stories sketch the shape of that work; they are not a spec.
 
 **Before building anything here**
 
@@ -366,3 +366,60 @@ work; they are not a spec.
         - Acceptance, to revise: a manual credit with its document reference appears in the
           owner's capital account; deleting it removes the credit; no manual row enters
           settlement or budgets.
+
+- [ ] **Loans and upcoming obligations**
+    - Effort: M
+    - What: The home's loans (lender, principal, rate, term, payment, current balance) and its
+      scheduled obligations (property tax installments, a one-off tax bill, insurance renewals,
+      loan payments) are recorded with their due dates, amounts, and the bucket or account that
+      pays each.
+    - Why: The House page shows the mortgage and what is coming due, and neither is in a bank
+      statement. The loans also change over time (short-term loans at purchase, a refinance
+      later), so a loan is replaced, not edited.
+    - Dependencies: Jointly owned accounts
+    - Status: Not Started
+    - Notes:
+        - Entered by hand. A payment row from a joint account links to the obligation it pays, so
+          each obligation reads as due, paid, or late, and the next one shows.
+        - A loan's current balance is computed from its terms and the principal paid, or entered
+          from the servicer's statement; choose with the maintainer. An interest-only loan's
+          balance moves only with principal paid.
+        - An amount not yet billed (a tax installment before the bill arrives) is an estimate,
+          marked as one, until the bill replaces it.
+        - A property tax installment has a due date and a later delinquency date; keep both.
+        - Acceptance, to revise: an obligation shows as due, paid (linked to its payment row), or
+          late; a loan's balance matches its servicer's statement; replacing a loan at a refinance
+          keeps the old loan's history.
+
+- [ ] **House page**
+    - Effort: M
+    - What: A new top-level page (route `/house`, an entry in `web/src/lib/navigation.ts`)
+      devoted to the co-owned home: what each owner has put in, each owner's current share, the
+      mortgage and other loans, upcoming payments, and the money set aside for renovation and
+      the other buckets.
+    - Why: The maintainer (2026-10-12): the house needs a whole tab of its own, with how much
+      each owner has put in, the current shares, the mortgage details, upcoming payments to be
+      aware of (like taxes), the money set aside for renovations, and more.
+    - Dependencies: Owner shares in a co-owned asset; Funding sources and pots; Share credits
+      from outside the joint accounts; Loans and upcoming obligations
+    - Status: Not Started
+    - Notes:
+        - Sections named so far; confirm the full list with the maintainer before building, since
+          "and more" is open:
+            - Put in: each owner's total to date, by kind (closing, loan interest, principal,
+              property tax, insurance, repairs, agreed work), and their deposits not yet spent.
+            - Shares: each owner's capital account and percentage now, and over time.
+            - Mortgage and loans: balance, rate, payment, next due date, and each owner's part of
+              the payment.
+            - Upcoming: the next obligations with their due and late dates and the bucket that
+              pays each, flagging a bucket that won't cover its next payment.
+            - Set aside: the renovation money and the other buckets, each beside the balance the
+              owners last entered from the bank.
+        - Same pattern as the other pages: a route in `web/src/App.tsx`, the page in
+          `web/src/pages/`, Orval-generated hooks. Figures are computed in Python and served
+          precomputed, as Settle Up's are; the UI does no arithmetic.
+        - Shown only once a co-owned asset is set up, so a couple without one never sees it.
+        - Acceptance, to revise: each figure on the page equals the same figure from its
+          source story's computation; each owner's "put in" total by qualifying kind equals
+          their capital account; percentages sum to 100; an obligation paid this month leaves
+          Upcoming.
