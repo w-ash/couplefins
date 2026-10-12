@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.routing import APIRoute
 from httpx import ASGITransport, AsyncClient
 import pytest
 
@@ -107,5 +108,6 @@ def test_catchall_is_registered_last(
     # so a router added after the catch-all would be unreachable. Pointed at a
     # temporary build so this holds in CI, where web/dist does not exist.
     monkeypatch.setattr("src.interface.api.app._WEB_DIST", dist)
-    paths = [route.path for route in create_app().routes]
-    assert paths[-1] == "/{path:path}"
+    last = create_app().routes[-1]
+    assert isinstance(last, APIRoute)
+    assert last.path == "/{path:path}"

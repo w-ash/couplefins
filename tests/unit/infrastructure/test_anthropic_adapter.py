@@ -7,7 +7,7 @@ on models with adaptive thinking.
 """
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -265,7 +265,7 @@ class TestBetaSurfaceParams:
         captured: dict[str, object] = {}
 
         @asynccontextmanager
-        async def fake_stream(**kwargs: object) -> AsyncIterator[_StubSDKStream]:
+        async def fake_stream(**kwargs: object) -> AsyncGenerator[_StubSDKStream]:
             await asyncio.sleep(0)
             captured.update(kwargs)
             yield _StubSDKStream([])

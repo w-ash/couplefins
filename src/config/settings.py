@@ -69,7 +69,7 @@ _MIN_JWT_SECRET_BYTES = 32
 
 
 class AuthConfig(BaseModel):
-    jwt_secret: str = "couplefins-dev-secret-change-in-prod"  # noqa: S105
+    jwt_secret: str = "couplefins-dev-secret-change-in-prod"  # ruff: ignore[hardcoded-password-string]
     token_expiry_minutes: int = 60 * 24 * 7  # 7 days
     cookie_name: str = "couplefins_session"
     cookie_secure: bool = False  # True in prod (HTTPS)

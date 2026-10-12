@@ -10,6 +10,7 @@ and executor in (see registry._handle_delegate_analysis), which keeps
 registry -> subagent -> use_case free of cycles.
 """
 
+from contextlib import aclosing
 from datetime import UTC, datetime
 
 from structlog.stdlib import get_logger
@@ -104,14 +105,15 @@ async def run_subagent(
     transcript: list[str] = []  # everything, for the truncation fallback
     truncated = False
     try:
-        async for event in use_case.execute(command):
-            if isinstance(event, TextDelta):
-                final_parts.append(event.text)
-                transcript.append(event.text)
-            elif isinstance(event, ToolStartEvent):
-                # Narration before a tool call is process, not answer.
-                final_parts.clear()
-                logger.info("subagent_tool_call", tool=event.name)
+        async with aclosing(use_case.execute(command)) as events:
+            async for event in events:
+                if isinstance(event, TextDelta):
+                    final_parts.append(event.text)
+                    transcript.append(event.text)
+                elif isinstance(event, ToolStartEvent):
+                    # Narration before a tool call is process, not answer.
+                    final_parts.clear()
+                    logger.info("subagent_tool_call", tool=event.name)
     except (MaxRoundsExceededError, ResponseTruncatedError) as e:
         # A partial answer is actionable for the main model; an exception
         # is not.

@@ -39,8 +39,8 @@ class CategoryGroupBudgetRepository(
 
     @staticmethod
     def _person_filter(
-        stmt: Select[tuple[CategoryGroupBudgetModel]], person_id: UUID | None
-    ) -> Select[tuple[CategoryGroupBudgetModel]]:
+        stmt: Select[CategoryGroupBudgetModel], person_id: UUID | None
+    ) -> Select[CategoryGroupBudgetModel]:
         if person_id is None:
             return stmt.where(CategoryGroupBudgetModel.person_id.is_(None))
         return stmt.where(CategoryGroupBudgetModel.person_id == str(person_id))

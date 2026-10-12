@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import Awaitable, Callable
+from contextlib import aclosing
 from datetime import UTC, datetime
 import json
 from typing import cast
@@ -136,11 +137,12 @@ def _bridge(
     """Wrap the async generator into a queue-based run function for SSE."""
 
     async def _run(queue: asyncio.Queue[QueueItem]) -> None:
-        async for event in use_case.execute(command):
-            if isinstance(event, TextDelta):
-                queue.put_nowait(event.text)
-            else:
-                queue.put_nowait(event)
+        async with aclosing(use_case.execute(command)) as events:
+            async for event in events:
+                if isinstance(event, TextDelta):
+                    queue.put_nowait(event.text)
+                else:
+                    queue.put_nowait(event)
 
     return _run
 

@@ -12,7 +12,7 @@ _llm_client: LLMClientProtocol | None = None
 
 
 def set_llm_client(client: LLMClientProtocol | None) -> None:
-    global _llm_client  # noqa: PLW0603
+    global _llm_client  # ruff: ignore[global-statement]
     _llm_client = client
 
 

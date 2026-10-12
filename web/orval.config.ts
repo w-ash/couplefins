@@ -11,7 +11,7 @@ export default defineConfig({
       mock: true,
       override: {
         mutator: { path: "src/api/client.ts", name: "customFetch" },
-        query: { useQuery: true, useSuspenseQuery: false },
+        query: { useSuspenseQuery: false },
       },
     },
   },

@@ -64,9 +64,11 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
         "application_started",
         chat_available=is_chat_available(),
     )
-    yield
-    logger.info("application_shutting_down")
-    await dispose_engine()
+    try:
+        yield
+    finally:
+        logger.info("application_shutting_down")
+        await dispose_engine()
 
 
 def _mount_static(app: FastAPI, dist: Path | None = None) -> None:

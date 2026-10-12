@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 import contextlib
 import json
 
@@ -10,7 +10,7 @@ from tests.integration.conftest import setup_and_login
 
 
 @contextlib.asynccontextmanager
-async def _sse_queue() -> AsyncIterator[asyncio.Queue[str]]:
+async def _sse_queue() -> AsyncGenerator[asyncio.Queue[str]]:
     queue = event_bus.subscribe()
     try:
         yield queue

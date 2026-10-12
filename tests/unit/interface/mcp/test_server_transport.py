@@ -9,7 +9,7 @@ protocol — not just called in-process. DB-backed pieces are stubbed:
 one.
 """
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 import json
 from types import SimpleNamespace
@@ -40,7 +40,7 @@ def fake_identity(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @asynccontextmanager
-async def _connected_client() -> AsyncIterator[ClientSession]:
+async def _connected_client() -> AsyncGenerator[ClientSession]:
     """Yield an initialised client session wired to the couplefins server."""
     built = server.build_server("Alice")
     async with create_client_server_memory_streams() as (

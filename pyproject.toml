@@ -4,32 +4,32 @@ version = "1.14.3"
 description = "Household finance tool for couples"
 requires-python = ">=3.14,<4.0"
 dependencies = [
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.34",
+    "fastapi>=0.143",
+    "uvicorn[standard]>=0.54",
     "httpx>=0.28",
-    "structlog>=24.1",
-    "pydantic>=2.10",
-    "pydantic-settings>=2.7",
-    "sqlalchemy[asyncio]>=2.0",
-    "asyncpg>=0.30",
-    "psycopg[binary]>=3.2",
-    "alembic>=1.15",
-    "python-multipart>=0.0.20",
+    "structlog>=26.1",
+    "pydantic>=2.14",
+    "pydantic-settings>=2.15",
+    "sqlalchemy[asyncio]>=2.1",
+    "asyncpg>=0.32",
+    "psycopg[binary]>=3.3",
+    "alembic>=1.20",
+    "python-multipart>=0.0.32",
     "attrs>=26.1.0,<27.0.0",
     "argon2-cffi>=24.0",
-    "PyJWT>=2.9",
-    "anthropic>=0.97,<1",
-    "mcp==2.0.0b1",
-    "mcp-types==2.0.0b1",
+    "PyJWT>=2.15",
+    "anthropic>=1.13,<2",
+    "mcp>=2.3,<3",
+    "mcp-types>=2.3,<3",
 ]
 
 [dependency-groups]
 dev = [
-    "pytest>=8.3",
-    "pytest-asyncio>=0.25",
-    "ruff>=0.11",
-    "basedpyright>=1.29",
-    "pre-commit>=4.1",
+    "pytest>=9.1",
+    "pytest-asyncio>=1.4",
+    "ruff>=0.17",
+    "basedpyright>=1.40",
+    "pre-commit>=4.6",
     "vulture>=2.15",
 ]
 
@@ -73,64 +73,66 @@ select = [
     "PTH",   # Use pathlib
 ]
 ignore = [
-    "E501",    # Line too long — handled by formatter
-    "COM812",  # Trailing comma — conflicts with formatter
-    "TC001",   # Move to TYPE_CHECKING — obsolete with PEP 649
-    "TC002",   # Move to TYPE_CHECKING — obsolete with PEP 649
-    "TC003",   # Move to TYPE_CHECKING — obsolete with PEP 649
-    "TC006",   # Cast quotes — contradicts PEP 649
-    "TRY003",  # Long exception messages — clear errors are good
+    "line-too-long",    # Line too long — handled by formatter
+    "missing-trailing-comma",  # Trailing comma — conflicts with formatter
+    "typing-only-first-party-import",   # Move to TYPE_CHECKING — obsolete with PEP 649
+    "typing-only-third-party-import",   # Move to TYPE_CHECKING — obsolete with PEP 649
+    "typing-only-standard-library-import",   # Move to TYPE_CHECKING — obsolete with PEP 649
+    "runtime-cast-value",   # Cast quotes — contradicts PEP 649
+    "raise-vanilla-args",  # Long exception messages — clear errors are good
+    "too-many-statements-in-try-clause",  # Statement count is not the risk; the except clauses name what they catch
+    "yield-in-context-manager-in-async-generator",  # Chat streams are consumed under contextlib.aclosing
 ]
 fixable = ["ALL"]
 
 [tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]
+"__init__.py" = ["unused-import"]
 "src/interface/api/**/*.py" = [
-    "RUF029",  # FastAPI async handlers without await
+    "unused-async",  # FastAPI async handlers without await
 ]
 "src/application/use_cases/**/*.py" = [
-    "PLR6301",  # Stateless execute() is intentional — use case architecture pattern
+    "no-self-use",  # Stateless execute() is intentional — use case architecture pattern
 ]
 "src/interface/mcp/confirmation.py" = [
-    "S105",     # CONFIRM_TOKEN_FIELD holds a JSON field NAME ("confirm_token"),
+    "hardcoded-password-string",     # CONFIRM_TOKEN_FIELD holds a JSON field NAME ("confirm_token"),
                 # not a credential — bandit's token-name heuristic false-positives
 ]
 "src/interface/mcp/server.py" = [
-    "RUF029",   # MCP SDK's request-handler protocol requires async handlers
+    "unused-async",   # MCP SDK's request-handler protocol requires async handlers
                 # even when a handler (tools/list) does no I/O
-    "ARG002",   # _UnavailableLLM.stream must match LLMClientProtocol's
-    "PLR6301",  # signature exactly — protocol conformance, not real logic
+    "unused-method-argument",   # _UnavailableLLM.stream must match LLMClientProtocol's
+    "no-self-use",  # signature exactly — protocol conformance, not real logic
 ]
 "src/interface/mcp/__main__.py" = [
-    "PLC0415",  # Deliberately deferred imports: stderr logging must be
+    "import-outside-top-level",  # Deliberately deferred imports: stderr logging must be
                 # configured before the server (and its logger tree) loads —
                 # stdout is the JSON-RPC channel
 ]
 "src/application/chat/user_data.py" = [
-    "FURB189",  # UserData must BE a str: json.dumps serializes str subclasses
+    "subclass-builtin",  # UserData must BE a str: json.dumps serializes str subclasses
                 # as plain strings and str-typed interfaces accept the marker
                 # transparently — collections.UserString would break both
 ]
 "vulture_whitelist.py" = [
-    "B018",    # Useless expressions — intentional, Vulture whitelist convention
-    "E402",    # Import order — imports grouped by category for readability
-    "F401",    # Unused imports — the import IS the usage for Vulture
+    "useless-expression",    # Useless expressions — intentional, Vulture whitelist convention
+    "module-import-not-at-top-of-file",    # Import order — imports grouped by category for readability
+    "unused-import",    # Unused imports — the import IS the usage for Vulture
 ]
 "tests/**/*.py" = [
-    "S101",     # Allow assert
-    "S105",     # Hardcoded password strings in tests
-    "S106",     # Hardcoded password arguments in tests
-    "S107",     # Hardcoded password defaults in tests
-    "ARG001",   # Unused function args (fixtures)
-    "ARG002",   # Unused method args (fixtures)
-    "PLR2004",  # Magic numbers in tests
-    "PLR0913",  # Many args in factory functions
-    "PLR6301",  # Test methods in classes don't use self
-    "PLC0415",  # Deferred imports in fixtures
-    "PLC2701",  # Private imports (_shared helpers)
-    "PT011",    # Broad pytest.raises
-    "ERA001",   # Commented-out code (documentation)
-    "RUF029",   # Async test stubs replace awaited callables — they must be
+    "assert",     # Allow assert
+    "hardcoded-password-string",     # Hardcoded password strings in tests
+    "hardcoded-password-func-arg",     # Hardcoded password arguments in tests
+    "hardcoded-password-default",     # Hardcoded password defaults in tests
+    "unused-function-argument",   # Unused function args (fixtures)
+    "unused-method-argument",   # Unused method args (fixtures)
+    "magic-value-comparison",  # Magic numbers in tests
+    "too-many-arguments",  # Many args in factory functions
+    "no-self-use",  # Test methods in classes don't use self
+    "import-outside-top-level",  # Deferred imports in fixtures
+    "import-private-name",  # Private imports (_shared helpers)
+    "pytest-raises-too-broad",    # Broad pytest.raises
+    "commented-out-code",   # Commented-out code (documentation)
+    "unused-async",   # Async test stubs replace awaited callables — they must be
                 # async even when the fake body does no async work
 ]
 

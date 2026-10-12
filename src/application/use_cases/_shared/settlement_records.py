@@ -14,7 +14,7 @@ from src.domain.ledger import LedgerMonth, plan_portions
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
-def build_settlement(  # noqa: PLR0913
+def build_settlement(  # ruff: ignore[too-many-arguments]
     *,
     from_person_id: UUID,
     to_person_id: UUID,

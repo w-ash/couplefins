@@ -35,11 +35,12 @@ FROM node:24-slim AS node-builder
 
 WORKDIR /app/web
 
-# Pinned to web/package.json's `packageManager`. web/package.json uses the
-# pnpm-10 `pnpm.onlyBuiltDependencies` shape, which pnpm 11 reads differently.
-RUN npm install -g pnpm@10.33.2
+# Pinned to web/package.json's `packageManager`. pnpm 11 reads its settings
+# (build allowlist, peer rules) from pnpm-workspace.yaml, so it ships with the
+# manifest and lockfile.
+RUN npm install -g pnpm@11.20.0
 
-COPY web/package.json web/pnpm-lock.yaml ./
+COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile
 

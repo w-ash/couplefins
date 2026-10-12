@@ -7,6 +7,6 @@
     "generate": "pnpm --prefix web generate"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^10.0.6"
   }
 }

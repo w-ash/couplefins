@@ -204,7 +204,7 @@ export const useChatStore = create<ChatState>()((set) => ({
   removeLastAssistantMessage: () =>
     set((s) => {
       const last = s.messages.at(-1);
-      if (!last || last.role !== "assistant") return s;
+      if (last?.role !== "assistant") return s;
       return { messages: s.messages.slice(0, -1) };
     }),
 

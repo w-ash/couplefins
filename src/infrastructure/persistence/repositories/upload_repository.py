@@ -94,7 +94,7 @@ class UploadRepository(BaseRepository[Upload, UploadModel]):
             .order_by(UploadModel.uploaded_at.desc())
         )
         result = await self._session.execute(stmt)
-        rows = cast(list[_UploadCountsRow], result.tuples().all())
+        rows = cast(list[_UploadCountsRow], result.all())
         return [
             UploadWithCounts(
                 id=UUID(id_),

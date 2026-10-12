@@ -256,7 +256,7 @@ def _compute_personal_spending(
     return household_portion + own_spending, household_portion, own_spending
 
 
-def _build_budget_alerts(  # noqa: PLR0913, PLR0917
+def _build_budget_alerts(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     month_budgets: list[CategoryGroupBudget],
     year_budgets: list[CategoryGroupBudget],
     year_txs: list[Transaction],
@@ -340,7 +340,7 @@ def _compute_all_scope_data(
     )
 
 
-def _compute_personal_scope_data(  # noqa: PLR0913, PLR0917
+def _compute_personal_scope_data(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     all_year_txs: list[Transaction],
     person_id: UUID,
     active_month: int,
@@ -399,7 +399,7 @@ def _compute_personal_scope_data(  # noqa: PLR0913, PLR0917
 
 @define(slots=True)
 class GetDashboardUseCase:
-    async def execute(  # noqa: PLR0914
+    async def execute(  # ruff: ignore[too-many-locals]
         self, command: GetDashboardCommand, uow: UnitOfWorkProtocol
     ) -> GetDashboardResult:
         async with uow:

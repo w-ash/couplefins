@@ -87,7 +87,9 @@ def _budget(lens: SpendingLens, month: int) -> BudgetOverview:
     )
 
 
-@pytest.mark.parametrize(("lens", "person_id"), zip(LENSES, PERSON_IDS, strict=True))
+@pytest.mark.parametrize(
+    ("lens", "person_id"), list(zip(LENSES, PERSON_IDS, strict=True))
+)
 def test_budget_and_insights_agree_per_group(
     lens: SpendingLens, person_id: UUID | None
 ) -> None:
@@ -164,7 +166,9 @@ def test_unmapped_category_lands_in_uncategorized_with_no_drift(
     assert budget.spending_drift is None
 
 
-@pytest.mark.parametrize(("lens", "person_id"), zip(LENSES, PERSON_IDS, strict=True))
+@pytest.mark.parametrize(
+    ("lens", "person_id"), list(zip(LENSES, PERSON_IDS, strict=True))
+)
 def test_flow_cells_sum_to_the_lens_total(
     lens: SpendingLens, person_id: UUID | None
 ) -> None:

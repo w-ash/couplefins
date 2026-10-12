@@ -130,7 +130,7 @@ export function ChatPanel({ fullScreen = false }: { fullScreen?: boolean }) {
     const store = useChatStore.getState();
     if (store.isStreaming) return;
     const last = store.messages.at(-1);
-    if (!last || last.role !== "assistant") return;
+    if (last?.role !== "assistant") return;
 
     store.removeLastAssistantMessage();
     const assistantId = store.startAssistantMessage();

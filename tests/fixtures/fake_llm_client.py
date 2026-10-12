@@ -1,6 +1,6 @@
 """Fake LLM client for chat integration tests."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 
@@ -55,7 +55,7 @@ class FakeLLMClient:
         self.captured_containers: list[str | None] = []
 
     @asynccontextmanager
-    async def stream(self, request: LLMRequest) -> AsyncIterator[_FakeStream]:
+    async def stream(self, request: LLMRequest) -> AsyncGenerator[_FakeStream]:
         self.captured_requests.append(request)
         self.captured_system = request.system
         self.captured_messages.append(list(request.messages))

@@ -34,7 +34,7 @@ router = APIRouter(tags=["reconciliation"], dependencies=[Depends(get_current_us
 
 
 @router.get("/reconciliation")
-async def get_reconciliation(  # noqa: PLR0913, PLR0917
+async def get_reconciliation(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     start_date: datetime.date | None = None,
     end_date: datetime.date | None = None,
     year: int | None = None,
@@ -54,7 +54,7 @@ async def get_reconciliation(  # noqa: PLR0913, PLR0917
 _VALID_SCOPES: set[ReconciliationScope] = {"household", "personal", "all"}
 
 
-def _build_command(  # noqa: PLR0913, PLR0917
+def _build_command(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     start_date: datetime.date | None,
     end_date: datetime.date | None,
     year: int | None,
