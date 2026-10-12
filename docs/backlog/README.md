@@ -85,10 +85,6 @@ pnpm --prefix web check && pnpm --prefix web test
 
 ## Version Matrix
 
-**Next:** v1.15.x, Co-owned Home ([spec](v1.15.x.md)), built before the planned v1.11.1, v1.11.2,
-and v1.14.4 (the maintainer, 2026-10-12). Its stories are an outline; read its "Before building"
-rules first.
-
 | Version | Goal | Status | Effort |
 |---|---|---|---|
 | v0.1.0 | Project scaffold + data model + CSV parser + category groups | Completed (2026-03-09) | L |
@@ -184,8 +180,6 @@ rules first.
 | v1.9.4 | MCP + routing review hardening — token↔tool binding in the store, null-tolerant confirmation, install/identity fixes, page-signal robustness ([spec](completed/v1.9.4-mcp-review-hardening.md)) | Completed (2026-07-17) | S |
 | v1.10.0 | Year-scoped Settle Up — year selector drives every figure, year-scoped waive, Settlement History, collapsed candidate search ([spec](completed/v1.10.x.md)) | Completed (2026-08-23) | M |
 | v1.11.0 | Settlement coverage — per-month settlement portions, all settle-up math in Python ([spec](v1.11.x.md)) | Completed (2026-08-24) | L |
-| v1.11.1 | Slim month-status endpoint — Transactions header card stops polling the full settle-up payload ([spec](v1.11.x.md)) | Planned | S |
-| v1.11.2 | Structured warnings — use cases return codes + params, frontend owns the copy ([spec](v1.11.x.md)) | Planned | M |
 | v1.11.3 | Year-scoped Dashboard settlement card — the hero answers for the current year ([spec](v1.11.x.md)) | Completed (2026-08-24) | S |
 | v1.12.0 | Insights scope toggle — Household / My Spending, one person-share rule across Budget, Dashboard, Insights ([spec](v1.12.x.md)) | Completed (2026-09-03) | M |
 | v1.12.1 | Transfer-kind category groups — credit card payments and transfers are money movement, not spending ([spec](v1.12.x.md)) | Completed (2026-09-03) | M |
@@ -199,12 +193,14 @@ rules first.
 | v1.14.1 | Signed settlement portions — one payment settles the net of the months it covers ([spec](v1.11.x.md)) | Completed (2026-09-06) | M |
 | v1.14.2 | Pages open on the latest month with data; prompt caching left to the API ([spec](v1.14.x.md)) | Completed (2026-09-06) | M |
 | v1.14.3 | Settlement History as a table — each fact stated once, detail behind disclosure ([spec](v1.14.x.md)) | Completed (2026-09-06) | S |
-| v1.14.4 | Rewrite public history to the neutral examples — older commits match the current examples, then force-push ([spec](v1.14.x.md)) | Planned | S |
 | v1.15.0 | Joint accounts — importers behind one interface, joint bank statements outside settlement ([spec](v1.15.x.md)) | Planned | L |
 | v1.15.1 | Sources, pots, and labels — whose money paid each joint row and from which pot; namespaced tags ([spec](v1.15.x.md)) | Planned | M |
 | v1.15.2 | Owner shares — capital accounts and share percentages from tagged rows and hand entries ([spec](v1.15.x.md)) | Planned | L |
 | v1.15.3 | Loans and upcoming obligations — loan terms, due dates, each linked to its payment ([spec](v1.15.x.md)) | Planned | M |
 | v1.15.4 | House page — put in, shares, mortgage, upcoming payments, money set aside ([spec](v1.15.x.md)) | Planned | M |
+| v1.16.0 | Slim month-status endpoint — Transactions header card stops polling the full settle-up payload ([spec](v1.11.x.md)) | Planned | S |
+| v1.16.1 | Structured warnings — use cases return codes + params, frontend owns the copy ([spec](v1.11.x.md)) | Planned | M |
+| v1.16.2 | Rewrite public history to the neutral examples — older commits match the current examples, then force-push ([spec](v1.14.x.md)) | Planned | S |
 
 ## Infrastructure Readiness
 
