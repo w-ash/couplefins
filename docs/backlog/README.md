@@ -193,11 +193,12 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.14.1 | Signed settlement portions — one payment settles the net of the months it covers ([spec](completed/v1.11.x.md)) | Completed (2026-09-06) | M |
 | v1.14.2 | Pages open on the latest month with data; prompt caching left to the API ([spec](completed/v1.14.x.md)) | Completed (2026-09-06) | M |
 | v1.14.3 | Settlement History as a table — each fact stated once, detail behind disclosure ([spec](completed/v1.14.x.md)) | Completed (2026-09-06) | S |
-| v1.15.0 | Joint accounts — importers behind one interface, joint bank statements outside settlement ([spec](v1.15.x.md)) | Planned | L |
-| v1.15.1 | Sources, pots, and labels — whose money paid each joint row and from which pot; namespaced tags ([spec](v1.15.x.md)) | Planned | M |
-| v1.15.2 | Owner shares — capital accounts and share percentages from tagged rows and hand entries ([spec](v1.15.x.md)) | Planned | L |
-| v1.15.3 | Loans and upcoming obligations — loan terms, due dates, each linked to its payment ([spec](v1.15.x.md)) | Planned | M |
-| v1.15.4 | House page — put in, shares, mortgage, upcoming payments, money set aside ([spec](v1.15.x.md)) | Planned | M |
+| v1.15.0 | Accounts and the Importer interface — every row has an account, every import one interface, the same file never imported twice ([spec](v1.15.x.md)) | In Progress | M |
+| v1.15.1 | Joint accounts — bank-statement importer if chosen, joint rows outside settlement ([spec](v1.15.x.md)) | Planned | L |
+| v1.15.2 | Sources, pots, and labels — whose money paid each joint row and from which pot; namespaced tags ([spec](v1.15.x.md)) | Planned | M |
+| v1.15.3 | Owner shares — capital accounts and share percentages from tagged rows and hand entries ([spec](v1.15.x.md)) | Planned | L |
+| v1.15.4 | Loans and upcoming obligations — loan terms, due dates, each linked to its payment ([spec](v1.15.x.md)) | Planned | M |
+| v1.15.5 | House page — put in, shares, mortgage, upcoming payments, money set aside ([spec](v1.15.x.md)) | Planned | M |
 | v1.16.0 | Slim month-status endpoint — Transactions header card stops polling the full settle-up payload ([spec](v1.16.x.md)) | Planned | S |
 | v1.16.1 | Structured warnings — use cases return codes + params, frontend owns the copy ([spec](v1.16.x.md)) | Planned | M |
 | v1.16.2 | Rewrite public history to the neutral examples — older commits match the current examples, then force-push ([spec](v1.16.x.md)) | Planned | S |

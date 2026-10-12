@@ -6,20 +6,25 @@ import attrs
 from attrs import define, field
 from structlog.stdlib import get_logger
 
-from src.application.use_cases._shared.command_validators import non_empty_string
+from src.application.use_cases._shared.command_validators import (
+    non_empty_bytes,
+    non_empty_string,
+)
 from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.application.use_cases._shared.finalization import assert_periods_not_finalized
 from src.application.use_cases._shared.transactions import (
+    build_import_context,
     classify_against_existing,
     find_new_categories,
     find_unmapped_categories,
-    get_other_person_names,
+    require_new_file,
 )
 from src.domain.dedup import ClassifiedTransaction
 from src.domain.entities.category import Category
 from src.domain.entities.transaction import Transaction
 from src.domain.entities.upload import Upload
-from src.domain.parsing.monarch_csv import parse_monarch_csv
+from src.domain.parsing.importer import Importer
+from src.domain.parsing.monarch_csv import MonarchCsvImporter
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 logger = get_logger()
@@ -33,7 +38,7 @@ def _noop_progress(_current: int, _total: int, _detail: str) -> None:
 
 @define(frozen=True, slots=True)
 class UploadCsvCommand:
-    csv_text: str = field(validator=non_empty_string)
+    data: bytes = field(validator=non_empty_bytes)
     person_id: uuid.UUID
     filename: str = field(validator=non_empty_string)
     accepted_change_ids: frozenset[uuid.UUID] = frozenset()
@@ -140,6 +145,8 @@ async def _delete_removed(
 
 @define(slots=True)
 class UploadCsvUseCase:
+    importer: Importer = field(factory=MonarchCsvImporter)
+
     async def execute(
         self,
         command: UploadCsvCommand,
@@ -153,10 +160,11 @@ class UploadCsvUseCase:
                 uow.persons.get_by_id, command.person_id, "Person"
             )
 
+            content_sha256 = await require_new_file(uow, command.data)
             upload_id = uuid.uuid4()
-            other_names = await get_other_person_names(uow, command.person_id)
-            parsed = parse_monarch_csv(
-                command.csv_text, command.person_id, upload_id, person_names=other_names
+            parsed = self.importer.parse(
+                command.data,
+                await build_import_context(uow, command.person_id, upload_id),
             )
             incoming = parsed.transactions
 
@@ -192,8 +200,12 @@ class UploadCsvUseCase:
                 person_id=command.person_id,
                 filename=command.filename,
                 uploaded_at=datetime.now(UTC),
+                importer=self.importer.name,
+                content_sha256=content_sha256,
             )
             await uow.uploads.save(upload)
+            if parsed.new_accounts:
+                await uow.accounts.save_batch(parsed.new_accounts)
 
             new_txs = partition.new_txs
             updated_txs = partition.updated_txs

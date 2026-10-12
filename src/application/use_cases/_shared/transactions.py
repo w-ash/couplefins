@@ -1,3 +1,4 @@
+import hashlib
 from uuid import UUID
 
 from src.domain.dedup import (
@@ -7,6 +8,8 @@ from src.domain.dedup import (
 )
 from src.domain.entities.category import Category
 from src.domain.entities.transaction import Transaction
+from src.domain.exceptions import DuplicateError
+from src.domain.parsing.importer import ImportContext
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -17,6 +20,30 @@ async def get_other_person_names(
     return frozenset(
         p.name.lower() for p in await uow.persons.get_all() if p.id != person_id
     )
+
+
+async def build_import_context(
+    uow: UnitOfWorkProtocol, person_id: UUID, upload_id: UUID
+) -> ImportContext:
+    """Load what an importer needs to parse a file for this uploader."""
+    accounts = await uow.accounts.get_by_owner(person_id)
+    return ImportContext(
+        payer_person_id=person_id,
+        upload_id=upload_id,
+        person_names=await get_other_person_names(uow, person_id),
+        accounts_by_label={a.name: a.id for a in accounts},
+    )
+
+
+async def require_new_file(uow: UnitOfWorkProtocol, data: bytes) -> str:
+    """Return the file's SHA-256; raise DuplicateError if it was imported before."""
+    content_sha256 = hashlib.sha256(data).hexdigest()
+    earlier = await uow.uploads.get_by_content_sha256(content_sha256)
+    if earlier is not None:
+        raise DuplicateError(
+            f"This file was already imported on {earlier.uploaded_at:%Y-%m-%d}."
+        )
+    return content_sha256
 
 
 def find_new_categories(

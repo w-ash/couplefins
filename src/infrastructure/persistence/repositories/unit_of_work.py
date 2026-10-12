@@ -2,6 +2,9 @@ from typing import Self
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.infrastructure.persistence.repositories.account_repository import (
+    AccountRepository,
+)
 from src.infrastructure.persistence.repositories.category_group_budget_repository import (
     CategoryGroupBudgetRepository,
 )
@@ -44,6 +47,7 @@ class UnitOfWork:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         self.persons = PersonRepository(session)
+        self.accounts = AccountRepository(session)
         self.transactions = TransactionRepository(session)
         self.transaction_edits = TransactionEditRepository(session)
         self.uploads = UploadRepository(session)

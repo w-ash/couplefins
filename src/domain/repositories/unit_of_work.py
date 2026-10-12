@@ -1,5 +1,6 @@
 from typing import Protocol, Self
 
+from src.domain.repositories.account_repository import AccountRepositoryProtocol
 from src.domain.repositories.category_group_budget_repository import (
     CategoryGroupBudgetRepositoryProtocol,
 )
@@ -35,6 +36,9 @@ from src.domain.repositories.upload_repository import UploadRepositoryProtocol
 class UnitOfWorkProtocol(Protocol):
     @property
     def persons(self) -> PersonRepositoryProtocol: ...
+
+    @property
+    def accounts(self) -> AccountRepositoryProtocol: ...
 
     @property
     def transactions(self) -> TransactionRepositoryProtocol: ...

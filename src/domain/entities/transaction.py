@@ -15,6 +15,7 @@ class Transaction:
     merchant: str
     category: str
     account: str
+    account_id: UUID
     original_statement: str
     occurrence: int
     notes: str

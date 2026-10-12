@@ -1,3 +1,4 @@
+from src.infrastructure.persistence.models.account_model import AccountModel
 from src.infrastructure.persistence.models.base import Base
 from src.infrastructure.persistence.models.category_group_budget_model import (
     CategoryGroupBudgetModel,
@@ -29,6 +30,7 @@ from src.infrastructure.persistence.models.transaction_model import TransactionM
 from src.infrastructure.persistence.models.upload_model import UploadModel
 
 __all__ = [
+    "AccountModel",
     "Base",
     "CategoryGroupBudgetModel",
     "CategoryGroupModel",

@@ -5,16 +5,18 @@ import uuid
 from attrs import define, field
 from structlog.stdlib import get_logger
 
-from src.application.use_cases._shared.command_validators import non_empty_string
+from src.application.use_cases._shared.command_validators import non_empty_bytes
 from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.application.use_cases._shared.transactions import (
+    build_import_context,
     classify_against_existing,
     find_all_unmapped_categories,
-    get_other_person_names,
+    require_new_file,
 )
 from src.domain.dedup import FieldDiff
 from src.domain.entities.transaction import Transaction
-from src.domain.parsing.monarch_csv import parse_monarch_csv
+from src.domain.parsing.importer import Importer
+from src.domain.parsing.monarch_csv import MonarchCsvImporter
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 logger = get_logger()
@@ -24,7 +26,7 @@ _SENTINEL_UPLOAD_ID = uuid.UUID(int=0)
 
 @define(frozen=True, slots=True)
 class PreviewCsvCommand:
-    csv_text: str = field(validator=non_empty_string)
+    data: bytes = field(validator=non_empty_bytes)
     person_id: uuid.UUID
 
 
@@ -69,6 +71,8 @@ def _to_preview(tx: Transaction) -> PreviewTransaction:
 
 @define(slots=True)
 class PreviewCsvUseCase:
+    importer: Importer = field(factory=MonarchCsvImporter)
+
     async def execute(
         self, command: PreviewCsvCommand, uow: UnitOfWorkProtocol
     ) -> PreviewCsvResult:
@@ -77,13 +81,11 @@ class PreviewCsvUseCase:
                 uow.persons.get_by_id, command.person_id, "Person"
             )
 
-            other_names = await get_other_person_names(uow, command.person_id)
-            parsed = parse_monarch_csv(
-                command.csv_text,
-                command.person_id,
-                _SENTINEL_UPLOAD_ID,
-                person_names=other_names,
+            await require_new_file(uow, command.data)
+            ctx = await build_import_context(
+                uow, command.person_id, _SENTINEL_UPLOAD_ID
             )
+            parsed = self.importer.parse(command.data, ctx)
             incoming = parsed.transactions
 
             all_categories = await uow.categories.get_all()

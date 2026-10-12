@@ -33,28 +33,40 @@ async def test_upload_csv_full_flow(client: AsyncClient) -> None:
     assert data["filename"] == "test.csv"
 
 
-async def test_upload_csv_idempotent_reupload(client: AsyncClient) -> None:
-    persons, cookies = await setup_and_login(client)
-    person_id = persons[0]["id"]
+async def test_upload_csv_same_file_twice_is_refused(client: AsyncClient) -> None:
+    _, cookies = await setup_and_login(client)
+    files = {"file": ("test.csv", io.BytesIO(VALID_CSV.encode()), "text/csv")}
+    first = await client.post("/api/v1/uploads/", files=files, auth=cookies)
+    assert first.status_code == 201
 
-    # First upload
+    for path in ("/api/v1/uploads/preview", "/api/v1/uploads/"):
+        files = {"file": ("again.csv", io.BytesIO(VALID_CSV.encode()), "text/csv")}
+        response = await client.post(path, files=files, auth=cookies)
+        assert response.status_code == 409
+        assert "already imported on" in response.json()["error"]["message"]
+
+
+async def test_upload_csv_overlapping_export_adds_only_new_rows(
+    client: AsyncClient,
+) -> None:
+    _, cookies = await setup_and_login(client)
     await client.post(
         "/api/v1/uploads/",
-        data={"person_id": person_id},
         files={"file": ("test.csv", io.BytesIO(VALID_CSV.encode()), "text/csv")},
         auth=cookies,
     )
 
-    # Second upload of same CSV → all unchanged
+    overlapping = VALID_CSV + (
+        "2026-01-17,Coffee Shop,Coffee Shops,Chase,COFFEE SHOP,,-5.00,\n"
+    )
     response = await client.post(
         "/api/v1/uploads/",
-        data={"person_id": person_id},
-        files={"file": ("test.csv", io.BytesIO(VALID_CSV.encode()), "text/csv")},
+        files={"file": ("test.csv", io.BytesIO(overlapping.encode()), "text/csv")},
         auth=cookies,
     )
     assert response.status_code == 201
     data = response.json()
-    assert data["new_count"] == 0
+    assert data["new_count"] == 1
     assert data["updated_count"] == 0
     assert data["skipped_count"] == 2
     assert data["removed_count"] == 0

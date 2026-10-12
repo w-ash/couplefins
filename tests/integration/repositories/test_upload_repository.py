@@ -6,18 +6,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.infrastructure.persistence.repositories.person_repository import (
     PersonRepository,
 )
-from src.infrastructure.persistence.repositories.transaction_repository import (
-    TransactionRepository,
-)
 from src.infrastructure.persistence.repositories.upload_repository import (
     UploadRepository,
 )
 from tests.fixtures.factories import make_person, make_transaction, make_upload
+from tests.integration.seed import save_transactions
 
 
 async def test_uploads_with_transactions_in_range(db_session: AsyncSession) -> None:
     person_repo = PersonRepository(db_session)
-    tx_repo = TransactionRepository(db_session)
     up_repo = UploadRepository(db_session)
 
     alice = make_person(name="Alice")
@@ -39,7 +36,7 @@ async def test_uploads_with_transactions_in_range(db_session: AsyncSession) -> N
         payer_person_id=alice.id,
         amount=Decimal("-30.00"),
     )
-    await tx_repo.save_batch([jan_tx, feb_tx])
+    await save_transactions(db_session, [jan_tx, feb_tx])
     await db_session.commit()
 
     result = await up_repo.get_by_person_ids_with_transactions_in_date_range(
@@ -51,7 +48,6 @@ async def test_uploads_with_transactions_in_range(db_session: AsyncSession) -> N
 
 async def test_excludes_out_of_range(db_session: AsyncSession) -> None:
     person_repo = PersonRepository(db_session)
-    tx_repo = TransactionRepository(db_session)
     up_repo = UploadRepository(db_session)
 
     alice = make_person(name="Alice")
@@ -65,7 +61,7 @@ async def test_excludes_out_of_range(db_session: AsyncSession) -> None:
         date=date(2026, 3, 15),
         payer_person_id=alice.id,
     )
-    await tx_repo.save(tx)
+    await save_transactions(db_session, [tx])
     await db_session.commit()
 
     result = await up_repo.get_by_person_ids_with_transactions_in_date_range(
@@ -76,7 +72,6 @@ async def test_excludes_out_of_range(db_session: AsyncSession) -> None:
 
 async def test_excludes_other_persons(db_session: AsyncSession) -> None:
     person_repo = PersonRepository(db_session)
-    tx_repo = TransactionRepository(db_session)
     up_repo = UploadRepository(db_session)
 
     alice = make_person(name="Alice")
@@ -91,7 +86,7 @@ async def test_excludes_other_persons(db_session: AsyncSession) -> None:
         date=date(2026, 1, 15),
         payer_person_id=bob.id,
     )
-    await tx_repo.save(tx)
+    await save_transactions(db_session, [tx])
     await db_session.commit()
 
     result = await up_repo.get_by_person_ids_with_transactions_in_date_range(
@@ -110,7 +105,6 @@ async def test_empty_person_ids(db_session: AsyncSession) -> None:
 
 async def test_get_all_with_transaction_counts(db_session: AsyncSession) -> None:
     person_repo = PersonRepository(db_session)
-    tx_repo = TransactionRepository(db_session)
     up_repo = UploadRepository(db_session)
 
     alice = make_person(name="Alice")
@@ -144,7 +138,7 @@ async def test_get_all_with_transaction_counts(db_session: AsyncSession) -> None
         amount=Decimal("-100.00"),
         tags=("shared",),
     )
-    await tx_repo.save_batch([tx1, tx2, tx3])
+    await save_transactions(db_session, [tx1, tx2, tx3])
     await db_session.commit()
 
     result = await up_repo.get_all_with_transaction_counts()
@@ -188,7 +182,6 @@ async def test_get_all_with_transaction_counts_empty_upload(
 
 async def test_no_duplicate_uploads(db_session: AsyncSession) -> None:
     person_repo = PersonRepository(db_session)
-    tx_repo = TransactionRepository(db_session)
     up_repo = UploadRepository(db_session)
 
     alice = make_person(name="Alice")
@@ -209,7 +202,7 @@ async def test_no_duplicate_uploads(db_session: AsyncSession) -> None:
         payer_person_id=alice.id,
         merchant="Store B",
     )
-    await tx_repo.save_batch([tx1, tx2])
+    await save_transactions(db_session, [tx1, tx2])
     await db_session.commit()
 
     result = await up_repo.get_by_person_ids_with_transactions_in_date_range(
@@ -217,3 +210,23 @@ async def test_no_duplicate_uploads(db_session: AsyncSession) -> None:
     )
     assert len(result) == 1
     assert result[0].id == upload.id
+
+
+async def test_get_by_content_sha256(db_session: AsyncSession) -> None:
+    alice = make_person(name="Alice")
+    await PersonRepository(db_session).save(alice)
+    hashed = make_upload(person_id=alice.id, content_sha256="ab" * 32)
+    unhashed = make_upload(person_id=alice.id)
+    repo = UploadRepository(db_session)
+    await repo.save_batch([hashed, unhashed])
+    await db_session.commit()
+
+    found = await repo.get_by_content_sha256("ab" * 32)
+
+    assert found is not None
+    assert (found.id, found.importer, found.content_sha256) == (
+        hashed.id,
+        "monarch_csv",
+        "ab" * 32,
+    )
+    assert await repo.get_by_content_sha256("cd" * 32) is None

@@ -189,7 +189,8 @@ Couplefins vocabulary mapped to standard accounting terms:
 |---|---|---|
 | Transaction | Source Document / Bank Statement Line | Imported from Monarch CSV |
 | Person | Account Holder | Implicit account — each person accumulates a running balance |
-| Upload | Batch Import / Document Provenance | Audit trail for data ingestion |
+| Upload | Batch Import / Document Provenance | Audit trail for data ingestion. Records the importer that read the file and the file's SHA-256, so the same file is never imported twice |
+| Account | Bank / Card Account | Where a transaction's money moved. Personal (one owner) or joint (both owners, no single owner). Every transaction has one; an import creates one per new source account label (v1.15.0) |
 | ReconciliationPeriod | Transaction Lock | Freezes a month's data (uploads/edits rejected) — not a balance scope; settlements covering the month can still be recorded |
 | CategoryGroup | Chart of Accounts (level 1) | Reporting hierarchy |
 | CategoryMapping | Posting Rule | Routes categories to groups |

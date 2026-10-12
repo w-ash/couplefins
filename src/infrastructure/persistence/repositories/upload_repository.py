@@ -27,6 +27,8 @@ class UploadRepository(BaseRepository[Upload, UploadModel]):
             person_id=UUID(model.person_id),
             filename=model.filename,
             uploaded_at=datetime.fromisoformat(model.uploaded_at),
+            importer=model.importer,
+            content_sha256=model.content_sha256,
         )
 
     @staticmethod
@@ -36,7 +38,14 @@ class UploadRepository(BaseRepository[Upload, UploadModel]):
             person_id=str(entity.person_id),
             filename=entity.filename,
             uploaded_at=entity.uploaded_at.isoformat(),
+            importer=entity.importer,
+            content_sha256=entity.content_sha256,
         )
+
+    async def get_by_content_sha256(self, content_sha256: str) -> Upload | None:
+        stmt = select(UploadModel).where(UploadModel.content_sha256 == content_sha256)
+        model = (await self._session.execute(stmt)).scalar_one_or_none()
+        return self._to_domain(model) if model else None
 
     async def _uploads_with_transactions(
         self, person_ids: list[UUID], *date_filters: ColumnElement[bool]

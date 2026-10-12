@@ -27,6 +27,7 @@ class TransactionModel(Base):
         ),
         Index("ix_transactions_household_date", "household", "date"),
         Index("ix_transactions_upload_id", "upload_id"),
+        Index("ix_transactions_account_id", "account_id"),
         Index("ix_transactions_person_date", "payer_person_id", "date"),
         Index("ix_transactions_tags_gin", "tags", postgresql_using="gin"),
         Index(
@@ -45,6 +46,9 @@ class TransactionModel(Base):
     merchant: Mapped[str] = mapped_column(String, nullable=False)
     category: Mapped[str] = mapped_column(String, nullable=False)
     account: Mapped[str] = mapped_column(String, nullable=False)
+    account_id: Mapped[str] = mapped_column(
+        String, ForeignKey("accounts.id"), nullable=False
+    )
     original_statement: Mapped[str] = mapped_column(String, nullable=False)
     occurrence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     notes: Mapped[str] = mapped_column(String, nullable=False)

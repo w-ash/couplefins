@@ -10,6 +10,9 @@ class Upload:
     person_id: UUID
     filename: str
     uploaded_at: datetime
+    importer: str
+    # Hex SHA-256 of the imported file. None on uploads made before files were hashed.
+    content_sha256: str | None
 
 
 @define(frozen=True, slots=True)

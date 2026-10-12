@@ -26,16 +26,6 @@ router = APIRouter(
 _change_ids_adapter = TypeAdapter(list[str])
 
 
-async def _decode_csv(file: UploadFile) -> str:
-    csv_bytes = await file.read()
-    try:
-        return csv_bytes.decode("utf-8-sig")
-    except UnicodeDecodeError as exc:
-        raise ValidationError(
-            "File is not valid UTF-8 text. Monarch exports use UTF-8 — try re-exporting."
-        ) from exc
-
-
 @router.get("/history")
 async def upload_history() -> UploadHistoryResponse:
     result = await execute_use_case(get_upload_history)
@@ -47,9 +37,7 @@ async def post_upload_preview(
     file: UploadFile,
     current_user: Person = Depends(get_current_user),
 ) -> PreviewUploadResponse:
-    csv_text = await _decode_csv(file)
-
-    command = PreviewCsvCommand(csv_text=csv_text, person_id=current_user.id)
+    command = PreviewCsvCommand(data=await file.read(), person_id=current_user.id)
     result = await execute_use_case(
         lambda uow: PreviewCsvUseCase().execute(command, uow)
     )
@@ -62,8 +50,6 @@ async def post_upload(
     current_user: Person = Depends(get_current_user),
     accepted_change_ids: str = Form(default="[]"),
 ) -> UploadSummaryResponse:
-    csv_text = await _decode_csv(file)
-
     try:
         raw_ids = _change_ids_adapter.validate_json(accepted_change_ids)
         change_ids = frozenset(UUID(id_str) for id_str in raw_ids)
@@ -71,7 +57,7 @@ async def post_upload(
         raise ValidationError("Invalid accepted_change_ids") from exc
 
     command = UploadCsvCommand(
-        csv_text=csv_text,
+        data=await file.read(),
         person_id=current_user.id,
         filename=file.filename or "upload.csv",
         accepted_change_ids=change_ids,

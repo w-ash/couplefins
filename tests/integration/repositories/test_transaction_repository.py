@@ -14,6 +14,7 @@ from src.infrastructure.persistence.repositories.upload_repository import (
     UploadRepository,
 )
 from tests.fixtures.factories import make_person, make_transaction, make_upload
+from tests.integration.seed import save_transactions
 
 
 async def _seed_household_transactions(
@@ -48,7 +49,7 @@ async def _seed_household_transactions(
         amount=Decimal("-30.00"),
     )
 
-    await repo.save_batch([jan_tx, feb_tx, non_household_tx])
+    await save_transactions(session, [jan_tx, feb_tx, non_household_tx])
     await session.commit()
 
 
@@ -109,7 +110,7 @@ async def test_household_by_date_range_boundary_dates(
         payer_percentage=50,
     )
 
-    await repo.save_batch([start_tx, end_tx, before_tx, after_tx])
+    await save_transactions(db_session, [start_tx, end_tx, before_tx, after_tx])
     await db_session.commit()
 
     result = await repo.get_household_by_date_range(date(2026, 1, 1), date(2026, 1, 31))
@@ -165,7 +166,7 @@ async def test_get_by_person_and_original_date_range_coalesces_dates(
         payer_person_id=bob.id,
         original_statement="OTHER PERSON",
     )
-    await repo.save_batch([in_window, edited_out, outside, other_person])
+    await save_transactions(db_session, [in_window, edited_out, outside, other_person])
     await db_session.commit()
 
     result = await repo.get_by_person_and_original_date_range(
@@ -210,7 +211,7 @@ async def test_get_by_person_and_date_range_includes_beneficiary_rows(
         tags=(),
         original_statement="ALICE OWN",
     )
-    await repo.save_batch([spotted, alice_own])
+    await save_transactions(db_session, [spotted, alice_own])
     await db_session.commit()
 
     bob_rows = await repo.get_by_person_and_date_range(
@@ -242,7 +243,7 @@ async def _seed_flagged_transaction(repo: TransactionRepository, session: AsyncS
         is_settlement=True,
         is_excluded=True,
     )
-    await repo.save_batch([tx])
+    await save_transactions(session, [tx])
     await session.commit()
     return tx
 
@@ -344,14 +345,17 @@ async def test_get_all_settlement_relevant_spans_months_and_types(
         payer_percentage=50,
         is_excluded=True,
     )
-    await repo.save_batch([
-        shared_jan,
-        spotted_mar,
-        personal_split_prev_year,
-        unsplit,
-        settlement_transfer,
-        excluded,
-    ])
+    await save_transactions(
+        db_session,
+        [
+            shared_jan,
+            spotted_mar,
+            personal_split_prev_year,
+            unsplit,
+            settlement_transfer,
+            excluded,
+        ],
+    )
     await db_session.commit()
 
     result = await repo.get_all_settlement_relevant()
@@ -386,7 +390,7 @@ async def test_latest_household_date_skips_excluded_categories(
         category="Credit Card Payment",
         payer_person_id=alice.id,
     )
-    await repo.save_batch([dinner, card_payment])
+    await save_transactions(db_session, [dinner, card_payment])
     await db_session.commit()
 
     assert await repo.get_latest_household_transaction_date(
@@ -407,14 +411,17 @@ async def test_latest_household_date_scoped_to_a_year(
     await PersonRepository(db_session).save(alice)
     await UploadRepository(db_session).save(upload)
 
-    await repo.save_batch([
-        make_transaction(
-            upload_id=upload.id, date=date(2024, 11, 4), payer_person_id=alice.id
-        ),
-        make_transaction(
-            upload_id=upload.id, date=date(2026, 1, 20), payer_person_id=alice.id
-        ),
-    ])
+    await save_transactions(
+        db_session,
+        [
+            make_transaction(
+                upload_id=upload.id, date=date(2024, 11, 4), payer_person_id=alice.id
+            ),
+            make_transaction(
+                upload_id=upload.id, date=date(2026, 1, 20), payer_person_id=alice.id
+            ),
+        ],
+    )
     await db_session.commit()
 
     assert await repo.get_latest_household_transaction_date(

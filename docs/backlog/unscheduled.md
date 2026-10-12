@@ -109,10 +109,10 @@ Importers behind one interface and Namespaced tags for consumer labels moved to
       shares), settlements with their portions, and per-person balances, over a date range.
     - Why: One stable contract that a sync tool, an agent session, or any later tool reads, so none of
       them reaches into the database or the web UI's routes.
-    - Dependencies: Service tokens for non-browser consumers; Jointly owned accounts (v1.15.0)
+    - Dependencies: Service tokens for non-browser consumers; Jointly owned accounts (v1.15.1)
     - Status: Not Started
     - Notes:
-        - Owner shares (v1.15.2) reach the API as an additive v1 change.
+        - Owner shares (v1.15.3) reach the API as an additive v1 change.
         - Endpoints:
           ```
           GET /api/ext/v1/meta

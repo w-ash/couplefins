@@ -36,6 +36,7 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             merchant=model.merchant,
             category=model.category,
             account=model.account,
+            account_id=UUID(model.account_id),
             original_statement=model.original_statement,
             occurrence=model.occurrence,
             notes=model.notes,
@@ -63,6 +64,7 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             "merchant": entity.merchant,
             "category": entity.category,
             "account": entity.account,
+            "account_id": str(entity.account_id),
             "original_statement": entity.original_statement,
             "occurrence": entity.occurrence,
             "notes": entity.notes,
@@ -258,7 +260,12 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             effective_date <= end_date.isoformat(),
         )
 
-    _IMMUTABLE_KEYS = frozenset({"account", "original_statement", "occurrence"})
+    _IMMUTABLE_KEYS = frozenset({
+        "account",
+        "account_id",
+        "original_statement",
+        "occurrence",
+    })
     _UPLOAD_ONLY_KEYS = frozenset({
         "date",
         "amount",

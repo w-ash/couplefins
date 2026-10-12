@@ -10,6 +10,17 @@ deploy. There is no `[Unreleased]` section.
 Versions before 1.14.0 predate this file. Their scope is recorded per series in
 `docs/backlog/completed/` and in the version matrix in `docs/backlog/README.md`.
 
+## [1.15.0] - 2026-10-12
+
+### Added
+
+- Every transaction belongs to an account. Existing rows were assigned to one personal account per person per Monarch account name, so no figure changes. This is the groundwork for importing joint bank accounts.
+
+### Changed
+
+- Uploading a file that was already imported is refused, at preview and at upload, with the date of the earlier import. A fresh export that repeats some rows still imports only its new rows.
+- Updated every dependency to its latest stable release, except vitest (4.x), msw (2.x) and jsdom (29.x), whose newer majors don't yet work with the rest of the test stack.
+
 ## [1.14.3] - 2026-09-06
 
 ### Changed
