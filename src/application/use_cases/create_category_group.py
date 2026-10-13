@@ -2,14 +2,14 @@ import uuid
 
 from attrs import define, field
 
-from src.application.use_cases._shared.command_validators import non_empty_string
+from src.application.use_cases._shared.command_validators import non_empty
 from src.domain.entities.category_group import CategoryGroup, GroupKind
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
 @define(frozen=True, slots=True)
 class CreateCategoryGroupCommand:
-    name: str = field(validator=non_empty_string)
+    name: str = field(validator=non_empty)
     icon: str | None = None
     kind: GroupKind = "expense"
 

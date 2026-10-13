@@ -18,7 +18,6 @@ Versions before 1.14.0 predate this file. Their scope is recorded per series in
 
 ### Changed
 
-- Uploading a file that was already imported is refused, at preview and at upload, with the date of the earlier import. A fresh export that repeats some rows still imports only its new rows.
 - Updated every dependency to its latest stable release, except vitest (4.x), msw (2.x) and jsdom (29.x), whose newer majors don't yet work with the rest of the test stack.
 
 ## [1.14.3] - 2026-09-06

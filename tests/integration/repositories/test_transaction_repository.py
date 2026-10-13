@@ -17,9 +17,7 @@ from tests.fixtures.factories import make_person, make_transaction, make_upload
 from tests.integration.seed import save_transactions
 
 
-async def _seed_household_transactions(
-    repo: TransactionRepository, session: AsyncSession
-) -> None:
+async def _seed_household_transactions(session: AsyncSession) -> None:
     alice = make_person(name="Alice")
     upload = make_upload(person_id=alice.id)
 
@@ -57,7 +55,7 @@ async def test_household_by_date_range_returns_only_household(
     db_session: AsyncSession,
 ) -> None:
     repo = TransactionRepository(db_session)
-    await _seed_household_transactions(repo, db_session)
+    await _seed_household_transactions(db_session)
 
     result = await repo.get_household_by_date_range(date(2026, 1, 1), date(2026, 1, 31))
     assert len(result) == 1
@@ -69,7 +67,7 @@ async def test_household_by_date_range_excludes_out_of_range(
     db_session: AsyncSession,
 ) -> None:
     repo = TransactionRepository(db_session)
-    await _seed_household_transactions(repo, db_session)
+    await _seed_household_transactions(db_session)
 
     result = await repo.get_household_by_date_range(date(2026, 3, 1), date(2026, 3, 31))
     assert result == []
@@ -229,7 +227,7 @@ async def test_get_by_person_and_date_range_includes_beneficiary_rows(
     assert alice_own.id in alice_ids
 
 
-async def _seed_flagged_transaction(repo: TransactionRepository, session: AsyncSession):
+async def _seed_flagged_transaction(session: AsyncSession):
     """One saved transaction with both in-app flags set (linked + excluded)."""
     alice = make_person(name="Alice")
     upload = make_upload(person_id=alice.id)
@@ -253,7 +251,7 @@ async def test_update_mutable_fields_batch_preserves_in_app_flags(
 ) -> None:
     """Accepting a re-upload "changed" row must not revert is_settlement/is_excluded."""
     repo = TransactionRepository(db_session)
-    tx = await _seed_flagged_transaction(repo, db_session)
+    tx = await _seed_flagged_transaction(db_session)
 
     # A freshly parsed CSV row carries default flags (False) and a new merchant.
     reparsed = attrs.evolve(
@@ -274,7 +272,7 @@ async def test_update_mutable_fields_still_writes_in_app_flags(
 ) -> None:
     """The singular update serves mark/unlink flows — it must flip the flags."""
     repo = TransactionRepository(db_session)
-    tx = await _seed_flagged_transaction(repo, db_session)
+    tx = await _seed_flagged_transaction(db_session)
 
     unmarked = attrs.evolve(tx, is_settlement=False, is_excluded=False)
     await repo.update_mutable_fields(unmarked)

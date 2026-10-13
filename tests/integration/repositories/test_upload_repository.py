@@ -210,23 +210,3 @@ async def test_no_duplicate_uploads(db_session: AsyncSession) -> None:
     )
     assert len(result) == 1
     assert result[0].id == upload.id
-
-
-async def test_get_by_content_sha256(db_session: AsyncSession) -> None:
-    alice = make_person(name="Alice")
-    await PersonRepository(db_session).save(alice)
-    hashed = make_upload(person_id=alice.id, content_sha256="ab" * 32)
-    unhashed = make_upload(person_id=alice.id)
-    repo = UploadRepository(db_session)
-    await repo.save_batch([hashed, unhashed])
-    await db_session.commit()
-
-    found = await repo.get_by_content_sha256("ab" * 32)
-
-    assert found is not None
-    assert (found.id, found.importer, found.content_sha256) == (
-        hashed.id,
-        "monarch_csv",
-        "ab" * 32,
-    )
-    assert await repo.get_by_content_sha256("cd" * 32) is None

@@ -3,7 +3,7 @@ import uuid
 
 from attrs import define, field
 
-from src.application.use_cases._shared.command_validators import non_empty_string
+from src.application.use_cases._shared.command_validators import non_empty
 from src.domain.auth import validate_password_strength
 from src.domain.entities.person import Person
 from src.domain.exceptions import DuplicateError, ValidationError
@@ -12,10 +12,10 @@ from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 @define(frozen=True, slots=True)
 class SetupCoupleCommand:
-    name1: str = field(validator=non_empty_string)
-    name2: str = field(validator=non_empty_string)
-    password1: str = field(validator=non_empty_string)
-    password2: str = field(validator=non_empty_string)
+    name1: str = field(validator=non_empty)
+    name2: str = field(validator=non_empty)
+    password1: str = field(validator=non_empty)
+    password2: str = field(validator=non_empty)
 
 
 @define(frozen=True, slots=True)

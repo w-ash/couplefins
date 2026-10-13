@@ -3,7 +3,7 @@ from uuid import UUID
 import attrs
 from attrs import define, field
 
-from src.application.use_cases._shared.command_validators import non_empty_string
+from src.application.use_cases._shared.command_validators import non_empty
 from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.domain.entities.category_group import (
     CategoryGroup,
@@ -17,7 +17,7 @@ from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 @define(frozen=True, slots=True)
 class UpdateCategoryGroupCommand:
     id: UUID
-    name: str = field(validator=non_empty_string)
+    name: str = field(validator=non_empty)
     # Required, not defaulted: a rename that forgot `kind` would silently
     # turn the Transfer group back into spending.
     kind: GroupKind

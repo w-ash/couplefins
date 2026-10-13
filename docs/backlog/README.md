@@ -193,7 +193,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.14.1 | Signed settlement portions — one payment settles the net of the months it covers ([spec](completed/v1.11.x.md)) | Completed (2026-09-06) | M |
 | v1.14.2 | Pages open on the latest month with data; prompt caching left to the API ([spec](completed/v1.14.x.md)) | Completed (2026-09-06) | M |
 | v1.14.3 | Settlement History as a table — each fact stated once, detail behind disclosure ([spec](completed/v1.14.x.md)) | Completed (2026-09-06) | S |
-| v1.15.0 | Accounts and the Importer interface — every row has an account, every import one interface, the same file never imported twice ([spec](v1.15.x.md)) | In Progress | M |
+| v1.15.0 | Accounts and the Importer interface — every row has an account, every import goes through one interface ([spec](v1.15.x.md)) | Completed (2026-10-12) | M |
 | v1.15.1 | Joint accounts — bank-statement importer if chosen, joint rows outside settlement ([spec](v1.15.x.md)) | Planned | L |
 | v1.15.2 | Sources, pots, and labels — whose money paid each joint row and from which pot; namespaced tags ([spec](v1.15.x.md)) | Planned | M |
 | v1.15.3 | Owner shares — capital accounts and share percentages from tagged rows and hand entries ([spec](v1.15.x.md)) | Planned | L |

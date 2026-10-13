@@ -1,9 +1,8 @@
-from collections.abc import Mapping
+from collections.abc import Iterable
 from typing import Protocol
-import uuid
 from uuid import UUID
 
-from attrs import define, field
+from attrs import define
 
 from src.domain.entities.account import Account
 from src.domain.entities.transaction import Transaction
@@ -16,42 +15,12 @@ class ImportContext:
     payer_person_id: UUID
     upload_id: UUID
     person_names: frozenset[str]
-    # The uploader's accounts, by the label the source uses for each.
-    accounts_by_label: Mapping[str, UUID]
 
 
 @define(frozen=True, slots=True)
 class ParseResult:
     transactions: list[Transaction]
     skipped_adjustment_count: int
-    # Accounts the file names that the uploader does not have yet. Each
-    # transaction's account_id points at one of these or at an existing account.
-    new_accounts: list[Account]
-
-
-@define(slots=True)
-class AccountResolver:
-    """Map an import's account labels to the uploader's accounts.
-
-    A label the uploader has no account for gets a new personal account,
-    created once and kept in `new_accounts` for the caller to save.
-    """
-
-    owner_person_id: UUID
-    known: dict[str, UUID]
-    new_accounts: list[Account] = field(factory=list)
-
-    def id_for(self, label: str) -> UUID:
-        if label not in self.known:
-            account = Account(
-                id=uuid.uuid4(),
-                name=label,
-                kind="personal",
-                owner_person_id=self.owner_person_id,
-            )
-            self.known[label] = account.id
-            self.new_accounts.append(account)
-        return self.known[label]
 
 
 class Importer(Protocol):
@@ -61,3 +30,17 @@ class Importer(Protocol):
     def name(self) -> str: ...
 
     def parse(self, data: bytes, ctx: ImportContext) -> ParseResult: ...
+
+
+def accounts_named_by(transactions: Iterable[Transaction]) -> list[Account]:
+    """Return the personal account each transaction names, once per account."""
+    accounts = {
+        tx.account_id: Account(
+            id=tx.account_id,
+            name=tx.account,
+            kind="personal",
+            owner_person_id=tx.payer_person_id,
+        )
+        for tx in transactions
+    }
+    return list(accounts.values())

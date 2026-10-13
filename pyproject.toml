@@ -73,20 +73,21 @@ select = [
     "PTH",   # Use pathlib
 ]
 ignore = [
-    "line-too-long",    # Line too long — handled by formatter
-    "missing-trailing-comma",  # Trailing comma — conflicts with formatter
-    "typing-only-first-party-import",   # Move to TYPE_CHECKING — obsolete with PEP 649
-    "typing-only-third-party-import",   # Move to TYPE_CHECKING — obsolete with PEP 649
-    "typing-only-standard-library-import",   # Move to TYPE_CHECKING — obsolete with PEP 649
-    "runtime-cast-value",   # Cast quotes — contradicts PEP 649
-    "raise-vanilla-args",  # Long exception messages — clear errors are good
-    "too-many-statements-in-try-clause",  # Statement count is not the risk; the except clauses name what they catch
-    "yield-in-context-manager-in-async-generator",  # Chat streams are consumed under contextlib.aclosing
+    "line-too-long",                        # handled by formatter
+    "missing-trailing-comma",               # conflicts with formatter
+    "typing-only-first-party-import",       # TYPE_CHECKING imports are obsolete with PEP 649
+    "typing-only-third-party-import",       # TYPE_CHECKING imports are obsolete with PEP 649
+    "typing-only-standard-library-import",  # TYPE_CHECKING imports are obsolete with PEP 649
+    "runtime-cast-value",                   # quoted cast types contradict PEP 649
+    "raise-vanilla-args",                   # long exception messages — clear errors are good
 ]
 fixable = ["ALL"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["unused-import"]
+"src/application/chat/use_case.py" = [
+    "yield-in-context-manager-in-async-generator",  # Both consumers close the stream with contextlib.aclosing
+]
 "src/interface/api/**/*.py" = [
     "unused-async",  # FastAPI async handlers without await
 ]

@@ -1,29 +1,26 @@
 from collections.abc import Callable
 from datetime import UTC, datetime
+import hashlib
 import uuid
 
 import attrs
 from attrs import define, field
 from structlog.stdlib import get_logger
 
-from src.application.use_cases._shared.command_validators import (
-    non_empty_bytes,
-    non_empty_string,
-)
+from src.application.use_cases._shared.command_validators import non_empty
 from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.application.use_cases._shared.finalization import assert_periods_not_finalized
 from src.application.use_cases._shared.transactions import (
-    build_import_context,
     classify_against_existing,
     find_new_categories,
     find_unmapped_categories,
-    require_new_file,
+    parse_file,
 )
 from src.domain.dedup import ClassifiedTransaction
 from src.domain.entities.category import Category
 from src.domain.entities.transaction import Transaction
 from src.domain.entities.upload import Upload
-from src.domain.parsing.importer import Importer
+from src.domain.parsing.importer import Importer, accounts_named_by
 from src.domain.parsing.monarch_csv import MonarchCsvImporter
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
@@ -38,9 +35,9 @@ def _noop_progress(_current: int, _total: int, _detail: str) -> None:
 
 @define(frozen=True, slots=True)
 class UploadCsvCommand:
-    data: bytes = field(validator=non_empty_bytes)
+    data: bytes = field(validator=non_empty)
     person_id: uuid.UUID
-    filename: str = field(validator=non_empty_string)
+    filename: str = field(validator=non_empty)
     accepted_change_ids: frozenset[uuid.UUID] = frozenset()
 
 
@@ -160,11 +157,9 @@ class UploadCsvUseCase:
                 uow.persons.get_by_id, command.person_id, "Person"
             )
 
-            content_sha256 = await require_new_file(uow, command.data)
             upload_id = uuid.uuid4()
-            parsed = self.importer.parse(
-                command.data,
-                await build_import_context(uow, command.person_id, upload_id),
+            parsed = await parse_file(
+                uow, self.importer, command.data, command.person_id, upload_id
             )
             incoming = parsed.transactions
 
@@ -201,16 +196,15 @@ class UploadCsvUseCase:
                 filename=command.filename,
                 uploaded_at=datetime.now(UTC),
                 importer=self.importer.name,
-                content_sha256=content_sha256,
+                content_sha256=hashlib.sha256(command.data).hexdigest(),
             )
             await uow.uploads.save(upload)
-            if parsed.new_accounts:
-                await uow.accounts.save_batch(parsed.new_accounts)
 
             new_txs = partition.new_txs
             updated_txs = partition.updated_txs
             skipped_count = partition.skipped_count
             if new_txs:
+                await uow.accounts.add_missing(accounts_named_by(new_txs))
                 await uow.transactions.save_batch(new_txs)
             if updated_txs:
                 await uow.transactions.update_mutable_fields_batch(updated_txs)

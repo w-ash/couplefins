@@ -4,12 +4,11 @@ import pytest
 
 from src.application.use_cases.preview_csv import PreviewCsvCommand, PreviewCsvUseCase
 from src.domain.entities.category import Category
-from src.domain.exceptions import DuplicateError, NotFoundError
+from src.domain.exceptions import NotFoundError
 from tests.fixtures.factories import (
     make_category,
     make_person,
     make_transaction,
-    make_upload,
 )
 from tests.fixtures.mocks import make_mock_uow
 
@@ -247,13 +246,3 @@ async def test_never_persists_data() -> None:
     uow.settlement_transaction_links.delete_by_transaction_ids.assert_not_called()
     uow.categories.save_batch.assert_not_called()
     uow.commit.assert_not_called()
-
-
-async def test_preview_refuses_a_file_already_imported() -> None:
-    uow = make_mock_uow()
-    person = make_person()
-    uow.persons.get_by_id.return_value = person
-    uow.uploads.get_by_content_sha256.return_value = make_upload()
-
-    with pytest.raises(DuplicateError, match="already imported on"):
-        await PreviewCsvUseCase().execute(_make_command(person_id=person.id), uow)

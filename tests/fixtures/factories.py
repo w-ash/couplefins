@@ -2,7 +2,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 import uuid
 
-from src.domain.entities.account import Account, AccountKind
+from src.domain.entities.account import Account, AccountKind, personal_account_id
 from src.domain.entities.category import Category
 from src.domain.entities.category_group import CategoryGroup, GroupKind
 from src.domain.entities.category_group_budget import CategoryGroupBudget
@@ -42,11 +42,6 @@ ALICE = make_person(name="Alice", id=uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa
 BOB = make_person(name="Bob", id=uuid.UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"))
 
 
-def _account_id_for(payer_person_id: uuid.UUID, label: str) -> uuid.UUID:
-    """One account per payer and label, as an import creates them."""
-    return uuid.uuid5(payer_person_id, label)
-
-
 def make_transaction(
     *,
     id: uuid.UUID | None = None,
@@ -77,7 +72,7 @@ def make_transaction(
         merchant=merchant,
         category=category,
         account=account,
-        account_id=account_id or _account_id_for(payer, account),
+        account_id=account_id or personal_account_id(payer, account),
         original_statement=original_statement,
         occurrence=occurrence,
         notes=notes,

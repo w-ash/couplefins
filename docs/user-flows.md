@@ -102,7 +102,6 @@ Getting transaction data into the system. Each person does this solo, on their o
 - Given I navigate to Upload, then my name is pre-selected as the uploader
 - Given I select a CSV file, when I click Upload, then the file is parsed and transactions are stored
 - Given a CSV has already been uploaded for this person + month, when I re-upload, then the previous data is replaced
-- Given a file identical to one already imported, when I preview or upload it, then it is refused with the date of the earlier import (v1.15.0)
 
 **US-IMPORT-2**: As a partner, I want to preview what will be imported before committing.
 

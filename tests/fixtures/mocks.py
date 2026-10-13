@@ -38,11 +38,9 @@ def make_mock_uow() -> AsyncMock:
     uow = AsyncMock(spec=UnitOfWorkProtocol)
     uow.persons = AsyncMock(spec=PersonRepositoryProtocol)
     uow.accounts = AsyncMock(spec=AccountRepositoryProtocol)
-    uow.accounts.get_by_owner.return_value = []
     uow.transactions = AsyncMock(spec=TransactionRepositoryProtocol)
     uow.transaction_edits = AsyncMock(spec=TransactionEditRepositoryProtocol)
     uow.uploads = AsyncMock(spec=UploadRepositoryProtocol)
-    uow.uploads.get_by_content_sha256.return_value = None
     uow.category_groups = AsyncMock(spec=CategoryGroupRepositoryProtocol)
     uow.categories = AsyncMock(spec=CategoryRepositoryProtocol)
     uow.category_group_budgets = AsyncMock(spec=CategoryGroupBudgetRepositoryProtocol)

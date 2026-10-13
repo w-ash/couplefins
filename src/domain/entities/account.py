@@ -1,4 +1,5 @@
-from typing import Literal, cast, get_args
+from typing import Literal, get_args
+import uuid
 from uuid import UUID
 
 from attrs import define
@@ -7,13 +8,16 @@ from attrs import define
 # person whose import it came from. A `joint` account belongs to both owners
 # and has no single owner.
 AccountKind = Literal["personal", "joint"]
+ACCOUNT_KINDS: tuple[AccountKind, ...] = get_args(AccountKind)
 
 
-def parse_account_kind(raw: str) -> AccountKind:
-    """Narrow a stored string to AccountKind at the persistence boundary."""
-    if raw in get_args(AccountKind):
-        return cast(AccountKind, raw)
-    raise ValueError(f"Unknown account kind: {raw!r}")
+def personal_account_id(owner_person_id: UUID, label: str) -> UUID:
+    """Return the id of the owner's personal account for a source account label.
+
+    The id derives from the owner and the label, so every import of a label
+    names the same account without a lookup.
+    """
+    return uuid.uuid5(owner_person_id, label)
 
 
 @define(frozen=True, slots=True)

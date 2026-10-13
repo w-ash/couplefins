@@ -5,8 +5,6 @@ from decimal import Decimal, InvalidOperation
 import io
 import uuid
 
-from attrs import define
-
 from src.domain.constants import (
     ADJUSTMENT_TAG,
     RESERVED_TAGS,
@@ -15,9 +13,10 @@ from src.domain.constants import (
     SharedTags,
     SplitDefaults,
 )
+from src.domain.entities.account import personal_account_id
 from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import ValidationError
-from src.domain.parsing.importer import AccountResolver, ImportContext, ParseResult
+from src.domain.parsing.importer import ImportContext, ParseResult
 
 REQUIRED_COLUMNS = {
     "Date",
@@ -83,12 +82,9 @@ def parse_monarch_csv(
     upload_id: uuid.UUID,
     *,
     person_names: frozenset[str] = frozenset(),
-    accounts: AccountResolver | None = None,
 ) -> ParseResult:
     reader = csv.DictReader(io.StringIO(csv_text))
     _validate_headers(reader)
-
-    accounts = accounts or AccountResolver(payer_person_id, {})
 
     occurrence_counter: collections.Counter[tuple[date, Decimal, str, str]] = (
         collections.Counter()
@@ -117,10 +113,9 @@ def parse_monarch_csv(
             continue
         amount, tx_date = parsed_cells
 
-        occurrence = _next_occurrence(
-            occurrence_counter,
-            (tx_date, amount, row["Account"], row["Original Statement"]),
-        )
+        base_key = (tx_date, amount, row["Account"], row["Original Statement"])
+        occurrence = occurrence_counter[base_key]
+        occurrence_counter[base_key] += 1
 
         transactions.append(
             Transaction(
@@ -130,7 +125,7 @@ def parse_monarch_csv(
                 merchant=row["Merchant"],
                 category=row["Category"],
                 account=row["Account"],
-                account_id=accounts.id_for(row["Account"]),
+                account_id=personal_account_id(payer_person_id, row["Account"]),
                 original_statement=row["Original Statement"],
                 occurrence=occurrence,
                 notes=row["Notes"],
@@ -152,18 +147,9 @@ def parse_monarch_csv(
     return ParseResult(
         transactions=transactions,
         skipped_adjustment_count=skipped_adjustment_count,
-        new_accounts=accounts.new_accounts,
     )
 
 
-def _next_occurrence[K](counter: collections.Counter[K], key: K) -> int:
-    """Return how many rows with this key came before, and count this one."""
-    occurrence = counter[key]
-    counter[key] += 1
-    return occurrence
-
-
-@define(frozen=True, slots=True)
 class MonarchCsvImporter:
     """Import a Monarch Money transactions export."""
 
@@ -184,7 +170,6 @@ class MonarchCsvImporter:
             ctx.payer_person_id,
             ctx.upload_id,
             person_names=ctx.person_names,
-            accounts=AccountResolver(ctx.payer_person_id, dict(ctx.accounts_by_label)),
         )
 
 

@@ -17,7 +17,7 @@ from structlog.stdlib import get_logger
 
 from src.application.chat.events import TextDelta, ToolStartEvent
 from src.application.chat.protocols import ToolContext, ToolExecutorFn
-from src.application.chat.use_case import ChatCommand, ChatUseCase
+from src.application.chat.use_case import ChatCommand, ChatEvent, ChatUseCase
 from src.application.chat.user_data import UserData
 from src.config.settings import ChatConfig
 from src.domain.exceptions import MaxRoundsExceededError, ResponseTruncatedError
@@ -77,6 +77,17 @@ def _build_system(ctx: ToolContext) -> list[dict[str, object]]:
     ]
 
 
+def _record(event: ChatEvent, final_parts: list[str], transcript: list[str]) -> None:
+    """Add one stream event to the answer so far and the full transcript."""
+    if isinstance(event, TextDelta):
+        final_parts.append(event.text)
+        transcript.append(event.text)
+    elif isinstance(event, ToolStartEvent):
+        # Narration before a tool call is process, not answer.
+        final_parts.clear()
+        logger.info("subagent_tool_call", tool=event.name)
+
+
 async def run_subagent(
     question: str,
     scope: str | None,
@@ -107,13 +118,7 @@ async def run_subagent(
     try:
         async with aclosing(use_case.execute(command)) as events:
             async for event in events:
-                if isinstance(event, TextDelta):
-                    final_parts.append(event.text)
-                    transcript.append(event.text)
-                elif isinstance(event, ToolStartEvent):
-                    # Narration before a tool call is process, not answer.
-                    final_parts.clear()
-                    logger.info("subagent_tool_call", tool=event.name)
+                _record(event, final_parts, transcript)
     except (MaxRoundsExceededError, ResponseTruncatedError) as e:
         # A partial answer is actionable for the main model; an exception
         # is not.

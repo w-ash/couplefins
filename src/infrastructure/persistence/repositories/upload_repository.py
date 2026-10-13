@@ -42,11 +42,6 @@ class UploadRepository(BaseRepository[Upload, UploadModel]):
             content_sha256=entity.content_sha256,
         )
 
-    async def get_by_content_sha256(self, content_sha256: str) -> Upload | None:
-        stmt = select(UploadModel).where(UploadModel.content_sha256 == content_sha256)
-        model = (await self._session.execute(stmt)).scalar_one_or_none()
-        return self._to_domain(model) if model else None
-
     async def _uploads_with_transactions(
         self, person_ids: list[UUID], *date_filters: ColumnElement[bool]
     ) -> list[Upload]:

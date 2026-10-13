@@ -2,9 +2,11 @@ import uuid
 
 import pytest
 
+from src.domain.entities.account import personal_account_id
 from src.domain.exceptions import ValidationError
-from src.domain.parsing.importer import AccountResolver, ImportContext
+from src.domain.parsing.importer import ImportContext, accounts_named_by
 from src.domain.parsing.monarch_csv import MonarchCsvImporter
+from tests.fixtures.factories import make_transaction
 
 CSV = (
     "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
@@ -14,66 +16,44 @@ CSV = (
 )
 
 
-def _context(
-    payer: uuid.UUID, accounts_by_label: dict[str, uuid.UUID] | None = None
-) -> ImportContext:
+def _context(payer: uuid.UUID) -> ImportContext:
     return ImportContext(
-        payer_person_id=payer,
-        upload_id=uuid.uuid4(),
-        person_names=frozenset(),
-        accounts_by_label=accounts_by_label or {},
+        payer_person_id=payer, upload_id=uuid.uuid4(), person_names=frozenset()
     )
 
 
-def test_resolver_returns_known_account() -> None:
-    known = uuid.uuid4()
-    resolver = AccountResolver(uuid.uuid4(), {"Chase": known})
+def test_personal_account_id_is_stable_per_owner_and_label() -> None:
+    alice, bob = uuid.uuid4(), uuid.uuid4()
 
-    assert resolver.id_for("Chase") == known
-    assert resolver.new_accounts == []
-
-
-def test_resolver_creates_one_personal_account_per_new_label() -> None:
-    owner = uuid.uuid4()
-    resolver = AccountResolver(owner, {})
-
-    first = resolver.id_for("Chase")
-    again = resolver.id_for("Chase")
-
-    assert first == again
-    assert len(resolver.new_accounts) == 1
-    account = resolver.new_accounts[0]
-    assert (account.id, account.name, account.kind, account.owner_person_id) == (
-        first,
-        "Chase",
-        "personal",
-        owner,
-    )
+    assert personal_account_id(alice, "Chase") == personal_account_id(alice, "Chase")
+    assert personal_account_id(alice, "Chase") != personal_account_id(alice, "Amex")
+    assert personal_account_id(alice, "Chase") != personal_account_id(bob, "Chase")
 
 
-def test_monarch_importer_creates_accounts_for_new_labels() -> None:
+def test_monarch_importer_points_each_row_at_its_payers_account() -> None:
     payer = uuid.uuid4()
 
     result = MonarchCsvImporter().parse(CSV.encode(), _context(payer))
 
-    assert sorted(a.name for a in result.new_accounts) == ["Amex", "Chase"]
-    ids = {a.name: a.id for a in result.new_accounts}
     assert [tx.account_id for tx in result.transactions] == [
-        ids["Chase"],
-        ids["Chase"],
-        ids["Amex"],
+        personal_account_id(payer, "Chase"),
+        personal_account_id(payer, "Chase"),
+        personal_account_id(payer, "Amex"),
     ]
 
 
-def test_monarch_importer_reuses_the_uploaders_accounts() -> None:
-    chase = uuid.uuid4()
+def test_accounts_named_by_gives_one_personal_account_per_account_id() -> None:
+    payer = uuid.uuid4()
+    chase = make_transaction(payer_person_id=payer, account="Chase")
+    chase_again = make_transaction(payer_person_id=payer, account="Chase")
+    amex = make_transaction(payer_person_id=payer, account="Amex")
 
-    result = MonarchCsvImporter().parse(
-        CSV.encode(), _context(uuid.uuid4(), {"Chase": chase})
-    )
+    accounts = accounts_named_by([chase, chase_again, amex])
 
-    assert [a.name for a in result.new_accounts] == ["Amex"]
-    assert result.transactions[0].account_id == chase
+    assert [(a.id, a.name, a.kind, a.owner_person_id) for a in accounts] == [
+        (chase.account_id, "Chase", "personal", payer),
+        (amex.account_id, "Amex", "personal", payer),
+    ]
 
 
 def test_monarch_importer_accepts_a_byte_order_mark() -> None:

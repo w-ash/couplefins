@@ -33,17 +33,21 @@ async def test_upload_csv_full_flow(client: AsyncClient) -> None:
     assert data["filename"] == "test.csv"
 
 
-async def test_upload_csv_same_file_twice_is_refused(client: AsyncClient) -> None:
+async def test_upload_csv_same_file_twice_adds_nothing(client: AsyncClient) -> None:
     _, cookies = await setup_and_login(client)
-    files = {"file": ("test.csv", io.BytesIO(VALID_CSV.encode()), "text/csv")}
-    first = await client.post("/api/v1/uploads/", files=files, auth=cookies)
-    assert first.status_code == 201
+    for _ in range(2):
+        response = await client.post(
+            "/api/v1/uploads/",
+            files={"file": ("test.csv", io.BytesIO(VALID_CSV.encode()), "text/csv")},
+            auth=cookies,
+        )
+        assert response.status_code == 201
 
-    for path in ("/api/v1/uploads/preview", "/api/v1/uploads/"):
-        files = {"file": ("again.csv", io.BytesIO(VALID_CSV.encode()), "text/csv")}
-        response = await client.post(path, files=files, auth=cookies)
-        assert response.status_code == 409
-        assert "already imported on" in response.json()["error"]["message"]
+    data = response.json()
+    assert data["new_count"] == 0
+    assert data["updated_count"] == 0
+    assert data["skipped_count"] == 2
+    assert data["removed_count"] == 0
 
 
 async def test_upload_csv_overlapping_export_adds_only_new_rows(

@@ -1,23 +1,23 @@
-from alembic.config import Config
-from sqlalchemy import create_engine, text
+import uuid
+
+from sqlalchemy import Connection, create_engine, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from alembic import command
 from src.config.settings import get_settings
-from src.infrastructure.persistence.database.db_connection import _ALEMBIC_DIR
+from src.domain.entities.account import personal_account_id
+from src.infrastructure.persistence.database.db_connection import (
+    alembic_config,
+    run_migrations,
+)
 
 _ALICE = "aaaaaaaa-0000-0000-0000-000000000001"
 _BOB = "bbbbbbbb-0000-0000-0000-000000000002"
 
 
-def _alembic_config(sync_url: str) -> Config:
-    cfg = Config()
-    cfg.set_main_option("script_location", str(_ALEMBIC_DIR))
-    cfg.set_main_option("sqlalchemy.url", sync_url)
-    return cfg
-
-
-def _insert_row(conn, tx_id: str, upload_id: str, payer: str, account: str) -> None:
+def _insert_row(
+    conn: Connection, tx_id: str, upload_id: str, payer: str, account: str
+) -> None:
     conn.execute(
         text(
             "INSERT INTO transactions (id, upload_id, date, merchant, category, "
@@ -41,8 +41,7 @@ async def test_backfill_gives_each_row_a_personal_account_of_its_payer(
     db_session: AsyncSession,  # truncates the tables afterwards
 ) -> None:
     sync_url = get_settings().database.sync_url
-    cfg = _alembic_config(sync_url)
-    command.downgrade(cfg, "0014")
+    command.downgrade(alembic_config(sync_url), "0014")
     engine = create_engine(sync_url)
     try:
         with engine.begin() as conn:
@@ -63,7 +62,7 @@ async def test_backfill_gives_each_row_a_personal_account_of_its_payer(
             _insert_row(conn, "a3", "upload-Alice", _ALICE, "Amex")
             _insert_row(conn, "b1", "upload-Bob", _BOB, "Chase")
 
-        command.upgrade(cfg, "head")
+        run_migrations(sync_url)
 
         with engine.connect() as conn:
             rows = conn.execute(
@@ -86,7 +85,13 @@ async def test_backfill_gives_each_row_a_personal_account_of_its_payer(
         ("a3", "Amex", "personal", _ALICE),
         ("b1", "Chase", "personal", _BOB),
     ]
-    assert rows[0][4] == rows[1][4]  # Alice's two Chase rows share one account
-    assert rows[0][4] != rows[3][4]  # Bob's Chase is his own
+    # The ids the app derives, so later imports land in the same accounts.
+    alice, bob = uuid.UUID(_ALICE), uuid.UUID(_BOB)
+    assert [r[4] for r in rows] == [
+        str(personal_account_id(alice, "Chase")),
+        str(personal_account_id(alice, "Chase")),
+        str(personal_account_id(alice, "Amex")),
+        str(personal_account_id(bob, "Chase")),
+    ]
     assert account_count == 3
     assert uploads == [("monarch_csv", None)]

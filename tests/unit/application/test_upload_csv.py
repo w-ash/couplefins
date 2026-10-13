@@ -6,14 +6,13 @@ import uuid
 import pytest
 
 from src.application.use_cases.upload_csv import UploadCsvCommand, UploadCsvUseCase
+from src.domain.entities.account import personal_account_id
 from src.domain.entities.category import Category
-from src.domain.exceptions import DuplicateError, NotFoundError
+from src.domain.exceptions import NotFoundError
 from tests.fixtures.factories import (
-    make_account,
     make_category,
     make_person,
     make_transaction,
-    make_upload,
 )
 from tests.fixtures.mocks import make_mock_uow
 
@@ -379,7 +378,7 @@ async def test_removed_settlement_linked_row_unlinks_with_warning() -> None:
 
 async def test_rejects_removal_from_finalized_month() -> None:
     """A removed row's own month is guarded even when no incoming row is in it."""
-    from datetime import UTC, date, datetime
+    from datetime import date
 
     from src.domain.exceptions import PeriodFinalizedError
     from tests.fixtures.factories import make_reconciliation_period
@@ -426,7 +425,7 @@ async def test_rejects_accepted_change_to_finalized_month() -> None:
     inside the January upload window, so it pairs with the CSV twin and would
     be updated in place — mutating a locked month unless the guard catches it.
     """
-    from datetime import UTC, date, datetime
+    from datetime import date
 
     from src.domain.exceptions import PeriodFinalizedError
     from tests.fixtures.factories import make_reconciliation_period
@@ -476,7 +475,6 @@ async def test_rejects_accepted_change_to_finalized_month() -> None:
 
 
 async def test_rejects_upload_to_finalized_month() -> None:
-    from datetime import UTC, datetime
 
     from src.domain.exceptions import PeriodFinalizedError
     from tests.fixtures.factories import make_reconciliation_period
@@ -510,46 +508,45 @@ async def test_records_importer_and_file_hash() -> None:
     assert upload.content_sha256 == hashlib.sha256(VALID_CSV.encode()).hexdigest()
 
 
-async def test_same_file_twice_is_refused() -> None:
+async def test_adds_the_account_each_new_row_names() -> None:
     uow = make_mock_uow()
     person = make_person()
     uow.persons.get_by_id.return_value = person
-    uow.uploads.get_by_content_sha256.return_value = make_upload(
-        uploaded_at=datetime(2026, 2, 3, tzinfo=UTC)
+    uow.transactions.get_by_person_and_original_date_range.return_value = []
+
+    await UploadCsvUseCase().execute(_make_command(person_id=person.id), uow)
+
+    (accounts,) = uow.accounts.add_missing.call_args.args
+    chase = personal_account_id(person.id, "Chase")
+    assert [(a.id, a.name, a.owner_person_id) for a in accounts] == [
+        (chase, "Chase", person.id)
+    ]
+    saved = uow.transactions.save_batch.call_args.args[0]
+    assert {tx.account_id for tx in saved} == {chase}
+
+
+async def test_adds_no_accounts_when_no_row_is_new() -> None:
+    uow = make_mock_uow()
+    person = make_person()
+    uow.persons.get_by_id.return_value = person
+    existing = make_transaction(
+        payer_person_id=person.id,
+        original_statement="GROCERY STORE",
+        account="Chase",
+        merchant="Grocery Store",
+        category="Groceries",
+        amount=Decimal("-50.00"),
+        tags=("shared",),
+        payer_percentage=50,
+    )
+    uow.transactions.get_by_person_and_original_date_range.return_value = [existing]
+    csv = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        '2026-01-15,Grocery Store,Groceries,Chase,GROCERY STORE,,"-50.00",shared\n'
     )
 
-    with pytest.raises(DuplicateError, match="already imported on 2026-02-03"):
-        await UploadCsvUseCase().execute(_make_command(person_id=person.id), uow)
+    await UploadCsvUseCase().execute(
+        _make_command(csv_text=csv, person_id=person.id), uow
+    )
 
-    uow.transactions.save_batch.assert_not_called()
-    uow.commit.assert_not_called()
-
-
-async def test_saves_an_account_for_each_new_label() -> None:
-    uow = make_mock_uow()
-    person = make_person()
-    uow.persons.get_by_id.return_value = person
-    uow.transactions.get_by_person_and_original_date_range.return_value = []
-
-    await UploadCsvUseCase().execute(_make_command(person_id=person.id), uow)
-
-    (accounts,) = uow.accounts.save_batch.call_args.args
-    assert [(a.name, a.owner_person_id) for a in accounts] == [("Chase", person.id)]
-    saved = uow.transactions.save_batch.call_args.args[0]
-    assert {tx.account_id for tx in saved} == {accounts[0].id}
-
-
-async def test_reuses_the_uploaders_existing_account() -> None:
-    uow = make_mock_uow()
-    person = make_person()
-    uow.persons.get_by_id.return_value = person
-    chase = make_account(name="Chase", owner_person_id=person.id)
-    uow.accounts.get_by_owner.return_value = [chase]
-    uow.transactions.get_by_person_and_original_date_range.return_value = []
-
-    await UploadCsvUseCase().execute(_make_command(person_id=person.id), uow)
-
-    uow.accounts.get_by_owner.assert_called_once_with(person.id)
-    uow.accounts.save_batch.assert_not_called()
-    saved = uow.transactions.save_batch.call_args.args[0]
-    assert {tx.account_id for tx in saved} == {chase.id}
+    uow.accounts.add_missing.assert_not_called()

@@ -150,9 +150,9 @@ def stream_chat_response(
                     })
                 else:
                     yield _sse_line({"type": "token", "text": item})
-        except asyncio.CancelledError:
+        finally:
+            # Stop the producer when the client goes away; a no-op once it finished.
             task.cancel()
-            raise
 
     return StreamingResponse(
         event_generator(),

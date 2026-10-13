@@ -3,7 +3,7 @@ from uuid import UUID
 
 from attrs import define, evolve, field
 
-from src.application.use_cases._shared.command_validators import non_empty_string
+from src.application.use_cases._shared.command_validators import non_empty
 from src.domain.auth import validate_password_strength
 from src.domain.entities.person import Person
 from src.domain.exceptions import AuthenticationError, ValidationError
@@ -12,8 +12,8 @@ from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 @define(frozen=True, slots=True)
 class SetInitialPasswordCommand:
-    name: str = field(validator=non_empty_string)
-    new_password: str = field(validator=non_empty_string)
+    name: str = field(validator=non_empty)
+    new_password: str = field(validator=non_empty)
 
 
 @define(frozen=True, slots=True)

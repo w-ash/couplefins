@@ -5,13 +5,12 @@ import uuid
 from attrs import define, field
 from structlog.stdlib import get_logger
 
-from src.application.use_cases._shared.command_validators import non_empty_bytes
+from src.application.use_cases._shared.command_validators import non_empty
 from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.application.use_cases._shared.transactions import (
-    build_import_context,
     classify_against_existing,
     find_all_unmapped_categories,
-    require_new_file,
+    parse_file,
 )
 from src.domain.dedup import FieldDiff
 from src.domain.entities.transaction import Transaction
@@ -26,7 +25,7 @@ _SENTINEL_UPLOAD_ID = uuid.UUID(int=0)
 
 @define(frozen=True, slots=True)
 class PreviewCsvCommand:
-    data: bytes = field(validator=non_empty_bytes)
+    data: bytes = field(validator=non_empty)
     person_id: uuid.UUID
 
 
@@ -81,11 +80,9 @@ class PreviewCsvUseCase:
                 uow.persons.get_by_id, command.person_id, "Person"
             )
 
-            await require_new_file(uow, command.data)
-            ctx = await build_import_context(
-                uow, command.person_id, _SENTINEL_UPLOAD_ID
+            parsed = await parse_file(
+                uow, self.importer, command.data, command.person_id, _SENTINEL_UPLOAD_ID
             )
-            parsed = self.importer.parse(command.data, ctx)
             incoming = parsed.transactions
 
             all_categories = await uow.categories.get_all()

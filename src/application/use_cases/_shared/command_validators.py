@@ -35,15 +35,13 @@ def quantize_cents(value: Decimal) -> Decimal:
     return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def non_empty_bytes(
-    _instance: object, attribute: Attribute[bytes], value: bytes
+def non_empty(
+    _instance: object,
+    attribute: Attribute[str] | Attribute[bytes],
+    value: str | bytes,
 ) -> None:
-    if not value.strip():
-        raise ValueError(f"{attribute.name} must not be empty")
-
-
-def non_empty_string(_instance: object, attribute: Attribute[str], value: str) -> None:
-    if not value.strip():
+    """attrs validator — reject empty or whitespace-only text or bytes."""
+    if not value or value.isspace():
         raise ValueError(f"{attribute.name} must not be empty")
 
 

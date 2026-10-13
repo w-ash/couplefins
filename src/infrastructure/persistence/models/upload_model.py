@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, Index, String, text
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infrastructure.persistence.models.base import Base
@@ -6,14 +6,6 @@ from src.infrastructure.persistence.models.base import Base
 
 class UploadModel(Base):
     __tablename__ = "uploads"
-    __table_args__: tuple[Index, ...] = (
-        Index(
-            "uq_uploads_content_sha256",
-            "content_sha256",
-            unique=True,
-            postgresql_where=text("content_sha256 IS NOT NULL"),
-        ),
-    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     person_id: Mapped[str] = mapped_column(

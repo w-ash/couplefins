@@ -58,11 +58,16 @@ async def get_session() -> AsyncGenerator[AsyncSession]:
         yield session
 
 
+def alembic_config(sync_url: str) -> Config:
+    """Return the Alembic config for this project's migrations on sync_url."""
+    cfg = Config()
+    cfg.set_main_option("script_location", str(_ALEMBIC_DIR))
+    cfg.set_main_option("sqlalchemy.url", sync_url)
+    return cfg
+
+
 def run_migrations(sync_url: str) -> None:
-    alembic_cfg = Config()
-    alembic_cfg.set_main_option("script_location", str(_ALEMBIC_DIR))
-    alembic_cfg.set_main_option("sqlalchemy.url", sync_url)
-    command.upgrade(alembic_cfg, "head")
+    command.upgrade(alembic_config(sync_url), "head")
 
 
 async def init_db() -> None:

@@ -1,4 +1,4 @@
-from typing import Literal, cast, get_args
+from typing import Literal, get_args
 from uuid import UUID
 
 from attrs import define
@@ -9,18 +9,12 @@ from attrs import define
 # coming in (paychecks, dividends). Neither counts toward spending, budgets,
 # or settlement, but both stay visible on the Transactions page.
 GroupKind = Literal["expense", "transfer", "income"]
+GROUP_KINDS: tuple[GroupKind, ...] = get_args(GroupKind)
 
 
 def is_spending_kind(kind: GroupKind) -> bool:
     """Only expense groups are spending; transfers and income are not."""
     return kind == "expense"
-
-
-def parse_group_kind(raw: str) -> GroupKind:
-    """Narrow a stored string to GroupKind at the persistence boundary."""
-    if raw in get_args(GroupKind):
-        return cast(GroupKind, raw)
-    raise ValueError(f"Unknown category group kind: {raw!r}")
 
 
 @define(frozen=True, slots=True)

@@ -5,8 +5,8 @@ Every existing row came from a Monarch export, so the data step creates one
 personal account per uploader per Monarch account label and points each row
 at it. No figure moves: settlement and spending read the same rows as before.
 
-An upload now records which importer read it and the SHA-256 of the file, so
-the same file is never imported twice. Uploads made before this have no hash.
+An upload now records which importer read it and the SHA-256 of the file, for
+provenance. Uploads made before this have no hash.
 
 Revision ID: 0015
 Revises: 0014
@@ -14,6 +14,7 @@ Create Date: 2026-10-12
 """
 
 from collections.abc import Sequence
+import uuid
 
 import sqlalchemy as sa
 
@@ -43,11 +44,34 @@ def upgrade() -> None:
             name="ck_accounts_kind_owner",
         ),
     )
-    op.execute(
-        "INSERT INTO accounts (id, name, kind, owner_person_id) "
-        "SELECT gen_random_uuid()::text, account, 'personal', payer_person_id "
-        "FROM (SELECT DISTINCT payer_person_id, account FROM transactions) AS labels"
+    labels = (
+        op
+        .get_bind()
+        .execute(sa.text("SELECT DISTINCT payer_person_id, account FROM transactions"))
+        .all()
     )
+    if labels:
+        accounts = sa.table(
+            "accounts",
+            sa.column("id"),
+            sa.column("name"),
+            sa.column("kind"),
+            sa.column("owner_person_id"),
+        )
+        # Each id is the one the app derives for that owner's label, uuid5(owner,
+        # label), so later imports of the label land in the same account.
+        op.bulk_insert(
+            accounts,
+            [
+                {
+                    "id": str(uuid.uuid5(uuid.UUID(owner), label)),
+                    "name": label,
+                    "kind": "personal",
+                    "owner_person_id": owner,
+                }
+                for owner, label in labels
+            ],
+        )
 
     op.add_column("transactions", sa.Column("account_id", sa.String(), nullable=True))
     op.execute(
@@ -72,17 +96,9 @@ def upgrade() -> None:
         ),
     )
     op.add_column("uploads", sa.Column("content_sha256", sa.String(), nullable=True))
-    op.create_index(
-        "uq_uploads_content_sha256",
-        "uploads",
-        ["content_sha256"],
-        unique=True,
-        postgresql_where=sa.text("content_sha256 IS NOT NULL"),
-    )
 
 
 def downgrade() -> None:
-    op.drop_index("uq_uploads_content_sha256", table_name="uploads")
     op.drop_column("uploads", "content_sha256")
     op.drop_column("uploads", "importer")
     op.drop_index("ix_transactions_account_id", table_name="transactions")

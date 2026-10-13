@@ -2,15 +2,15 @@ import uuid
 
 from attrs import define, field
 
-from src.application.use_cases._shared.command_validators import non_empty_string
+from src.application.use_cases._shared.command_validators import non_empty
 from src.domain.entities.settlement_merchant import SettlementMerchant
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
 @define(frozen=True, slots=True)
 class CreateSettlementMerchantCommand:
-    name: str = field(validator=non_empty_string)
-    merchant_pattern: str = field(validator=non_empty_string)
+    name: str = field(validator=non_empty)
+    merchant_pattern: str = field(validator=non_empty)
 
 
 @define(frozen=True, slots=True)
