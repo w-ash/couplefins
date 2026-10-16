@@ -3,7 +3,7 @@ import { Button } from "@/components/Button";
 import { GenericToolResultCard } from "@/components/chat/ToolResultCard";
 import type { ConfirmationState } from "@/lib/chat";
 import { cn } from "@/lib/cn";
-import { formatCurrency, SHORT_MONTHS } from "@/lib/format";
+import { formatCurrency, formatMonthYear } from "@/lib/format";
 
 interface ConfirmationCardProps {
   actionId: string;
@@ -112,7 +112,7 @@ function monthLabel(details: Record<string, unknown>): string {
   const month = details.month as number | undefined;
   const year = details.year as number | undefined;
   if (!month || !year) return "";
-  return `${SHORT_MONTHS[month - 1]} ${year}`;
+  return formatMonthYear(year, month);
 }
 
 function DetailDisplay({

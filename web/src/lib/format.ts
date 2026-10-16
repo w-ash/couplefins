@@ -17,6 +17,11 @@ export const MONTHS = [
 
 export const SHORT_MONTHS = MONTHS.map((m) => m.slice(0, 3));
 
+/** Short month and year, e.g. "Sep 2026". */
+export function formatMonthYear(year: number, month: number): string {
+  return `${SHORT_MONTHS[month - 1]} ${year}`;
+}
+
 export function currentYear(): number {
   return new Date().getFullYear();
 }
@@ -67,6 +72,11 @@ export function formatDateTime(isoString: string): string {
 
 export function formatCurrency(amount: number): string {
   return currencyFmt.format(amount);
+}
+
+/** A percent with a fixed number of decimals, e.g. "6.00%" for (6, 2). */
+export function formatPercent(value: number, digits = 1): string {
+  return `${value.toFixed(digits)}%`;
 }
 
 // Half-cent: any amount within this of zero is indistinguishable from $0.00
@@ -206,7 +216,7 @@ export function formatMonthSpan(span: MonthSpanShape): string {
   if (start.year === end.year) {
     return `${SHORT_MONTHS[start.month - 1]}–${SHORT_MONTHS[end.month - 1]}`;
   }
-  return `${SHORT_MONTHS[start.month - 1]} ${start.year} – ${SHORT_MONTHS[end.month - 1]} ${end.year}`;
+  return `${formatMonthYear(start.year, start.month)} – ${formatMonthYear(end.year, end.month)}`;
 }
 
 /** The period named in the URL, `undefined` where it names none. Never null:

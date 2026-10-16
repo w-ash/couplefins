@@ -49,6 +49,7 @@ describe("Sidebar", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Budget" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Upload" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "House" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
   });
 

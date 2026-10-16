@@ -194,7 +194,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.14.2 | Pages open on the latest month with data; prompt caching left to the API ([spec](completed/v1.14.x.md)) | Completed (2026-09-06) | M |
 | v1.14.3 | Settlement History as a table — each fact stated once, detail behind disclosure ([spec](completed/v1.14.x.md)) | Completed (2026-09-06) | S |
 | v1.15.0 | Accounts and the Importer interface — every row has an account, every import goes through one interface ([spec](v1.15.x.md)) | Completed (2026-10-12) | M |
-| v1.15.1 | House page with dummy data — the page built first, every section filled with example figures ([spec](v1.15.x.md)) | Planned | M |
+| v1.15.1 | House page with dummy data — the page built first, every section filled with example figures ([spec](v1.15.x.md)) | Completed (2026-10-15) | M |
 | v1.15.2 | Joint accounts — bank-statement importer if chosen, joint rows outside settlement ([spec](v1.15.x.md)) | Planned | L |
 | v1.15.3 | Sources, pots, and labels — whose money paid each joint row and from which pot; namespaced tags ([spec](v1.15.x.md)) | Planned | M |
 | v1.15.4 | Owner shares — capital accounts and share percentages from tagged rows and hand entries ([spec](v1.15.x.md)) | Planned | L |

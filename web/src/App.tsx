@@ -27,6 +27,9 @@ const TransactionsPage = lazy(() =>
 const InsightsPage = lazy(() =>
   import("./pages/InsightsPage").then((m) => ({ default: m.InsightsPage })),
 );
+const HousePage = lazy(() =>
+  import("./pages/HousePage").then((m) => ({ default: m.HousePage })),
+);
 const AskPage = lazy(() =>
   import("./pages/AskPage").then((m) => ({ default: m.AskPage })),
 );
@@ -59,6 +62,14 @@ const router = createBrowserRouter([
         element: (
           <Suspense fallback={<RouteLoading />}>
             <InsightsPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: "house",
+        element: (
+          <Suspense fallback={<RouteLoading />}>
+            <HousePage />
           </Suspense>
         ),
       },

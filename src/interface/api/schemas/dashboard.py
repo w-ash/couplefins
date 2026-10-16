@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from src.application.use_cases._shared.command_validators import Scope
 from src.application.use_cases.get_dashboard import GetDashboardResult
@@ -47,6 +47,8 @@ class BudgetAlertResponse(BaseModel):
 
 
 class DashboardPersonResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     name: str
 

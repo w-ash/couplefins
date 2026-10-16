@@ -9,6 +9,7 @@ import type {
   TransactionsLink,
   TransactionsRange,
 } from "@/lib/transaction-links";
+import { getPersonChartColor } from "@/types/person";
 
 export const UNCATEGORIZED_KEY = "uncategorized";
 export const UNCATEGORIZED_COLOR = "var(--color-muted-foreground)";
@@ -96,7 +97,7 @@ export function groupColor(ctx: FlowContext, groupId: string | null): string {
 }
 
 function personColor(ctx: FlowContext, personId: string): string {
-  return `var(--person-${ctx.personIndex.get(personId) ?? 0})`;
+  return getPersonChartColor(ctx.personIndex.get(personId) ?? 0);
 }
 
 /** One node per source. The household share is one claim no matter which

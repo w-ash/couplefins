@@ -3,6 +3,7 @@ import {
   CURRENCY_EPSILON,
   computeShares,
   formatMonthSpan,
+  formatPercent,
   formatSignedCurrency,
   isZeroCurrency,
   stripUserData,
@@ -65,6 +66,17 @@ describe("formatSignedCurrency", () => {
   it("prefixes negative amounts with a true minus sign (U+2212)", () => {
     expect(formatSignedCurrency(-50)).toBe("−$50.00");
     expect(formatSignedCurrency(-42.5)).toBe("−$42.50");
+  });
+});
+
+describe("formatPercent", () => {
+  it("shows one decimal by default", () => {
+    expect(formatPercent(58.4)).toBe("58.4%");
+    expect(formatPercent(60)).toBe("60.0%");
+  });
+
+  it("shows the decimals asked for", () => {
+    expect(formatPercent(6, 2)).toBe("6.00%");
   });
 });
 

@@ -18,9 +18,10 @@ const SCREENSHOT_DIR = join(import.meta.dirname, "..", "screenshots");
 const ROUTES = [
   { path: "/", name: "dashboard" },
   { path: "/transactions", name: "transactions" },
-  { path: "/settle-up", name: "settle-up" },
+  { path: "/settle", name: "settle-up" },
   { path: "/budget", name: "budget" },
   { path: "/insights", name: "insights" },
+  { path: "/house", name: "house" },
   { path: "/upload", name: "upload" },
   { path: "/settings", name: "settings" },
 ];

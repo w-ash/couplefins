@@ -3,6 +3,7 @@ import { getBudgetsMock } from "@/api/generated/budgets/budgets.msw";
 import { getCategoryGroupsMock } from "@/api/generated/category-groups/category-groups.msw";
 import { getDashboardMock } from "@/api/generated/dashboard/dashboard.msw";
 import { getHealthCheckMockHandler } from "@/api/generated/health/health.msw";
+import { getHouseMock } from "@/api/generated/house/house.msw";
 import { getInsightsMock } from "@/api/generated/insights/insights.msw";
 import { getPersonsMock } from "@/api/generated/persons/persons.msw";
 import { getReconciliationMock } from "@/api/generated/reconciliation/reconciliation.msw";
@@ -30,4 +31,5 @@ export const server = setupServer(
   ...getTransactionsMock(),
   ...getSettlementsMock(),
   ...getInsightsMock(),
+  ...getHouseMock(),
 );

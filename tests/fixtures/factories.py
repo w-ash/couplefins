@@ -15,6 +15,13 @@ from src.domain.entities.settlement_transaction_link import SettlementTransactio
 from src.domain.entities.transaction import Transaction
 from src.domain.entities.transaction_edit import TransactionEdit
 from src.domain.entities.upload import Upload
+from src.domain.house import (
+    ObligationFigures,
+    ObligationKind,
+    OwnerAmount,
+    OwnerShare,
+    ShareHistoryPoint,
+)
 
 
 def make_person(
@@ -290,4 +297,57 @@ def make_settlement_merchant(
         id=id or uuid.uuid4(),
         name=name,
         merchant_pattern=merchant_pattern,
+    )
+
+
+def make_owner_amount(
+    *,
+    person_id: uuid.UUID | None = None,
+    amount: Decimal = Decimal("100.00"),
+) -> OwnerAmount:
+    return OwnerAmount(person_id=person_id or uuid.uuid4(), amount=amount)
+
+
+def make_owner_share(
+    *,
+    person_id: uuid.UUID | None = None,
+    capital: Decimal = Decimal("100.00"),
+    percent: Decimal = Decimal(50),
+) -> OwnerShare:
+    return OwnerShare(
+        person_id=person_id or uuid.uuid4(), capital=capital, percent=percent
+    )
+
+
+def make_share_history_point(
+    *,
+    year: int = 2026,
+    month: int = 1,
+    owners: tuple[OwnerShare, ...] = (),
+) -> ShareHistoryPoint:
+    return ShareHistoryPoint(year=year, month=month, owners=owners)
+
+
+def make_obligation(
+    *,
+    id: uuid.UUID | None = None,
+    name: str = "Mortgage payment",
+    kind: ObligationKind = "loan_payment",
+    amount: Decimal = Decimal("100.00"),
+    is_estimate: bool = False,
+    due: date = date(2026, 11, 1),
+    late_after: date | None = None,
+    pays_from: str | None = "Loan payments",
+    shortfall: Decimal | None = None,
+) -> ObligationFigures:
+    return ObligationFigures(
+        id=id or uuid.uuid4(),
+        name=name,
+        kind=kind,
+        amount=amount,
+        is_estimate=is_estimate,
+        due=due,
+        late_after=late_after,
+        pays_from=pays_from,
+        shortfall=shortfall,
     )

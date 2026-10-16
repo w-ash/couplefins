@@ -1,4 +1,5 @@
 import type { CategoryGroupResponseKind } from "@/api/generated/model";
+import { Pill } from "@/components/Pill";
 
 /** A group kind that is not spending, and the caption Settings shows for it. */
 export type NonSpendingKind = Exclude<CategoryGroupResponseKind, "expense">;
@@ -20,12 +21,5 @@ const LABELS: Record<NonSpendingKind, { label: string; title: string }> = {
 /** Marks a transfer- or income-kind group, or one of its rows. */
 export function GroupKindPill({ kind }: { kind: NonSpendingKind }) {
   const { label, title } = LABELS[kind];
-  return (
-    <span
-      className="shrink-0 rounded-full bg-muted px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
-      title={title}
-    >
-      {label}
-    </span>
-  );
+  return <Pill title={title}>{label}</Pill>;
 }

@@ -10,6 +10,12 @@ deploy. There is no `[Unreleased]` section.
 Versions before 1.14.0 predate this file. Their scope is recorded per series in
 `docs/backlog/completed/` and in the version matrix in `docs/backlog/README.md`.
 
+## [1.15.1] - 2026-10-15
+
+### Added
+
+- A House page for the co-owned home: what each owner has put in, shares now and over time, loans, upcoming obligations, set-aside buckets, and recent joint-account activity. It shows example figures for Alice and Bob, and says so, until the data behind each section is built.
+
 ## [1.15.0] - 2026-10-12
 
 ### Added

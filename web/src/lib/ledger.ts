@@ -5,7 +5,12 @@ import type {
   MonthReference,
   SettlementPortionResponse,
 } from "@/api/generated/model";
-import { currentYear, MONTHS, SHORT_MONTHS } from "@/lib/format";
+import {
+  currentYear,
+  formatMonthYear,
+  MONTHS,
+  SHORT_MONTHS,
+} from "@/lib/format";
 
 // Every number on Settle Up arrives precomputed from the API — this module
 // only decides which slice of the ledger a view is looking at. No arithmetic
@@ -105,7 +110,7 @@ export function formatPortionPeriod(
     const names = short ? SHORT_MONTHS : MONTHS;
     return p.year === viewYear
       ? names[p.month - 1]
-      : `${SHORT_MONTHS[p.month - 1]} ${p.year}`;
+      : formatMonthYear(p.year, p.month);
   };
 
   const first = sorted[0];

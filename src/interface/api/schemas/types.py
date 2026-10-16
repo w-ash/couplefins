@@ -13,3 +13,6 @@ MoneyField = Annotated[
     PlainSerializer(float, return_type=float, when_used="json"),
     WithJsonSchema({"type": "number"}),
 ]
+
+# A percent (0-100), serialized exactly as MoneyField is.
+PercentField = MoneyField

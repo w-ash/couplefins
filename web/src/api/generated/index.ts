@@ -4,6 +4,7 @@ export * from './category-groups/category-groups.ts';
 export * from './chat/chat.ts';
 export * from './dashboard/dashboard.ts';
 export * from './health/health.ts';
+export * from './house/house.ts';
 export * from './insights/insights.ts';
 export * from './persons/persons.ts';
 export * from './reconciliation/reconciliation.ts';

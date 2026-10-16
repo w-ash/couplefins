@@ -52,7 +52,7 @@ The couple sits down to:
 
 ## Information Architecture
 
-Seven top-level pages in the sidebar, ordered by workflow, plus a chat assistant panel:
+Eight top-level pages in the sidebar, ordered by workflow, plus a chat assistant panel:
 
 | Page | Purpose | Ships in |
 |---|---|---|
@@ -61,6 +61,7 @@ Seven top-level pages in the sidebar, ordered by workflow, plus a chat assistant
 | **Settle Up** | Link settlement transactions, waive balances, finalization controls | v0.6.0 |
 | **Budget** | Category group budgets, monthly + YTD views, progress indicators, spending charts | v0.4.0 |
 | **Insights** | Where the money went (Sankey / donut / bars with drill-down), spending over time (stacked months + group table with YoY), what moved this month; every figure links to its transactions (v1.13.2). Household / My Spending scope toggle (v1.12.0) | v0.7.0 |
+| **House** | The co-owned home: what each owner has put in, shares now and over time, loans, upcoming obligations, set-aside buckets, recent joint-account activity. Example figures until the data behind each section is built (v1.15.2–v1.15.6) | v1.15.1 |
 | **Upload** | CSV import: preview, confirm, re-upload. Drag-and-drop in v0.8.x | v0.1.1 |
 | **Settings** | Person config, category-to-group mappings, adjustment accounts, theme | v0.1.3 |
 | **Ask** *(panel)* | Chat assistant — natural language queries about spending, budgets, settlements. Right-edge panel on desktop, full-screen page on mobile. Optional (requires API key). | v1.5.0 |
@@ -520,6 +521,50 @@ Setup and maintenance tasks that happen occasionally, not monthly.
 - Given a transfer that is really an expense, then I change that row's category to a spending category in the editor, as today
 - Given Settings → Category Groups, then a group can also count as Income (paychecks, dividends); an Income group shows an "Income" pill and the same caption, its rows are excluded from spending, budgets, and settlement in every scope, and the seeded "Income" group is Income on deploy (v1.13.3)
 - Given an Income row on the Transactions page, then it is listed under All with an "Income" badge, left out of the In view total, and never enters My Spending as a negative expense (v1.13.3)
+
+### The House
+
+The co-owned home on its own page. Every figure is computed in Python and served by one endpoint; the browser does no arithmetic. Until the data behind each section is built (v1.15.2–v1.15.6), the figures are examples for Alice and Bob.
+
+**US-HOUSE-1** (v1.15.1): As a co-owner, I want a House page in the app's navigation, so that I can open the home's finances from anywhere.
+
+- Given the desktop sidebar, then House appears after Insights
+- Given a phone, then the bottom bar still has five tabs and House is in the More sheet
+- Given I open `/house`, then the page loads with all six sections
+
+**US-HOUSE-2** (v1.15.1): As a co-owner, I want to see what each of us has put in, so that I know where we each stand.
+
+- Given the Put in section, then each owner's total to date is shown by kind: closing, loan interest, loan principal, property tax, insurance, repairs, agreed work
+- Given the Put in section, then each owner's deposits not yet spent are shown beside those totals
+
+**US-HOUSE-3** (v1.15.1): As a co-owner, I want to see each owner's share of the home, now and over time, so that I know how ownership has moved.
+
+- Given the Shares section, then each owner's capital account and percentage now are shown
+- Given the Shares section, then a chart plots both owners' shares over time
+
+**US-HOUSE-4** (v1.15.1): As a co-owner, I want to see the loans on the home, so that I know what is owed and who pays what.
+
+- Given the Loans section, then each loan shows its balance, rate, payment, and next due date
+- Given a loan, then each owner's part of the payment is shown
+
+**US-HOUSE-5** (v1.15.1): As a co-owner, I want to see upcoming obligations and which bucket pays each, so that nothing is paid late.
+
+- Given the Upcoming section, then each obligation shows its due date, late date, and the bucket that pays it
+- Given a bucket that won't cover an obligation once the earlier obligations it pays are taken out, then that obligation carries a visible shortfall flag for the part the bucket can't cover
+
+**US-HOUSE-6** (v1.15.1): As a co-owner, I want each bucket beside the balance last entered from the bank, so that I can see whether the books match the bank.
+
+- Given the Set aside section, then each bucket shows its balance, the balance last entered from the bank, and the difference
+
+**US-HOUSE-7** (v1.15.1): As a co-owner, I want the joint accounts' latest activity, so that I can see what just moved.
+
+- Given the Recent activity section, then the joint accounts' latest rows show date, account, who, kind, budget line, amount, and each owner's share
+
+**US-HOUSE-8** (v1.15.1): As a co-owner, I want to know when the House figures are examples, so that I never mistake them for real ones.
+
+- Given the endpoint reports example data, then the page shows a notice that the figures are examples until the data behind each section is built
+- Given the endpoint reports real data, then the notice is gone
+- Given any figure on the page, then it comes precomputed from the endpoint; nothing is computed in the browser
 
 ### Asking Questions (v1.5.x)
 

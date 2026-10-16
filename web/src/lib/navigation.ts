@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeftRight,
   HandCoins,
+  House,
   LayoutDashboard,
   MessageCircle,
   PieChart,
@@ -17,7 +18,7 @@ export interface NavRoute {
   icon: LucideIcon;
 }
 
-/** Primary nav — shown in sidebar and bottom tab bar. */
+/** Primary nav — the five bottom-bar tabs, also in the sidebar. */
 export const PRIMARY_ROUTES: NavRoute[] = [
   { to: "/", label: "Dashboard", shortLabel: "Home", icon: LayoutDashboard },
   {
@@ -31,8 +32,9 @@ export const PRIMARY_ROUTES: NavRoute[] = [
   { to: "/insights", label: "Insights", icon: TrendingUp },
 ];
 
-/** Secondary nav — shown in sidebar and mobile "More" sheet. */
+/** Secondary nav — the sidebar and the mobile "More" sheet. */
 export const SECONDARY_ROUTES: NavRoute[] = [
+  { to: "/house", label: "House", icon: House },
   { to: "/upload", label: "Upload", icon: Upload },
   { to: "/settings", label: "Settings", icon: Settings },
 ];

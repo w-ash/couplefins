@@ -18,7 +18,7 @@ All components live in `web/src/components/`.
 
 | Component | Purpose |
 |---|---|
-| `Sidebar` | Left nav (w-56), wordmark, 7 `NavItem`s, identity toggle |
+| `Sidebar` | Left nav (w-56), wordmark, 8 `NavItem`s, identity toggle |
 | `NavItem` | Sidebar link with icon, active: `border-l-2 bg-accent font-semibold` |
 | `PageHeader` | Title + icon, optional right-side children for controls |
 | `AppLayout` | Shell: `flex min-h-screen` with `Sidebar` + `<main>` outlet |
@@ -48,6 +48,8 @@ All components live in `web/src/components/`.
 | `UploadStatusRow` | Per-person upload status (pending/done) |
 | `FinalizationBanner` | Lock state with icon |
 | `UnmappedCategoriesWarning` | Alert with link to Settings |
+| `WarningBanner` | Warning box: icon + title line, optional detail below (`role` alert/status) |
+| `Pill` | Small uppercase muted label (a kind, "estimate"); `GroupKindPill`, `ActivityKindPill` wrap it |
 | `ThemeToggle` | Light/dark/system radio with icons |
 
 ## Input Styles (`web/src/lib/input-styles.ts`)
@@ -66,6 +68,6 @@ Use these instead of writing raw Tailwind for inputs.
 
 **lucide-react** (v0.577.0). All icons come from this package.
 
-Nav icons: `LayoutDashboard`, `ArrowLeftRight`, `HandCoins`, `PieChart`, `TrendingUp`, `Upload`, `Settings`
+Nav icons: `LayoutDashboard`, `ArrowLeftRight`, `HandCoins`, `PieChart`, `TrendingUp`, `House`, `Upload`, `Settings`
 
 Category group icons registered in `lib/category-icons.ts` — 19 icons mapped by name string. Use `getCategoryGroupIcon(iconName)` to resolve; defaults to `Tag` icon.

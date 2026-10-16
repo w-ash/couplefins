@@ -1,6 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Check,
@@ -39,6 +38,7 @@ import { TagReferenceGuide } from "@/components/TagReferenceGuide";
 import { UnmappedCategoriesWarning } from "@/components/UnmappedCategoriesWarning";
 import { UploadError } from "@/components/UploadError";
 import { UploadHistory } from "@/components/UploadHistory";
+import { WarningBanner } from "@/components/WarningBanner";
 import { useSetToggle } from "@/hooks/useSetToggle";
 import { useUploadProgress } from "@/hooks/useUploadProgress";
 import { useInvalidateCategories } from "@/lib/categories";
@@ -545,21 +545,18 @@ function ConfirmedCard({
       </dl>
 
       {summary.warnings.length > 0 && (
-        <div
+        <WarningBanner
           role="alert"
-          className="mt-4 rounded-lg border border-warning-border bg-warning-muted p-3"
+          className="mt-4"
+          title={plural("warning", summary.warnings.length)}
         >
-          <p className="mb-2 flex items-center gap-1.5 font-medium text-sm text-warning">
-            <AlertTriangle className="size-4 shrink-0" />
-            {plural("warning", summary.warnings.length)}
-          </p>
           <ul className="list-disc pl-4 text-sm text-warning-muted-foreground">
             {summary.warnings.map((warning, i) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: static result rows, never reordered; warnings can repeat verbatim
               <li key={i}>{warning}</li>
             ))}
           </ul>
-        </div>
+        </WarningBanner>
       )}
 
       <UnmappedCategoriesWarning

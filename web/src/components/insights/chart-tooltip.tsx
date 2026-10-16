@@ -1,9 +1,16 @@
 import type { ReactNode } from "react";
 
-/** The popover shell every Insights chart tooltip uses. */
-export function ChartTooltipShell({ children }: { children: ReactNode }) {
+/** The popover shell every chart tooltip uses, with an optional title line. */
+export function ChartTooltipShell({
+  title,
+  children,
+}: {
+  title?: string;
+  children: ReactNode;
+}) {
   return (
     <div className="rounded-lg border border-border bg-popover px-3 py-1.5 text-xs shadow-md">
+      {title && <p className="mb-0.5 font-medium text-foreground">{title}</p>}
       {children}
     </div>
   );

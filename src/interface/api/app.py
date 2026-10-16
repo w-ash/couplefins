@@ -33,6 +33,7 @@ from src.interface.api.routes.chat import router as chat_router
 from src.interface.api.routes.dashboard import router as dashboard_router
 from src.interface.api.routes.events import router as events_router
 from src.interface.api.routes.health import router as health_router
+from src.interface.api.routes.house import router as house_router
 from src.interface.api.routes.insights import router as insights_router
 from src.interface.api.routes.persons import router as persons_router
 from src.interface.api.routes.reconciliation import router as reconciliation_router
@@ -148,6 +149,7 @@ def create_app() -> FastAPI:
     app.include_router(settlements_router, prefix=AppConfig.API_V1_PREFIX)
     app.include_router(settings_router, prefix=AppConfig.API_V1_PREFIX)
     app.include_router(insights_router, prefix=AppConfig.API_V1_PREFIX)
+    app.include_router(house_router, prefix=AppConfig.API_V1_PREFIX)
     app.include_router(events_router, prefix=AppConfig.API_V1_PREFIX)
     app.include_router(chat_router, prefix=AppConfig.API_V1_PREFIX)
 

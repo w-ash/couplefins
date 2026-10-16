@@ -135,3 +135,32 @@ if TYPE_CHECKING:
 
     TransactionResponse.is_transfer  # response field — serialized, read by the web client
     TransactionResponse.is_income  # response field — serialized, read by the web client
+
+    # --- House records: read by name when HouseResponse validates from attributes;
+    # the same-named response fields are serialized to JSON in GET /house ---
+
+    from src.domain.house import (
+        ActivityRow,
+        Bucket,
+        HouseFigures,
+        LoanFigures,
+        ObligationFigures,
+        PutInSection,
+        SharesSection,
+    )
+
+    HouseFigures.as_of
+    HouseFigures.put_in
+    HouseFigures.loans
+    HouseFigures.upcoming
+    HouseFigures.set_aside
+    HouseFigures.recent_activity
+    PutInSection.totals
+    SharesSection.total_capital
+    LoanFigures.rate_percent
+    ObligationFigures.is_estimate
+    ObligationFigures.due
+    ObligationFigures.pays_from
+    ObligationFigures.shortfall
+    Bucket.difference
+    ActivityRow.account_name

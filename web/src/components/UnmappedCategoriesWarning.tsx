@@ -1,10 +1,9 @@
-import { AlertTriangle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { useGetCategoryGroups } from "@/api/generated/category-groups/category-groups";
 import { UnmappedCategoryRow } from "@/components/UnmappedCategoryRow";
+import { WarningBanner } from "@/components/WarningBanner";
 import { useGroupOptions } from "@/lib/categories";
-import { cn } from "@/lib/cn";
 
 export function UnmappedCategoriesWarning({
   categories,
@@ -31,17 +30,10 @@ export function UnmappedCategoriesWarning({
   if (visible.length === 0) return null;
 
   return (
-    <div
-      className={cn(
-        "rounded-lg border border-warning-border bg-warning-muted p-3",
-        className,
-      )}
+    <WarningBanner
+      className={className}
+      title={`${visible.length} unmapped ${visible.length === 1 ? "category" : "categories"}`}
     >
-      <p className="mb-2 flex items-center gap-1.5 font-medium text-sm text-warning">
-        <AlertTriangle className="size-4 shrink-0" />
-        {visible.length} unmapped{" "}
-        {visible.length === 1 ? "category" : "categories"}
-      </p>
       {compact || groups.length === 0 ? (
         <ul className="list-disc pl-4 text-sm text-warning-muted-foreground">
           {visible.map((cat) => (
@@ -69,6 +61,6 @@ export function UnmappedCategoriesWarning({
           Fix in Settings
         </Link>
       )}
-    </div>
+    </WarningBanner>
   );
 }

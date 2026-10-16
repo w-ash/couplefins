@@ -663,6 +663,9 @@ BLACKLISTED_USE_CASES: frozenset[str] = frozenset({
     "ResetPartnerPasswordUseCase",
     "SetupCoupleUseCase",
     "UpdatePersonUseCase",
+    # 2026-10-15: serves a fixed example payload until v1.15.4; a
+    # get_house_summary read tool lands with the real figures.
+    "GetHouseUseCase",
 })
 
 # Excluded because chat has no file input/output channel, not by policy.
