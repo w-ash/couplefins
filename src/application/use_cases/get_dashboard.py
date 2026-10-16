@@ -246,11 +246,10 @@ def _resolve_active_month(
 
 
 def _compute_personal_spending(
-    txs: list[Transaction], person_id: UUID
+    txs: list[Transaction], lens: PersonalLens
 ) -> tuple[Decimal, Decimal, Decimal]:
     """(total, household_portion, own_spending) for one person, through the
     same lens Budget and Insights use."""
-    lens = PersonalLens(person_id)
     household_portion = total_spending(lens, [tx for tx in txs if tx.household])
     own_spending = total_spending(lens, [tx for tx in txs if not tx.household])
     return household_portion + own_spending, household_portion, own_spending
@@ -264,7 +263,7 @@ def _build_budget_alerts(  # ruff: ignore[too-many-arguments, too-many-positiona
     category_groups: list[CategoryGroup],
     year: int,
     month: int,
-    person_id: UUID,
+    lens: PersonalLens,
 ) -> list[BudgetAlert]:
     """Compute personal budget overview and extract top alerts."""
     overview = compute_budget_overview(
@@ -277,7 +276,7 @@ def _build_budget_alerts(  # ruff: ignore[too-many-arguments, too-many-positiona
             year,
             month,
         ),
-        PersonalLens(person_id),
+        lens,
     )
     alert_statuses: set[HealthStatus] = {"near_limit", "over_budget"}
     alerts = [
@@ -342,7 +341,7 @@ def _compute_all_scope_data(
 
 def _compute_personal_scope_data(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     all_year_txs: list[Transaction],
-    person_id: UUID,
+    lens: PersonalLens,
     active_month: int,
     year: int,
     month_budgets: list[CategoryGroupBudget],
@@ -352,9 +351,7 @@ def _compute_personal_scope_data(  # ruff: ignore[too-many-arguments, too-many-p
 ) -> _PersonalScopeData:
     # Compute once per month, derive active-month and YTD from the results
     by_month = partition_by_month(all_year_txs, lambda tx: tx.date.month)
-    month_results = {
-        m: _compute_personal_spending(by_month[m], person_id) for m in by_month
-    }
+    month_results = {m: _compute_personal_spending(by_month[m], lens) for m in by_month}
 
     spending_month, household_share, personal_own = month_results.get(
         active_month, (Decimal(0), Decimal(0), Decimal(0))
@@ -384,7 +381,7 @@ def _compute_personal_scope_data(  # ruff: ignore[too-many-arguments, too-many-p
         category_groups,
         year,
         active_month,
-        person_id,
+        lens,
     )
 
     return _PersonalScopeData(
@@ -516,7 +513,7 @@ class GetDashboardUseCase:
                 ]
                 personal_data = _compute_personal_scope_data(
                     all_year_txs,
-                    command.person_id,
+                    PersonalLens(command.person_id, ctx.person_ids),
                     active_month,
                     command.year,
                     personal_month_budgets,

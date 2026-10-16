@@ -10,6 +10,19 @@ deploy. There is no `[Unreleased]` section.
 Versions before 1.14.0 predate this file. Their scope is recorded per series in
 `docs/backlog/completed/` and in the version matrix in `docs/backlog/README.md`.
 
+## [1.15.2] - 2026-10-15
+
+### Added
+
+- Joint accounts. In Settings → Accounts, mark a Monarch account joint: rows both of you already imported under it lose their payer, split 50/50, leave settlement, and collapse to one row where both exports held the same transaction. Unmarking reverses it. Later uploads import joint rows the same way, and a file that omits the account removes nothing from it.
+- Joint rows show a "Joint · account" badge on Transactions, and an owner-shares editor (two percentages that sum to 100, reset to 50/50) replaces the split editor. They count in full toward the household and by share toward each person; Insights shows them as a "Joint accounts" source.
+- Deposits into a joint account record who made them, matched from the row's text, with an "Unassigned deposits" chip and a picker for the rest.
+- The House page's Recent activity now shows real joint-account rows instead of examples.
+
+### Changed
+
+- Transactions are identified by account rather than payer, which joint rows need. No figure changes.
+
 ## [1.15.1] - 2026-10-15
 
 ### Added

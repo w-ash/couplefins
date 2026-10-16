@@ -4,6 +4,8 @@ import type { CategoryGroupResponse } from "@/api/generated/model";
 import { Button } from "@/components/Button";
 import { ResponsivePopover } from "@/components/ResponsivePopover";
 import {
+  payerFilterEntries,
+  payerFilterLabel,
   SCOPE_LABELS,
   type TransactionFilters as TransactionFiltersType,
 } from "@/lib/transaction-filters";
@@ -34,16 +36,17 @@ export function PayerFilter({
   onChange: (payers: string[]) => void;
 }) {
   const activeSet = useMemo(() => new Set(activePayers), [activePayers]);
+  const entries = useMemo(() => payerFilterEntries(persons), [persons]);
 
   const toggle = useCallback(
     (id: string) => {
       const next = new Set(activeSet);
       if (next.has(id)) next.delete(id);
       else next.add(id);
-      if (next.size === persons.length) onChange([]);
+      if (next.size === entries.length) onChange([]);
       else onChange([...next]);
     },
-    [activeSet, persons.length, onChange],
+    [activeSet, entries.length, onChange],
   );
 
   return (
@@ -53,7 +56,7 @@ export function PayerFilter({
     >
       {() => (
         <div className="p-1">
-          {persons.map((p) => (
+          {entries.map((p) => (
             <label
               key={p.id}
               className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-popover-foreground hover:bg-accent"
@@ -409,7 +412,7 @@ export function ActiveFilterPills({
   for (const p of filters.payers) {
     pills.push({
       key: `payer-${p}`,
-      label: `Payer: ${personNames.get(p) ?? p}`,
+      label: `Payer: ${payerFilterLabel(p, personNames)}`,
       onRemove: () => filters.setPayers(filters.payers.filter((x) => x !== p)),
     });
   }
@@ -455,6 +458,14 @@ export function ActiveFilterPills({
       key: "discuss",
       label: "Discuss",
       onRemove: () => filters.setDiscuss(false),
+    });
+  }
+
+  if (filters.unassigned) {
+    pills.push({
+      key: "unassigned",
+      label: "Unassigned deposits",
+      onRemove: () => filters.setUnassigned(false),
     });
   }
 

@@ -33,22 +33,35 @@ export function HousePage() {
       )}
       {data && (
         <div className="space-y-6">
-          {data.is_example && <ExampleDataNotice />}
-          <PutInSection putIn={data.put_in} owners={data.persons} />
+          {data.example_sections.length > 0 && <ExampleDataNotice />}
+          <PutInSection
+            example={data.example_sections.includes("put_in")}
+            putIn={data.put_in}
+            owners={data.persons}
+          />
           <SharesSection
+            example={data.example_sections.includes("shares")}
             shares={data.shares}
             owners={data.persons}
             getPersonColor={getPersonColor}
             getPersonIndex={getPersonIndex}
           />
           <LoansSection
+            example={data.example_sections.includes("loans")}
             loans={data.loans}
             owners={data.persons}
             getPersonColor={getPersonColor}
           />
-          <UpcomingSection upcoming={data.upcoming} />
-          <SetAsideSection setAside={data.set_aside} />
+          <UpcomingSection
+            example={data.example_sections.includes("upcoming")}
+            upcoming={data.upcoming}
+          />
+          <SetAsideSection
+            example={data.example_sections.includes("set_aside")}
+            setAside={data.set_aside}
+          />
           <RecentActivitySection
+            example={data.example_sections.includes("recent_activity")}
             activity={data.recent_activity}
             owners={data.persons}
             getPersonName={getPersonName}

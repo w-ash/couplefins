@@ -5,6 +5,7 @@ from attrs import define, evolve
 from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.application.use_cases._shared.finalization import (
     assert_periods_not_finalized,
+    months_of,
 )
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
@@ -44,9 +45,7 @@ class DeleteSettlementUseCase:
             # settlement record is always allowed, but unlinking flips
             # is_settlement in each linked tx's own month (cross-month links
             # exist via the candidate window).
-            await assert_periods_not_finalized(
-                uow, {(tx.date.year, tx.date.month) for tx in linked_txs}
-            )
+            await assert_periods_not_finalized(uow, months_of(linked_txs))
 
             for tx in linked_txs:
                 if tx.is_settlement:

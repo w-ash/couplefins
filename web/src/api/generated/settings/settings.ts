@@ -24,10 +24,14 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AccountsResponse,
   CreateSettlementMerchantRequest,
   DeleteSettlementMerchant200,
   HTTPValidationError,
-  SettlementMerchantResponse
+  MarkAccountJointRequest,
+  MarkAccountJointResponse,
+  SettlementMerchantResponse,
+  UnmarkAccountJointResponse
 } from '../model';
 
 import { customFetch } from '../../client.ts';
@@ -361,4 +365,314 @@ export const useDeleteSettlementMerchant = <TError = HTTPValidationError,
         TContext
       > => {
       return useMutation(getDeleteSettlementMerchantMutationOptions(options), queryClient);
+    }
+    export type getAccountsResponse200 = {
+  data: AccountsResponse
+  status: 200
+}
+
+export type getAccountsResponseSuccess = (getAccountsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getAccountsResponse = (getAccountsResponseSuccess)
+
+export const getGetAccountsUrl = () => {
+
+
+
+
+  return `/api/v1/settings/accounts`
+}
+
+/**
+ * @summary Get Accounts
+ */
+export const getAccounts = async ( options?: Parameters<typeof customFetch>[1]): Promise<getAccountsResponse> => {
+
+  return customFetch<getAccountsResponse>(getGetAccountsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAccountsQueryKey = () => {
+    return [
+    `/api/v1/settings/accounts`
+    ] as const;
+    }
+
+
+export const getGetAccountsQueryOptions = <TData = Awaited<ReturnType<typeof getAccounts>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAccounts>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAccountsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAccounts>>> = ({ signal }) => getAccounts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAccounts>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetAccountsQueryResult = NonNullable<Awaited<ReturnType<typeof getAccounts>>>
+export type GetAccountsQueryError = unknown
+
+
+export function useGetAccounts<TData = Awaited<ReturnType<typeof getAccounts>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAccounts>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAccounts>>,
+          TError,
+          Awaited<ReturnType<typeof getAccounts>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAccounts<TData = Awaited<ReturnType<typeof getAccounts>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAccounts>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAccounts>>,
+          TError,
+          Awaited<ReturnType<typeof getAccounts>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAccounts<TData = Awaited<ReturnType<typeof getAccounts>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAccounts>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Accounts
+ */
+
+export function useGetAccounts<TData = Awaited<ReturnType<typeof getAccounts>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAccounts>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetAccountsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type markAccountJointResponse201 = {
+  data: MarkAccountJointResponse
+  status: 201
+}
+
+export type markAccountJointResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type markAccountJointResponseSuccess = (markAccountJointResponse201) & {
+  headers: Headers;
+};
+export type markAccountJointResponseError = (markAccountJointResponse422) & {
+  headers: Headers;
+};
+
+export type markAccountJointResponse = (markAccountJointResponseSuccess | markAccountJointResponseError)
+
+export const getMarkAccountJointUrl = () => {
+
+
+
+
+  return `/api/v1/settings/accounts/joint`
+}
+
+/**
+ * @summary Mark Account Joint
+ */
+export const markAccountJoint = async (markAccountJointRequest: MarkAccountJointRequest, options?: Parameters<typeof customFetch>[1]): Promise<markAccountJointResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<markAccountJointResponse>(getMarkAccountJointUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(markAccountJointRequest)
+  }
+);}
+
+
+
+
+
+export const getMarkAccountJointMutationKey = () => ['markAccountJoint'] as const;
+
+export const getMarkAccountJointMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markAccountJoint>>, TError,MarkAccountJointMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markAccountJoint>>, TError,MarkAccountJointMutationVariables, TContext> => {
+
+const mutationKey = getMarkAccountJointMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markAccountJoint>>, MarkAccountJointMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  markAccountJoint(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkAccountJointMutationResult = NonNullable<Awaited<ReturnType<typeof markAccountJoint>>>
+    export type MarkAccountJointMutationBody = MarkAccountJointRequest
+    export type MarkAccountJointMutationError = HTTPValidationError
+    export type MarkAccountJointMutationVariables = {data: MarkAccountJointRequest}
+
+    /**
+ * @summary Mark Account Joint
+ */
+export const useMarkAccountJoint = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markAccountJoint>>, TError,MarkAccountJointMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof markAccountJoint>>,
+        TError,
+        MarkAccountJointMutationVariables,
+        TContext
+      > => {
+      return useMutation(getMarkAccountJointMutationOptions(options), queryClient);
+    }
+    export type unmarkAccountJointResponse200 = {
+  data: UnmarkAccountJointResponse
+  status: 200
+}
+
+export type unmarkAccountJointResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type unmarkAccountJointResponseSuccess = (unmarkAccountJointResponse200) & {
+  headers: Headers;
+};
+export type unmarkAccountJointResponseError = (unmarkAccountJointResponse422) & {
+  headers: Headers;
+};
+
+export type unmarkAccountJointResponse = (unmarkAccountJointResponseSuccess | unmarkAccountJointResponseError)
+
+export const getUnmarkAccountJointUrl = (label: string,) => {
+
+
+
+
+  return `/api/v1/settings/accounts/joint/${label}`
+}
+
+/**
+ * @summary Unmark Account Joint
+ */
+export const unmarkAccountJoint = async (label: string, options?: Parameters<typeof customFetch>[1]): Promise<unmarkAccountJointResponse> => {
+
+  return customFetch<unmarkAccountJointResponse>(getUnmarkAccountJointUrl(label),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getUnmarkAccountJointMutationKey = () => ['unmarkAccountJoint'] as const;
+
+export const getUnmarkAccountJointMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unmarkAccountJoint>>, TError,UnmarkAccountJointMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unmarkAccountJoint>>, TError,UnmarkAccountJointMutationVariables, TContext> => {
+
+const mutationKey = getUnmarkAccountJointMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unmarkAccountJoint>>, UnmarkAccountJointMutationVariables> = (props) => {
+          const {label} = props ?? {};
+
+          return  unmarkAccountJoint(label,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnmarkAccountJointMutationResult = NonNullable<Awaited<ReturnType<typeof unmarkAccountJoint>>>
+
+    export type UnmarkAccountJointMutationError = HTTPValidationError
+    export type UnmarkAccountJointMutationVariables = {label: string}
+
+    /**
+ * @summary Unmark Account Joint
+ */
+export const useUnmarkAccountJoint = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unmarkAccountJoint>>, TError,UnmarkAccountJointMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof unmarkAccountJoint>>,
+        TError,
+        UnmarkAccountJointMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUnmarkAccountJointMutationOptions(options), queryClient);
     }

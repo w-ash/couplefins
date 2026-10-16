@@ -11,7 +11,9 @@ export function LoansSection({
   loans,
   owners,
   getPersonColor,
+  example = false,
 }: {
+  example?: boolean;
   loans: LoanResponse[];
   owners: Owner[];
   getPersonColor: (id: string) => string;
@@ -19,6 +21,7 @@ export function LoansSection({
   return (
     <Card as="section" aria-labelledby="house-loans">
       <SectionHeader
+        example={example}
         id="house-loans"
         title="Loans"
         description="What is owed on the house and who pays what."

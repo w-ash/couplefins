@@ -1,5 +1,10 @@
 from httpx import AsyncClient
 
+from tests.integration.api._joint import (
+    couple_with_joint_exports,
+    january,
+    mark_joint,
+)
 from tests.integration.conftest import setup_and_login, upload_csv
 
 SHARED_CSV = (
@@ -155,3 +160,19 @@ async def test_settlement_updates_after_split_change(client: AsyncClient) -> Non
 
     # Settlement should have changed
     assert settlement_before["amount"] != settlement_after["amount"]
+
+
+async def test_split_route_rejects_a_joint_row(client: AsyncClient) -> None:
+    """US-JOINT-1: a joint row has no payer split to edit."""
+    couple = await couple_with_joint_exports(client)
+    await mark_joint(client, couple.alice)
+    recon = await january(client, couple.alice)
+    joint = next(tx["id"] for tx in recon["transactions"] if tx["is_joint"])
+
+    response = await client.patch(
+        "/api/v1/transactions/splits",
+        json={"splits": [{"transaction_id": joint, "payer_percentage": 50}]},
+        auth=couple.alice,
+    )
+
+    assert response.status_code == 422

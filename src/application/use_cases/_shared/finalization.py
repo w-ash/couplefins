@@ -1,7 +1,14 @@
+from collections.abc import Iterable
 from datetime import datetime
 
+from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import PeriodFinalizedError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
+
+
+def months_of(rows: Iterable[Transaction]) -> set[tuple[int, int]]:
+    """The (year, month) of each row's current date."""
+    return {(tx.date.year, tx.date.month) for tx in rows}
 
 
 async def load_period_status(

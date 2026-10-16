@@ -13,6 +13,7 @@ from src.domain.insights import (
 from tests.fixtures.factories import (
     ALICE,
     BOB,
+    COUPLE_IDS,
     make_transaction,
 )
 
@@ -30,7 +31,7 @@ def _setup_groups() -> tuple[UUID, UUID, dict[str, tuple[UUID, str]]]:
 
 class TestComputeSpendingTrends:
     def test_empty_input(self) -> None:
-        result = compute_spending_trends([], {}, 2026)
+        result = compute_spending_trends([], {}, 2026, person_ids=COUPLE_IDS)
         assert result.monthly_group_spending == []
         assert result.monthly_totals == []
         assert result.group_summaries == []
@@ -46,7 +47,7 @@ class TestComputeSpendingTrends:
             ),
         ]
 
-        result = compute_spending_trends(txs, lookup, 2026)
+        result = compute_spending_trends(txs, lookup, 2026, person_ids=COUPLE_IDS)
 
         assert len(result.monthly_group_spending) == 1
         mgs = result.monthly_group_spending[0]
@@ -79,7 +80,7 @@ class TestComputeSpendingTrends:
             ),
         ]
 
-        result = compute_spending_trends(txs, lookup, 2026)
+        result = compute_spending_trends(txs, lookup, 2026, person_ids=COUPLE_IDS)
 
         assert len(result.monthly_group_spending) == 4  # 2 groups x 2 months
         assert len(result.monthly_totals) == 2
@@ -106,7 +107,7 @@ class TestComputeSpendingTrends:
             ),
         ]
 
-        result = compute_spending_trends(txs, lookup, 2026)
+        result = compute_spending_trends(txs, lookup, 2026, person_ids=COUPLE_IDS)
 
         months = [t.month for t in result.monthly_totals]
         assert months == [1, 3]  # Feb is absent, not zero-filled
@@ -121,7 +122,7 @@ class TestComputeSpendingTrends:
             ),
         ]
 
-        result = compute_spending_trends(txs, lookup, 2026)
+        result = compute_spending_trends(txs, lookup, 2026, person_ids=COUPLE_IDS)
 
         assert len(result.group_summaries) == 1
         assert result.group_summaries[0].group_id is None
@@ -139,7 +140,7 @@ class TestComputeSpendingTrends:
             ),  # refund
         ]
 
-        result = compute_spending_trends(txs, lookup, 2026)
+        result = compute_spending_trends(txs, lookup, 2026, person_ids=COUPLE_IDS)
 
         assert len(result.monthly_totals) == 1
         assert result.monthly_totals[0].total_amount == Decimal("30.00")
@@ -159,7 +160,7 @@ class TestComputeSpendingTrends:
             ),  # not shared
         ]
 
-        result = compute_spending_trends(txs, lookup, 2026)
+        result = compute_spending_trends(txs, lookup, 2026, person_ids=COUPLE_IDS)
 
         assert result.monthly_totals[0].total_amount == Decimal("50.00")
 
@@ -174,7 +175,7 @@ class TestComputeSpendingTrends:
             ),
         ]
 
-        result = compute_spending_trends(txs, lookup, 2026)
+        result = compute_spending_trends(txs, lookup, 2026, person_ids=COUPLE_IDS)
 
         assert result.group_summaries[0].group_id == food_id
         assert result.group_summaries[1].group_id == travel_id
@@ -193,7 +194,9 @@ class TestComputeSpendingTrends:
             ),
         ]
 
-        result = compute_spending_trends(txs, lookup, 2026, through_month=2)
+        result = compute_spending_trends(
+            txs, lookup, 2026, through_month=2, person_ids=COUPLE_IDS
+        )
 
         # Per-month breakdown still covers the whole year...
         assert len(result.monthly_totals) == 3
@@ -215,7 +218,9 @@ class TestComputeSpendingTrends:
             ),
         ]
 
-        result = compute_spending_trends(txs, lookup, 2026, through_month=None)
+        result = compute_spending_trends(
+            txs, lookup, 2026, through_month=None, person_ids=COUPLE_IDS
+        )
 
         assert result.group_summaries[0].ytd_total == Decimal("120.00")
 
@@ -231,7 +236,9 @@ class TestComputeSpendingTrends:
             ),
         ]
 
-        result = compute_spending_trends(txs, lookup, 2026, through_month=1)
+        result = compute_spending_trends(
+            txs, lookup, 2026, through_month=1, person_ids=COUPLE_IDS
+        )
 
         group_ids = {g.group_id for g in result.group_summaries}
         assert group_ids == {food_id}
@@ -256,7 +263,9 @@ class TestComputeTrailingAverage:
             ),
         ]
 
-        result = compute_trailing_average(txs, lookup, target_month=4, window=3)
+        result = compute_trailing_average(
+            txs, lookup, target_month=4, window=3, person_ids=COUPLE_IDS
+        )
 
         assert food_id in result
         # Average of months 1-3: (100 + 200 + 150) / 3 = 150
@@ -273,7 +282,9 @@ class TestComputeTrailingAverage:
             ),
         ]
 
-        result = compute_trailing_average(txs, lookup, target_month=3, window=3)
+        result = compute_trailing_average(
+            txs, lookup, target_month=3, window=3, person_ids=COUPLE_IDS
+        )
 
         # Only month 1 is before target month 3
         assert result[food_id] == Decimal("100.00")
@@ -286,7 +297,9 @@ class TestComputeTrailingAverage:
             ),
         ]
 
-        result = compute_trailing_average(txs, lookup, target_month=1)
+        result = compute_trailing_average(
+            txs, lookup, target_month=1, person_ids=COUPLE_IDS
+        )
 
         assert result == {}
 
@@ -302,7 +315,9 @@ class TestComputeTrailingAverage:
             # Month 2 has no data
         ]
 
-        result = compute_trailing_average(txs, lookup, target_month=4, window=3)
+        result = compute_trailing_average(
+            txs, lookup, target_month=4, window=3, person_ids=COUPLE_IDS
+        )
 
         # Months 1 and 3 have data, window=3 but only 2 available: (100+200)/2
         assert result[food_id] == Decimal("150.00")
@@ -321,7 +336,9 @@ class TestComputeTrailingAverage:
             ),
         ]
 
-        result = compute_trailing_average(txs, lookup, target_month=3, window=3)
+        result = compute_trailing_average(
+            txs, lookup, target_month=3, window=3, person_ids=COUPLE_IDS
+        )
 
         assert result[food_id] == Decimal("150.00")  # (100+200)/2
         assert result[travel_id] == Decimal(
@@ -329,7 +346,7 @@ class TestComputeTrailingAverage:
         )  # 300/2 (present in month 1, window covers months 1+2)
 
     def test_empty_input(self) -> None:
-        result = compute_trailing_average([], {}, target_month=3)
+        result = compute_trailing_average([], {}, target_month=3, person_ids=COUPLE_IDS)
         assert result == {}
 
 
@@ -348,7 +365,9 @@ class TestComputeComparisonCards:
             ),
         ]
 
-        cards = compute_comparison_cards(txs, lookup, target_month=3)
+        cards = compute_comparison_cards(
+            txs, lookup, target_month=3, person_ids=COUPLE_IDS
+        )
 
         assert len(cards) == 1
         card = cards[0]
@@ -373,7 +392,9 @@ class TestComputeComparisonCards:
             ),
         ]
 
-        cards = compute_comparison_cards(txs, lookup, target_month=3)
+        cards = compute_comparison_cards(
+            txs, lookup, target_month=3, person_ids=COUPLE_IDS
+        )
 
         card = cards[0]
         assert card.delta_amount == Decimal("-100.00")
@@ -388,7 +409,9 @@ class TestComputeComparisonCards:
             ),
         ]
 
-        cards = compute_comparison_cards(txs, lookup, target_month=1)
+        cards = compute_comparison_cards(
+            txs, lookup, target_month=1, person_ids=COUPLE_IDS
+        )
 
         assert len(cards) == 1
         card = cards[0]
@@ -405,7 +428,9 @@ class TestComputeComparisonCards:
             ),
         ]
 
-        cards = compute_comparison_cards(txs, lookup, target_month=2)
+        cards = compute_comparison_cards(
+            txs, lookup, target_month=2, person_ids=COUPLE_IDS
+        )
 
         assert len(cards) == 1
         card = cards[0]
@@ -414,7 +439,7 @@ class TestComputeComparisonCards:
         assert card.is_new is False
 
     def test_empty_returns_empty(self) -> None:
-        cards = compute_comparison_cards([], {}, target_month=3)
+        cards = compute_comparison_cards([], {}, target_month=3, person_ids=COUPLE_IDS)
         assert cards == []
 
     def test_sorted_by_abs_delta_percentage(self) -> None:
@@ -436,7 +461,9 @@ class TestComputeComparisonCards:
             ),
         ]
 
-        cards = compute_comparison_cards(txs, lookup, target_month=2)
+        cards = compute_comparison_cards(
+            txs, lookup, target_month=2, person_ids=COUPLE_IDS
+        )
 
         assert cards[0].group_id == travel_id  # 50% delta > 10%
         assert cards[1].group_id == food_id
@@ -458,7 +485,9 @@ class TestComputeComparisonCards:
             ),
         ]
 
-        cards = compute_comparison_cards(txs, lookup, target_month=2)
+        cards = compute_comparison_cards(
+            txs, lookup, target_month=2, person_ids=COUPLE_IDS
+        )
 
         assert cards[0].group_id == travel_id
         assert cards[0].is_new is True
@@ -477,7 +506,9 @@ class TestComputeComparisonCards:
             ),
         ]
 
-        cards = compute_comparison_cards(txs, lookup, target_month=2)
+        cards = compute_comparison_cards(
+            txs, lookup, target_month=2, person_ids=COUPLE_IDS
+        )
 
         assert cards[0].group_id == travel_id
         assert cards[1].group_id == food_id
@@ -501,7 +532,7 @@ class TestExcludedTransactions:
             ),
         ]
 
-        result = compute_spending_trends(txs, lookup, 2026)
+        result = compute_spending_trends(txs, lookup, 2026, person_ids=COUPLE_IDS)
 
         assert result.monthly_totals[0].total_amount == Decimal("50.00")
 
@@ -521,7 +552,9 @@ class TestExcludedTransactions:
             ),
         ]
 
-        cards = compute_comparison_cards(txs, lookup, target_month=2)
+        cards = compute_comparison_cards(
+            txs, lookup, target_month=2, person_ids=COUPLE_IDS
+        )
         assert cards[0].current_month_amount == Decimal("50.00")
 
 
@@ -532,7 +565,9 @@ class TestPersonalScope:
     def _ytd(
         txs: list[Transaction], lookup: dict[str, tuple[UUID, str]], pid: UUID | None
     ) -> dict[UUID | None, Decimal]:
-        result = compute_spending_trends(txs, lookup, 2026, person_id=pid)
+        result = compute_spending_trends(
+            txs, lookup, 2026, person_id=pid, person_ids=COUPLE_IDS
+        )
         return {g.group_id: g.ytd_total for g in result.group_summaries}
 
     def test_household_split_gives_each_person_their_share(self) -> None:
@@ -600,16 +635,25 @@ class TestPersonalScope:
                 payer_percentage=100,
             )
         ]
-        result = compute_spending_trends(txs, lookup, 2026, person_id=BOB.id)
+        result = compute_spending_trends(
+            txs, lookup, 2026, person_id=BOB.id, person_ids=COUPLE_IDS
+        )
         assert result.group_summaries == []
         assert result.monthly_totals == []
-        assert compute_comparison_cards(txs, lookup, 3, person_id=BOB.id) == []
+        assert (
+            compute_comparison_cards(
+                txs, lookup, 3, person_id=BOB.id, person_ids=COUPLE_IDS
+            )
+            == []
+        )
 
     def test_refund_nets_the_persons_share(self) -> None:
         food_id, _, lookup = _setup_groups()
         txs = [
             make_transaction(
-                category="Dining Out", amount=Decimal("25.00"), payer_person_id=ALICE.id
+                category="Dining Out",
+                amount=Decimal("25.00"),
+                payer_person_id=ALICE.id,
             )
         ]
         assert self._ytd(txs, lookup, ALICE.id) == {food_id: Decimal("-12.50")}
@@ -669,10 +713,14 @@ class TestPersonalScope:
             )
             for m in (1, 2, 3)
         ]
-        avg = compute_trailing_average(txs, lookup, 3, person_id=BOB.id)
+        avg = compute_trailing_average(
+            txs, lookup, 3, person_id=BOB.id, person_ids=COUPLE_IDS
+        )
         assert avg == {food_id: Decimal("30.00")}
 
-        cards = compute_comparison_cards(txs, lookup, 3, person_id=BOB.id)
+        cards = compute_comparison_cards(
+            txs, lookup, 3, person_id=BOB.id, person_ids=COUPLE_IDS
+        )
         assert len(cards) == 1
         assert cards[0].current_month_amount == Decimal("30.00")
         assert cards[0].trailing_average == Decimal("30.00")
@@ -705,7 +753,7 @@ def _row(
 class TestComputeSpendingFlow:
     def test_empty_input(self) -> None:
         _, _, lookup = _setup_groups()
-        flow = compute_spending_flow([], lookup, months={1})
+        flow = compute_spending_flow([], lookup, months={1}, person_ids=COUPLE_IDS)
         assert (flow.cells, flow.top_merchants) == ([], [])
 
     def test_household_cells_are_keyed_by_payer_and_category(self) -> None:
@@ -717,7 +765,7 @@ class TestComputeSpendingFlow:
             _row(category="Flights", amount="-300.00", payer=ALICE.id, pct=100),
         ]
 
-        flow = compute_spending_flow(txs, lookup, months={1})
+        flow = compute_spending_flow(txs, lookup, months={1}, person_ids=COUPLE_IDS)
 
         assert [
             (
@@ -738,13 +786,15 @@ class TestComputeSpendingFlow:
     def test_refund_nets_against_the_payers_cell(self) -> None:
         _, _, lookup = _setup_groups()
         txs = [_row(amount="-40.00"), _row(amount="15.00", day=20)]
-        [cell] = compute_spending_flow(txs, lookup, months={1}).cells
+        [cell] = compute_spending_flow(
+            txs, lookup, months={1}, person_ids=COUPLE_IDS
+        ).cells
         assert (cell.amount, cell.transaction_count) == (Decimal("25.00"), 2)
 
     def test_unmapped_category_is_uncategorized(self) -> None:
         _, _, lookup = _setup_groups()
         [cell] = compute_spending_flow(
-            [_row(category="Mystery")], lookup, months={1}
+            [_row(category="Mystery")], lookup, months={1}, person_ids=COUPLE_IDS
         ).cells
         assert (cell.group_id, cell.group_name) == (None, "Uncategorized")
 
@@ -756,8 +806,10 @@ class TestComputeSpendingFlow:
             _row(month=3, amount="-5.00"),
         ]
 
-        february = compute_spending_flow(txs, lookup, months={2})
-        ytd = compute_spending_flow(txs, lookup, months=range(1, 3))
+        february = compute_spending_flow(txs, lookup, months={2}, person_ids=COUPLE_IDS)
+        ytd = compute_spending_flow(
+            txs, lookup, months=range(1, 3), person_ids=COUPLE_IDS
+        )
 
         assert sum(c.amount for c in february.cells) == Decimal("20.00")
         assert sum(c.amount for c in ytd.cells) == Decimal("60.00")
@@ -773,7 +825,9 @@ class TestComputeSpendingFlow:
             _row(amount="-12.00", payer=ALICE.id, pct=0, household=False),  # I spotted
         ]
 
-        flow = compute_spending_flow(txs, lookup, person_id=ALICE.id, months={1})
+        flow = compute_spending_flow(
+            txs, lookup, person_id=ALICE.id, person_ids=COUPLE_IDS, months={1}
+        )
 
         assert {(c.source_kind, c.source_person_id, c.amount) for c in flow.cells} == {
             ("household_share", BOB.id, Decimal("50.00")),
@@ -792,7 +846,9 @@ class TestComputeSpendingFlow:
             _row(merchant="Refunder", amount="25.00"),
         ]
 
-        flow = compute_spending_flow(txs, lookup, months={1}, merchant_limit=2)
+        flow = compute_spending_flow(
+            txs, lookup, months={1}, merchant_limit=2, person_ids=COUPLE_IDS
+        )
 
         assert [
             (m.merchant, m.amount, m.transaction_count) for m in flow.top_merchants
@@ -802,7 +858,9 @@ class TestComputeSpendingFlow:
         ]
         sushi = flow.top_merchants[1]
         assert (sushi.category, sushi.group_id) == ("Dining Out", food_id)
-        unlimited = compute_spending_flow(txs, lookup, months={1})
+        unlimited = compute_spending_flow(
+            txs, lookup, months={1}, person_ids=COUPLE_IDS
+        )
         assert "Refunder" not in {m.merchant for m in unlimited.top_merchants}
 
 
@@ -816,7 +874,9 @@ class TestComputeCategoryComparisons:
             _row(month=3, category="Groceries", amount="-30.00"),
         ]
 
-        comparisons = compute_category_comparisons(txs, lookup, 3)
+        comparisons = compute_category_comparisons(
+            txs, lookup, 3, person_ids=COUPLE_IDS
+        )
 
         assert [(c.category, c.is_new) for c in comparisons] == [
             ("Groceries", True),
@@ -841,7 +901,8 @@ class TestComputeCategoryComparisons:
         _, _, lookup = _setup_groups()
         txs = [_row(month=1, amount="-40.00"), _row(month=2, category="Groceries")]
         by_category = {
-            c.category: c for c in compute_category_comparisons(txs, lookup, 2)
+            c.category: c
+            for c in compute_category_comparisons(txs, lookup, 2, person_ids=COUPLE_IDS)
         }
         assert by_category["Dining Out"].current_month_amount == Decimal(0)
         assert by_category["Dining Out"].delta_percentage == Decimal(-100)
@@ -849,9 +910,11 @@ class TestComputeCategoryComparisons:
     def test_uses_the_person_lens(self) -> None:
         _, _, lookup = _setup_groups()
         txs = [_row(month=1, amount="-100.00", payer=BOB.id, pct=50)]
-        [alice] = compute_category_comparisons(txs, lookup, 1, person_id=ALICE.id)
+        [alice] = compute_category_comparisons(
+            txs, lookup, 1, person_id=ALICE.id, person_ids=COUPLE_IDS
+        )
         assert alice.current_month_amount == Decimal("50.00")
 
     def test_empty(self) -> None:
         _, _, lookup = _setup_groups()
-        assert compute_category_comparisons([], lookup, 1) == []
+        assert compute_category_comparisons([], lookup, 1, person_ids=COUPLE_IDS) == []

@@ -3,6 +3,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from src.domain.exceptions import InvariantViolationError
 from src.domain.spending_lens import (
     AllRowsLens,
     HouseholdLens,
@@ -14,7 +15,7 @@ from src.domain.spending_lens import (
     source_split,
     total_spending,
 )
-from tests.fixtures.factories import ALICE, BOB, make_transaction
+from tests.fixtures.factories import ALICE, BOB, COUPLE_IDS, make_transaction
 
 FOOD = uuid4()
 LOOKUP = {"Dining Out": (FOOD, "Food & Dining"), "Groceries": (FOOD, "Food & Dining")}
@@ -63,12 +64,12 @@ def test_personal_lens_relevance_is_nonzero_share(
     tx = make_transaction(
         household=household, payer_percentage=payer_percentage, payer_person_id=ALICE.id
     )
-    assert PersonalLens(viewer).is_relevant(tx) is expected
+    assert PersonalLens(viewer, COUPLE_IDS).is_relevant(tx) is expected
 
 
 @pytest.mark.parametrize(
     "lens",
-    [HouseholdLens(), PersonalLens(ALICE.id), SplitLens(), AllRowsLens()],
+    [HouseholdLens(), PersonalLens(ALICE.id, COUPLE_IDS), SplitLens(), AllRowsLens()],
     ids=type,
 )
 @pytest.mark.parametrize("flag", ["is_excluded", "is_settlement"])
@@ -152,8 +153,8 @@ def test_contribution_is_signed_under_every_lens() -> None:
         HouseholdLens().contribution(refund),
     ) == (Decimal("100.00"), Decimal("-40.00"))
     assert (
-        PersonalLens(BOB.id).contribution(expense),
-        PersonalLens(BOB.id).contribution(refund),
+        PersonalLens(BOB.id, COUPLE_IDS).contribution(expense),
+        PersonalLens(BOB.id, COUPLE_IDS).contribution(refund),
     ) == (Decimal("50.00"), Decimal("-20.00"))
     assert SplitLens().contribution(refund) == Decimal("-40.00")
     assert AllRowsLens().contribution(refund) == Decimal("-40.00")
@@ -165,7 +166,7 @@ def test_personal_owner_is_payer_viewer_or_nobody() -> None:
     )
     assert HouseholdLens(frozenset({"Groceries"})).personal_owner(tx) == ALICE.id
     assert HouseholdLens().personal_owner(tx) is None
-    assert PersonalLens(BOB.id).personal_owner(tx) == BOB.id
+    assert PersonalLens(BOB.id, COUPLE_IDS).personal_owner(tx) == BOB.id
     assert SplitLens().personal_owner(tx) is None
     assert AllRowsLens().personal_owner(tx) == ALICE.id
 
@@ -206,7 +207,7 @@ def test_breakdowns_attribute_buckets_by_lens() -> None:
         BOB.id: Decimal("30.00"),
     }
 
-    alice_bd = compute_breakdowns(PersonalLens(ALICE.id), txs, LOOKUP)[0]
+    alice_bd = compute_breakdowns(PersonalLens(ALICE.id, COUPLE_IDS), txs, LOOKUP)[0]
     alice = alice_bd.categories[0]
     assert alice.total_amount == Decimal("140.00")
     assert alice.household_amount == Decimal("50.00")
@@ -239,4 +240,98 @@ def test_select_and_total_agree() -> None:
     ]
     assert len(select(HouseholdLens(), txs)) == 2
     assert total_spending(HouseholdLens(), txs) == Decimal("60.00")
-    assert total_spending(PersonalLens(BOB.id), txs) == Decimal("30.00")
+    assert total_spending(PersonalLens(BOB.id, COUPLE_IDS), txs) == Decimal("30.00")
+
+
+# --- Joint rows ---
+
+ALL_LENSES = [
+    HouseholdLens(),
+    PersonalLens(ALICE.id, COUPLE_IDS),
+    PersonalLens(BOB.id, COUPLE_IDS),
+    SplitLens(),
+    AllRowsLens(),
+]
+
+
+def test_joint_row_counts_in_full_for_the_household_and_all_rows() -> None:
+    joint = make_transaction(joint=True, amount=Decimal("-80.01"))
+
+    assert total_spending(HouseholdLens(), [joint]) == Decimal("80.01")
+    assert total_spending(AllRowsLens(), [joint]) == Decimal("80.01")
+
+
+@pytest.mark.parametrize(
+    "owner_shares", [None, {ALICE.id: 70, BOB.id: 30}, {ALICE.id: 0, BOB.id: 100}]
+)
+@pytest.mark.parametrize("amount", ["-80.01", "33.33"], ids=["expense", "refund"])
+def test_owners_shares_of_a_joint_row_sum_to_the_household_view(
+    owner_shares: dict[UUID, int] | None, amount: str
+) -> None:
+    joint = make_transaction(
+        joint=True, amount=Decimal(amount), owner_shares=owner_shares
+    )
+
+    alice = total_spending(PersonalLens(ALICE.id, COUPLE_IDS), [joint])
+    bob = total_spending(PersonalLens(BOB.id, COUPLE_IDS), [joint])
+
+    assert alice + bob == total_spending(HouseholdLens(), [joint])
+
+
+def test_owner_with_no_share_of_a_joint_row_does_not_see_it() -> None:
+    joint = make_transaction(joint=True, owner_shares={ALICE.id: 0, BOB.id: 100})
+
+    assert not PersonalLens(ALICE.id, COUPLE_IDS).is_relevant(joint)
+    assert PersonalLens(BOB.id, COUPLE_IDS).is_relevant(joint)
+
+
+def test_joint_row_never_enters_the_split_lens() -> None:
+    assert not SplitLens().is_relevant(make_transaction(joint=True))
+
+
+@pytest.mark.parametrize("lens", ALL_LENSES, ids=type)
+def test_every_lens_draws_a_joint_row_from_the_joint_account(
+    lens: SpendingLens,
+) -> None:
+    source = lens.flow_source(make_transaction(joint=True))
+
+    assert (source.kind, source.person_id) == ("joint", None)
+
+
+def test_full_amount_lenses_attribute_a_joint_row_to_nobody() -> None:
+    joint = make_transaction(joint=True, category="Groceries")
+
+    assert HouseholdLens(frozenset({"Groceries"})).personal_owner(joint) is None
+    assert AllRowsLens().personal_owner(joint) is None
+
+
+def test_personal_lens_needs_the_couple() -> None:
+    """The split names the couple, so a lens without both fails on its first row."""
+    lens = PersonalLens(ALICE.id, [ALICE.id])
+
+    with pytest.raises(InvariantViolationError, match="needs 2 persons"):
+        lens.is_relevant(make_transaction(payer_person_id=ALICE.id))
+
+
+def test_personal_lens_holds_the_couple_as_a_tuple() -> None:
+    assert PersonalLens(ALICE.id, [ALICE.id, BOB.id]).person_ids == (ALICE.id, BOB.id)
+
+
+@pytest.mark.parametrize(
+    ("household", "payer", "kind"),
+    [
+        (True, BOB.id, "household_share"),
+        (False, ALICE.id, "personal"),
+        (False, BOB.id, "spotted_for_me"),
+    ],
+)
+def test_personal_flow_source_names_the_payer(
+    household: bool, payer: UUID, kind: str
+) -> None:
+    tx = make_transaction(
+        household=household, payer_person_id=payer, payer_percentage=50
+    )
+
+    source = PersonalLens(ALICE.id, COUPLE_IDS).flow_source(tx)
+
+    assert (source.kind, source.person_id) == (kind, payer)

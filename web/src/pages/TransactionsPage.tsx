@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronUp,
   HandCoins,
+  Landmark,
   MessageCircleQuestion,
   Pencil,
   StickyNote,
@@ -40,7 +41,7 @@ import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import type { ComboboxOption } from "@/components/Combobox";
 import { DateRangePicker } from "@/components/DateRangePicker";
-import { GroupKindPill } from "@/components/GroupKindPill";
+import { GroupKindPill, JointPill } from "@/components/GroupKindPill";
 import { InlineSuccess } from "@/components/InlineSuccess";
 import { PageHeader } from "@/components/PageHeader";
 import {
@@ -72,7 +73,6 @@ import {
 } from "@/lib/date-range";
 import {
   amountColorClass,
-  computeShares,
   formatCurrency,
   formatDate,
   formatSplit,
@@ -226,11 +226,21 @@ function TransactionTable({
   const handleBulkApply = useCallback(
     async (ids: string[], changes: BulkChanges) => {
       const promises: Promise<unknown>[] = [];
-      if (changes.payer_percentage != null || changes.category != null) {
+      const hasOwnerShares = changes.owner_shares !== undefined;
+      const hasDepositor = changes.depositor_person_id !== undefined;
+      if (
+        changes.payer_percentage != null ||
+        changes.category != null ||
+        hasOwnerShares ||
+        hasDepositor
+      ) {
         const payload: BulkUpdateRequest = { transaction_ids: ids };
         if (changes.payer_percentage != null)
           payload.payer_percentage = changes.payer_percentage;
         if (changes.category != null) payload.category = changes.category;
+        if (hasOwnerShares) payload.owner_shares = changes.owner_shares;
+        if (hasDepositor)
+          payload.depositor_person_id = changes.depositor_person_id;
         promises.push(onBulkUpdate(payload));
       }
       if (changes.tags) {
@@ -248,12 +258,25 @@ function TransactionTable({
       const parts: string[] = [];
       if (changes.payer_percentage != null) parts.push("split");
       if (changes.category != null) parts.push("category");
+      if (changes.owner_shares !== undefined) parts.push("owner shares");
+      if (changes.depositor_person_id !== undefined) parts.push("depositor");
       if (changes.tags) parts.push("tags");
       setBulkResult({
         message: `Updated ${parts.join(", ")} on ${plural("transaction", ids.length)}`,
       });
     },
     [onBulkUpdate, onBulkTags, setBulkResult],
+  );
+
+  const transactionsById = useMemo(
+    () => new Map(transactions.map((tx) => [tx.id, tx])),
+    [transactions],
+  );
+  const allSelectedJoint = useMemo(
+    () =>
+      selected.size > 0 &&
+      [...selected].every((id) => transactionsById.get(id)?.is_joint === true),
+    [selected, transactionsById],
   );
 
   if (transactions.length === 0) return null;
@@ -285,6 +308,8 @@ function TransactionTable({
               selectedTagCounts={selectedTagCounts}
               categoryOptions={categoryOptions}
               availableTags={availableTags}
+              owners={personEntries}
+              allJoint={allSelectedJoint}
               saving={isSaving}
               onApply={handleBulkApply}
               onCancel={exitBulkMode}
@@ -435,13 +460,11 @@ function TransactionRow({
   onTransactionUpdate: (fields: UpdateTransactionRequest) => void;
   onCancel: () => void;
 }) {
-  const payerPct = tx.payer_percentage ?? 50;
-  const { payerShare, otherShare } = computeShares(
-    Math.abs(tx.amount),
-    payerPct,
-  );
-  const payerName = personNames.get(tx.payer_person_id) ?? "Unknown";
-  const payerColor = getPersonColor(tx.payer_person_id);
+  const depositorName = tx.depositor_person_id
+    ? (personNames.get(tx.depositor_person_id) ?? "Unknown")
+    : null;
+  const payerName = personNames.get(tx.payer_person_id ?? "") ?? "Unknown";
+  const payerColor = getPersonColor(tx.payer_person_id ?? "");
   const otherName =
     [...personNames].find(([id]) => id !== tx.payer_person_id)?.[1] ?? "Other";
   const categoryGroup = categoryGroups.get(tx.category) ?? "Uncategorized";
@@ -524,7 +547,25 @@ function TransactionRow({
           {categoryGroup}
         </td>
         <td className="hidden py-2 pr-4 sm:table-cell">
-          <PersonBadge name={payerName} accentColor={payerColor} size="xs" />
+          {tx.is_joint ? (
+            <span className="flex flex-col items-start gap-0.5">
+              <span className="inline-flex items-center gap-1.5">
+                <JointPill />
+                <span className="text-muted-foreground">
+                  Joint · {tx.account}
+                </span>
+              </span>
+              {tx.amount > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  {depositorName
+                    ? `from ${depositorName}`
+                    : "Unassigned deposit"}
+                </span>
+              )}
+            </span>
+          ) : (
+            <PersonBadge name={payerName} accentColor={payerColor} size="xs" />
+          )}
         </td>
         <td
           className={`py-2 pr-4 text-right tabular-nums ${amountColorClass(tx.amount)}`}
@@ -532,16 +573,14 @@ function TransactionRow({
           {formatCurrency(tx.amount)}
         </td>
         <td className="hidden py-2 pr-4 text-right text-muted-foreground tabular-nums sm:table-cell">
-          {formatSplit(tx.payer_percentage)}
+          {tx.is_joint ? "—" : formatSplit(tx.payer_percentage)}
         </td>
         {personEntries.map((p) => (
           <td
             key={p.id}
             className="hidden py-2 px-3 text-right text-muted-foreground tabular-nums sm:table-cell"
           >
-            {formatCurrency(
-              p.id === tx.payer_person_id ? payerShare : otherShare,
-            )}
+            {formatCurrency(tx.share_amounts[p.id] ?? 0)}
           </td>
         ))}
       </tr>
@@ -800,6 +839,13 @@ export function TransactionsPage() {
                   count={filters.settlementCount}
                   active={filters.settlement}
                   onClick={() => filters.setSettlement(!filters.settlement)}
+                />
+                <QuickFilterChip
+                  icon={<Landmark className="size-3.5" />}
+                  label="Unassigned deposits"
+                  count={filters.unassignedCount}
+                  active={filters.unassigned}
+                  onClick={() => filters.setUnassigned(!filters.unassigned)}
                 />
               </div>
 

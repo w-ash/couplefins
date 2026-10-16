@@ -81,13 +81,22 @@ class GetSpendingTrendsUseCase:
                 year,
                 through_month=through_month,
                 person_id=command.person_id,
+                person_ids=ctx.person_ids,
             )
 
             comparison_cards = compute_comparison_cards(
-                year_txs, category_lookup, target_month, person_id=command.person_id
+                year_txs,
+                category_lookup,
+                target_month,
+                person_id=command.person_id,
+                person_ids=ctx.person_ids,
             )
             category_comparisons = compute_category_comparisons(
-                year_txs, category_lookup, target_month, person_id=command.person_id
+                year_txs,
+                category_lookup,
+                target_month,
+                person_id=command.person_id,
+                person_ids=ctx.person_ids,
             )
 
             # Both flows come from the rows already fetched; the YTD window
@@ -96,12 +105,14 @@ class GetSpendingTrendsUseCase:
                 year_txs,
                 category_lookup,
                 person_id=command.person_id,
+                person_ids=ctx.person_ids,
                 months={target_month},
             )
             ytd_flow = compute_spending_flow(
                 year_txs,
                 category_lookup,
                 person_id=command.person_id,
+                person_ids=ctx.person_ids,
                 months=range(1, through_month + 1),
             )
 
@@ -120,6 +131,7 @@ class GetSpendingTrendsUseCase:
                     category_lookup,
                     comparison_year,
                     person_id=command.person_id,
+                    person_ids=ctx.person_ids,
                 ).monthly_group_spending
 
             return GetSpendingTrendsResult(

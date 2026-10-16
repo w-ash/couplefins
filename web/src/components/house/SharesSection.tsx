@@ -14,7 +14,9 @@ export function SharesSection({
   owners,
   getPersonColor,
   getPersonIndex,
+  example = false,
 }: {
+  example?: boolean;
   shares: SharesSectionResponse;
   owners: Owner[];
   getPersonColor: (id: string) => string;
@@ -23,6 +25,7 @@ export function SharesSection({
   return (
     <Card as="section" aria-labelledby="house-shares">
       <SectionHeader
+        example={example}
         id="house-shares"
         title="Shares"
         description="Each owner's share of the house, now and over time."

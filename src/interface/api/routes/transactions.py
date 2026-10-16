@@ -1,3 +1,5 @@
+from collections.abc import Mapping
+from typing import TypedDict
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -10,6 +12,7 @@ from src.application.use_cases.bulk_modify_tags import (
 from src.application.use_cases.bulk_update_transactions import (
     BulkUpdateTransactionsCommand,
     BulkUpdateTransactionsUseCase,
+    Unset,
 )
 from src.application.use_cases.get_tags import GetTagsUseCase
 from src.application.use_cases.get_transaction_edits import (
@@ -30,6 +33,7 @@ from src.interface.api.schemas.transactions import (
     BulkUpdateRequest,
     BulkUpdateResponse,
     ImportEventResponse,
+    TransactionChangesRequest,
     TransactionEditHistoryResponse,
     TransactionEditResponse,
     UpdateSplitsRequest,
@@ -39,6 +43,39 @@ from src.interface.api.schemas.transactions import (
 )
 
 router = APIRouter(tags=["transactions"], dependencies=[Depends(get_current_user)])
+
+
+def _given[T](value: T | None) -> T | Unset:
+    """A field's value, or Unset when the request leaves it out or null."""
+    return Unset.UNSET if value is None else value
+
+
+class _CommandFields(TypedDict):
+    category: str | None
+    notes: str | None
+    payer_percentage: int | Unset
+    household: bool | Unset
+    is_excluded: bool | Unset
+    depositor_person_id: UUID | Unset | None
+    owner_shares: Mapping[UUID, int] | Unset | None
+
+
+def _command_fields(body: TransactionChangesRequest) -> _CommandFields:
+    """The update command's fields from either PATCH body. The joint-row
+    fields are Unset when the request leaves them out; an explicit null is
+    a value that clears the field."""
+    sent = body.model_fields_set
+    return _CommandFields(
+        category=body.category,
+        notes=body.notes,
+        payer_percentage=_given(body.payer_percentage),
+        household=_given(body.household),
+        is_excluded=_given(body.is_excluded),
+        depositor_person_id=(
+            body.depositor_person_id if "depositor_person_id" in sent else Unset.UNSET
+        ),
+        owner_shares=body.owner_shares if "owner_shares" in sent else Unset.UNSET,
+    )
 
 
 @router.get("/tags")
@@ -74,19 +111,10 @@ async def bulk_update_transactions(
     body: BulkUpdateRequest,
     current_user: Person = Depends(get_current_user),
 ) -> BulkUpdateResponse:
-    kwargs: dict[str, object] = {}
-    if body.payer_percentage is not None:
-        kwargs["payer_percentage"] = body.payer_percentage
-    if body.household is not None:
-        kwargs["household"] = body.household
-    if body.is_excluded is not None:
-        kwargs["is_excluded"] = body.is_excluded
     command = BulkUpdateTransactionsCommand(
         transaction_ids=list(body.transaction_ids),
-        category=body.category,
-        notes=body.notes,
         edited_by_person_id=current_user.id,
-        **kwargs,  # type: ignore[arg-type]
+        **_command_fields(body),
     )
     result = await execute_use_case(
         lambda uow: BulkUpdateTransactionsUseCase().execute(command, uow)
@@ -119,34 +147,20 @@ async def update_transaction(
     body: UpdateTransactionRequest,
     current_user: Person = Depends(get_current_user),
 ) -> UpdateTransactionResponse:
-    extras: dict[str, object] = {}
-    if "payer_percentage" in body.model_fields_set:
-        extras["payer_percentage"] = body.payer_percentage
-    if "household" in body.model_fields_set:
-        extras["household"] = body.household
-    if "is_excluded" in body.model_fields_set:
-        extras["is_excluded"] = body.is_excluded
     command = BulkUpdateTransactionsCommand(
         transaction_ids=[transaction_id],
         date=body.date,
         amount=body.amount,
-        category=body.category,
-        notes=body.notes,
         tags=tuple(body.tags) if body.tags is not None else None,
         edited_by_person_id=current_user.id,
-        **extras,  # type: ignore[arg-type]
+        **_command_fields(body),
     )
     result = await execute_use_case(
         lambda uow: BulkUpdateTransactionsUseCase().execute(command, uow)
     )
     event_bus.broadcast("transactions")
-    tx_id = (
-        result.updated_transactions[0].id
-        if result.updated_transactions
-        else transaction_id
-    )
     return UpdateTransactionResponse(
-        id=tx_id,
+        id=transaction_id,
         edits=[TransactionEditResponse.model_validate(e) for e in result.edits],
     )
 

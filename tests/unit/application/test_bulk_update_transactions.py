@@ -1,15 +1,23 @@
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from unittest.mock import AsyncMock
 import uuid
 
+import attrs
 import pytest
 
 from src.application.use_cases.bulk_update_transactions import (
     BulkUpdateTransactionsCommand,
     BulkUpdateTransactionsUseCase,
 )
+from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import NotFoundError, PeriodFinalizedError, ValidationError
-from tests.fixtures.factories import make_reconciliation_period, make_transaction
+from tests.fixtures.factories import (
+    ALICE,
+    BOB,
+    make_reconciliation_period,
+    make_transaction,
+)
 from tests.fixtures.mocks import make_mock_uow
 
 
@@ -496,3 +504,142 @@ async def test_edits_carry_edited_by_person_id() -> None:
 
     edits = uow.transaction_edits.save_batch.call_args[0][0]
     assert all(e.edited_by_person_id == person_id for e in edits)
+
+
+# --- Joint rows: owner shares and depositor (US-JOINT-1, US-JOINT-2) ---
+
+
+def _joint_uow(*rows: Transaction) -> AsyncMock:
+    uow = make_mock_uow()
+    uow.persons.get_all.return_value = [ALICE, BOB]
+    uow.transactions.get_by_ids.return_value = list(rows)
+    return uow
+
+
+async def _apply(uow: AsyncMock, command: BulkUpdateTransactionsCommand) -> None:
+    await BulkUpdateTransactionsUseCase().execute(command, uow)
+
+
+async def test_sets_owner_shares_and_depositor_on_a_joint_row() -> None:
+    deposit = make_transaction(joint=True, amount=Decimal("1600.00"))
+    uow = _joint_uow(deposit)
+
+    await _apply(
+        uow,
+        BulkUpdateTransactionsCommand(
+            transaction_ids=[deposit.id],
+            owner_shares={ALICE.id: 60, BOB.id: 40},
+            depositor_person_id=ALICE.id,
+        ),
+    )
+
+    updated = uow.transactions.update_mutable_fields.call_args.args[0]
+    assert updated.owner_shares == {ALICE.id: 60, BOB.id: 40}
+    assert updated.depositor_person_id == ALICE.id
+    edits = {
+        e.field_name: e for e in uow.transaction_edits.save_batch.call_args.args[0]
+    }
+    assert not edits["owner_shares"].old_value
+    assert edits["owner_shares"].new_value == f"{ALICE.id}:60,{BOB.id}:40"
+    assert edits["depositor_person_id"].new_value == str(ALICE.id)
+
+
+async def test_null_resets_owner_shares_and_unassigns_the_depositor() -> None:
+    deposit = make_transaction(
+        joint=True,
+        amount=Decimal("1600.00"),
+        owner_shares={ALICE.id: 60, BOB.id: 40},
+        depositor_person_id=BOB.id,
+    )
+    uow = _joint_uow(deposit)
+
+    await _apply(
+        uow,
+        BulkUpdateTransactionsCommand(
+            transaction_ids=[deposit.id], owner_shares=None, depositor_person_id=None
+        ),
+    )
+
+    updated = uow.transactions.update_mutable_fields.call_args.args[0]
+    assert (updated.owner_shares, updated.depositor_person_id) == (None, None)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"owner_shares": {ALICE.id: 50, BOB.id: 50}},
+        {"depositor_person_id": ALICE.id},
+    ],
+)
+async def test_joint_only_fields_are_rejected_on_a_personal_row(
+    change: dict[str, object],
+) -> None:
+    personal = make_transaction(payer_person_id=ALICE.id)
+    uow = _joint_uow(personal)
+    command = attrs.evolve(
+        BulkUpdateTransactionsCommand(transaction_ids=[personal.id]), **change
+    )
+
+    with pytest.raises(ValidationError, match="joint-account"):
+        await _apply(uow, command)
+
+    uow.commit.assert_not_called()
+
+
+async def test_a_payer_split_is_rejected_on_a_joint_row() -> None:
+    joint = make_transaction(joint=True)
+    uow = _joint_uow(joint)
+
+    with pytest.raises(ValidationError, match="no payer split"):
+        await _apply(
+            uow,
+            BulkUpdateTransactionsCommand(
+                transaction_ids=[joint.id], payer_percentage=50
+            ),
+        )
+
+
+async def test_a_joint_row_stays_household() -> None:
+    joint = make_transaction(joint=True)
+    uow = _joint_uow(joint)
+
+    with pytest.raises(ValidationError, match="always household"):
+        await _apply(
+            uow,
+            BulkUpdateTransactionsCommand(transaction_ids=[joint.id], household=False),
+        )
+
+
+@pytest.mark.parametrize(
+    ("shares", "message"),
+    [
+        ({ALICE.id: 60, uuid.uuid4(): 40}, "each of the couple"),
+        ({ALICE.id: 60, BOB.id: 30}, "sum to 100"),
+    ],
+)
+async def test_owner_shares_must_split_the_couple_whole(
+    shares: dict[uuid.UUID, int], message: str
+) -> None:
+    joint = make_transaction(joint=True)
+    uow = _joint_uow(joint)
+
+    with pytest.raises(ValidationError, match=message):
+        await _apply(
+            uow,
+            BulkUpdateTransactionsCommand(
+                transaction_ids=[joint.id], owner_shares=shares
+            ),
+        )
+
+
+async def test_the_depositor_must_be_one_of_the_couple() -> None:
+    joint = make_transaction(joint=True, amount=Decimal("100.00"))
+    uow = _joint_uow(joint)
+
+    with pytest.raises(ValidationError, match="not one of the couple"):
+        await _apply(
+            uow,
+            BulkUpdateTransactionsCommand(
+                transaction_ids=[joint.id], depositor_person_id=uuid.uuid4()
+            ),
+        )

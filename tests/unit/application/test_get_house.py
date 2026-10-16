@@ -1,25 +1,57 @@
-"""The House example payload is internally consistent.
+"""The House payload: the example is internally consistent, and recent
+activity is real once a joint account exists.
 
 The page renders these figures without arithmetic, so every total, percent,
 and difference must already agree with the figures it summarizes.
 """
 
 from collections.abc import Iterable
+from datetime import date
 from decimal import Decimal
 
+import attrs
 import pytest
 
-from src.application.use_cases.get_house import GetHouseCommand, GetHouseUseCase
-from src.domain.house import HouseFigures, OwnerAmount, OwnerShare
+from src.application.use_cases._shared.house_example import (
+    EXAMPLE_HOUSE,
+    example_house,
+)
+from src.application.use_cases.get_house import (
+    HOUSE_SECTIONS,
+    GetHouseCommand,
+    GetHouseResult,
+    GetHouseUseCase,
+)
+from src.domain.entities.transaction import Transaction
+from src.domain.house import (
+    ActivityRow,
+    HouseFigures,
+    HousePerson,
+    OwnerAmount,
+    OwnerShare,
+)
+from tests.fixtures.factories import (
+    ALICE,
+    BOB,
+    make_joint_account,
+    make_transaction,
+    make_transfer_group,
+)
 from tests.fixtures.mocks import make_mock_uow
+
+COUPLE = (HousePerson(ALICE.id, "Alice"), HousePerson(BOB.id, "Bob"))
 
 
 def _sum(amounts: Iterable[OwnerAmount]) -> Decimal:
     return sum((a.amount for a in amounts), Decimal(0))
 
 
-@pytest.fixture
-async def figures() -> HouseFigures:
+@pytest.fixture(params=["served", "for_the_couple"])
+async def figures(request: pytest.FixtureRequest) -> HouseFigures:
+    """The example as served before any joint account exists, and as
+    re-keyed to the couple once one does."""
+    if request.param == "for_the_couple":
+        return example_house(ALICE.id, BOB.id)
     result = await GetHouseUseCase().execute(GetHouseCommand(), make_mock_uow())
     return result.figures
 
@@ -95,3 +127,164 @@ class TestExampleHouse:
         assert months == sorted(months)
         assert dues == sorted(dues)
         assert dates == sorted(dates, reverse=True)
+
+
+def test_the_couples_example_keys_every_owner_on_the_couple() -> None:
+    house = example_house(ALICE.id, BOB.id)
+
+    assert house.persons == COUPLE
+    assert house.put_in.total == EXAMPLE_HOUSE.put_in.total
+    assert [row.person_id for row in house.recent_activity if row.person_id] == [
+        ALICE.id,
+        BOB.id,
+        ALICE.id,
+    ]
+
+
+class TestRecentActivity:
+    """US-HOUSE-7: the joint accounts' latest rows, real once a joint
+    account exists."""
+
+    JOINT = make_joint_account("Joint Checking")
+
+    @staticmethod
+    async def _house(rows: list[Transaction]) -> GetHouseResult:
+        uow = make_mock_uow()
+        transfer, card_payment = make_transfer_group()
+        uow.persons.get_all.return_value = [ALICE, BOB]
+        uow.category_groups.get_all.return_value = [transfer]
+        uow.categories.get_all.return_value = [card_payment]
+        uow.accounts.get_all.return_value = [TestRecentActivity.JOINT]
+        uow.transactions.get_recent_by_account_ids.return_value = rows
+        return await GetHouseUseCase().execute(GetHouseCommand(), uow)
+
+    @staticmethod
+    def _row(**overrides: object) -> Transaction:
+        return attrs.evolve(
+            make_transaction(joint=True, account=TestRecentActivity.JOINT.name),
+            **overrides,
+        )
+
+    async def test_the_section_is_real_and_the_rest_still_example(self) -> None:
+        result = await self._house([])
+
+        assert result.example_sections == HOUSE_SECTIONS - {"recent_activity"}
+        assert result.figures.recent_activity == ()
+        assert result.figures.persons == COUPLE
+
+    async def test_every_section_is_example_without_a_joint_account(self) -> None:
+        result = await GetHouseUseCase().execute(GetHouseCommand(), make_mock_uow())
+
+        assert result.example_sections == HOUSE_SECTIONS
+        assert result.figures == EXAMPLE_HOUSE
+
+    def test_the_sections_are_every_figure_but_the_couple_and_date(self) -> None:
+        assert {
+            "put_in",
+            "shares",
+            "loans",
+            "upcoming",
+            "set_aside",
+            "recent_activity",
+        } == HOUSE_SECTIONS
+
+    async def test_kind_follows_category_sign_and_depositor(self) -> None:
+        rows = [
+            self._row(amount=Decimal("-80.00"), category="Groceries"),
+            self._row(amount=Decimal("25.00"), category="Groceries"),
+            self._row(
+                amount=Decimal("1600.00"),
+                category="Deposits",
+                depositor_person_id=ALICE.id,
+            ),
+            self._row(amount=Decimal("-500.00"), category="Credit Card Payment"),
+        ]
+
+        result = await self._house(rows)
+
+        assert [r.kind for r in result.figures.recent_activity] == [
+            "payment",
+            "refund",
+            "deposit",
+            "transfer",
+        ]
+        assert [r.person_id for r in result.figures.recent_activity] == [
+            None,
+            None,
+            ALICE.id,
+            None,
+        ]
+
+    async def test_a_transfer_naming_its_depositor_is_their_deposit(self) -> None:
+        """Depositor first: money in that names a depositor is a deposit,
+        and the depositor's alone, even in a transfer-kind category."""
+        rows = [
+            self._row(
+                amount=Decimal("1500.00"),
+                category="Credit Card Payment",
+                depositor_person_id=BOB.id,
+            ),
+            self._row(amount=Decimal("1500.00"), category="Credit Card Payment"),
+        ]
+
+        result = await self._house(rows)
+
+        deposit, transfer = result.figures.recent_activity
+        assert (deposit.kind, deposit.person_id) == ("deposit", BOB.id)
+        assert deposit.shares == (
+            OwnerAmount(ALICE.id, Decimal("0.00")),
+            OwnerAmount(BOB.id, Decimal("1500.00")),
+        )
+        assert (transfer.kind, transfer.shares) == ("transfer", ())
+
+    async def test_shares_follow_the_owner_shares_and_skip_transfers(self) -> None:
+        rows = [
+            self._row(amount=Decimal("-100.00")),
+            self._row(
+                amount=Decimal("-100.00"), owner_shares={ALICE.id: 60, BOB.id: 40}
+            ),
+            self._row(amount=Decimal("-100.00"), category="Credit Card Payment"),
+        ]
+
+        result = await self._house(rows)
+
+        assert [r.shares for r in result.figures.recent_activity] == [
+            (
+                OwnerAmount(ALICE.id, Decimal("50.00")),
+                OwnerAmount(BOB.id, Decimal("50.00")),
+            ),
+            (
+                OwnerAmount(ALICE.id, Decimal("60.00")),
+                OwnerAmount(BOB.id, Decimal("40.00")),
+            ),
+            (),
+        ]
+
+    async def test_budget_line_is_the_first_line_tag(self) -> None:
+        rows = [
+            self._row(tags=("shared", "line:repair", "line:renovation")),
+            self._row(tags=("shared",)),
+        ]
+
+        result = await self._house(rows)
+
+        assert [r.budget_line for r in result.figures.recent_activity] == [
+            "repair",
+            None,
+        ]
+
+    async def test_reads_the_newest_twenty_rows_with_their_account(self) -> None:
+        rows = [self._row(date=date(2026, 1, 25 - n)) for n in range(20)]
+        uow = make_mock_uow()
+        uow.persons.get_all.return_value = [ALICE, BOB]
+        uow.accounts.get_all.return_value = [self.JOINT]
+        uow.transactions.get_recent_by_account_ids.return_value = rows
+
+        result = await GetHouseUseCase().execute(GetHouseCommand(), uow)
+
+        uow.transactions.get_recent_by_account_ids.assert_awaited_once_with(
+            [self.JOINT.id], 20
+        )
+        activity: tuple[ActivityRow, ...] = result.figures.recent_activity
+        assert [r.date for r in activity] == [tx.date for tx in rows]
+        assert {r.account_name for r in activity} == {"Joint Checking"}

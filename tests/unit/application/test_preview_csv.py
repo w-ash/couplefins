@@ -6,7 +6,10 @@ from src.application.use_cases.preview_csv import PreviewCsvCommand, PreviewCsvU
 from src.domain.entities.category import Category
 from src.domain.exceptions import NotFoundError
 from tests.fixtures.factories import (
+    ALICE,
+    BOB,
     make_category,
+    make_joint_account,
     make_person,
     make_transaction,
 )
@@ -39,7 +42,7 @@ async def test_all_new_transactions() -> None:
         make_category(name="Gas"),
         make_category(name="Dining Out"),
     ]
-    uow.transactions.get_by_person_and_original_date_range.return_value = []
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = []
     command = _make_command(person_id=person.id)
 
     result = await PreviewCsvUseCase().execute(command, uow)
@@ -69,7 +72,9 @@ async def test_detects_unchanged_transactions() -> None:
         tags=("shared",),
         payer_percentage=50,
     )
-    uow.transactions.get_by_person_and_original_date_range.return_value = [existing]
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = [
+        existing
+    ]
 
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
@@ -98,7 +103,9 @@ async def test_detects_changed_transactions() -> None:
         tags=("shared",),
         payer_percentage=50,
     )
-    uow.transactions.get_by_person_and_original_date_range.return_value = [existing]
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = [
+        existing
+    ]
 
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
@@ -124,7 +131,7 @@ async def test_reports_new_and_unmapped_categories_without_creating() -> None:
     uow.categories.get_all.return_value = [
         make_category(name="Groceries"),
     ]
-    uow.transactions.get_by_person_and_original_date_range.return_value = []
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = []
     command = _make_command()
 
     result = await PreviewCsvUseCase().execute(command, uow)
@@ -140,7 +147,7 @@ async def test_reports_existing_unmapped_categories() -> None:
         make_category(name="Groceries"),
         Category(id=uuid.uuid4(), name="Gas", group_id=None),
     ]
-    uow.transactions.get_by_person_and_original_date_range.return_value = []
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = []
     command = _make_command()
 
     result = await PreviewCsvUseCase().execute(command, uow)
@@ -189,7 +196,7 @@ async def test_reports_removed_transactions() -> None:
         merchant="Coffee Shop",
         date=kept.date,
     )
-    uow.transactions.get_by_person_and_original_date_range.return_value = [
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = [
         kept,
         dropped,
     ]
@@ -234,7 +241,7 @@ async def test_never_persists_data() -> None:
     uow = make_mock_uow()
     uow.persons.get_by_id.return_value = make_person()
     uow.categories.get_all.return_value = []
-    uow.transactions.get_by_person_and_original_date_range.return_value = []
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = []
     command = _make_command()
 
     await PreviewCsvUseCase().execute(command, uow)
@@ -246,3 +253,23 @@ async def test_never_persists_data() -> None:
     uow.settlement_transaction_links.delete_by_transaction_ids.assert_not_called()
     uow.categories.save_batch.assert_not_called()
     uow.commit.assert_not_called()
+
+
+async def test_rows_on_a_joint_label_preview_as_joint() -> None:
+    """US-IMPORT-5: the preview classifies a joint account's rows "Joint"."""
+    uow = make_mock_uow()
+    uow.persons.get_by_id.return_value = ALICE
+    uow.persons.get_all.return_value = [ALICE, BOB]
+    uow.accounts.get_all.return_value = [make_joint_account("Joint Checking")]
+    csv = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        '2026-01-15,Hardware Store,Home,Joint Checking,HARDWARE STORE,,"-120.00",\n'
+        '2026-01-16,Grocery Store,Groceries,Chase,GROCERY STORE,,"-50.00",\n'
+    )
+
+    result = await PreviewCsvUseCase().execute(_make_command(csv, ALICE.id), uow)
+
+    assert [(tx.merchant, tx.is_joint) for tx in result.new_transactions] == [
+        ("Hardware Store", True),
+        ("Grocery Store", False),
+    ]

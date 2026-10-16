@@ -53,7 +53,7 @@ class CategoryComparisonItem(BaseModel):
 
 class SpendingFlowCellItem(BaseModel):
     source_kind: FlowSourceKind
-    source_person_id: UUID
+    source_person_id: UUID | None
     group_id: UUID | None
     group_name: str
     category: str

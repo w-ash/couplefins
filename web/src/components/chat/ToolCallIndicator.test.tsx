@@ -43,4 +43,13 @@ describe("ToolCallIndicator", () => {
     );
     expect(screen.getByText("Checked settlement")).toBeInTheDocument();
   });
+
+  it("labels get_accounts", () => {
+    render(
+      <ToolCallIndicator
+        toolCall={{ id: "1", name: "get_accounts", kind: "read" }}
+      />,
+    );
+    expect(screen.getByText("Looking up accounts…")).toBeInTheDocument();
+  });
 });

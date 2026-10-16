@@ -55,6 +55,7 @@ import {
 import { useIdentityStore } from "@/lib/identity";
 import { PAGE_PADDING, tableHeaderRowClass } from "@/lib/layout";
 import {
+  type PreviewScopeInput,
   type PreviewScopeKind,
   previewScopeKind,
 } from "@/lib/transaction-filters";
@@ -231,10 +232,8 @@ function ActionPanel({
   );
 }
 
-function typeBreakdown(
-  transactions: { household: boolean; payer_percentage: number }[],
-): string {
-  const counts = { household: 0, personal: 0, spotted: 0 };
+function typeBreakdown(transactions: PreviewScopeInput[]): string {
+  const counts = { household: 0, personal: 0, spotted: 0, joint: 0 };
   for (const tx of transactions) {
     counts[previewScopeKind(tx)]++;
   }
@@ -242,6 +241,7 @@ function typeBreakdown(
   if (counts.household) parts.push(`${counts.household} household`);
   if (counts.personal) parts.push(`${counts.personal} personal`);
   if (counts.spotted) parts.push(`${counts.spotted} spotted`);
+  if (counts.joint) parts.push(`${counts.joint} joint`);
   return parts.join(", ");
 }
 
@@ -249,6 +249,7 @@ const SCOPE_BADGE_CLASSES: Record<PreviewScopeKind, string> = {
   household: "bg-primary-muted text-primary-muted-foreground",
   personal: "bg-muted/50 text-muted-foreground/50",
   spotted: "", // partner accent, supplied per-render
+  joint: "bg-muted text-muted-foreground",
 };
 
 function ScopeBadge({
@@ -256,17 +257,17 @@ function ScopeBadge({
   partnerName,
   partnerAccentClass,
 }: {
-  tx: { household: boolean; payer_percentage: number };
+  tx: PreviewScopeInput;
   partnerName: string | null;
   partnerAccentClass: string;
 }) {
   const kind = previewScopeKind(tx);
-  const label =
-    kind === "spotted"
-      ? `Spotted → ${partnerName ?? "partner"}`
-      : kind === "household"
-        ? "Household"
-        : "Personal";
+  const label = {
+    household: "Household",
+    personal: "Personal",
+    spotted: `Spotted → ${partnerName ?? "partner"}`,
+    joint: "Joint",
+  } satisfies Record<PreviewScopeKind, string>;
   return (
     <span
       className={cn(
@@ -274,7 +275,7 @@ function ScopeBadge({
         kind === "spotted" ? partnerAccentClass : SCOPE_BADGE_CLASSES[kind],
       )}
     >
-      {label}
+      {label[kind]}
     </span>
   );
 }
@@ -332,7 +333,7 @@ function PreviewCard({
                 partnerName={partnerName}
                 partnerAccentClass={partnerAccentClass}
               />
-              {tx.payer_percentage < 100 && (
+              {tx.payer_percentage < 100 && !tx.is_joint && (
                 <span className="tabular-nums">
                   {formatSplit(tx.payer_percentage)}
                 </span>
@@ -382,7 +383,7 @@ function PreviewCard({
                   />
                 </td>
                 <td className="py-2 text-muted-foreground tabular-nums">
-                  {tx.payer_percentage < 100 ? (
+                  {tx.payer_percentage < 100 && !tx.is_joint ? (
                     formatSplit(tx.payer_percentage)
                   ) : (
                     <Minus className="size-4 text-icon-muted" />

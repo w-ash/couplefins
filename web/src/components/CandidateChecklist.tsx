@@ -52,7 +52,7 @@ function CandidateRow({
         <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
           <span>{formatDate(candidate.date)}</span>
           <span aria-hidden="true">&middot;</span>
-          <span>{getPersonName(candidate.payer_person_id)}</span>
+          <span>{getPersonName(candidate.payer_person_id ?? "")}</span>
         </div>
         {candidate.match_reasons.length > 0 && (
           <p className="mt-1 text-xs text-muted-foreground/70">

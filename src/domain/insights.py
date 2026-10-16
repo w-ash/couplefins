@@ -1,5 +1,5 @@
 from collections import defaultdict
-from collections.abc import Container
+from collections.abc import Container, Sequence
 from decimal import Decimal
 from uuid import UUID
 
@@ -17,9 +17,12 @@ from src.domain.spending_lens import (
 )
 
 
-def _lens(person_id: UUID | None) -> SpendingLens:
-    """Household lens, or one person's share of spending."""
-    return HouseholdLens() if person_id is None else PersonalLens(person_id)
+def _lens(person_id: UUID | None, person_ids: Sequence[UUID]) -> SpendingLens:
+    """Household lens, or one person's share of spending. A person's lens
+    needs the couple's `person_ids`."""
+    if person_id is None:
+        return HouseholdLens()
+    return PersonalLens(person_id, person_ids)
 
 
 def _group_by_month(txs: list[Transaction]) -> dict[int, list[Transaction]]:
@@ -63,11 +66,11 @@ class CategoryComparison:
 @define(frozen=True, slots=True)
 class SpendingFlowCell:
     """One (source, category) sum under the lens: the flow chart's atom.
-    `source_person_id` is the payer; `source_kind` says what claim the
-    viewer has on the row (see `SpendingLens.flow_source`)."""
+    `source_person_id` is the payer (None for a joint row); `source_kind`
+    says what claim the viewer has on the row (see `SpendingLens.flow_source`)."""
 
     source_kind: FlowSourceKind
-    source_person_id: UUID
+    source_person_id: UUID | None
     group_id: UUID | None
     group_name: str
     category: str
@@ -132,6 +135,7 @@ def compute_spending_trends(
     through_month: int | None = None,
     *,
     person_id: UUID | None = None,
+    person_ids: Sequence[UUID],
 ) -> SpendingTrends:
     """Compute per-month trends (full year) and YTD group summaries.
 
@@ -141,9 +145,9 @@ def compute_spending_trends(
     when given (the selected month), so "Year to date" agrees with Budget
     and Dashboard's YTD instead of silently including months after the
     one being viewed. `person_id` switches to that person's share of
-    spending (`PersonalLens`).
+    spending (`PersonalLens`), which needs the couple's `person_ids`.
     """
-    lens = _lens(person_id)
+    lens = _lens(person_id, person_ids)
     by_month = _group_by_month(select(lens, year_txs))
 
     monthly_group_spending: list[MonthlyGroupSpending] = []
@@ -227,8 +231,9 @@ def compute_trailing_average(
     window: int = 3,
     *,
     person_id: UUID | None = None,
+    person_ids: Sequence[UUID],
 ) -> dict[UUID | None, Decimal]:
-    lens = _lens(person_id)
+    lens = _lens(person_id, person_ids)
     return _compute_trailing_average_from_expenses(
         select(lens, year_txs), category_lookup, target_month, window, lens
     )
@@ -241,8 +246,9 @@ def compute_comparison_cards(
     window: int = 3,
     *,
     person_id: UUID | None = None,
+    person_ids: Sequence[UUID],
 ) -> list[GroupComparison]:
-    lens = _lens(person_id)
+    lens = _lens(person_id, person_ids)
     expenses = select(lens, year_txs)
     target_txs = [tx for tx in expenses if tx.date.month == target_month]
 
@@ -309,17 +315,20 @@ def compute_spending_flow(
     category_lookup: dict[str, tuple[UUID, str]],
     *,
     person_id: UUID | None = None,
+    person_ids: Sequence[UUID],
     months: Container[int],
     merchant_limit: int = 10,
 ) -> SpendingFlow:
     """Where the money went in `months` (one month, or January through the
     selected month for year to date), under the household or a person's lens.
     Cells sort by group total, then amount, so the largest flows come first."""
-    lens = _lens(person_id)
+    lens = _lens(person_id, person_ids)
     rows = [tx for tx in select(lens, year_txs) if tx.date.month in months]
 
-    cell_amount: dict[tuple[FlowSourceKind, UUID, str], Decimal] = defaultdict(Decimal)
-    cell_count: dict[tuple[FlowSourceKind, UUID, str], int] = defaultdict(int)
+    cell_amount: dict[tuple[FlowSourceKind, UUID | None, str], Decimal] = defaultdict(
+        Decimal
+    )
+    cell_count: dict[tuple[FlowSourceKind, UUID | None, str], int] = defaultdict(int)
     merchant_amount: dict[str, Decimal] = defaultdict(Decimal)
     merchant_count: dict[str, int] = defaultdict(int)
     merchant_categories: dict[str, dict[str, Decimal]] = defaultdict(
@@ -395,11 +404,12 @@ def compute_category_comparisons(
     window: int = 3,
     *,
     person_id: UUID | None = None,
+    person_ids: Sequence[UUID],
 ) -> list[CategoryComparison]:
     """`compute_comparison_cards` at category grain: the target month against
     the trailing-window average per category, biggest swings first (a new
     category outranks any finite percentage, ties broken by dollars)."""
-    lens = _lens(person_id)
+    lens = _lens(person_id, person_ids)
     by_month = _group_by_month(select(lens, year_txs))
     current = _category_totals(lens, by_month.get(target_month, []), category_lookup)
 

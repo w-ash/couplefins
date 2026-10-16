@@ -209,3 +209,21 @@ async def test_finalized_settlement_month_raises_on_link() -> None:
     with pytest.raises(PeriodFinalizedError):
         await MarkTransactionAsSettlementUseCase().execute(command, uow)
     uow.settlement_transaction_links.save_batch.assert_not_called()
+
+
+@pytest.mark.parametrize("linked", [False, True])
+async def test_a_joint_account_row_cannot_be_marked_a_settlement(linked: bool) -> None:
+    tx = make_transaction(joint=True)
+    settlement = make_settlement()
+    uow = make_mock_uow()
+    uow.transactions.get_by_id.return_value = tx
+    uow.settlements.get_by_id.return_value = settlement
+
+    command = MarkTransactionAsSettlementCommand(
+        transaction_id=tx.id, settlement_id=settlement.id if linked else None
+    )
+    with pytest.raises(ValidationError, match="joint-account row"):
+        await MarkTransactionAsSettlementUseCase().execute(command, uow)
+
+    uow.settlement_transaction_links.save_batch.assert_not_called()
+    uow.transactions.update_mutable_fields.assert_not_called()

@@ -9,8 +9,11 @@ import {
 } from '@faker-js/faker';
 
 import type {
+  AccountsResponse,
   DeleteSettlementMerchant200,
-  SettlementMerchantResponse
+  MarkAccountJointResponse,
+  SettlementMerchantResponse,
+  UnmarkAccountJointResponse
 } from '../model';
 
 
@@ -21,4 +24,10 @@ export const getPostSettlementMerchantResponseMock = (overrideResponse: Partial<
 export const getDeleteSettlementMerchantResponseMock = (): DeleteSettlementMerchant200 => ({
         [faker.string.alphanumeric(5)]: faker.datatype.boolean()
       })
+
+export const getGetAccountsResponseMock = (overrideResponse: Partial<Extract<AccountsResponse, object>> = {}): AccountsResponse => ({accounts: Array.from({ length: faker.number.int({min: 1, max: 10}) }, (_, i) => i + 1).map(() => ({id: faker.string.uuid(), name: faker.string.alpha({length: {min: 10, max: 20}}), kind: faker.helpers.arrayElement(['personal','joint'] as const), owner_person_id: faker.helpers.arrayElement([faker.string.uuid(),null,])})), ...overrideResponse})
+
+export const getMarkAccountJointResponseMock = (overrideResponse: Partial<Extract<MarkAccountJointResponse, object>> = {}): MarkAccountJointResponse => ({account: {id: faker.string.uuid(), name: faker.string.alpha({length: {min: 10, max: 20}}), kind: faker.helpers.arrayElement(['personal','joint'] as const), owner_person_id: faker.helpers.arrayElement([faker.string.uuid(),null,])}, moved_count: faker.number.int(), dropped_count: faker.number.int(), ...overrideResponse})
+
+export const getUnmarkAccountJointResponseMock = (overrideResponse: Partial<Extract<UnmarkAccountJointResponse, object>> = {}): UnmarkAccountJointResponse => ({moved_count: faker.number.int(), ...overrideResponse})
 

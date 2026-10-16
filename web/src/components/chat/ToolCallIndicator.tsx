@@ -9,6 +9,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_spending_trends: "trends",
   get_dashboard_status: "status",
   get_tags: "tags",
+  get_accounts: "accounts",
   get_transaction_history: "edit history",
   get_budgets: "configured budgets",
   get_category_setup: "category setup",

@@ -151,6 +151,18 @@ async def exec_split(action: PendingAction, current_user: Person) -> dict[str, o
     }
 
 
+def _optional_id(value: object) -> UUID | None:
+    """A stored person id, or None."""
+    return None if value is None else UUID(cast(str, value))
+
+
+def _shares_by_id(value: object) -> dict[UUID, int] | None:
+    """Stored owner shares keyed by person id, or None for 50/50."""
+    if value is None:
+        return None
+    return {UUID(k): v for k, v in cast(dict[str, int], value).items()}
+
+
 async def exec_bulk(action: PendingAction, current_user: Person) -> dict[str, object]:
     """Run tag changes and field changes as one atomic operation.
 
@@ -192,6 +204,12 @@ async def exec_bulk(action: PendingAction, current_user: Person) -> dict[str, ob
             category=cast(str, field_changes["category"])
             if "category" in field_changes
             else None,
+            depositor_person_id=_optional_id(field_changes["depositor_person_id"])
+            if "depositor_person_id" in field_changes
+            else Unset.UNSET,
+            owner_shares=_shares_by_id(field_changes["owner_shares"])
+            if "owner_shares" in field_changes
+            else Unset.UNSET,
         )
 
     async def _run(uow: UnitOfWorkProtocol) -> tuple[int, int]:

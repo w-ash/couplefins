@@ -28,7 +28,7 @@ from src.domain.constants import CoupleDefaults
 from src.domain.entities.settlement import Settlement
 from src.domain.entities.settlement_portion import SettlementPortion
 from src.domain.entities.transaction import Transaction
-from src.domain.filters import is_split_relevant
+from src.domain.filters import is_split_relevant, payer_of
 from src.domain.month_key import MonthKey
 from src.domain.reconciliation import SettlementResult
 from src.domain.splits import compute_shares
@@ -236,7 +236,7 @@ def _signed_share(tx: Transaction, person_a: UUID) -> Decimal:
     _, other_share = compute_shares(tx.amount, tx.payer_percentage)
     # Expense: the other person owes the payer. Refund: the reverse.
     owed_to_payer = other_share if tx.amount < 0 else -other_share
-    return -owed_to_payer if tx.payer_person_id == person_a else owed_to_payer
+    return -owed_to_payer if payer_of(tx) == person_a else owed_to_payer
 
 
 def _signed_result(result: SettlementResult | None, person_a: UUID) -> Decimal:

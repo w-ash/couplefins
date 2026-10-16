@@ -10,7 +10,7 @@ export interface SettlementCandidateResponse {
   date: string;
   merchant: string;
   amount: number;
-  payer_person_id: string;
+  payer_person_id: string | null;
   category: string;
   score: number;
   match_reasons: string[];

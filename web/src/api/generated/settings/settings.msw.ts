@@ -13,17 +13,23 @@ import type {
 } from 'msw';
 
 import type {
+  AccountsResponse,
   DeleteSettlementMerchant200,
-  SettlementMerchantResponse
+  MarkAccountJointResponse,
+  SettlementMerchantResponse,
+  UnmarkAccountJointResponse
 } from '../model';
 
 import {
   getDeleteSettlementMerchantResponseMock,
+  getGetAccountsResponseMock,
   getGetSettlementMerchantsResponseMock,
-  getPostSettlementMerchantResponseMock
+  getMarkAccountJointResponseMock,
+  getPostSettlementMerchantResponseMock,
+  getUnmarkAccountJointResponseMock
 } from './settings.faker.ts';
 
-export { getGetSettlementMerchantsResponseMock, getPostSettlementMerchantResponseMock, getDeleteSettlementMerchantResponseMock } from './settings.faker.ts';
+export { getGetSettlementMerchantsResponseMock, getPostSettlementMerchantResponseMock, getDeleteSettlementMerchantResponseMock, getGetAccountsResponseMock, getMarkAccountJointResponseMock, getUnmarkAccountJointResponseMock } from './settings.faker.ts';
 
 
 export const getGetSettlementMerchantsMockHandler = (overrideResponse?: SettlementMerchantResponse[] | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<SettlementMerchantResponse[]> | SettlementMerchantResponse[]), options?: RequestHandlerOptions) => {
@@ -61,8 +67,47 @@ export const getDeleteSettlementMerchantMockHandler = (overrideResponse?: Delete
       })
   }, options)
 }
+
+export const getGetAccountsMockHandler = (overrideResponse?: AccountsResponse | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<AccountsResponse> | AccountsResponse), options?: RequestHandlerOptions) => {
+  return http.get('*/api/v1/settings/accounts', async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getGetAccountsResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
+
+export const getMarkAccountJointMockHandler = (overrideResponse?: MarkAccountJointResponse | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<MarkAccountJointResponse> | MarkAccountJointResponse), options?: RequestHandlerOptions) => {
+  return http.post('*/api/v1/settings/accounts/joint', async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getMarkAccountJointResponseMock(),
+      { status: 201
+      })
+  }, options)
+}
+
+export const getUnmarkAccountJointMockHandler = (overrideResponse?: UnmarkAccountJointResponse | ((info: Parameters<Parameters<typeof http.delete>[1]>[0]) => Promise<UnmarkAccountJointResponse> | UnmarkAccountJointResponse), options?: RequestHandlerOptions) => {
+  return http.delete('*/api/v1/settings/accounts/joint/:label', async (info: Parameters<Parameters<typeof http.delete>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getUnmarkAccountJointResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
 export const getSettingsMock = () => [
   getGetSettlementMerchantsMockHandler(),
   getPostSettlementMerchantMockHandler(),
-  getDeleteSettlementMerchantMockHandler()
+  getDeleteSettlementMerchantMockHandler(),
+  getGetAccountsMockHandler(),
+  getMarkAccountJointMockHandler(),
+  getUnmarkAccountJointMockHandler()
 ]

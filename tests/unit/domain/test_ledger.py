@@ -13,6 +13,8 @@ from decimal import Decimal
 from typing import ClassVar
 import uuid
 
+from attrs import evolve
+
 from src.domain.entities.settlement import Settlement
 from src.domain.entities.settlement_portion import SettlementPortion
 from src.domain.entities.transaction import Transaction
@@ -154,6 +156,16 @@ class TestCharges:
         ledger = compute_ledger(
             [month_debt(2026, 1, "100"), transfer, no_split], [], [], PERSONS
         )
+        assert signed(month_row(ledger, 2026, 1).charged) == Decimal(100)
+
+    def test_joint_rows_add_nothing(self) -> None:
+        joint = make_transaction(date=date(2026, 1, 7), joint=True, amount=Decimal(-90))
+        split_joint = evolve(joint, id=uuid.uuid4(), payer_percentage=50)
+
+        ledger = compute_ledger(
+            [month_debt(2026, 1, "100"), joint, split_joint], [], [], PERSONS
+        )
+
         assert signed(month_row(ledger, 2026, 1).charged) == Decimal(100)
 
     def test_zero_net_month_reads_settled(self) -> None:

@@ -51,11 +51,14 @@ class UploadRepository(BaseRepository[Upload, UploadModel]):
         subq = (
             select(TransactionModel.upload_id)
             .where(*date_filters)
-            .where(TransactionModel.payer_person_id.in_(person_id_strs))
             .distinct()
             .subquery()
         )
-        stmt = select(UploadModel).where(UploadModel.id.in_(select(subq)))
+        # By uploader, not payer: a joint account's rows have no payer.
+        stmt = select(UploadModel).where(
+            UploadModel.person_id.in_(person_id_strs),
+            UploadModel.id.in_(select(subq)),
+        )
         result = await self._session.execute(stmt)
         return [self._to_domain(row) for row in result.scalars().all()]
 

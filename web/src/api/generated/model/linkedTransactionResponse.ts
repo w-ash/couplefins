@@ -10,5 +10,5 @@ export interface LinkedTransactionResponse {
   date: string;
   merchant: string;
   amount: number;
-  payer_person_id: string;
+  payer_person_id: string | null;
 }

@@ -3,6 +3,11 @@ import { useCallback, useMemo, useState } from "react";
 import type { TagAction } from "@/api/generated/model";
 import { Button } from "@/components/Button";
 import { Combobox, type ComboboxOption } from "@/components/Combobox";
+import { DepositorSelect, KEEP_DEPOSITOR } from "@/components/DepositorSelect";
+import {
+  OwnerSharesEditor,
+  useOwnerShares,
+} from "@/components/OwnerSharesEditor";
 import { PercentInput } from "@/components/PercentInput";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { parsePercent, plural } from "@/lib/format";
@@ -11,6 +16,10 @@ export interface BulkChanges {
   payer_percentage?: number;
   category?: string;
   tags?: { action: TagAction; tags: string[] };
+  /** Owner shares keyed by person id; null resets to 50/50. Joint rows only. */
+  owner_shares?: Record<string, number> | null;
+  /** Depositor person id; null unassigns. Joint rows only. */
+  depositor_person_id?: string | null;
 }
 
 interface BulkEditToolbarProps {
@@ -19,6 +28,10 @@ interface BulkEditToolbarProps {
   selectedTagCounts: Map<string, number>;
   categoryOptions: ComboboxOption[];
   availableTags: string[];
+  /** The two persons, in persons order. */
+  owners: Array<{ id: string; name: string }>;
+  /** True when every selected row is joint; owner-share and depositor edits need it. */
+  allJoint: boolean;
   saving: boolean;
   onApply: (ids: string[], changes: BulkChanges) => void;
   onCancel: () => void;
@@ -30,8 +43,9 @@ function buildSummaryLines(
   categoryOptions: ComboboxOption[],
   tagAction: TagAction,
   selectedTags: string[],
+  jointLines: string[],
 ): string[] {
-  const lines: string[] = [];
+  const lines: string[] = [...jointLines];
   if (splitParsed !== null) {
     lines.push(`Set split to ${splitParsed}%`);
   }
@@ -53,6 +67,8 @@ export function BulkEditToolbar({
   selectedTagCounts,
   categoryOptions,
   availableTags,
+  owners,
+  allJoint,
   saving,
   onApply,
   onCancel,
@@ -63,18 +79,45 @@ export function BulkEditToolbar({
   const [tagAction, setTagAction] = useState<TagAction>("add");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
+  const ownerShares = useOwnerShares(owners, null);
+  const [depositor, setDepositor] = useState(KEEP_DEPOSITOR);
+
   const count = selectedIds.size;
 
+  const { pair: ownerPair, reset: ownerReset, firstShare } = ownerShares;
+  const hasOwnerShares =
+    allJoint && ownerPair !== null && (ownerReset || firstShare !== null);
+  const ownerSharesHaveError = allJoint && ownerShares.invalid;
+  const hasDepositor = allJoint && depositor !== KEEP_DEPOSITOR;
+
   // Split validation
-  const splitParsed = parsePercent(splitValue);
+  const splitParsed = allJoint ? null : parsePercent(splitValue);
   const hasSplit = splitParsed !== null;
-  const splitHasError = splitValue !== "" && !hasSplit;
+  const splitHasError = !allJoint && splitValue !== "" && !hasSplit;
 
   // Change detection
   const hasCategory = category !== "";
   const hasTags = selectedTags.length > 0;
-  const hasAnyChange = hasSplit || hasCategory || hasTags;
-  const canReview = hasAnyChange && !splitHasError && count > 0;
+  const hasAnyChange =
+    hasSplit || hasCategory || hasTags || hasOwnerShares || hasDepositor;
+  const canReview =
+    hasAnyChange && !splitHasError && !ownerSharesHaveError && count > 0;
+
+  const jointLines: string[] = [];
+  if (hasOwnerShares && ownerPair) {
+    jointLines.push(
+      ownerReset
+        ? "Reset owner shares to 50/50"
+        : `Set owner shares to ${ownerPair[0].name} ${firstShare}% / ${ownerPair[1].name} ${100 - (firstShare ?? 0)}%`,
+    );
+  }
+  if (hasDepositor) {
+    jointLines.push(
+      depositor === ""
+        ? "Mark deposits unassigned"
+        : `Set depositor to ${owners.find((o) => o.id === depositor)?.name ?? "—"}`,
+    );
+  }
 
   const summaryLines =
     step === "reviewing"
@@ -84,6 +127,7 @@ export function BulkEditToolbar({
           categoryOptions,
           tagAction,
           selectedTags,
+          jointLines,
         )
       : [];
 
@@ -126,6 +170,9 @@ export function BulkEditToolbar({
     if (splitParsed !== null) changes.payer_percentage = splitParsed;
     if (hasCategory) changes.category = category;
     if (hasTags) changes.tags = { action: tagAction, tags: selectedTags };
+    if (hasOwnerShares && ownerShares.payload !== undefined)
+      changes.owner_shares = ownerShares.payload;
+    if (hasDepositor) changes.depositor_person_id = depositor || null;
     onApply([...selectedIds], changes);
   }, [
     splitParsed,
@@ -136,6 +183,10 @@ export function BulkEditToolbar({
     selectedTags,
     selectedIds,
     onApply,
+    hasOwnerShares,
+    ownerShares.payload,
+    hasDepositor,
+    depositor,
   ]);
 
   const handleKeyDown = useCallback(
@@ -184,20 +235,22 @@ export function BulkEditToolbar({
           {/* Form fields */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-3">
             {/* Split */}
-            <label
-              htmlFor="bulk-split"
-              className="flex items-center gap-2 text-sm text-muted-foreground"
-            >
-              <span className="w-16 shrink-0">Split</span>
-              <PercentInput
-                id="bulk-split"
-                value={splitValue}
-                onChange={setSplitValue}
-                placeholder="—"
-                disabled={saving}
-                error={splitHasError}
-              />
-            </label>
+            {!allJoint && (
+              <label
+                htmlFor="bulk-split"
+                className="flex items-center gap-2 text-sm text-muted-foreground"
+              >
+                <span className="w-16 shrink-0">Split</span>
+                <PercentInput
+                  id="bulk-split"
+                  value={splitValue}
+                  onChange={setSplitValue}
+                  placeholder="—"
+                  disabled={saving}
+                  error={splitHasError}
+                />
+              </label>
+            )}
 
             {/* Category */}
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -213,6 +266,29 @@ export function BulkEditToolbar({
                 className="flex-1"
               />
             </div>
+
+            {allJoint && ownerPair && (
+              <div className="sm:col-span-2">
+                <OwnerSharesEditor
+                  owners={ownerPair}
+                  values={ownerShares.values}
+                  disabled={saving}
+                  isDefault={false}
+                  onChange={ownerShares.onChange}
+                  onReset={ownerShares.onReset}
+                />
+              </div>
+            )}
+
+            {allJoint && (
+              <DepositorSelect
+                owners={owners}
+                value={depositor}
+                onChange={setDepositor}
+                disabled={saving}
+                allowKeep
+              />
+            )}
 
             {/* Tags — full width */}
             <div className="flex items-center gap-2 text-sm text-muted-foreground sm:col-span-2">

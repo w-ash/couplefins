@@ -4,14 +4,17 @@
  * Couplefins
  * OpenAPI spec version: 0.1.0
  */
+import type { UpdateTransactionRequestOwnerShares } from './updateTransactionRequestOwnerShares.ts';
 
 export interface UpdateTransactionRequest {
-  date?: string | null;
-  amount?: number | null;
   category?: string | null;
-  tags?: string[] | null;
   payer_percentage?: number | null;
   household?: boolean | null;
   is_excluded?: boolean | null;
   notes?: string | null;
+  depositor_person_id?: string | null;
+  owner_shares?: UpdateTransactionRequestOwnerShares;
+  date?: string | null;
+  amount?: number | null;
+  tags?: string[] | null;
 }

@@ -5,26 +5,37 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 import re
+from uuid import uuid4
+
+from structlog.testing import capture_logs
 
 from src.application.use_cases._shared.reconciliation_context import (
+    ReconciliationContext,
     load_reconciliation_context,
 )
 from src.application.use_cases._shared.transaction_reads import (
+    NO_SHARES,
+    fetch_account_rows,
     fetch_all_settlement_rows,
+    fetch_joint_rows,
     fetch_latest_spending_month,
     fetch_listed_rows,
+    fetch_payer_rows,
     fetch_scoped_rows,
     fetch_settlement_rows,
     fetch_year_spending_rows,
     resolve_period,
+    row_shares,
+    with_shares,
 )
 from src.domain.repositories.transaction_repository import (
     TransactionRepositoryProtocol,
 )
 from tests.fixtures.factories import (
     ALICE,
+    BOB,
     make_income_group,
-    make_person,
+    make_joint_account,
     make_transaction,
     make_transfer_group,
 )
@@ -40,6 +51,8 @@ _LIST_READS = {
     "get_settlement_relevant_by_date_range",
     "get_all_settlement_relevant",
     "get_by_person_and_date_range",
+    "get_by_account_ids",
+    "get_recent_by_account_ids",
 }
 # Scalar reads that still answer "what spending exists?" and so must apply
 # the transfer rule the same way the list reads do.
@@ -60,10 +73,7 @@ def _rows():
 async def _ctx():
     uow = make_mock_uow()
     transfer, card_payment = make_transfer_group()
-    uow.persons.get_all.return_value = [
-        make_person(name="Alice"),
-        make_person(name="Bob"),
-    ]
+    uow.persons.get_all.return_value = [ALICE, BOB]
     uow.category_groups.get_all.return_value = [transfer]
     uow.categories.get_all.return_value = [card_payment]
     return uow, await load_reconciliation_context(uow)
@@ -206,7 +216,7 @@ async def test_income_rows_are_not_spending_under_any_scope() -> None:
     uow = make_mock_uow()
     transfer, card_payment = make_transfer_group()
     income, paychecks = make_income_group()
-    uow.persons.get_all.return_value = [ALICE]
+    uow.persons.get_all.return_value = [ALICE, BOB]
     uow.category_groups.get_all.return_value = [transfer, income]
     uow.categories.get_all.return_value = [card_payment, paychecks]
     ctx = await load_reconciliation_context(uow)
@@ -233,7 +243,7 @@ async def test_personal_scope_is_every_row_where_my_share_is_positive() -> None:
     my share of household splits, my own rows, and what my partner spotted
     for me — never a row where my share is zero."""
     uow, ctx = await _ctx()
-    bob = make_person(name="Bob")
+    bob = BOB
     split_rent = make_transaction(
         category="Rent", payer_person_id=bob.id, payer_percentage=50
     )
@@ -260,3 +270,88 @@ async def test_personal_scope_is_every_row_where_my_share_is_positive() -> None:
 
     assert rows.listed == [split_rent, spotted_for_me]
     uow.transactions.get_by_date_range.assert_called_once_with(*WINDOW, tags=None)
+
+
+async def test_account_rows_are_every_row_of_the_accounts() -> None:
+    uow = make_mock_uow()
+    dinner, card, _ = _rows()
+    uow.transactions.get_by_account_ids.return_value = [dinner, card]
+
+    assert await fetch_account_rows(uow, [dinner.account_id]) == [dinner, card]
+    uow.transactions.get_by_account_ids.assert_awaited_once_with([dinner.account_id])
+
+
+async def test_joint_rows_are_the_bounded_newest_first_read() -> None:
+    """Transfers stay: the House activity list shows them as such. The
+    repository orders and bounds the read."""
+    uow = make_mock_uow()
+    joint = make_joint_account()
+    new, card = (
+        make_transaction(joint=True, account=joint.name, date=date(2026, 1, day))
+        for day in (20, 9)
+    )
+    uow.transactions.get_recent_by_account_ids.return_value = [new, card]
+
+    assert await fetch_joint_rows(uow, [joint.id], 2) == [new, card]
+    uow.transactions.get_recent_by_account_ids.assert_awaited_once_with([joint.id], 2)
+
+
+async def test_payer_rows_leave_out_joint_rows_at_the_read() -> None:
+    uow = make_mock_uow()
+    venmo = make_transaction(category="Credit Card Payment")
+    uow.transactions.get_by_date_range.return_value = [venmo]
+
+    assert await fetch_payer_rows(uow, WINDOW) == [venmo]
+    uow.transactions.get_by_date_range.assert_awaited_once_with(
+        *WINDOW, payer_only=True
+    )
+
+
+# --- Row shares: computed once, here, for every listed row ---
+
+
+async def _couple_ctx() -> ReconciliationContext:
+    uow = make_mock_uow()
+    uow.persons.get_all.return_value = [ALICE, BOB]
+    transfer, card = make_transfer_group()
+    uow.category_groups.get_all.return_value = [transfer]
+    uow.categories.get_all.return_value = [card]
+    return await load_reconciliation_context(uow)
+
+
+async def test_row_shares_split_a_spending_row() -> None:
+    ctx = await _couple_ctx()
+    tx = make_transaction(
+        payer_person_id=BOB.id, payer_percentage=70, amount=Decimal("-100.00")
+    )
+
+    shares = row_shares(tx, ctx)
+
+    assert shares.percentages == {BOB.id: 70, ALICE.id: 30}
+    assert shares.amounts == {BOB.id: Decimal("70.00"), ALICE.id: Decimal("30.00")}
+
+
+async def test_a_transfer_has_no_shares_unless_it_is_a_joint_deposit() -> None:
+    ctx = await _couple_ctx()
+    card = make_transaction(category="Credit Card Payment", payer_person_id=ALICE.id)
+    deposit = make_transaction(
+        joint=True,
+        category="Credit Card Payment",
+        amount=Decimal("1500.00"),
+        depositor_person_id=BOB.id,
+    )
+
+    assert row_shares(card, ctx) == NO_SHARES
+    assert row_shares(deposit, ctx).percentages == {ALICE.id: 0, BOB.id: 100}
+
+
+async def test_a_row_whose_payer_left_the_couple_has_no_shares() -> None:
+    """Stale data logs a warning; the read still answers."""
+    ctx = await _couple_ctx()
+    stale = make_transaction(payer_person_id=uuid4())
+
+    with capture_logs() as logs:
+        shares = with_shares([stale], ctx)
+
+    assert shares == {stale.id: NO_SHARES}
+    assert [log["event"] for log in logs] == ["transaction_shares_unresolved"]

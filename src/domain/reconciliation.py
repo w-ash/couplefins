@@ -20,7 +20,7 @@ from src.domain.entities.person import Person
 from src.domain.entities.settlement import Settlement
 from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import InvariantViolationError
-from src.domain.filters import is_split_relevant
+from src.domain.filters import is_split_relevant, payer_of
 from src.domain.spending_lens import SplitLens, compute_breakdowns
 from src.domain.splits import compute_shares
 
@@ -95,9 +95,9 @@ def filter_split_transactions(
 ) -> list[Transaction]:
     """Transactions that participate in settlement math.
 
-    Excludes excluded rows, settlement transfers, and household-no-split
+    Excludes excluded rows, settlement transfers, household-no-split
     (payer_percentage == 100, which means the payer absorbs the whole bill
-    and nothing is owed back).
+    and nothing is owed back), and joint rows (no payer to owe back).
     """
     return [tx for tx in transactions if is_split_relevant(tx)]
 
@@ -113,17 +113,18 @@ def _compute_person_summaries(
     for tx in transactions:
         payer_share, other_share = compute_shares(tx.amount, tx.payer_percentage)
 
-        other_id = partner_of[tx.payer_person_id]
+        payer_id = payer_of(tx)
+        other_id = partner_of[payer_id]
 
         if tx.amount < 0:
             # Expense: payer paid the full amount
-            paid[tx.payer_person_id] += abs(tx.amount)
-            share[tx.payer_person_id] += payer_share
+            paid[payer_id] += abs(tx.amount)
+            share[payer_id] += payer_share
             share[other_id] += other_share
         else:
             # Refund: payer received the refund
-            paid[tx.payer_person_id] -= abs(tx.amount)
-            share[tx.payer_person_id] -= payer_share
+            paid[payer_id] -= abs(tx.amount)
+            share[payer_id] -= payer_share
             share[other_id] -= other_share
 
     return [
@@ -144,9 +145,10 @@ def compute_payer_split_summaries(
     for tx in transactions:
         payer_share, _ = compute_shares(tx.amount, tx.payer_percentage)
         sign = Decimal(1) if tx.amount < 0 else Decimal(-1)
-        paid[tx.payer_person_id] += sign * abs(tx.amount)
-        share[tx.payer_person_id] += sign * payer_share
-        counts[tx.payer_person_id] += 1
+        payer_id = payer_of(tx)
+        paid[payer_id] += sign * abs(tx.amount)
+        share[payer_id] += sign * payer_share
+        counts[payer_id] += 1
 
     return [
         PayerSplitSummary(
@@ -187,7 +189,7 @@ def compute_payer_group_summaries(
         payer_share, _ = compute_shares(tx.amount, tx.payer_percentage)
         gid, gname = category_lookup.get(tx.category, (None, UNCATEGORIZED_GROUP_NAME))
         group_names[gid] = gname
-        key: _PayerGroupKey = (tx.payer_person_id, gid)
+        key: _PayerGroupKey = (payer_of(tx), gid)
         sign = Decimal(1) if tx.amount < 0 else Decimal(-1)
         paid[key] = paid.get(key, Decimal(0)) + sign * abs(tx.amount)
         share[key] = share.get(key, Decimal(0)) + sign * payer_share

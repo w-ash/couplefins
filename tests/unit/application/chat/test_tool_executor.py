@@ -644,6 +644,32 @@ async def test_get_tags_empty() -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_accounts_names_each_owner() -> None:
+    from src.application.use_cases.list_accounts import ListAccountsResult
+    from tests.fixtures.factories import make_account, make_joint_account
+
+    accounts = [
+        make_account(name="Chase", owner_person_id=ALICE.id),
+        make_joint_account("Joint Checking"),
+    ]
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        return_value=ListAccountsResult(accounts=accounts),
+    ):
+        result = await execute_tool("get_accounts", {}, CTX)
+
+    assert result == {
+        "total_count": 2,
+        "showing": 2,
+        "accounts": [
+            {"name": "Chase", "kind": "personal", "owner": "Alice"},
+            {"name": "Joint Checking", "kind": "joint", "owner": "Joint"},
+        ],
+    }
+
+
+@pytest.mark.asyncio
 async def test_get_transaction_history_happy_path() -> None:
     from datetime import UTC, datetime
 
@@ -863,6 +889,7 @@ async def test_get_reconciliation_report_concise() -> None:
         latest_transaction_month=(2026, 3),
         spending_transactions=[],
         category_kinds={},
+        shares={},
     )
     with patch(
         "src.application.chat.tool_executor.execute_use_case",
@@ -911,6 +938,7 @@ async def test_get_reconciliation_report_detailed_adds_breakdown_and_rows() -> N
         latest_transaction_month=(2026, 3),
         spending_transactions=txns,
         category_kinds={},
+        shares={},
     )
     with patch(
         "src.application.chat.tool_executor.execute_use_case",
@@ -960,6 +988,7 @@ async def test_get_reconciliation_report_largest_lists_spending_rows_only() -> N
             t for t in listed if t.category != "Credit Card Payment"
         ],
         category_kinds={"Credit Card Payment": "transfer"},
+        shares={},
     )
     with patch(
         "src.application.chat.tool_executor.execute_use_case",

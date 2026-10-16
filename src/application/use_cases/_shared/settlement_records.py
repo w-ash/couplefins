@@ -6,6 +6,10 @@ from uuid import UUID, uuid4
 
 from attrs import define, field
 
+from src.application.use_cases._shared.transaction_pipeline import (
+    NOT_A_SETTLEMENT_LEG,
+    reject_joint_rows,
+)
 from src.domain.entities.settlement import Settlement
 from src.domain.entities.settlement_portion import SettlementPortion
 from src.domain.entities.transaction import Transaction
@@ -45,8 +49,11 @@ def derive_direction_from_legs(
 
     A negative leg names its payer as the sender; a positive leg names its
     payer as the recipient. A single leg fills the missing side with the
-    other member of the couple. Contradictory legs raise ValidationError.
+    other member of the couple. Contradictory or joint legs raise
+    ValidationError.
     """
+    legs = list(legs)
+    reject_joint_rows(legs, NOT_A_SETTLEMENT_LEG)
     senders = {tx.payer_person_id for tx in legs if tx.amount < 0}
     recipients = {tx.payer_person_id for tx in legs if tx.amount > 0}
     if len(senders) > 1 or len(recipients) > 1 or (senders and senders == recipients):

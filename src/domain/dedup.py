@@ -11,12 +11,15 @@ from src.domain.formatting import field_str as _field_str
 
 @define(frozen=True, slots=True)
 class TransactionNaturalKey:
+    """A row's identity across imports. The account id names the owner too:
+    a personal account derives from its owner and label, a joint account
+    from its label alone, so both owners' exports of a joint row share a key."""
+
     date: date
     amount: Decimal
-    account: str
+    account_id: UUID
     original_statement: str
     occurrence: int
-    payer_person_id: UUID
 
 
 @define(frozen=True, slots=True)
@@ -51,10 +54,9 @@ def natural_key(tx: Transaction) -> TransactionNaturalKey:
     return TransactionNaturalKey(
         date=tx.original_date if tx.original_date is not None else tx.date,
         amount=tx.original_amount if tx.original_amount is not None else tx.amount,
-        account=tx.account,
+        account_id=tx.account_id,
         original_statement=tx.original_statement,
         occurrence=tx.occurrence,
-        payer_person_id=tx.payer_person_id,
     )
 
 
@@ -82,9 +84,11 @@ def find_removed_transactions(
     """Existing rows whose natural key no longer appears in the incoming CSV.
 
     Re-upload is a true replace: these rows were deleted (or re-keyed) in
-    Monarch and must be removed. The caller guarantees `existing` is scoped
-    to the uploader's own rows within the upload's date window — rows outside
-    that window are never removal candidates.
+    Monarch and must be removed. The caller scopes `existing` to the rows
+    the uploader owns in the upload's date window: their personal rows, and
+    the rows of a joint account the file names that their own uploads
+    imported. A partner's import of a joint row is never a removal
+    candidate, nor is any row outside that scope.
     """
     incoming_keys = {natural_key(tx) for tx in incoming}
     return [tx for tx in existing if natural_key(tx) not in incoming_keys]

@@ -3,9 +3,13 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from src.application.use_cases._shared.transaction_reads import TransactionShares
 from src.application.use_cases._shared.upload_status import UploadStatus
 from src.application.use_cases.get_reconciliation import GetReconciliationResult
+from src.domain.entities.category_group import GroupKind
 from src.domain.entities.reconciliation_period import ReconciliationPeriod
+from src.domain.entities.transaction import Transaction
+from src.domain.filters import is_joint_row
 from src.domain.reconciliation import PersonSummary, SettlementResult
 from src.interface.api.schemas.types import MoneyField
 
@@ -106,7 +110,8 @@ class TransactionResponse(BaseModel):
     amount: MoneyField
     notes: str
     tags: list[str]
-    payer_person_id: UUID
+    # None on a joint account's row (`is_joint`).
+    payer_person_id: UUID | None
     payer_percentage: int
     household: bool
     is_excluded: bool
@@ -117,6 +122,50 @@ class TransactionResponse(BaseModel):
     is_income: bool
     original_date: datetime.date | None
     original_amount: MoneyField | None
+    is_joint: bool
+    account_id: UUID
+    # Each person's percentage of the row, resolved (personal: payer and
+    # partner; joint: a deposit's depositor, else the override or 50/50).
+    # Empty on a transfer or income row other than a joint deposit.
+    shares: dict[UUID, int]
+    # Each person's amount of the row (|amount| split by `shares`, exact to the
+    # cent). Empty when `shares` is.
+    share_amounts: dict[UUID, MoneyField]
+    # Joint rows only: the hand-set override behind `shares`, and whose
+    # deposit an incoming row is.
+    owner_shares: dict[UUID, int] | None
+    depositor_person_id: UUID | None
+
+    @classmethod
+    def from_domain(
+        cls, tx: Transaction, kind: GroupKind | None, shares: TransactionShares
+    ) -> TransactionResponse:
+        """The row as listed; `kind` is its category's group kind, if mapped."""
+        return cls(
+            id=tx.id,
+            date=tx.date,
+            merchant=tx.merchant,
+            category=tx.category,
+            account=tx.account,
+            amount=tx.amount,
+            notes=tx.notes,
+            tags=list(tx.tags),
+            payer_person_id=tx.payer_person_id,
+            payer_percentage=tx.payer_percentage,
+            household=tx.household,
+            is_excluded=tx.is_excluded,
+            is_settlement=tx.is_settlement,
+            is_transfer=kind == "transfer",
+            is_income=kind == "income",
+            original_date=tx.original_date,
+            original_amount=tx.original_amount,
+            is_joint=is_joint_row(tx),
+            account_id=tx.account_id,
+            shares=dict(shares.percentages),
+            share_amounts=dict(shares.amounts),
+            owner_shares=None if tx.owner_shares is None else dict(tx.owner_shares),
+            depositor_person_id=tx.depositor_person_id,
+        )
 
 
 class FinalizePeriodRequest(BaseModel):
@@ -168,7 +217,6 @@ class ReconciliationResponse(BaseModel):
     @classmethod
     def from_result(cls, result: GetReconciliationResult) -> ReconciliationResponse:
         summary = result.summary
-
         return cls(
             start_date=summary.start_date,
             end_date=summary.end_date,
@@ -206,24 +254,8 @@ class ReconciliationResponse(BaseModel):
             ],
             transaction_count=summary.transaction_count,
             transactions=[
-                TransactionResponse(
-                    id=tx.id,
-                    date=tx.date,
-                    merchant=tx.merchant,
-                    category=tx.category,
-                    account=tx.account,
-                    amount=tx.amount,
-                    notes=tx.notes,
-                    tags=list(tx.tags),
-                    payer_person_id=tx.payer_person_id,
-                    payer_percentage=tx.payer_percentage,
-                    household=tx.household,
-                    is_excluded=tx.is_excluded,
-                    is_settlement=tx.is_settlement,
-                    is_transfer=result.category_kinds.get(tx.category) == "transfer",
-                    is_income=result.category_kinds.get(tx.category) == "income",
-                    original_date=tx.original_date,
-                    original_amount=tx.original_amount,
+                TransactionResponse.from_domain(
+                    tx, result.category_kinds.get(tx.category), result.shares[tx.id]
                 )
                 for tx in result.transactions
             ],

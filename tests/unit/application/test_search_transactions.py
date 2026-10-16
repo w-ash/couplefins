@@ -9,6 +9,8 @@ from src.application.use_cases.search_transactions import (
 )
 from src.domain.exceptions import ValidationError
 from tests.fixtures.factories import (
+    ALICE,
+    BOB,
     make_category,
     make_transaction,
     make_transfer_group,
@@ -53,6 +55,7 @@ async def test_household_scope_uses_household_fetch() -> None:
 @pytest.mark.asyncio
 async def test_personal_scope_reads_the_window_and_keeps_my_share() -> None:
     uow = make_mock_uow()
+    uow.persons.get_all.return_value = [ALICE, BOB]
     uow.transactions.get_by_date_range.return_value = [
         make_transaction(
             merchant="Whole Foods", payer_person_id=ALICE_ID, household=False
@@ -75,6 +78,7 @@ async def test_personal_scope_is_every_row_where_my_share_is_positive() -> None:
     what their partner spotted for them; a row where their share is zero is
     not theirs (matches the Transactions page and Insights "My Spending")."""
     uow = make_mock_uow()
+    uow.persons.get_all.return_value = [ALICE, BOB]
     uow.transactions.get_by_date_range.return_value = [
         make_transaction(merchant="Rent", payer_person_id=ALICE_ID, household=True),
         make_transaction(merchant="Hobby", payer_person_id=ALICE_ID, household=False),

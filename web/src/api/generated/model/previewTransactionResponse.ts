@@ -12,4 +12,5 @@ export interface PreviewTransactionResponse {
   amount: number;
   household: boolean;
   payer_percentage: number;
+  is_joint: boolean;
 }

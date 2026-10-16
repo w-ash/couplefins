@@ -60,7 +60,7 @@ class LinkedTransactionResponse(BaseModel):
     date: datetime.date
     merchant: str
     amount: MoneyField
-    payer_person_id: UUID
+    payer_person_id: UUID | None
 
     @classmethod
     def from_domain(cls, tx: Transaction) -> LinkedTransactionResponse:
@@ -143,7 +143,7 @@ class SettlementCandidateResponse(BaseModel):
     date: datetime.date
     merchant: str
     amount: MoneyField
-    payer_person_id: UUID
+    payer_person_id: UUID | None
     category: str
     score: int
     match_reasons: list[str]

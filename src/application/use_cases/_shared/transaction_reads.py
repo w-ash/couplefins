@@ -6,19 +6,26 @@ cannot forget it. A grep gate in tests/unit/application/test_transaction_reads.p
 forbids list reads on `uow.transactions` anywhere else under src/application.
 """
 
+from collections.abc import Iterable, Mapping
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from uuid import UUID
 
 from attrs import define
+from structlog.stdlib import get_logger
 
 from src.application.use_cases._shared.command_validators import Scope
 from src.application.use_cases._shared.reconciliation_context import (
     ReconciliationContext,
 )
+from src.domain.entities.category_group import is_spending_kind
 from src.domain.entities.transaction import Transaction
-from src.domain.filters import exclude_non_spending
-from src.domain.person_spending import compute_person_share
+from src.domain.exceptions import InvariantViolationError
+from src.domain.filters import depositor_of, exclude_non_spending
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
+from src.domain.splits import owner_shares, person_share, share_amounts
+
+logger = get_logger()
 
 type DateWindow = tuple[date, date]
 
@@ -89,7 +96,9 @@ async def fetch_scoped_rows(
     start, end = window
     if scope == "personal" and person_id is not None:
         window_txs = await uow.transactions.get_by_date_range(start, end, tags=tags)
-        listed = [tx for tx in window_txs if compute_person_share(tx, person_id) > 0]
+        listed = [
+            tx for tx in window_txs if person_share(tx, person_id, ctx.person_ids) > 0
+        ]
     elif scope == "all" and person_id is not None:
         household_txs = await uow.transactions.get_household_by_date_range(
             start, end, tags=tags
@@ -152,8 +161,75 @@ async def fetch_listed_rows(
     *,
     tags: tuple[str, ...] | None = None,
 ) -> list[Transaction]:
-    """Every row in a window, transfers included. For the All list and
-    settlement-candidate search (Venmo legs live in the Transfer group) —
-    takes no context so it cannot be "fixed" by accident."""
+    """Every row in a window, transfers included. For the All list — takes
+    no context so it cannot be "fixed" by accident."""
     start, end = window
     return await uow.transactions.get_by_date_range(start, end, tags=tags)
+
+
+async def fetch_payer_rows(
+    uow: UnitOfWorkProtocol, window: DateWindow
+) -> list[Transaction]:
+    """Every row with a payer in a window, transfers included. For
+    settlement-candidate search: Venmo legs live in the Transfer group, and
+    a joint account's row is never a leg."""
+    start, end = window
+    return await uow.transactions.get_by_date_range(start, end, payer_only=True)
+
+
+async def fetch_account_rows(
+    uow: UnitOfWorkProtocol, account_ids: list[UUID]
+) -> list[Transaction]:
+    """Every row in the given accounts, at any date, transfers included. For
+    moving rows between accounts, which needs all of them."""
+    return await uow.transactions.get_by_account_ids(account_ids)
+
+
+async def fetch_joint_rows(
+    uow: UnitOfWorkProtocol, joint_account_ids: list[UUID], limit: int
+) -> list[Transaction]:
+    """The joint accounts' newest `limit` rows, newest first. Transfers stay:
+    the House activity list shows them as such."""
+    return await uow.transactions.get_recent_by_account_ids(joint_account_ids, limit)
+
+
+@define(frozen=True, slots=True)
+class TransactionShares:
+    """One row's split: each person's percentage and unsigned amount.
+
+    Empty when the row has none: a transfer- or income-kind row (unless it
+    is a joint deposit, which is its depositor's), or a row whose payer or
+    owners are not the couple.
+    """
+
+    percentages: Mapping[UUID, int]
+    amounts: Mapping[UUID, Decimal]
+
+
+NO_SHARES = TransactionShares(percentages={}, amounts={})
+
+
+def row_shares(tx: Transaction, ctx: ReconciliationContext) -> TransactionShares:
+    """The row's split, or NO_SHARES. A row whose payer or owners are not
+    the couple (stale data) logs a warning instead of failing the read."""
+    kind = ctx.category_kinds.get(tx.category)
+    if kind is not None and not is_spending_kind(kind) and depositor_of(tx) is None:
+        return NO_SHARES
+    person_ids = ctx.person_ids
+    try:
+        return TransactionShares(
+            percentages=owner_shares(tx, person_ids),
+            amounts=share_amounts(tx, person_ids),
+        )
+    except InvariantViolationError as e:
+        logger.warning(
+            "transaction_shares_unresolved", transaction_id=str(tx.id), error=str(e)
+        )
+        return NO_SHARES
+
+
+def with_shares(
+    rows: Iterable[Transaction], ctx: ReconciliationContext
+) -> dict[UUID, TransactionShares]:
+    """Each row's split, by row id."""
+    return {tx.id: row_shares(tx, ctx) for tx in rows}

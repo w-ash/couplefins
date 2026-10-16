@@ -12,6 +12,8 @@ import {
   isInSpottedScope,
   isSettlementLinked,
   isSpendingRow,
+  isUnassignedDeposit,
+  myPercentage,
   previewScopeKind,
   type SortState,
   sortList,
@@ -61,7 +63,7 @@ describe("cycleSortState", () => {
 // ─── sortList ───
 
 function makeTx(overrides: Partial<TransactionResponse>): TransactionResponse {
-  return {
+  const tx: TransactionResponse = {
     id: "1",
     date: "2025-01-15",
     merchant: "Grocery Store",
@@ -79,8 +81,42 @@ function makeTx(overrides: Partial<TransactionResponse>): TransactionResponse {
     is_income: false,
     original_date: null,
     original_amount: null,
+    is_joint: false,
+    account_id: "a1",
+    shares: {},
+    share_amounts: {},
+    owner_shares: null,
+    depositor_person_id: null,
     ...overrides,
   };
+  // Mirror the server: per-person shares follow the payer split unless a
+  // test pins them.
+  if (!overrides.shares && tx.payer_person_id) {
+    const other = tx.payer_person_id === "p1" ? "p2" : "p1";
+    tx.shares = {
+      [tx.payer_person_id]: tx.payer_percentage,
+      [other]: 100 - tx.payer_percentage,
+    };
+  }
+  // Mirror the server: the first owner (the payer of a personal row, p1 of a
+  // joint row) takes the half-up cent; the other takes the remainder.
+  if (!overrides.share_amounts) {
+    const ids = Object.keys(tx.shares);
+    const first =
+      tx.is_joint || !tx.payer_person_id ? ids[0] : tx.payer_person_id;
+    const second = ids.find((id) => id !== first);
+    if (first && second) {
+      const cents = Math.round(Math.abs(tx.amount) * 100);
+      const firstCents = Math.floor(
+        (cents * (tx.shares[first] ?? 0) + 50) / 100,
+      );
+      tx.share_amounts = {
+        [first]: firstCents / 100,
+        [second]: (cents - firstCents) / 100,
+      };
+    }
+  }
+  return tx;
 }
 
 describe("sortList", () => {
@@ -845,5 +881,83 @@ describe("income rows", () => {
     expect(buckets.income).toEqual({ count: 1, amount: 5000 });
     expect(buckets.household.count).toBe(1);
     expect(buckets.personal.count).toBe(0);
+  });
+});
+
+// ─── joint accounts ───
+
+describe("myPercentage", () => {
+  // The formula this replaced: split when I paid, the remainder otherwise.
+  const oldFormula = (tx: TransactionResponse, me: string) =>
+    tx.payer_person_id === me ? tx.payer_percentage : 100 - tx.payer_percentage;
+
+  it("equals the payer formula on personal rows", () => {
+    for (const payer of ["p1", "p2"]) {
+      for (const pct of [0, 30, 50, 100]) {
+        const tx = makeTx({ payer_person_id: payer, payer_percentage: pct });
+        for (const me of ["p1", "p2"]) {
+          expect(myPercentage(tx, me)).toBe(oldFormula(tx, me));
+        }
+      }
+    }
+  });
+
+  it("reads the server-resolved shares on a joint row", () => {
+    const tx = makeTx({
+      is_joint: true,
+      payer_person_id: null,
+      shares: { p1: 70, p2: 30 },
+    });
+    expect(myPercentage(tx, "p1")).toBe(70);
+    expect(myPercentage(tx, "p2")).toBe(30);
+    expect(isInPersonalScope(tx, "p2")).toBe(true);
+  });
+
+  it("is zero when the row has no shares", () => {
+    expect(myPercentage(makeTx({ shares: {} }), "p1")).toBe(0);
+  });
+});
+
+describe("joint rows and scopes", () => {
+  it("never counts a joint row as spotted", () => {
+    const tx = makeTx({
+      is_joint: true,
+      payer_person_id: null,
+      payer_percentage: 0,
+      shares: { p1: 50, p2: 50 },
+    });
+    expect(isInSpottedScope(tx, "p1")).toBe(false);
+  });
+
+  it("classifies a joint preview row as joint", () => {
+    expect(
+      previewScopeKind({
+        household: true,
+        payer_percentage: 0,
+        is_joint: true,
+      }),
+    ).toBe("joint");
+  });
+});
+
+describe("isUnassignedDeposit", () => {
+  const deposit = makeTx({
+    is_joint: true,
+    payer_person_id: null,
+    amount: 500,
+    depositor_person_id: null,
+  });
+
+  it("matches an unattributed joint credit", () => {
+    expect(isUnassignedDeposit(deposit)).toBe(true);
+  });
+
+  it("skips assigned, excluded, non-credit, and non-joint rows", () => {
+    expect(isUnassignedDeposit({ ...deposit, depositor_person_id: "p1" })).toBe(
+      false,
+    );
+    expect(isUnassignedDeposit({ ...deposit, is_excluded: true })).toBe(false);
+    expect(isUnassignedDeposit({ ...deposit, amount: -20 })).toBe(false);
+    expect(isUnassignedDeposit({ ...deposit, is_joint: false })).toBe(false);
   });
 });

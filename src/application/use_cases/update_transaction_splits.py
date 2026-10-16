@@ -5,11 +5,14 @@ from attrs import define, evolve
 
 from src.domain.exceptions import ValidationError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
+from src.domain.split_rules import check_payer_percentage
 
+from ._shared.command_validators import as_validation_error
 from ._shared.transaction_pipeline import (
+    NO_PAYER_SPLIT,
     compute_edit,
     fetch_and_validate,
-    validate_payer_percentage,
+    reject_joint_rows,
 )
 
 
@@ -41,11 +44,12 @@ class UpdateTransactionSplitsUseCase:
             raise ValidationError("At least one split entry is required")
 
         for entry in command.splits:
-            validate_payer_percentage(entry.payer_percentage)
+            as_validation_error(check_payer_percentage, entry.payer_percentage)
 
         async with uow:
             ids = [entry.transaction_id for entry in command.splits]
             transactions = await fetch_and_validate(uow, ids)
+            reject_joint_rows(transactions.values(), NO_PAYER_SPLIT)
 
             now = datetime.now(UTC)
             edits = [

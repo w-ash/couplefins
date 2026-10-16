@@ -7,7 +7,8 @@ Budget, Insights, and Dashboard all pass a lens into the same functions, so
   `include_personal` categories, attributed to their payer).
 - `PersonalLens`: one person's signed share; a row is theirs only when that
   share is nonzero, so a partner-paid `household, s100` row (their own
-  concert ticket) is household-only.
+  concert ticket) is household-only. A joint account's row is each owner's
+  by their share of it.
 - `SplitLens`: reconcile()'s settlement universe — split rows, household or
   not, at full amount. Not a page lens.
 - `AllRowsLens`: the Dashboard's "all" scope — every reconciliation-relevant
@@ -24,7 +25,7 @@ from decimal import Decimal
 from typing import Literal, Protocol
 from uuid import UUID
 
-from attrs import define
+from attrs import define, field
 
 from src.domain.categories import (
     CategoryBreakdown,
@@ -33,22 +34,37 @@ from src.domain.categories import (
 )
 from src.domain.constants import UNCATEGORIZED_GROUP_NAME
 from src.domain.entities.transaction import Transaction
-from src.domain.filters import is_reconciliation_relevant, is_split_relevant
-from src.domain.person_spending import compute_person_share, signed_person_share
+from src.domain.filters import (
+    is_joint_row,
+    is_reconciliation_relevant,
+    is_split_relevant,
+    payer_of,
+)
+from src.domain.person_spending import signed_person_share
+from src.domain.splits import person_share
 
 # Where a row's money came from, as the spending-flow chart draws it. Full-
 # amount lenses answer with the payer; a person's lens answers with the kind
-# of claim they have on the row.
-type FlowSourceKind = Literal["payer", "household_share", "personal", "spotted_for_me"]
+# of claim they have on the row. Every lens answers `joint` for a joint
+# account's row, which has no payer.
+type FlowSourceKind = Literal[
+    "payer", "household_share", "personal", "spotted_for_me", "joint"
+]
 
 
 @define(frozen=True, slots=True)
 class FlowSource:
     kind: FlowSourceKind
-    person_id: UUID
+    # None for a joint row.
+    person_id: UUID | None
+
+
+_JOINT_SOURCE = FlowSource("joint", None)
 
 
 def _paid_by(tx: Transaction) -> FlowSource:
+    if is_joint_row(tx):
+        return _JOINT_SOURCE
     return FlowSource("payer", tx.payer_person_id)
 
 
@@ -62,7 +78,8 @@ class SpendingLens(Protocol):
         ...
 
     def personal_owner(self, tx: Transaction, /) -> UUID | None:
-        """Whose personal spending a non-household row is; None = unattributed."""
+        """Whose personal spending a non-household row is; None = unattributed
+        (always for a joint row under a full-amount lens: it has no payer)."""
         ...
 
     def flow_source(self, tx: Transaction, /) -> FlowSource:
@@ -98,32 +115,39 @@ class HouseholdLens:
 @define(frozen=True, slots=True)
 class PersonalLens:
     """One person's share. A row is theirs only when that share is nonzero:
-    their share of household splits, their own personal rows, and what their
-    partner spotted for them."""
+    their share of household splits, their own personal rows, what their
+    partner spotted for them, and their share of joint rows. `person_ids`
+    is the couple, which a split needs (see `splits.owner_shares`); a split
+    raises InvariantViolationError unless it names exactly two persons."""
 
     person_id: UUID
+    person_ids: tuple[UUID, ...] = field(converter=tuple)
 
     def is_relevant(self, tx: Transaction) -> bool:
         return (
             is_reconciliation_relevant(tx)
-            and compute_person_share(tx, self.person_id) != 0
+            and person_share(tx, self.person_id, self.person_ids) != 0
         )
 
     def contribution(self, tx: Transaction) -> Decimal:
-        return signed_person_share(tx, self.person_id)
+        return signed_person_share(tx, self.person_id, person_ids=self.person_ids)
 
     def personal_owner(self, _tx: Transaction, /) -> UUID | None:
         return self.person_id
 
     def flow_source(self, tx: Transaction) -> FlowSource:
-        """A household row is my share of the couple's spending; a row I paid
-        is personal; a row my partner paid that I owe part of is theirs to
-        settle — "spotted for me" (a personal split lands here too)."""
+        """A joint row is my share of what the joint account paid; a household
+        row is my share of the couple's spending; a row I paid is personal; a
+        row my partner paid that I owe part of is theirs to settle — "spotted
+        for me" (a personal split lands here too)."""
+        if is_joint_row(tx):
+            return _JOINT_SOURCE
+        payer = payer_of(tx)
         if tx.household:
-            return FlowSource("household_share", tx.payer_person_id)
-        if tx.payer_person_id == self.person_id:
-            return FlowSource("personal", tx.payer_person_id)
-        return FlowSource("spotted_for_me", tx.payer_person_id)
+            return FlowSource("household_share", payer)
+        if payer == self.person_id:
+            return FlowSource("personal", payer)
+        return FlowSource("spotted_for_me", payer)
 
 
 @define(frozen=True, slots=True)

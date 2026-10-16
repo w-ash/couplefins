@@ -3,11 +3,9 @@ from uuid import UUID
 
 import pytest
 
-from src.domain.person_spending import (
-    compute_person_share,
-    signed_person_share,
-)
-from tests.fixtures.factories import ALICE, BOB, make_transaction
+from src.domain.person_spending import signed_person_share
+from src.domain.splits import person_share
+from tests.fixtures.factories import ALICE, BOB, COUPLE_IDS, make_transaction
 
 
 @pytest.mark.parametrize(
@@ -35,18 +33,18 @@ def test_person_share(
         payer_percentage=payer_percentage,
         payer_person_id=ALICE.id,
     )
-    assert compute_person_share(tx, viewer) == Decimal(expected)
+    assert person_share(tx, viewer, COUPLE_IDS) == Decimal(expected)
 
 
 def test_signed_share_expense_is_positive() -> None:
     tx = make_transaction(
         amount=Decimal(-100), payer_percentage=50, payer_person_id=ALICE.id
     )
-    assert signed_person_share(tx, BOB.id) == Decimal("50.00")
+    assert signed_person_share(tx, BOB.id, person_ids=COUPLE_IDS) == Decimal("50.00")
 
 
 def test_signed_share_refund_is_negative() -> None:
     tx = make_transaction(
         amount=Decimal(100), payer_percentage=50, payer_person_id=ALICE.id
     )
-    assert signed_person_share(tx, ALICE.id) == Decimal("-50.00")
+    assert signed_person_share(tx, ALICE.id, person_ids=COUPLE_IDS) == Decimal("-50.00")

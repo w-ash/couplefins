@@ -14,6 +14,7 @@ from src.application.use_cases._shared.transactions import (
 )
 from src.domain.dedup import FieldDiff
 from src.domain.entities.transaction import Transaction
+from src.domain.filters import is_joint_row
 from src.domain.parsing.importer import Importer
 from src.domain.parsing.monarch_csv import MonarchCsvImporter
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
@@ -37,6 +38,7 @@ class PreviewTransaction:
     amount: Decimal
     household: bool
     payer_percentage: int
+    is_joint: bool
 
 
 @define(frozen=True, slots=True)
@@ -65,6 +67,7 @@ def _to_preview(tx: Transaction) -> PreviewTransaction:
         amount=tx.amount,
         household=tx.household,
         payer_percentage=tx.payer_percentage,
+        is_joint=is_joint_row(tx),
     )
 
 
@@ -80,8 +83,14 @@ class PreviewCsvUseCase:
                 uow.persons.get_by_id, command.person_id, "Person"
             )
 
+            accounts = await uow.accounts.get_all()
             parsed = await parse_file(
-                uow, self.importer, command.data, command.person_id, _SENTINEL_UPLOAD_ID
+                uow,
+                self.importer,
+                command.data,
+                person_id=command.person_id,
+                upload_id=_SENTINEL_UPLOAD_ID,
+                accounts=accounts,
             )
             incoming = parsed.transactions
 
@@ -101,7 +110,7 @@ class PreviewCsvUseCase:
                 )
 
             classified, existing, removed = await classify_against_existing(
-                incoming, command.person_id, uow
+                incoming, command.person_id, accounts, uow
             )
             existing_by_id = {e.id: e for e in existing}
 

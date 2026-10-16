@@ -2,6 +2,7 @@ from datetime import date
 from decimal import Decimal
 import uuid
 
+from attrs import evolve
 import pytest
 
 from src.domain.entities.category import Category
@@ -717,3 +718,31 @@ def test_compute_gross_settlement_empty_is_zero_amount() -> None:
     result = compute_gross_settlement([], [alice.id, bob.id])
     assert result is not None
     assert result.amount == Decimal(0)
+
+
+def test_joint_rows_never_enter_settlement() -> None:
+    alice, bob = _alice_bob()
+    split = make_transaction(
+        amount=Decimal("-100.00"), payer_person_id=alice.id, payer_percentage=50
+    )
+    joint = make_transaction(joint=True, amount=Decimal("-500.00"))
+    joint_split = evolve(joint, id=uuid.uuid4(), payer_percentage=50)
+
+    result = reconcile(
+        [split, joint, joint_split],
+        [alice, bob],
+        [],
+        [],
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+    )
+
+    assert result.split_transactions == [split]
+    assert result.total_household_spending == Decimal("100.00")
+    assert result.settlement is not None
+    assert result.settlement.amount == Decimal("50.00")
+    assert compute_gross_settlement([joint, joint_split], [alice.id, bob.id]) == (
+        SettlementResult(
+            amount=Decimal(0), from_person_id=alice.id, to_person_id=bob.id
+        )
+    )

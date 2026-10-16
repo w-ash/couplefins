@@ -10,13 +10,16 @@ import { amountCellClass, cellClass, tableHeaderRowClass } from "@/lib/layout";
 export function PutInSection({
   putIn,
   owners,
+  example = false,
 }: {
+  example?: boolean;
   putIn: PutInSectionResponse;
   owners: Owner[];
 }) {
   return (
     <Card as="section" aria-labelledby="house-put-in">
       <SectionHeader
+        example={example}
         id="house-put-in"
         title="Put in"
         description="What each owner has put into the house to date."

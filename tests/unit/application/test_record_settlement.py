@@ -15,6 +15,8 @@ from src.domain.exceptions import (
     ValidationError,
 )
 from tests.fixtures.factories import (
+    ALICE,
+    BOB,
     make_person,
     make_reconciliation_period,
     make_transaction,
@@ -388,3 +390,22 @@ async def test_amount_quantized_to_cents() -> None:
 
     result = await RecordSettlementUseCase().execute(command, uow)
     assert result.settlement.amount == Decimal("20.37")
+
+
+async def test_a_joint_account_row_cannot_be_a_leg() -> None:
+    uow = make_mock_uow()
+    uow.persons.get_by_ids.return_value = [ALICE, BOB]
+    joint = make_transaction(joint=True)
+    uow.transactions.get_by_ids.return_value = [joint]
+
+    command = RecordSettlementCommand(
+        amount=Decimal("50.00"),
+        from_person_id=ALICE.id,
+        to_person_id=BOB.id,
+        method="Venmo",
+        linked_transaction_ids=[joint.id],
+    )
+    with pytest.raises(ValidationError, match="joint-account row"):
+        await RecordSettlementUseCase().execute(command, uow)
+
+    uow.settlements.save.assert_not_called()

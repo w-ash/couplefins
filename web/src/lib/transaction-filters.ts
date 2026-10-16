@@ -23,15 +23,13 @@ export function isInHouseholdScope(tx: TransactionResponse): boolean {
   return tx.household && !isNotSpending(tx);
 }
 
-// The current user's share percentage of a row: their split when they paid,
-// the remainder when their partner did.
+// The current user's share percentage of a row, as the server resolved it
+// (`shares` is keyed by person id; empty on transfer and income rows).
 export function myPercentage(
   tx: TransactionResponse,
   currentPersonId: string,
 ): number {
-  return tx.payer_person_id === currentPersonId
-    ? tx.payer_percentage
-    : 100 - tx.payer_percentage;
+  return tx.shares[currentPersonId] ?? 0;
 }
 
 // The current user's signed share of a row's amount (the same sign convention
@@ -69,7 +67,47 @@ export function isInSpottedScope(
 ): boolean {
   if (!currentPersonId) return false;
   if (isNotSpending(tx)) return false;
-  return tx.payer_person_id === currentPersonId && tx.payer_percentage === 0;
+  return (
+    tx.payer_person_id !== null &&
+    tx.payer_person_id === currentPersonId &&
+    tx.payer_percentage === 0
+  );
+}
+
+/** A credit into a joint account that no one has been credited with yet. */
+export function isUnassignedDeposit(tx: TransactionResponse): boolean {
+  return (
+    tx.is_joint &&
+    tx.amount > 0 &&
+    tx.depositor_person_id === null &&
+    !tx.is_excluded
+  );
+}
+
+/** Payer-filter value that matches joint rows (they have no payer). */
+const JOINT_PAYER = "joint";
+
+/** Payer-filter key for a row's payer; joint rows (no payer) share one key. */
+export function payerKey(isJoint: boolean, personId: string | null): string {
+  return isJoint ? JOINT_PAYER : (personId ?? "");
+}
+
+export function txPayerKey(tx: TransactionResponse): string {
+  return payerKey(tx.is_joint, tx.payer_person_id);
+}
+
+/** Payer-filter choices: every person plus the joint pseudo-payer. */
+export function payerFilterEntries(
+  persons: Array<{ id: string; name: string }>,
+): Array<{ id: string; name: string }> {
+  return [...persons, { id: JOINT_PAYER, name: "Joint" }];
+}
+
+export function payerFilterLabel(
+  id: string,
+  names: Map<string, string>,
+): string {
+  return id === JOINT_PAYER ? "Joint" : (names.get(id) ?? id);
 }
 
 export function isSettlementLinked(tx: TransactionResponse): boolean {
@@ -91,12 +129,16 @@ export function isSpendingRow(tx: TransactionResponse): boolean {
 // Upload-preview classification. Preview rows are always paid by the
 // uploader, so payer_percentage === 0 means the partner owes the full
 // amount back (spotted).
-export type PreviewScopeKind = "household" | "personal" | "spotted";
+export type PreviewScopeKind = "household" | "personal" | "spotted" | "joint";
 
-export function previewScopeKind(tx: {
+export interface PreviewScopeInput {
   household: boolean;
   payer_percentage: number;
-}): PreviewScopeKind {
+  is_joint?: boolean;
+}
+
+export function previewScopeKind(tx: PreviewScopeInput): PreviewScopeKind {
+  if (tx.is_joint) return "joint";
   if (tx.payer_percentage === 0) return "spotted";
   return tx.household ? "household" : "personal";
 }
@@ -296,6 +338,7 @@ interface FilterState {
   hasNotes: boolean;
   discuss: boolean;
   settlement: boolean;
+  unassigned: boolean;
   sort: SortState;
 }
 
@@ -312,6 +355,7 @@ export const TX_FILTER_PARAMS = {
   hasNotes: "hasNotes",
   discuss: "discuss",
   settlement: "settlement",
+  unassigned: "unassigned",
   sort: "sort",
 } as const;
 
@@ -369,6 +413,7 @@ export function useTransactionFilters(
       hasNotes: searchParams.get(TX_FILTER_PARAMS.hasNotes) === "1",
       discuss: searchParams.get(TX_FILTER_PARAMS.discuss) === "1",
       settlement: searchParams.get(TX_FILTER_PARAMS.settlement) === "1",
+      unassigned: searchParams.get(TX_FILTER_PARAMS.unassigned) === "1",
       sort: parseSort(searchParams.get(TX_FILTER_PARAMS.sort)),
     };
   }, [searchParams]);
@@ -411,6 +456,8 @@ export function useTransactionFilters(
             setFlag(TX_FILTER_PARAMS.discuss, updates.discuss ?? false);
           if ("settlement" in updates)
             setFlag(TX_FILTER_PARAMS.settlement, updates.settlement ?? false);
+          if ("unassigned" in updates)
+            setFlag(TX_FILTER_PARAMS.unassigned, updates.unassigned ?? false);
           if ("sort" in updates)
             setStr(
               TX_FILTER_PARAMS.sort,
@@ -471,6 +518,11 @@ export function useTransactionFilters(
     [setFilter],
   );
 
+  const setUnassigned = useCallback(
+    (v: boolean) => setFilter({ unassigned: v }),
+    [setFilter],
+  );
+
   const setSort = useCallback(
     (s: SortState) => setFilter({ sort: s }),
     [setFilter],
@@ -488,6 +540,7 @@ export function useTransactionFilters(
       hasNotes: false,
       discuss: false,
       settlement: false,
+      unassigned: false,
       sort: DEFAULT_SORT,
     });
   }, [setFilter]);
@@ -526,7 +579,7 @@ export function useTransactionFilters(
     // Payer filter (OR within group)
     if (state.payers.length > 0) {
       const payerSet = new Set(state.payers);
-      result = result.filter((tx) => payerSet.has(tx.payer_person_id));
+      result = result.filter((tx) => payerSet.has(txPayerKey(tx)));
     }
 
     // Category filter (OR within group)
@@ -551,6 +604,9 @@ export function useTransactionFilters(
     if (state.settlement) {
       result = result.filter((tx) => isSettlementLinked(tx));
     }
+    if (state.unassigned) {
+      result = result.filter((tx) => isUnassignedDeposit(tx));
+    }
 
     // Amount range (absolute value)
     const { minAmount, maxAmount } = state;
@@ -565,21 +621,25 @@ export function useTransactionFilters(
     return sortList(result, state.sort, categoryGroups);
   }, [transactions, state, categoryGroups, currentPersonId]);
 
-  const { notesCount, discussCount, settlementCount } = useMemo(() => {
-    let notes = 0;
-    let discuss = 0;
-    let settlement = 0;
-    for (const tx of transactions) {
-      if (tx.notes !== "") notes++;
-      if (hasDiscussTag(tx)) discuss++;
-      if (isSettlementLinked(tx)) settlement++;
-    }
-    return {
-      notesCount: notes,
-      discussCount: discuss,
-      settlementCount: settlement,
-    };
-  }, [transactions]);
+  const { notesCount, discussCount, settlementCount, unassignedCount } =
+    useMemo(() => {
+      let notes = 0;
+      let discuss = 0;
+      let settlement = 0;
+      let unassigned = 0;
+      for (const tx of transactions) {
+        if (tx.notes !== "") notes++;
+        if (hasDiscussTag(tx)) discuss++;
+        if (isSettlementLinked(tx)) settlement++;
+        if (isUnassignedDeposit(tx)) unassigned++;
+      }
+      return {
+        notesCount: notes,
+        discussCount: discuss,
+        settlementCount: settlement,
+        unassignedCount: unassigned,
+      };
+    }, [transactions]);
 
   const scopeCounts = useMemo(
     () => computeScopeCounts(transactions, currentPersonId),
@@ -595,7 +655,8 @@ export function useTransactionFilters(
     (state.minAmount != null || state.maxAmount != null ? 1 : 0) +
     (state.hasNotes ? 1 : 0) +
     (state.discuss ? 1 : 0) +
-    (state.settlement ? 1 : 0);
+    (state.settlement ? 1 : 0) +
+    (state.unassigned ? 1 : 0);
 
   return {
     filtered,
@@ -610,10 +671,12 @@ export function useTransactionFilters(
     hasNotes: state.hasNotes,
     discuss: state.discuss,
     settlement: state.settlement,
+    unassigned: state.unassigned,
     sort: state.sort,
     notesCount,
     discussCount,
     settlementCount,
+    unassignedCount,
     scopeCounts,
     setScope,
     setQuery,
@@ -624,6 +687,7 @@ export function useTransactionFilters(
     setHasNotes,
     setDiscuss,
     setSettlement,
+    setUnassigned,
     setSort,
     clearAll,
     activeFilterCount,

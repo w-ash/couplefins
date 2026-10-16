@@ -36,6 +36,7 @@ describe("sourceLabel", () => {
     );
     expect(sourceLabel("personal", ALICE.id, ctx)).toBe("My personal");
     expect(sourceLabel("spotted_for_me", BOB.id, ctx)).toBe("Bob paid for me");
+    expect(sourceLabel("joint", null, ctx)).toBe("Joint accounts");
   });
 });
 
@@ -92,6 +93,25 @@ describe("buildSankeyData", () => {
     expect(color("Bob paid")).toBe("var(--person-1)");
     expect(color("Dining Out")).toBe("var(--chart-0)");
     expect(color("Flights")).toBe("var(--chart-1)");
+  });
+
+  it("draws a joint source as one neutral node linked to joint rows", () => {
+    const cells = [
+      cell({ source_kind: "joint", source_person_id: null, amount: 80 }),
+      cell({
+        source_kind: "joint",
+        source_person_id: null,
+        category: "Groceries",
+        amount: 40,
+      }),
+      cell({ amount: 60 }),
+    ];
+    const { nodes } = buildSankeyData(cells, ctx);
+    const joint = nodes.filter((n) => n.name === "Joint accounts");
+    expect(joint).toHaveLength(1);
+    expect(joint[0]?.amount).toBe(120);
+    expect(joint[0]?.color).toBe("var(--color-muted-foreground)");
+    expect(joint[0]?.link.payerId).toBe("joint");
   });
 
   it("folds the long tail of a group into Everything else", () => {

@@ -13,9 +13,10 @@ from src.domain.constants import (
     SharedTags,
     SplitDefaults,
 )
-from src.domain.entities.account import personal_account_id
+from src.domain.entities.account import joint_account_id, personal_account_id
 from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import ValidationError
+from src.domain.joint import as_joint_row
 from src.domain.parsing.importer import ImportContext, ParseResult
 
 REQUIRED_COLUMNS = {
@@ -76,13 +77,14 @@ def _parse_amount_and_date(
     return amount, tx_date
 
 
-def parse_monarch_csv(
-    csv_text: str,
-    payer_person_id: uuid.UUID,
-    upload_id: uuid.UUID,
-    *,
-    person_names: frozenset[str] = frozenset(),
-) -> ParseResult:
+def parse_monarch_csv(csv_text: str, ctx: ImportContext) -> ParseResult:
+    """Parse a Monarch export into the uploader's transactions.
+
+    A tag naming the uploader's partner marks a row spotted. A row whose
+    `Account` label is in `ctx.joint_labels` belongs to that joint account
+    (`as_joint_row`): it has no payer, is household spending, and is never
+    split or a settlement, whatever its tags.
+    """
     reader = csv.DictReader(io.StringIO(csv_text))
     _validate_headers(reader)
 
@@ -106,7 +108,7 @@ def parse_monarch_csv(
             household = False
             payer_percentage = 100
         else:
-            household, payer_percentage = _classify(tags, person_names)
+            household, payer_percentage = _classify(tags, ctx.person_names)
 
         parsed_cells = _parse_amount_and_date(row, row_num, errors)
         if parsed_cells is None:
@@ -118,23 +120,26 @@ def parse_monarch_csv(
         occurrence_counter[base_key] += 1
 
         transactions.append(
-            Transaction(
-                id=uuid.uuid4(),
-                upload_id=upload_id,
-                date=tx_date,
-                merchant=row["Merchant"],
-                category=row["Category"],
-                account=row["Account"],
-                account_id=personal_account_id(payer_person_id, row["Account"]),
-                original_statement=row["Original Statement"],
-                occurrence=occurrence,
-                notes=row["Notes"],
-                amount=amount,
-                tags=tags,
-                payer_person_id=payer_person_id,
-                payer_percentage=payer_percentage,
-                household=household,
-                is_settlement=is_settlement,
+            _on_joint_label(
+                Transaction(
+                    id=uuid.uuid4(),
+                    upload_id=ctx.upload_id,
+                    date=tx_date,
+                    merchant=row["Merchant"],
+                    category=row["Category"],
+                    account=row["Account"],
+                    account_id=personal_account_id(ctx.payer_person_id, row["Account"]),
+                    original_statement=row["Original Statement"],
+                    occurrence=occurrence,
+                    notes=row["Notes"],
+                    amount=amount,
+                    tags=tags,
+                    payer_person_id=ctx.payer_person_id,
+                    payer_percentage=payer_percentage,
+                    household=household,
+                    is_settlement=is_settlement,
+                ),
+                ctx,
             )
         )
 
@@ -165,12 +170,20 @@ class MonarchCsvImporter:
             raise ValidationError(
                 "File is not valid UTF-8 text. Monarch exports use UTF-8 — try re-exporting."
             ) from exc
-        return parse_monarch_csv(
-            csv_text,
-            ctx.payer_person_id,
-            ctx.upload_id,
-            person_names=ctx.person_names,
-        )
+        return parse_monarch_csv(csv_text, ctx)
+
+
+def _on_joint_label(tx: Transaction, ctx: ImportContext) -> Transaction:
+    """The row as its joint account's when its label is marked joint; any
+    other row unchanged."""
+    if tx.account not in ctx.joint_labels:
+        return tx
+    return as_joint_row(
+        tx,
+        account_id=joint_account_id(tx.account),
+        persons=ctx.persons,
+        carry_split=False,
+    )
 
 
 def _parse_tags(tags_str: str) -> tuple[str, ...]:

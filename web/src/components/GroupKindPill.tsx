@@ -23,3 +23,12 @@ export function GroupKindPill({ kind }: { kind: NonSpendingKind }) {
   const { label, title } = LABELS[kind];
   return <Pill title={title}>{label}</Pill>;
 }
+
+/** Marks a row from a joint account: no payer, shares by owner. */
+export function JointPill() {
+  return (
+    <Pill title="Joint account — outside settlement; shares by owner">
+      Joint
+    </Pill>
+  );
+}

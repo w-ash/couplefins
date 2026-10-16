@@ -8,7 +8,7 @@ import type { FlowSourceKind } from './flowSourceKind.ts';
 
 export interface SpendingFlowCellItem {
   source_kind: FlowSourceKind;
-  source_person_id: string;
+  source_person_id: string | null;
   group_id: string | null;
   group_name: string;
   category: string;

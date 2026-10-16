@@ -1,5 +1,6 @@
 import { Database, Settings } from "lucide-react";
 import { useHealthCheck } from "@/api/generated/health/health";
+import { AccountsSettings } from "@/components/AccountsSettings";
 import { Card } from "@/components/Card";
 import { CategoryMappingEditor } from "@/components/CategoryMappingEditor";
 import { PageHeader } from "@/components/PageHeader";
@@ -36,6 +37,16 @@ export function SettingsPage() {
             description="Names and Monarch adjustment account names for CSV export"
           />
           <PersonAccountSettings />
+        </Card>
+
+        {/* Accounts */}
+        <Card as="section" aria-labelledby="settings-accounts">
+          <SectionHeader
+            id="settings-accounts"
+            title="Accounts"
+            description="Monarch account labels seen in uploads. Mark a label joint when both of you fund it."
+          />
+          <AccountsSettings />
         </Card>
 
         {/* Settlement Merchants */}

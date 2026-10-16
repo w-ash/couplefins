@@ -1,8 +1,14 @@
+from collections.abc import Mapping
 from datetime import UTC, date, datetime
 from decimal import Decimal
 import uuid
 
-from src.domain.entities.account import Account, AccountKind, personal_account_id
+from src.domain.entities.account import (
+    Account,
+    AccountKind,
+    joint_account_id,
+    personal_account_id,
+)
 from src.domain.entities.category import Category
 from src.domain.entities.category_group import CategoryGroup, GroupKind
 from src.domain.entities.category_group_budget import CategoryGroupBudget
@@ -47,6 +53,8 @@ def make_person(
 # frozen, so module-level sharing is safe.
 ALICE = make_person(name="Alice", id=uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
 BOB = make_person(name="Bob", id=uuid.UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"))
+# The couple's ids, in the order a split takes them.
+COUPLE_IDS = (ALICE.id, BOB.id)
 
 
 def make_transaction(
@@ -70,8 +78,21 @@ def make_transaction(
     is_excluded: bool = False,
     original_date: date | None = None,
     original_amount: Decimal | None = None,
+    joint: bool = False,
+    owner_shares: Mapping[uuid.UUID, int] | None = None,
+    depositor_person_id: uuid.UUID | None = None,
 ) -> Transaction:
-    payer = payer_person_id or uuid.uuid4()
+    """A transaction; a random payer when none is given. `joint` makes it a
+    joint account's row: no payer, the joint account of `account`, household,
+    unsplit (the import defaults; `payer_person_id`, `payer_percentage` and
+    `household` are ignored)."""
+    if joint:
+        payer = None
+        default_account_id = joint_account_id(account)
+        payer_percentage, household = 100, True
+    else:
+        payer = payer_person_id or uuid.uuid4()
+        default_account_id = personal_account_id(payer, account)
     return Transaction(
         id=id or uuid.uuid4(),
         upload_id=upload_id or uuid.uuid4(),
@@ -79,7 +100,7 @@ def make_transaction(
         merchant=merchant,
         category=category,
         account=account,
-        account_id=account_id or personal_account_id(payer, account),
+        account_id=account_id or default_account_id,
         original_statement=original_statement,
         occurrence=occurrence,
         notes=notes,
@@ -92,6 +113,8 @@ def make_transaction(
         is_excluded=is_excluded,
         original_date=original_date,
         original_amount=original_amount,
+        depositor_person_id=depositor_person_id,
+        owner_shares=owner_shares,
     )
 
 
@@ -128,6 +151,13 @@ def make_account(
         owner_person_id=(
             owner_person_id or uuid.uuid4() if kind == "personal" else None
         ),
+    )
+
+
+def make_joint_account(name: str = "Joint Checking") -> Account:
+    """The joint account a joint row of label `name` belongs to."""
+    return Account(
+        id=joint_account_id(name), name=name, kind="joint", owner_person_id=None
     )
 
 

@@ -5,7 +5,8 @@ from src.domain.dedup import (
     find_removed_transactions,
     natural_key,
 )
-from tests.fixtures.factories import make_transaction
+from src.domain.entities.account import joint_account_id, personal_account_id
+from tests.fixtures.factories import ALICE, BOB, make_transaction
 
 
 def test_natural_key_extracts_correct_fields() -> None:
@@ -14,10 +15,34 @@ def test_natural_key_extracts_correct_fields() -> None:
 
     assert key.date == tx.date
     assert key.amount == tx.amount
-    assert key.account == "Amex"
+    assert key.account_id == personal_account_id(tx.payer_person_id, "Amex")
     assert key.original_statement == tx.original_statement
     assert key.occurrence == 1
-    assert key.payer_person_id == tx.payer_person_id
+
+
+def test_same_row_on_both_owners_personal_accounts_keys_apart() -> None:
+    alice_row = make_transaction(payer_person_id=ALICE.id, account="Chase")
+    bob_row = make_transaction(payer_person_id=BOB.id, account="Chase")
+
+    assert natural_key(alice_row) != natural_key(bob_row)
+
+
+def test_joint_row_from_either_owners_export_shares_one_key() -> None:
+    from_alice = make_transaction(joint=True, account="Joint Checking")
+    from_bob = make_transaction(joint=True, account="Joint Checking")
+
+    assert natural_key(from_alice) == natural_key(from_bob)
+    assert natural_key(from_alice).account_id == joint_account_id("Joint Checking")
+
+
+def test_joint_row_imported_by_the_second_owner_classifies_unchanged() -> None:
+    existing = make_transaction(joint=True, account="Joint Checking")
+    incoming = make_transaction(joint=True, account="Joint Checking")
+
+    [result] = classify_transactions([incoming], [existing])
+
+    assert result.status == "unchanged"
+    assert result.existing_id == existing.id
 
 
 def test_classify_all_new() -> None:

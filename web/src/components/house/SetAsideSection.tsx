@@ -12,12 +12,15 @@ import { amountCellClass, cellClass, tableHeaderRowClass } from "@/lib/layout";
 
 export function SetAsideSection({
   setAside,
+  example = false,
 }: {
+  example?: boolean;
   setAside: SetAsideSectionResponse;
 }) {
   return (
     <Card as="section" aria-labelledby="house-set-aside">
       <SectionHeader
+        example={example}
         id="house-set-aside"
         title="Set aside"
         description="Each bucket beside the balance last entered from the bank."

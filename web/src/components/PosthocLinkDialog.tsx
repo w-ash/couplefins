@@ -37,8 +37,8 @@ function LinkedRow({
   return (
     <div className="flex items-center gap-2 rounded-md bg-muted/30 px-3 py-1.5 text-sm">
       <PersonBadge
-        name={getPersonName(tx.payer_person_id)}
-        accentColor={getPersonColor(tx.payer_person_id)}
+        name={getPersonName(tx.payer_person_id ?? "")}
+        accentColor={getPersonColor(tx.payer_person_id ?? "")}
         size="xs"
       />
       <span className="min-w-0 truncate text-foreground">{tx.merchant}</span>

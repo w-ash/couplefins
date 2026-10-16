@@ -14,7 +14,7 @@ import {
 import { TransactionsPage } from "./TransactionsPage";
 
 function makeTx(overrides: Partial<TransactionResponse>): TransactionResponse {
-  return {
+  const tx: TransactionResponse = {
     id: "tx",
     date: "2026-01-15",
     merchant: "Generic Merchant",
@@ -32,8 +32,42 @@ function makeTx(overrides: Partial<TransactionResponse>): TransactionResponse {
     is_income: false,
     original_date: null,
     original_amount: null,
+    is_joint: false,
+    account_id: "a1",
+    shares: {},
+    share_amounts: {},
+    owner_shares: null,
+    depositor_person_id: null,
     ...overrides,
   };
+  // Mirror the server: per-person shares follow the payer split unless a
+  // test pins them.
+  if (!overrides.shares && tx.payer_person_id) {
+    const other = tx.payer_person_id === "p1" ? "p2" : "p1";
+    tx.shares = {
+      [tx.payer_person_id]: tx.payer_percentage,
+      [other]: 100 - tx.payer_percentage,
+    };
+  }
+  // Mirror the server: the first owner (the payer of a personal row, p1 of a
+  // joint row) takes the half-up cent; the other takes the remainder.
+  if (!overrides.share_amounts) {
+    const ids = Object.keys(tx.shares);
+    const first =
+      tx.is_joint || !tx.payer_person_id ? ids[0] : tx.payer_person_id;
+    const second = ids.find((id) => id !== first);
+    if (first && second) {
+      const cents = Math.round(Math.abs(tx.amount) * 100);
+      const firstCents = Math.floor(
+        (cents * (tx.shares[first] ?? 0) + 50) / 100,
+      );
+      tx.share_amounts = {
+        [first]: firstCents / 100,
+        [second]: (cents - firstCents) / 100,
+      };
+    }
+  }
+  return tx;
 }
 
 const persons = [
@@ -531,5 +565,195 @@ describe("TransactionsPage", () => {
     expect(
       screen.getByText(/3 transactions · \$4,160\.00 imported/),
     ).toBeInTheDocument();
+  });
+
+  describe("joint rows", () => {
+    const jointRow = makeTx({
+      id: "tx-joint",
+      date: "2026-01-22",
+      merchant: "Water Utility",
+      category: "Utilities",
+      account: "Joint Checking",
+      amount: -80,
+      payer_person_id: null,
+      is_joint: true,
+      payer_percentage: 100,
+      shares: { p1: 50, p2: 50 },
+    });
+    const deposit = makeTx({
+      id: "tx-dep",
+      date: "2026-01-23",
+      merchant: "Transfer In",
+      category: "Deposit",
+      account: "Joint Checking",
+      amount: 500,
+      payer_person_id: null,
+      is_joint: true,
+      shares: { p1: 50, p2: 50 },
+      depositor_person_id: null,
+    });
+
+    function serveJoint() {
+      server.use(
+        http.get("/api/v1/reconciliation", () =>
+          HttpResponse.json({
+            ...reconciliationResponse,
+            transaction_count: 4,
+            transactions: [
+              ...reconciliationResponse.transactions,
+              jointRow,
+              deposit,
+            ],
+          }),
+        ),
+      );
+    }
+
+    it("shows a Joint badge with the account instead of a payer", async () => {
+      serveJoint();
+      renderWithProviders(<TransactionsPage />);
+
+      expect(await screen.findAllByText("Joint · Joint Checking")).toHaveLength(
+        2,
+      );
+      expect(
+        screen.getAllByTitle(
+          "Joint account — outside settlement; shares by owner",
+        ),
+      ).toHaveLength(2);
+    });
+
+    it("offers owner shares, not the split editor, on a joint row", async () => {
+      serveJoint();
+      renderWithProviders(<TransactionsPage />);
+      await userEvent.click(await screen.findByText("Water Utility"));
+
+      expect(await screen.findByLabelText(/Alice/)).toHaveValue(50);
+      expect(screen.getByLabelText(/Bob/)).toHaveValue(50);
+      expect(
+        screen.getByRole("button", { name: "Reset to 50/50" }),
+      ).toBeInTheDocument();
+      expect(document.getElementById("tx-split")).toBeNull();
+      expect(screen.queryByText("Scope")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Depositor")).not.toBeInTheDocument();
+    });
+
+    it("keeps owner shares complementary and submits them", async () => {
+      serveJoint();
+      let body: unknown;
+      server.use(
+        http.patch("/api/v1/transactions/tx-joint", async ({ request }) => {
+          body = await request.json();
+          return HttpResponse.json(jointRow);
+        }),
+      );
+      renderWithProviders(<TransactionsPage />);
+      await userEvent.click(await screen.findByText("Water Utility"));
+
+      const alice = await screen.findByLabelText(/Alice/);
+      await userEvent.clear(alice);
+      await userEvent.type(alice, "70");
+      expect(screen.getByLabelText(/Bob/)).toHaveValue(30);
+
+      await userEvent.click(
+        screen.getByRole("button", { name: "Save Changes" }),
+      );
+      await waitFor(() =>
+        expect(body).toEqual({ owner_shares: { p1: 70, p2: 30 } }),
+      );
+    });
+
+    it("resets an override to 50/50 by sending null", async () => {
+      server.use(
+        http.get("/api/v1/reconciliation", () =>
+          HttpResponse.json({
+            ...reconciliationResponse,
+            transaction_count: 3,
+            transactions: [
+              ...reconciliationResponse.transactions,
+              {
+                ...jointRow,
+                owner_shares: { p1: 70, p2: 30 },
+                shares: { p1: 70, p2: 30 },
+              },
+            ],
+          }),
+        ),
+      );
+      let body: unknown;
+      server.use(
+        http.patch("/api/v1/transactions/tx-joint", async ({ request }) => {
+          body = await request.json();
+          return HttpResponse.json(jointRow);
+        }),
+      );
+      renderWithProviders(<TransactionsPage />);
+      await userEvent.click(await screen.findByText("Water Utility"));
+      await userEvent.click(
+        screen.getByRole("button", { name: "Reset to 50/50" }),
+      );
+      await userEvent.click(
+        screen.getByRole("button", { name: "Save Changes" }),
+      );
+      await waitFor(() => expect(body).toEqual({ owner_shares: null }));
+    });
+
+    it("picks a depositor on a joint credit", async () => {
+      serveJoint();
+      let body: unknown;
+      server.use(
+        http.patch("/api/v1/transactions/tx-dep", async ({ request }) => {
+          body = await request.json();
+          return HttpResponse.json(deposit);
+        }),
+      );
+      renderWithProviders(<TransactionsPage />);
+      await userEvent.click(await screen.findByText("Transfer In"));
+
+      const select = screen.getByLabelText("Depositor");
+      expect(select).toHaveValue("");
+      await userEvent.selectOptions(select, "Bob");
+      await userEvent.click(
+        screen.getByRole("button", { name: "Save Changes" }),
+      );
+      await waitFor(() => expect(body).toEqual({ depositor_person_id: "p2" }));
+    });
+
+    it("counts unassigned deposits in a filter chip", async () => {
+      serveJoint();
+      renderWithProviders(<TransactionsPage />);
+      const chip = await screen.findByRole("button", {
+        name: /Unassigned deposits/,
+      });
+      expect(within(chip).getByText("1")).toBeInTheDocument();
+      await userEvent.click(chip);
+
+      await waitFor(() => {
+        expect(screen.getByText("Transfer In")).toBeInTheDocument();
+        expect(screen.queryByText("Water Utility")).not.toBeInTheDocument();
+        expect(screen.queryByText("Restaurant")).not.toBeInTheDocument();
+      });
+    });
+
+    it("hides owner-share bulk controls unless every selected row is joint", async () => {
+      serveJoint();
+      renderWithProviders(<TransactionsPage />);
+      await screen.findByText("Water Utility");
+      await userEvent.click(screen.getByRole("button", { name: "Bulk Edit" }));
+
+      const rowCheckbox = (merchant: string) => {
+        const row = screen.getByText(merchant).closest("tr");
+        if (!row) throw new Error(`row for ${merchant} not found`);
+        return within(row).getByRole("checkbox");
+      };
+
+      await userEvent.click(rowCheckbox("Water Utility"));
+      expect(await screen.findByLabelText(/Alice/)).toBeInTheDocument();
+      expect(document.getElementById("bulk-split")).toBeNull();
+
+      await userEvent.click(rowCheckbox("Restaurant"));
+      expect(screen.queryByLabelText(/Alice/)).not.toBeInTheDocument();
+      expect(document.getElementById("bulk-split")).not.toBeNull();
+    });
   });
 });

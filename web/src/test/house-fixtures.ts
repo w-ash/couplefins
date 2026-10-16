@@ -18,7 +18,14 @@ export function makeHouseResponse(
   overrides: Partial<HouseResponse> = {},
 ): HouseResponse {
   return {
-    is_example: true,
+    example_sections: [
+      "put_in",
+      "shares",
+      "loans",
+      "upcoming",
+      "set_aside",
+      "recent_activity",
+    ],
     as_of: "2026-10-15",
     persons: [
       { id: ALICE_ID, name: "Alice" },

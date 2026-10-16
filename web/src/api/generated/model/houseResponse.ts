@@ -15,10 +15,11 @@ import type { SharesSectionResponse } from './sharesSectionResponse.ts';
 /**
  * Every House figure, precomputed — the client renders, never derives.
  *
- * ``is_example`` is true while the figures are the fixed example payload.
+ * ``example_sections`` names the sections still on the fixed example
+ * payload, by their field names here; empty once every figure is real.
  */
 export interface HouseResponse {
-  is_example: boolean;
+  example_sections: string[];
   as_of: string;
   persons: DashboardPersonResponse[];
   put_in: PutInSectionResponse;

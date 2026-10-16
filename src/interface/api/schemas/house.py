@@ -107,10 +107,11 @@ class ActivityRowResponse(_HouseModel):
 class HouseResponse(_HouseModel):
     """Every House figure, precomputed — the client renders, never derives.
 
-    ``is_example`` is true while the figures are the fixed example payload.
+    ``example_sections`` names the sections still on the fixed example
+    payload, by their field names here; empty once every figure is real.
     """
 
-    is_example: bool
+    example_sections: list[str]
     as_of: datetime.date
     persons: list[DashboardPersonResponse]
     put_in: PutInSectionResponse
@@ -123,6 +124,6 @@ class HouseResponse(_HouseModel):
     @classmethod
     def from_result(cls, result: GetHouseResult) -> HouseResponse:
         return cls.model_validate({
-            "is_example": result.is_example,
+            "example_sections": sorted(result.example_sections),
             **attrs.asdict(result.figures, recurse=False),
         })

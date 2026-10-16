@@ -1,18 +1,25 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 import hashlib
+from unittest.mock import AsyncMock
 import uuid
 
 import pytest
 
 from src.application.use_cases.upload_csv import UploadCsvCommand, UploadCsvUseCase
-from src.domain.entities.account import personal_account_id
+from src.domain.entities.account import joint_account_id, personal_account_id
 from src.domain.entities.category import Category
+from src.domain.entities.person import Person
 from src.domain.exceptions import NotFoundError
+from src.domain.filters import is_joint_row
 from tests.fixtures.factories import (
+    ALICE,
+    BOB,
     make_category,
+    make_joint_account,
     make_person,
     make_transaction,
+    make_upload,
 )
 from tests.fixtures.mocks import make_mock_uow
 
@@ -46,7 +53,7 @@ async def test_uploads_all_new_transactions() -> None:
         make_category(name="Gas"),
         make_category(name="Dining Out"),
     ]
-    uow.transactions.get_by_person_and_original_date_range.return_value = []
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = []
     command = _make_command(person_id=person.id)
 
     result = await UploadCsvUseCase().execute(command, uow)
@@ -78,7 +85,9 @@ async def test_skips_unchanged_transactions() -> None:
         payer_percentage=50,
         notes="",
     )
-    uow.transactions.get_by_person_and_original_date_range.return_value = [existing]
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = [
+        existing
+    ]
 
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
@@ -110,7 +119,9 @@ async def test_updates_accepted_changes() -> None:
         payer_percentage=50,
         notes="",
     )
-    uow.transactions.get_by_person_and_original_date_range.return_value = [existing]
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = [
+        existing
+    ]
 
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
@@ -148,7 +159,9 @@ async def test_skips_rejected_changes() -> None:
         payer_percentage=50,
         notes="",
     )
-    uow.transactions.get_by_person_and_original_date_range.return_value = [existing]
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = [
+        existing
+    ]
 
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
@@ -189,7 +202,9 @@ async def test_date_edited_row_still_matches_by_original_date() -> None:
         payer_percentage=50,
         notes="",
     )
-    uow.transactions.get_by_person_and_original_date_range.return_value = [existing]
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = [
+        existing
+    ]
 
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
@@ -202,9 +217,10 @@ async def test_date_edited_row_still_matches_by_original_date() -> None:
     assert result.new_count == 0
     assert result.skipped_count == 1
     uow.transactions.save_batch.assert_not_called()
-    # The dedup fetch window is min/max of the incoming CSV dates.
-    uow.transactions.get_by_person_and_original_date_range.assert_called_once_with(
-        person.id, date(2026, 1, 15), date(2026, 1, 15)
+    # The dedup fetch window is min/max of the incoming CSV dates, over the
+    # accounts the file names.
+    uow.transactions.get_by_account_ids_and_original_date_range.assert_called_once_with(
+        [personal_account_id(person.id, "Chase")], date(2026, 1, 15), date(2026, 1, 15)
     )
 
 
@@ -214,7 +230,7 @@ async def test_auto_creates_unmapped_categories_on_upload() -> None:
     uow.categories.get_all.return_value = [
         make_category(name="Groceries"),
     ]
-    uow.transactions.get_by_person_and_original_date_range.return_value = []
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = []
     command = _make_command()
 
     result = await UploadCsvUseCase().execute(command, uow)
@@ -237,7 +253,7 @@ async def test_reports_existing_unmapped_categories() -> None:
         Category(id=uuid.uuid4(), name="Gas", group_id=None),
         Category(id=uuid.uuid4(), name="Dining Out", group_id=None),
     ]
-    uow.transactions.get_by_person_and_original_date_range.return_value = []
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = []
     command = _make_command()
 
     result = await UploadCsvUseCase().execute(command, uow)
@@ -317,7 +333,7 @@ async def test_reupload_deletes_rows_missing_from_csv() -> None:
         merchant="Coffee Shop",
         date=kept.date,
     )
-    uow.transactions.get_by_person_and_original_date_range.return_value = [
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = [
         kept,
         dropped,
     ]
@@ -353,7 +369,7 @@ async def test_removed_settlement_linked_row_unlinks_with_warning() -> None:
         account="Chase",
         merchant="Venmo",
     )
-    uow.transactions.get_by_person_and_original_date_range.return_value = [dropped]
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = [dropped]
     uow.settlement_transaction_links.get_by_transaction_ids.return_value = [
         make_settlement_transaction_link(transaction_id=dropped.id)
     ]
@@ -396,7 +412,7 @@ async def test_rejects_removal_from_finalized_month() -> None:
         original_statement="COFFEE SHOP",
         account="Chase",
     )
-    uow.transactions.get_by_person_and_original_date_range.return_value = [dropped]
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = [dropped]
     uow.reconciliation_periods.get_by_periods.return_value = [
         make_reconciliation_period(
             year=2026, month=2, is_finalized=True, finalized_at=datetime.now(UTC)
@@ -447,7 +463,7 @@ async def test_rejects_accepted_change_to_finalized_month() -> None:
         payer_percentage=50,
         notes="",
     )
-    uow.transactions.get_by_person_and_original_date_range.return_value = [edited]
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = [edited]
     uow.reconciliation_periods.get_by_periods.return_value = [
         make_reconciliation_period(
             year=2026, month=2, is_finalized=True, finalized_at=datetime.now(UTC)
@@ -499,7 +515,7 @@ async def test_records_importer_and_file_hash() -> None:
     uow = make_mock_uow()
     person = make_person()
     uow.persons.get_by_id.return_value = person
-    uow.transactions.get_by_person_and_original_date_range.return_value = []
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = []
 
     await UploadCsvUseCase().execute(_make_command(person_id=person.id), uow)
 
@@ -512,7 +528,7 @@ async def test_adds_the_account_each_new_row_names() -> None:
     uow = make_mock_uow()
     person = make_person()
     uow.persons.get_by_id.return_value = person
-    uow.transactions.get_by_person_and_original_date_range.return_value = []
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = []
 
     await UploadCsvUseCase().execute(_make_command(person_id=person.id), uow)
 
@@ -539,7 +555,9 @@ async def test_adds_no_accounts_when_no_row_is_new() -> None:
         tags=("shared",),
         payer_percentage=50,
     )
-    uow.transactions.get_by_person_and_original_date_range.return_value = [existing]
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = [
+        existing
+    ]
     csv = (
         "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
         '2026-01-15,Grocery Store,Groceries,Chase,GROCERY STORE,,"-50.00",shared\n'
@@ -550,3 +568,127 @@ async def test_adds_no_accounts_when_no_row_is_new() -> None:
     )
 
     uow.accounts.add_missing.assert_not_called()
+
+
+JOINT_CSV = (
+    "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+    '2026-01-15,Hardware Store,Home Improvement,Joint Checking,HARDWARE STORE,,"-120.00",shared\n'
+    '2026-01-16,Grocery Store,Groceries,Chase,GROCERY STORE,,"-50.00",\n'
+)
+
+
+ALICE_UPLOAD = make_upload(person_id=ALICE.id)
+
+
+def _joint_uow(uploader: Person) -> AsyncMock:
+    uow = make_mock_uow()
+    uow.persons.get_by_id.return_value = uploader
+    uow.persons.get_all.return_value = [ALICE, BOB]
+    uow.accounts.get_all.return_value = [make_joint_account("Joint Checking")]
+    uow.uploads.get_by_ids.return_value = [ALICE_UPLOAD]
+    return uow
+
+
+async def test_rows_on_a_joint_label_import_into_the_joint_account() -> None:
+    """US-IMPORT-5: no payer, household, unsplit, outside settlement."""
+    uow = _joint_uow(ALICE)
+
+    await UploadCsvUseCase().execute(_make_command(JOINT_CSV, ALICE.id), uow)
+
+    saved = uow.transactions.save_batch.call_args.args[0]
+    [hardware] = [tx for tx in saved if tx.account == "Joint Checking"]
+    assert is_joint_row(hardware)
+    assert hardware.account_id == joint_account_id("Joint Checking")
+    assert (hardware.payer_percentage, hardware.household) == (100, True)
+    # The joint account exists already; only the personal account is added.
+    (accounts,) = uow.accounts.add_missing.call_args.args
+    assert [a.name for a in accounts] == ["Chase"]
+
+
+async def test_partner_upload_of_the_same_joint_rows_adds_nothing() -> None:
+    """US-IMPORT-5: both partners' exports of a joint row store it once."""
+    uow = _joint_uow(BOB)
+    alice_import = make_transaction(
+        joint=True,
+        upload_id=ALICE_UPLOAD.id,
+        account="Joint Checking",
+        date=date(2026, 1, 15),
+        merchant="Hardware Store",
+        category="Home Improvement",
+        original_statement="HARDWARE STORE",
+        amount=Decimal("-120.00"),
+        tags=("shared",),
+        notes="",
+    )
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = [
+        alice_import
+    ]
+    joint_only = "\n".join(JOINT_CSV.splitlines()[:2]) + "\n"
+
+    result = await UploadCsvUseCase().execute(_make_command(joint_only, BOB.id), uow)
+
+    assert (result.new_count, result.skipped_count, result.removed_count) == (0, 1, 0)
+    uow.transactions.save_batch.assert_not_called()
+    uow.accounts.get_all.assert_awaited_once()
+    (account_ids, *_) = (
+        uow.transactions.get_by_account_ids_and_original_date_range.call_args.args
+    )
+    assert joint_account_id("Joint Checking") in account_ids
+
+
+async def test_file_not_naming_the_joint_account_leaves_it_alone() -> None:
+    """US-IMPORT-5: the removal scope is the uploader's personal accounts
+    plus the accounts the file names, so a joint row is never a removal
+    candidate unless the file names its account."""
+    uow = _joint_uow(ALICE)
+    chase_only = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        '2026-01-16,Grocery Store,Groceries,Chase,GROCERY STORE,,"-50.00",\n'
+    )
+
+    await UploadCsvUseCase().execute(_make_command(chase_only, ALICE.id), uow)
+
+    (account_ids, *_) = (
+        uow.transactions.get_by_account_ids_and_original_date_range.call_args.args
+    )
+    assert account_ids == [personal_account_id(ALICE.id, "Chase")]
+    uow.transactions.delete_by_ids.assert_not_called()
+
+
+async def test_partners_file_lacking_a_joint_row_the_other_imported_removes_nothing() -> (
+    None
+):
+    """US-IMPORT-5: a joint row is removed only by its own uploader's re-import."""
+    uow = _joint_uow(BOB)
+    alices = make_transaction(
+        joint=True,
+        upload_id=ALICE_UPLOAD.id,
+        account="Joint Checking",
+        date=date(2026, 1, 15),
+        original_statement="PAINT STORE",
+    )
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = [alices]
+    joint_only = "\n".join(JOINT_CSV.splitlines()[:2]) + "\n"
+
+    result = await UploadCsvUseCase().execute(_make_command(joint_only, BOB.id), uow)
+
+    assert result.removed_count == 0
+    uow.transactions.delete_by_ids.assert_not_called()
+
+
+async def test_uploaders_later_file_lacking_their_joint_row_removes_it() -> None:
+    uow = _joint_uow(ALICE)
+    alices = make_transaction(
+        joint=True,
+        upload_id=ALICE_UPLOAD.id,
+        account="Joint Checking",
+        date=date(2026, 1, 15),
+        original_statement="PAINT STORE",
+    )
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = [alices]
+    joint_only = "\n".join(JOINT_CSV.splitlines()[:2]) + "\n"
+
+    result = await UploadCsvUseCase().execute(_make_command(joint_only, ALICE.id), uow)
+
+    assert result.removed_count == 1
+    uow.transactions.delete_by_ids.assert_awaited_once_with([alices.id])

@@ -11,6 +11,7 @@ type BroadcastEntity = Literal[
     "reconciliation",
     "budgets",
     "category_groups",
+    "accounts",
 ]
 
 

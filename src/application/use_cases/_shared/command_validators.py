@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 from uuid import UUID
@@ -11,6 +12,16 @@ from src.domain.month_key import MAX_MONTH, assert_month_key
 Scope = Literal["household", "personal", "all"]
 # Pages with no "all" view: a person-scoped variant of the household page.
 PersonScope = Literal["household", "personal"]
+
+
+def as_validation_error[**P](
+    check: Callable[P, object], /, *args: P.args, **kwargs: P.kwargs
+) -> None:
+    """Run a domain value check; raise its ValueError as a ValidationError."""
+    try:
+        check(*args, **kwargs)
+    except ValueError as e:
+        raise ValidationError(str(e)) from e
 
 
 def require_person_for_personal_scope(scope: Scope, person_id: UUID | None) -> None:

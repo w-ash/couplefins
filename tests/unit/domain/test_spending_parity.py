@@ -16,6 +16,7 @@ from src.domain.budget import (
     BudgetOverviewInputs,
     compute_budget_overview,
 )
+from src.domain.filters import exclude_non_spending
 from src.domain.insights import (
     compute_comparison_cards,
     compute_spending_flow,
@@ -27,7 +28,13 @@ from src.domain.spending_lens import (
     SpendingLens,
     total_spending,
 )
-from tests.fixtures.factories import ALICE, BOB, make_category_group, make_transaction
+from tests.fixtures.factories import (
+    ALICE,
+    BOB,
+    COUPLE_IDS,
+    make_category_group,
+    make_transaction,
+)
 
 FOOD = make_category_group(name="Food & Dining")
 TRAVEL = make_category_group(name="Travel")
@@ -62,6 +69,17 @@ def _personal(month: int, category: str, amount: str, payer: UUID, pct: int, tag
     )
 
 
+def _joint(month: int, category: str, amount: str, shares=None):
+    return make_transaction(
+        date=date(2026, month, 5),
+        category=category,
+        amount=D(amount),
+        account="Joint Checking",
+        joint=True,
+        owner_shares=shares,
+    )
+
+
 ROWS = [
     _household(1, "Dining Out", "-100.00", ALICE.id, 50),
     _household(1, "Dining Out", "-40.00", BOB.id, 50),
@@ -76,8 +94,15 @@ ROWS = [
     make_transaction(date=date(2026, 3, 5), amount=D("-99.00"), is_excluded=True),
     make_transaction(date=date(2026, 3, 6), amount=D("-1500.00"), is_settlement=True),
     _household(3, "Mystery", "-12.34", BOB.id, 50),  # unmapped category
+    _joint(2, "Groceries", "-80.01"),  # joint, 50/50 on an odd cent
+    _joint(3, "Dining Out", "-60.00", {ALICE.id: 70, BOB.id: 30}),  # joint override
+    _joint(3, "Flights", "25.00"),  # joint refund
 ]
-LENSES = [HouseholdLens(), PersonalLens(ALICE.id), PersonalLens(BOB.id)]
+LENSES = [
+    HouseholdLens(),
+    PersonalLens(ALICE.id, COUPLE_IDS),
+    PersonalLens(BOB.id, COUPLE_IDS),
+]
 PERSON_IDS = [None, ALICE.id, BOB.id]
 
 
@@ -95,9 +120,11 @@ def test_budget_and_insights_agree_per_group(
 ) -> None:
     budget = _budget(lens, 3)
     trends = compute_spending_trends(
-        ROWS, LOOKUP, 2026, through_month=3, person_id=person_id
+        ROWS, LOOKUP, 2026, through_month=3, person_id=person_id, person_ids=COUPLE_IDS
     )
-    cards = compute_comparison_cards(ROWS, LOOKUP, 3, person_id=person_id)
+    cards = compute_comparison_cards(
+        ROWS, LOOKUP, 3, person_id=person_id, person_ids=COUPLE_IDS
+    )
 
     assert {s.group_id: s.ytd_spent for s in budget.group_statuses if s.ytd_spent} == {
         g.group_id: g.ytd_total for g in trends.group_summaries if g.ytd_total
@@ -127,8 +154,8 @@ def test_partners_personal_views_sum_to_household_view() -> None:
     """Every household row is split between the two partners, so their
     personal views of household rows add up to the household view exactly."""
     household_rows = [tx for tx in ROWS if tx.household]
-    alice = total_spending(PersonalLens(ALICE.id), household_rows)
-    bob = total_spending(PersonalLens(BOB.id), household_rows)
+    alice = total_spending(PersonalLens(ALICE.id, COUPLE_IDS), household_rows)
+    bob = total_spending(PersonalLens(BOB.id, COUPLE_IDS), household_rows)
     assert alice + bob == total_spending(HouseholdLens(), household_rows)
 
 
@@ -149,7 +176,7 @@ def test_include_personal_adds_exactly_the_opted_in_rows() -> None:
     insights_food = next(
         g
         for g in compute_spending_trends(
-            ROWS, LOOKUP, 2026, through_month=3, person_id=None
+            ROWS, LOOKUP, 2026, through_month=3, person_id=None, person_ids=COUPLE_IDS
         ).group_summaries
         if g.group_id == FOOD.id
     )
@@ -175,16 +202,18 @@ def test_flow_cells_sum_to_the_lens_total(
     """The flow chart is drawn from cells, so the cells must add up to the
     same spending the headline and the group table show."""
     month_rows = [tx for tx in ROWS if tx.date.month == 2]
-    month_flow = compute_spending_flow(ROWS, LOOKUP, person_id=person_id, months={2})
+    month_flow = compute_spending_flow(
+        ROWS, LOOKUP, person_id=person_id, person_ids=COUPLE_IDS, months={2}
+    )
     assert sum((c.amount for c in month_flow.cells), D(0)) == total_spending(
         lens, month_rows
     )
 
     trends = compute_spending_trends(
-        ROWS, LOOKUP, 2026, through_month=3, person_id=person_id
+        ROWS, LOOKUP, 2026, through_month=3, person_id=person_id, person_ids=COUPLE_IDS
     )
     ytd_flow = compute_spending_flow(
-        ROWS, LOOKUP, person_id=person_id, months=range(1, 4)
+        ROWS, LOOKUP, person_id=person_id, person_ids=COUPLE_IDS, months=range(1, 4)
     )
     assert sum((c.amount for c in ytd_flow.cells), D(0)) == sum(
         (g.ytd_total for g in trends.group_summaries), D(0)
@@ -196,3 +225,14 @@ def test_flow_cells_sum_to_the_lens_total(
             sum((c.amount for c in ytd_flow.cells if c.group_id == gid), D(0))
         ]
     } == {g.group_id: g.ytd_total for g in trends.group_summaries}
+
+
+def test_transfer_kind_joint_row_counts_nowhere() -> None:
+    """A move between the joint accounts is transfer-kind: the reads drop it
+    before any lens, so no page counts it."""
+    move = _joint(2, "Transfer", "-500.00")
+    rows = exclude_non_spending([*ROWS, move], {"Transfer"})
+
+    assert rows == ROWS
+    for lens in LENSES:
+        assert total_spending(lens, rows) == total_spending(lens, ROWS)

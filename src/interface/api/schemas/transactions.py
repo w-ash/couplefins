@@ -4,14 +4,8 @@ from uuid import UUID
 from pydantic import BaseModel, field_validator
 
 from src.application.use_cases.bulk_modify_tags import TagAction
-from src.domain.splits import check_payer_percentage
+from src.domain.split_rules import check_owner_shares, check_payer_percentage
 from src.interface.api.schemas.types import MoneyField
-
-
-def _validate_payer_pct(v: int | None) -> int | None:
-    if v is not None:
-        check_payer_percentage(v)
-    return v
 
 
 def _validate_non_empty[T](v: list[T], label: str) -> list[T]:
@@ -44,20 +38,38 @@ class UpdateSplitsResponse(BaseModel):
     updated_count: int
 
 
-class UpdateTransactionRequest(BaseModel):
-    date: datetime.date | None = None
-    amount: MoneyField | None = None
+class TransactionChangesRequest(BaseModel):
+    """The fields both transaction PATCH routes change. Omitted (or null)
+    leaves a field as it is, except where noted."""
+
     category: str | None = None
-    tags: list[str] | None = None
     payer_percentage: int | None = None
     household: bool | None = None
     is_excluded: bool | None = None
     notes: str | None = None
+    # Joint rows only. Omitted leaves the value; null clears it.
+    depositor_person_id: UUID | None = None
+    owner_shares: dict[UUID, int] | None = None
 
     @field_validator("payer_percentage")
     @classmethod
     def validate_payer_percentage(cls, v: int | None) -> int | None:
-        return _validate_payer_pct(v)
+        if v is not None:
+            check_payer_percentage(v)
+        return v
+
+    @field_validator("owner_shares")
+    @classmethod
+    def validate_owner_shares(cls, v: dict[UUID, int] | None) -> dict[UUID, int] | None:
+        if v is not None:
+            check_owner_shares(v)
+        return v
+
+
+class UpdateTransactionRequest(TransactionChangesRequest):
+    date: datetime.date | None = None
+    amount: MoneyField | None = None
+    tags: list[str] | None = None
 
 
 class TransactionEditResponse(BaseModel):
@@ -89,23 +101,13 @@ class UpdateTransactionResponse(BaseModel):
     edits: list[TransactionEditResponse]
 
 
-class BulkUpdateRequest(BaseModel):
+class BulkUpdateRequest(TransactionChangesRequest):
     transaction_ids: list[UUID]
-    category: str | None = None
-    payer_percentage: int | None = None
-    household: bool | None = None
-    is_excluded: bool | None = None
-    notes: str | None = None
 
     @field_validator("transaction_ids")
     @classmethod
     def validate_non_empty(cls, v: list[UUID]) -> list[UUID]:
         return _validate_non_empty(v, "transaction ID")
-
-    @field_validator("payer_percentage")
-    @classmethod
-    def validate_payer_percentage(cls, v: int | None) -> int | None:
-        return _validate_payer_pct(v)
 
 
 class BulkUpdateResponse(BaseModel):

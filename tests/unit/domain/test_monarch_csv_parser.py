@@ -5,11 +5,23 @@ import uuid
 
 import pytest
 
+from src.domain.entities.account import joint_account_id, personal_account_id
+from src.domain.entities.person import Person
+from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import ValidationError
+from src.domain.parsing.importer import ImportContext
 from src.domain.parsing.monarch_csv import parse_monarch_csv
+from tests.fixtures.factories import ALICE, BOB, make_person
 
 PAYER_ID = uuid.uuid4()
 UPLOAD_ID = uuid.uuid4()
+CTX = ImportContext(payer_person_id=PAYER_ID, upload_id=UPLOAD_ID, persons=())
+
+
+def _knowing(*persons: Person) -> ImportContext:
+    """The uploader's context, with `persons` as the uploader's partners."""
+    return ImportContext(payer_person_id=PAYER_ID, upload_id=UPLOAD_ID, persons=persons)
+
 
 _HEADERS = [
     "Date",
@@ -45,7 +57,7 @@ def _make_csv(*rows: dict[str, str]) -> str:
 
 def test_standard_household_expense_fifty_fifty() -> None:
     csv = _make_csv({"Tags": "shared"})
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID).transactions
+    result = parse_monarch_csv(csv, CTX).transactions
 
     assert len(result) == 1
     tx = result[0]
@@ -56,7 +68,7 @@ def test_standard_household_expense_fifty_fifty() -> None:
 
 def test_non_household_expense() -> None:
     csv = _make_csv({"Tags": "personal"})
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID).transactions
+    result = parse_monarch_csv(csv, CTX).transactions
 
     assert len(result) == 1
     tx = result[0]
@@ -66,7 +78,7 @@ def test_non_household_expense() -> None:
 
 def test_s70_tag_sets_payer_percentage() -> None:
     csv = _make_csv({"Tags": "shared, s70"})
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID).transactions
+    result = parse_monarch_csv(csv, CTX).transactions
 
     assert len(result) == 1
     assert result[0].payer_percentage == 70
@@ -74,7 +86,7 @@ def test_s70_tag_sets_payer_percentage() -> None:
 
 def test_s100_tag_sets_payer_percentage() -> None:
     csv = _make_csv({"Tags": "shared, s100"})
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID).transactions
+    result = parse_monarch_csv(csv, CTX).transactions
 
     assert len(result) == 1
     assert result[0].payer_percentage == 100
@@ -82,7 +94,7 @@ def test_s100_tag_sets_payer_percentage() -> None:
 
 def test_s0_tag_sets_payer_percentage() -> None:
     csv = _make_csv({"Tags": "shared, s0"})
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID).transactions
+    result = parse_monarch_csv(csv, CTX).transactions
 
     assert len(result) == 1
     assert result[0].payer_percentage == 0
@@ -90,7 +102,7 @@ def test_s0_tag_sets_payer_percentage() -> None:
 
 def test_s33_tag_sets_payer_percentage() -> None:
     csv = _make_csv({"Tags": "shared, s33"})
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID).transactions
+    result = parse_monarch_csv(csv, CTX).transactions
 
     assert len(result) == 1
     assert result[0].payer_percentage == 33
@@ -99,7 +111,7 @@ def test_s33_tag_sets_payer_percentage() -> None:
 def test_case_insensitive_shared_tag() -> None:
     for tag in ("Shared", "SHARED", "Split", "SPLIT"):
         csv = _make_csv({"Tags": tag})
-        result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID).transactions
+        result = parse_monarch_csv(csv, CTX).transactions
         assert result[0].household is True, (
             f"Tag '{tag}' should be recognized as shared"
         )
@@ -107,7 +119,7 @@ def test_case_insensitive_shared_tag() -> None:
 
 def test_empty_tags_is_personal() -> None:
     csv = _make_csv({"Tags": ""})
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID).transactions
+    result = parse_monarch_csv(csv, CTX).transactions
 
     assert len(result) == 1
     assert result[0].household is False
@@ -116,14 +128,14 @@ def test_empty_tags_is_personal() -> None:
 
 def test_negative_amount_is_expense() -> None:
     csv = _make_csv({"Amount": "-100.50", "Tags": "shared"})
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID).transactions
+    result = parse_monarch_csv(csv, CTX).transactions
 
     assert result[0].amount == Decimal("-100.50")
 
 
 def test_positive_amount_is_income_refund() -> None:
     csv = _make_csv({"Amount": "25.00", "Tags": "shared"})
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID).transactions
+    result = parse_monarch_csv(csv, CTX).transactions
 
     assert result[0].amount == Decimal("25.00")
 
@@ -134,14 +146,14 @@ def test_multiple_rows_returns_correct_count() -> None:
         {"Merchant": "Store B", "Tags": "shared"},
         {"Merchant": "Store C", "Tags": ""},
     )
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID).transactions
+    result = parse_monarch_csv(csv, CTX).transactions
 
     assert len(result) == 3
 
 
 def test_header_only_csv_returns_empty_list() -> None:
     csv = "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags"
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID).transactions
+    result = parse_monarch_csv(csv, CTX).transactions
 
     assert result == []
 
@@ -149,26 +161,26 @@ def test_header_only_csv_returns_empty_list() -> None:
 def test_missing_required_columns_raises_validation_error() -> None:
     csv = "Date,Merchant,Amount\n2026-01-15,Test,-50.00"
     with pytest.raises(ValidationError, match="missing required columns"):
-        parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+        parse_monarch_csv(csv, CTX)
 
 
 def test_payer_person_id_comes_from_parameter() -> None:
     csv = _make_csv({"Tags": "shared"})
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID).transactions
+    result = parse_monarch_csv(csv, CTX).transactions
 
     assert result[0].payer_person_id == PAYER_ID
 
 
 def test_upload_id_comes_from_parameter() -> None:
     csv = _make_csv({"Tags": "shared"})
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID).transactions
+    result = parse_monarch_csv(csv, CTX).transactions
 
     assert result[0].upload_id == UPLOAD_ID
 
 
 def test_invalid_sxx_over_100_defaults_to_50() -> None:
     csv = _make_csv({"Tags": "shared, s150"})
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID).transactions
+    result = parse_monarch_csv(csv, CTX).transactions
 
     assert len(result) == 1
     assert result[0].payer_percentage == 50
@@ -181,7 +193,7 @@ def test_occurrence_assigned_for_duplicate_natural_keys() -> None:
         {"Original Statement": "COFFEE SHOP", "Merchant": "Coffee"},
         {"Original Statement": "CLIPPER TRANSIT FARE", "Merchant": "Clipper"},
     )
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID).transactions
+    result = parse_monarch_csv(csv, CTX).transactions
 
     assert len(result) == 4
     # First two Clipper rows + third share the same base key (same date/amount/account/stmt)
@@ -197,7 +209,7 @@ def test_unique_rows_all_get_occurrence_zero() -> None:
         {"Original Statement": "STORE B"},
         {"Original Statement": "STORE C"},
     )
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID).transactions
+    result = parse_monarch_csv(csv, CTX).transactions
 
     assert all(tx.occurrence == 0 for tx in result)
 
@@ -205,13 +217,13 @@ def test_unique_rows_all_get_occurrence_zero() -> None:
 def test_single_invalid_amount_includes_row_number() -> None:
     csv = _make_csv({"Amount": "abc", "Merchant": "Starbucks"})
     with pytest.raises(ValidationError, match=r"Row 2 \(Starbucks\).*invalid amount"):
-        parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+        parse_monarch_csv(csv, CTX)
 
 
 def test_single_invalid_date_includes_row_number() -> None:
     csv = _make_csv({"Date": "not-a-date", "Merchant": "Target"})
     with pytest.raises(ValidationError, match=r"Row 2 \(Target\).*invalid date"):
-        parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+        parse_monarch_csv(csv, CTX)
 
 
 def test_multiple_invalid_rows_collects_all_errors() -> None:
@@ -221,7 +233,7 @@ def test_multiple_invalid_rows_collects_all_errors() -> None:
         {"Date": "2026-13-01", "Merchant": "Amazon"},
     )
     with pytest.raises(ValidationError) as exc_info:
-        parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+        parse_monarch_csv(csv, CTX)
 
     message = str(exc_info.value)
     assert "Row 2 (Starbucks)" in message
@@ -238,7 +250,7 @@ def test_error_cap_at_max_row_errors() -> None:
     rows = [{"Amount": "bad", "Merchant": f"Store{i}"} for i in range(30)]
     csv = _make_csv(*rows)
     with pytest.raises(ValidationError) as exc_info:
-        parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+        parse_monarch_csv(csv, CTX)
 
     message = str(exc_info.value)
     lines = message.split("\n")
@@ -252,7 +264,7 @@ def test_nan_amount_is_row_error() -> None:
     with pytest.raises(
         ValidationError, match=r"Row 2 \(Starbucks\).*non-finite amount"
     ):
-        parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+        parse_monarch_csv(csv, CTX)
 
 
 def test_infinity_amount_is_row_error() -> None:
@@ -261,7 +273,7 @@ def test_infinity_amount_is_row_error() -> None:
         with pytest.raises(
             ValidationError, match=r"Row 2 \(Target\).*non-finite amount"
         ):
-            parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+            parse_monarch_csv(csv, CTX)
 
 
 def test_truncated_row_is_row_error_not_typeerror() -> None:
@@ -271,7 +283,7 @@ def test_truncated_row_is_row_error_not_typeerror() -> None:
         "2026-01-15,Starbucks\n"
     )
     with pytest.raises(ValidationError, match=r"Row 2 \(Starbucks\).*invalid amount"):
-        parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+        parse_monarch_csv(csv, CTX)
 
 
 def test_truncated_row_without_merchant_uses_placeholder() -> None:
@@ -280,7 +292,7 @@ def test_truncated_row_without_merchant_uses_placeholder() -> None:
         "2026-01-15\n"
     )
     with pytest.raises(ValidationError, match=r"Row 2 \(\?\).*invalid amount"):
-        parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+        parse_monarch_csv(csv, CTX)
 
 
 def test_non_finite_and_truncated_errors_batch_together() -> None:
@@ -291,7 +303,7 @@ def test_non_finite_and_truncated_errors_batch_together() -> None:
         "2026-01-17,Amazon\n"
     )
     with pytest.raises(ValidationError) as exc_info:
-        parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+        parse_monarch_csv(csv, CTX)
 
     message = str(exc_info.value)
     assert "Row 2 (Starbucks)" in message
@@ -306,12 +318,12 @@ def test_no_partial_import_when_errors_exist() -> None:
         {"Amount": "bad", "Merchant": "Invalid"},
     )
     with pytest.raises(ValidationError):
-        parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+        parse_monarch_csv(csv, CTX)
 
 
 def test_household_tag_sets_household_no_split() -> None:
     csv = _make_csv({"Tags": "household"})
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID).transactions
+    result = parse_monarch_csv(csv, CTX).transactions
 
     assert len(result) == 1
     tx = result[0]
@@ -321,9 +333,7 @@ def test_household_tag_sets_household_no_split() -> None:
 
 def test_person_name_tag_spotted() -> None:
     csv = _make_csv({"Tags": "bob"})
-    result = parse_monarch_csv(
-        csv, PAYER_ID, UPLOAD_ID, person_names=frozenset({"bob"})
-    ).transactions
+    result = parse_monarch_csv(csv, _knowing(BOB)).transactions
 
     assert len(result) == 1
     tx = result[0]
@@ -334,7 +344,7 @@ def test_person_name_tag_spotted() -> None:
 
 def test_household_tag_with_sxx() -> None:
     csv = _make_csv({"Tags": "household, s30"})
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID).transactions
+    result = parse_monarch_csv(csv, CTX).transactions
 
     assert len(result) == 1
     tx = result[0]
@@ -344,7 +354,7 @@ def test_household_tag_with_sxx() -> None:
 
 def test_multiple_sxx_tags_highest_wins() -> None:
     csv = _make_csv({"Tags": "shared, s30, s70"})
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID).transactions
+    result = parse_monarch_csv(csv, CTX).transactions
 
     assert len(result) == 1
     assert result[0].payer_percentage == 70
@@ -352,9 +362,7 @@ def test_multiple_sxx_tags_highest_wins() -> None:
 
 def test_reserved_tag_not_treated_as_person_name() -> None:
     csv = _make_csv({"Tags": "shared"})
-    result = parse_monarch_csv(
-        csv, PAYER_ID, UPLOAD_ID, person_names=frozenset({"shared"})
-    ).transactions
+    result = parse_monarch_csv(csv, _knowing(make_person(name="shared"))).transactions
 
     assert len(result) == 1
     tx = result[0]
@@ -365,7 +373,7 @@ def test_reserved_tag_not_treated_as_person_name() -> None:
 
 def test_sxx_alone_without_household_tag_is_personal_split() -> None:
     csv = _make_csv({"Tags": "s70"})
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID).transactions
+    result = parse_monarch_csv(csv, CTX).transactions
 
     assert len(result) == 1
     tx = result[0]
@@ -377,9 +385,7 @@ def test_sxx_alone_without_household_tag_is_personal_split() -> None:
 
 def test_person_name_with_sxx_without_household_tag() -> None:
     csv = _make_csv({"Tags": "bob, s30"})
-    result = parse_monarch_csv(
-        csv, PAYER_ID, UPLOAD_ID, person_names=frozenset({"bob"})
-    ).transactions
+    result = parse_monarch_csv(csv, _knowing(BOB)).transactions
 
     assert len(result) == 1
     tx = result[0]
@@ -390,9 +396,7 @@ def test_person_name_with_sxx_without_household_tag() -> None:
 
 def test_household_person_name_and_sxx_uses_sxx() -> None:
     csv = _make_csv({"Tags": "household, bob, s70"})
-    result = parse_monarch_csv(
-        csv, PAYER_ID, UPLOAD_ID, person_names=frozenset({"bob"})
-    ).transactions
+    result = parse_monarch_csv(csv, _knowing(BOB)).transactions
 
     assert len(result) == 1
     tx = result[0]
@@ -403,9 +407,7 @@ def test_household_person_name_and_sxx_uses_sxx() -> None:
 
 def test_household_plus_person_name_is_household_spotted() -> None:
     csv = _make_csv({"Tags": "household, bob"})
-    result = parse_monarch_csv(
-        csv, PAYER_ID, UPLOAD_ID, person_names=frozenset({"bob"})
-    ).transactions
+    result = parse_monarch_csv(csv, _knowing(BOB)).transactions
 
     assert len(result) == 1
     tx = result[0]
@@ -416,9 +418,7 @@ def test_household_plus_person_name_is_household_spotted() -> None:
 
 def test_shared_tag_plus_person_name_is_household_spotted() -> None:
     csv = _make_csv({"Tags": "shared, bob"})
-    result = parse_monarch_csv(
-        csv, PAYER_ID, UPLOAD_ID, person_names=frozenset({"bob"})
-    ).transactions
+    result = parse_monarch_csv(csv, _knowing(BOB)).transactions
 
     assert len(result) == 1
     tx = result[0]
@@ -433,7 +433,7 @@ def test_adjustment_tagged_rows_are_skipped_and_counted() -> None:
         {"Merchant": "Adjustment", "Tags": "couplefins-adjustment"},
         {"Merchant": "Adjustment 2", "Tags": "Couplefins-Adjustment"},
     )
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+    result = parse_monarch_csv(csv, CTX)
 
     assert [tx.merchant for tx in result.transactions] == ["Grocery Store"]
     assert result.skipped_adjustment_count == 2
@@ -445,7 +445,7 @@ def test_adjustment_rows_skipped_before_validation() -> None:
         {"Merchant": "Valid", "Tags": ""},
         {"Merchant": "Adjustment", "Amount": "NaN", "Tags": "couplefins-adjustment"},
     )
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+    result = parse_monarch_csv(csv, CTX)
 
     assert len(result.transactions) == 1
     assert result.skipped_adjustment_count == 1
@@ -453,6 +453,98 @@ def test_adjustment_rows_skipped_before_validation() -> None:
 
 def test_no_adjustment_rows_reports_zero_skipped() -> None:
     csv = _make_csv({"Tags": "shared"})
-    result = parse_monarch_csv(csv, PAYER_ID, UPLOAD_ID)
+    result = parse_monarch_csv(csv, CTX)
 
     assert result.skipped_adjustment_count == 0
+
+
+# --- Joint account labels ---
+
+JOINT = frozenset({"Joint Checking"})
+
+
+def _parse_joint(*rows: dict[str, str]) -> list[Transaction]:
+    ctx = ImportContext(
+        payer_person_id=ALICE.id,
+        upload_id=UPLOAD_ID,
+        persons=(ALICE, BOB),
+        joint_labels=JOINT,
+    )
+    return parse_monarch_csv(_make_csv(*rows), ctx).transactions
+
+
+def test_joint_label_imports_with_no_payer_into_its_joint_account() -> None:
+    [tx] = _parse_joint({"Account": "Joint Checking", "Amount": "-120.00"})
+
+    assert tx.payer_person_id is None
+    assert tx.account_id == joint_account_id("Joint Checking")
+    assert tx.account == "Joint Checking"
+    assert tx.household is True
+    assert tx.payer_percentage == 100
+    assert tx.is_settlement is False
+    assert tx.depositor_person_id is None
+
+
+def test_other_labels_stay_the_uploaders() -> None:
+    joint, own = _parse_joint({"Account": "Joint Checking"}, {"Account": "Chase"})
+
+    assert joint.payer_person_id is None
+    assert own.payer_person_id == ALICE.id
+    assert own.account_id == personal_account_id(ALICE.id, "Chase")
+
+
+@pytest.mark.parametrize(
+    "tags", ["shared", "s70", "bob", "settlement", "household, s30", "bob, s20"]
+)
+def test_tags_on_a_joint_row_neither_split_it_nor_make_it_a_settlement(
+    tags: str,
+) -> None:
+    [tx] = _parse_joint({"Account": "Joint Checking", "Tags": tags})
+
+    assert (tx.payer_person_id, tx.payer_percentage, tx.household) == (None, 100, True)
+    assert tx.is_settlement is False
+    assert tx.tags == tuple(t.strip() for t in tags.split(","))
+
+
+def test_joint_deposit_names_the_one_owner_in_its_text() -> None:
+    [tx] = _parse_joint({
+        "Account": "Joint Checking",
+        "Merchant": "Transfer",
+        "Original Statement": "ONLINE TRANSFER FROM BOB",
+        "Amount": "500.00",
+    })
+
+    assert tx.depositor_person_id == BOB.id
+
+
+@pytest.mark.parametrize(
+    "statement", ["INTEREST PAYMENT", "TRANSFER ALICE TO BOB"], ids=["none", "both"]
+)
+def test_joint_deposit_with_no_single_owner_named_has_no_depositor(
+    statement: str,
+) -> None:
+    [tx] = _parse_joint({
+        "Account": "Joint Checking",
+        "Original Statement": statement,
+        "Amount": "500.00",
+    })
+
+    assert tx.depositor_person_id is None
+
+
+def test_joint_payment_never_has_a_depositor() -> None:
+    [tx] = _parse_joint({
+        "Account": "Joint Checking",
+        "Original Statement": "PAYMENT TO BOB'S PLUMBING",
+        "Amount": "-500.00",
+    })
+
+    assert tx.depositor_person_id is None
+
+
+def test_joint_rows_count_occurrences_like_any_row() -> None:
+    first, second = _parse_joint(
+        {"Account": "Joint Checking"}, {"Account": "Joint Checking"}
+    )
+
+    assert (first.occurrence, second.occurrence) == (0, 1)

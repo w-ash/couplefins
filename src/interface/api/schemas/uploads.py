@@ -55,6 +55,7 @@ class PreviewTransactionResponse(BaseModel):
     amount: MoneyField
     household: bool
     payer_percentage: int
+    is_joint: bool
 
 
 class FieldDiffResponse(BaseModel):
@@ -88,6 +89,7 @@ class PreviewUploadResponse(BaseModel):
                 amount=tx.amount,
                 household=tx.household,
                 payer_percentage=tx.payer_percentage,
+                is_joint=tx.is_joint,
             )
 
         return cls(

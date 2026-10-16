@@ -15,6 +15,7 @@ via ToolSpec entries, never called by name from this module.
 """
 
 import calendar
+from collections.abc import Callable, Mapping
 from decimal import Decimal
 from itertools import starmap
 from typing import cast, get_args
@@ -30,7 +31,7 @@ from src.application.use_cases._shared.command_validators import (
     assert_positive_decimal,
     person_for_scope,
 )
-from src.application.use_cases._shared.finalization import load_period_status
+from src.application.use_cases._shared.finalization import load_period_status, months_of
 from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
@@ -38,6 +39,11 @@ from src.application.use_cases._shared.settlement_math import load_ledger
 from src.application.use_cases._shared.settlement_records import (
     derive_direction_from_legs,
 )
+from src.application.use_cases._shared.transaction_pipeline import (
+    NO_PAYER_SPLIT,
+    reject_joint_rows,
+)
+from src.application.use_cases.bulk_update_transactions import validate_bulk_changes
 from src.application.use_cases.export_adjustments import (
     ExportAdjustmentsCommand,
     PreviewAdjustmentsResult,
@@ -84,6 +90,11 @@ from src.application.use_cases.get_upload_history import (
     GetUploadHistoryResult,
     GetUploadHistoryUseCase,
 )
+from src.application.use_cases.list_accounts import (
+    ListAccountsCommand,
+    ListAccountsResult,
+    ListAccountsUseCase,
+)
 from src.application.use_cases.list_budgets import ListBudgetsResult, list_budgets
 from src.application.use_cases.list_category_groups import (
     ListCategoryGroupsCommand,
@@ -110,18 +121,20 @@ from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import ToolExecutionError, ValidationError
 from src.domain.filters import is_reconciliation_relevant
+from src.domain.formatting import FieldValue
 from src.domain.ledger import MonthKey, SettlementLedger
 from src.domain.month_key import assert_month_key
 from src.domain.reconciliation import SettlementResult
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
-from src.domain.splits import check_payer_percentage
+from src.domain.split_rules import check_payer_percentage
 
 
-def _person_name(person_id: UUID, persons: list[Person]) -> str:
+def _person_name(person_id: UUID | None, persons: list[Person]) -> str:
+    """The person's name; "Joint" for a joint row, which has no payer."""
     for p in persons:
         if p.id == person_id:
             return p.name
-    return "Unknown"
+    return "Joint" if person_id is None else "Unknown"
 
 
 _MAX_BULK_TRANSACTIONS = 100
@@ -480,6 +493,28 @@ async def handle_get_tags(
         "total_count": len(result.tags),
         "showing": len(shown),
         "tags": [UserData(t) for t in shown],
+    }
+
+
+async def handle_get_accounts(
+    _tool_input: dict[str, object],
+    ctx: ToolContext,
+) -> dict[str, object]:
+    result: ListAccountsResult = await execute_use_case(
+        lambda uow: ListAccountsUseCase().execute(ListAccountsCommand(), uow)
+    )
+    shown = result.accounts[:_MAX_LIST_ROWS]
+    return {
+        "total_count": len(result.accounts),
+        "showing": len(shown),
+        "accounts": [
+            {
+                "name": UserData(a.name),
+                "kind": a.kind,
+                "owner": _person_name(a.owner_person_id, ctx.persons),
+            }
+            for a in shown
+        ],
     }
 
 
@@ -1059,9 +1094,8 @@ async def handle_update_transaction_split(
     async def _fetch(uow: UnitOfWorkProtocol) -> list[dict[str, object]]:
         async with uow:
             by_id = await _fetch_transactions(uow, [tid for tid, _ in entries])
-            await _assert_months_open(
-                uow, {(tx.date.year, tx.date.month) for tx in by_id.values()}
-            )
+            await _assert_months_open(uow, months_of(by_id.values()))
+            _as_tool_error(reject_joint_rows, by_id.values(), NO_PAYER_SPLIT)
             rows: list[dict[str, object]] = []
             for transaction_id, payer_percentage in entries:
                 tx = by_id[transaction_id]
@@ -1104,6 +1138,78 @@ async def handle_update_transaction_split(
     )
 
 
+# The bulk tool's joint-row changes, by the names the model uses.
+_JOINT_CHANGE_NAMES = frozenset({"depositor", "owner_shares"})
+_NO_DEPOSITOR = "none"
+
+
+def _as_tool_error[**P](
+    check: Callable[P, object], /, *args: P.args, **kwargs: P.kwargs
+) -> None:
+    """Run a use case's check at propose time; raise its ValidationError as
+    a ToolExecutionError."""
+    try:
+        check(*args, **kwargs)
+    except ValidationError as e:
+        raise ToolExecutionError(str(e)) from e
+
+
+def _resolve_joint_changes(
+    changes: dict[str, object], persons: list[Person]
+) -> tuple[dict[str, FieldValue], list[str]]:
+    """The joint-row changes as update fields keyed by person id, and their
+    descriptions.
+
+    `depositor` becomes `depositor_person_id` (None for "none");
+    `owner_shares` becomes `owner_shares` by id (None for an empty object).
+    """
+    resolved: dict[str, FieldValue] = {}
+    parts: list[str] = []
+    if "depositor" in changes:
+        name = cast(str, changes["depositor"])
+        if name.strip().lower() == _NO_DEPOSITOR:
+            resolved["depositor_person_id"] = None
+            parts.append("depositor unassigned")
+        else:
+            depositor = resolve_person(name, persons)
+            resolved["depositor_person_id"] = depositor.id
+            parts.append(f"depositor to {depositor.name}")
+    if "owner_shares" in changes:
+        by_name = cast(dict[str, int], changes["owner_shares"])
+        shares = {resolve_person(name, persons): pct for name, pct in by_name.items()}
+        resolved["owner_shares"] = {p.id: pct for p, pct in shares.items()} or None
+        parts.append(
+            "owner shares " + " / ".join(f"{p.name} {pct}" for p, pct in shares.items())
+            if shares
+            else "owner shares reset to 50/50"
+        )
+    return resolved, parts
+
+
+def _row_updates(
+    changes: dict[str, object], joint: dict[str, FieldValue]
+) -> dict[str, FieldValue]:
+    """The changes `validate_bulk_changes` checks against the rows, by the
+    use case's field names."""
+    updates = dict(joint)
+    if "payer_percentage" in changes:
+        updates["payer_percentage"] = cast(int, changes["payer_percentage"])
+    if "household" in changes:
+        updates["household"] = cast(bool, changes["household"])
+    return updates
+
+
+def _stored(joint: dict[str, FieldValue]) -> dict[str, object]:
+    """Joint-row changes as the pending action stores them: ids as text."""
+    stored: dict[str, object] = {}
+    for name, value in joint.items():
+        if isinstance(value, Mapping):
+            stored[name] = {str(k): v for k, v in value.items()}
+        else:
+            stored[name] = None if value is None else str(value)
+    return stored
+
+
 async def handle_bulk_update_transactions(
     tool_input: dict[str, object],
     ctx: ToolContext,
@@ -1119,19 +1225,26 @@ async def handle_bulk_update_transactions(
     except ValueError as e:
         raise ToolExecutionError(f"Invalid transaction ID: {e}") from e
 
-    # Validate every transaction exists + check finalization in one UoW
-    async def _validate(uow: UnitOfWorkProtocol) -> None:
-        async with uow:
-            by_id = await _fetch_transactions(uow, transaction_ids)
-            await _assert_months_open(
-                uow, {(tx.date.year, tx.date.month) for tx in by_id.values()}
-            )
-
-    await execute_use_case(_validate)
-
     changes = cast(dict[str, object], tool_input.get("changes", {}))
     if not changes:
         raise ToolExecutionError("No changes specified")
+
+    joint_changes, joint_parts = _resolve_joint_changes(changes, ctx.persons)
+
+    # Validate every transaction exists + check finalization in one UoW, and
+    # reject what the use case would reject at confirm time.
+    async def _validate(uow: UnitOfWorkProtocol) -> None:
+        async with uow:
+            by_id = await _fetch_transactions(uow, transaction_ids)
+            await _assert_months_open(uow, months_of(by_id.values()))
+            _as_tool_error(
+                validate_bulk_changes,
+                _row_updates(changes, joint_changes),
+                by_id.values(),
+                [p.id for p in ctx.persons],
+            )
+
+    await execute_use_case(_validate)
 
     if "category" in changes:
         await _check_category_exists(cast(str, changes["category"]))
@@ -1152,6 +1265,7 @@ async def handle_bulk_update_transactions(
         tag_action = cast(str, tag_info["action"])
         values = cast(list[str], tag_info["values"])
         parts.append(f"{tag_action} tags: {', '.join(wrap(v) for v in values)}")
+    parts.extend(joint_parts)
 
     change_desc = ", ".join(parts) if parts else "no changes"
     count = len(transaction_ids)
@@ -1161,7 +1275,10 @@ async def handle_bulk_update_transactions(
     details: dict[str, object] = {
         "transaction_ids": [str(tid) for tid in transaction_ids],
         "count": count,
-        "changes": changes,
+        "changes": {
+            **{k: v for k, v in changes.items() if k not in _JOINT_CHANGE_NAMES},
+            **_stored(joint_changes),
+        },
     }
     return _propose_action(
         ctx.current_user, "bulk_update_transactions", tool_input, description, details

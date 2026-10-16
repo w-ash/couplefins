@@ -1,3 +1,4 @@
+from collections.abc import Collection, Iterable, Mapping
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from enum import Enum
@@ -8,14 +9,18 @@ from attrs import define, evolve, field
 
 from src.domain.entities.transaction_edit import TransactionEdit
 from src.domain.exceptions import ValidationError
+from src.domain.filters import is_joint_row
 from src.domain.formatting import FieldValue
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
+from src.domain.split_rules import check_owner_shares, check_payer_percentage
 
+from ._shared.command_validators import as_validation_error
 from ._shared.finalization import assert_period_not_finalized
 from ._shared.transaction_pipeline import (
+    NO_PAYER_SPLIT,
     compute_edit,
     fetch_and_validate,
-    validate_payer_percentage,
+    reject_joint_rows,
 )
 
 if TYPE_CHECKING:
@@ -37,6 +42,9 @@ class BulkUpdateTransactionsCommand:
     payer_percentage: int | Unset = field(default=Unset.UNSET)
     household: bool | Unset = field(default=Unset.UNSET)
     is_excluded: bool | Unset = field(default=Unset.UNSET)
+    # Joint rows only. None clears the value.
+    depositor_person_id: UUID | Unset | None = field(default=Unset.UNSET)
+    owner_shares: Mapping[UUID, int] | Unset | None = field(default=Unset.UNSET)
     edited_by_person_id: UUID | None = None
 
 
@@ -67,6 +75,10 @@ def _collect_updates(
         updates["household"] = command.household
     if not isinstance(command.is_excluded, Unset):
         updates["is_excluded"] = command.is_excluded
+    if not isinstance(command.depositor_person_id, Unset):
+        updates["depositor_person_id"] = command.depositor_person_id
+    if not isinstance(command.owner_shares, Unset):
+        updates["owner_shares"] = command.owner_shares
     return updates
 
 
@@ -94,19 +106,41 @@ def _validate_command(
             "date and amount can only be changed for a single transaction"
         )
     if not isinstance(command.payer_percentage, Unset):
-        validate_payer_percentage(command.payer_percentage)
+        as_validation_error(check_payer_percentage, command.payer_percentage)
 
 
-_EDIT_FIELDS = (
-    "date",
-    "amount",
-    "category",
-    "notes",
-    "tags",
-    "payer_percentage",
-    "household",
-    "is_excluded",
-)
+_JOINT_ONLY_FIELDS = ("depositor_person_id", "owner_shares")
+
+
+def validate_bulk_changes(
+    updates: Mapping[str, FieldValue],
+    transactions: Iterable[Transaction],
+    couple: Collection[UUID],
+) -> None:
+    """Reject a change a row's account does not allow.
+
+    A joint row has no payer: its split is its owner shares, and it is
+    always household. Only a joint row has a depositor or owner shares,
+    and they name the couple. The chat assistant runs this check when it
+    proposes a change, and the use case again when it applies one.
+    """
+    rows = list(transactions)
+    if any(f in updates for f in _JOINT_ONLY_FIELDS) and not all(
+        map(is_joint_row, rows)
+    ):
+        raise ValidationError(
+            "Only a joint-account row has a depositor or owner shares"
+        )
+    if "payer_percentage" in updates:
+        reject_joint_rows(rows, NO_PAYER_SPLIT)
+    if updates.get("household") is False:
+        reject_joint_rows(rows, "A joint-account row is always household")
+    depositor = updates.get("depositor_person_id")
+    if depositor is not None and depositor not in couple:
+        raise ValidationError(f"Depositor {depositor} is not one of the couple")
+    shares = updates.get("owner_shares")
+    if isinstance(shares, Mapping):
+        as_validation_error(check_owner_shares, shares, couple)
 
 
 async def apply_bulk_transaction_updates(
@@ -125,6 +159,8 @@ async def apply_bulk_transaction_updates(
     _validate_command(command, updates)
 
     transactions = await fetch_and_validate(uow, command.transaction_ids)
+    couple = [p.id for p in await uow.persons.get_all()]
+    validate_bulk_changes(updates, transactions.values(), couple)
 
     if "date" in updates:
         tx = transactions[command.transaction_ids[0]]
@@ -151,6 +187,8 @@ async def apply_bulk_transaction_updates(
             ("payer_percentage", tx.payer_percentage),
             ("household", tx.household),
             ("is_excluded", tx.is_excluded),
+            ("depositor_person_id", tx.depositor_person_id),
+            ("owner_shares", tx.owner_shares),
         )
         edits = [
             e

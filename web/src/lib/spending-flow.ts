@@ -5,6 +5,7 @@ import type {
 } from "@/api/generated/model";
 import { getChartColor } from "@/lib/chart-colors";
 import type { PersonScope } from "@/lib/person-scope";
+import { payerKey } from "@/lib/transaction-filters";
 import type {
   TransactionsLink,
   TransactionsRange,
@@ -12,7 +13,9 @@ import type {
 import { getPersonChartColor } from "@/types/person";
 
 export const UNCATEGORIZED_KEY = "uncategorized";
-export const UNCATEGORIZED_COLOR = "var(--color-muted-foreground)";
+/** Joint-account sources belong to neither partner. */
+const NEUTRAL_COLOR = "var(--color-muted-foreground)";
+export const UNCATEGORIZED_COLOR = NEUTRAL_COLOR;
 
 /** What the flow chart and the legend need to know about the viewer. */
 export interface FlowContext {
@@ -110,10 +113,10 @@ function sourceId(cell: SpendingFlowCellItem): string {
 /** How a source reads on the page, in the viewer's words. */
 export function sourceLabel(
   kind: FlowSourceKind,
-  personId: string,
+  personId: string | null,
   ctx: FlowContext,
 ): string {
-  const name = ctx.personNames.get(personId) ?? "Unknown";
+  const name = ctx.personNames.get(personId ?? "") ?? "Unknown";
   switch (kind) {
     case "payer":
       return `${name} paid`;
@@ -123,16 +126,19 @@ export function sourceLabel(
       return "My personal";
     case "spotted_for_me":
       return `${name} paid for me`;
+    case "joint":
+      return "Joint accounts";
   }
 }
 
 export function sourceColor(
   kind: FlowSourceKind,
-  personId: string,
+  personId: string | null,
   ctx: FlowContext,
 ): string {
   if (kind === "household_share") return "var(--household)";
-  return personColor(ctx, personId);
+  if (kind === "joint") return NEUTRAL_COLOR;
+  return personColor(ctx, personId ?? "");
 }
 
 /** The Transactions list a source node stands for. A person's own sources
@@ -140,12 +146,16 @@ export function sourceColor(
  * list (its share column shows what counted). */
 function sourceLink(
   kind: FlowSourceKind,
-  personId: string,
+  personId: string | null,
   ctx: FlowContext,
 ): TransactionsLink {
   if (kind === "household_share")
     return { range: ctx.range, scope: "household" };
-  return { range: ctx.range, scope: ctx.scope, payerId: personId };
+  return {
+    range: ctx.range,
+    scope: ctx.scope,
+    payerId: payerKey(kind === "joint", personId) || undefined,
+  };
 }
 
 function categoryLink(

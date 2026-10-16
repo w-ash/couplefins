@@ -758,3 +758,120 @@ async def test_manage_settlement_merchant_add_duplicate_raises() -> None:
             {"action": "add", "name": "venmo", "pattern": "venmo"},
             CTX,
         )
+
+
+# --- bulk_update_transactions: joint rows (US-JOINT-1, US-JOINT-2) ---
+
+
+@pytest.mark.anyio
+async def test_bulk_update_resolves_joint_changes_by_name() -> None:
+    deposit = make_transaction(joint=True, amount=Decimal("1600.00"))
+    uow = make_mock_uow()
+    uow.transactions.get_by_ids.return_value = [deposit]
+
+    with _patch_execute_with_uow(uow):
+        result = await execute_tool(
+            "bulk_update_transactions",
+            {
+                "transaction_ids": [str(deposit.id)],
+                "changes": {
+                    "depositor": "alice",
+                    "owner_shares": {"Alice": 60, "Bob": 40},
+                },
+            },
+            CTX,
+        )
+
+    assert result["details"]["changes"] == {
+        "depositor_person_id": str(ALICE.id),
+        "owner_shares": {str(ALICE.id): 60, str(BOB.id): 40},
+    }
+    assert "depositor to Alice" in str(result["description"])
+    assert "owner shares Alice 60 / Bob 40" in str(result["description"])
+
+
+@pytest.mark.anyio
+async def test_bulk_update_clears_joint_changes() -> None:
+    deposit = make_transaction(joint=True, amount=Decimal("1600.00"))
+    uow = make_mock_uow()
+    uow.transactions.get_by_ids.return_value = [deposit]
+
+    with _patch_execute_with_uow(uow):
+        result = await execute_tool(
+            "bulk_update_transactions",
+            {
+                "transaction_ids": [str(deposit.id)],
+                "changes": {"depositor": "none", "owner_shares": {}},
+            },
+            CTX,
+        )
+
+    assert result["details"]["changes"] == {
+        "depositor_person_id": None,
+        "owner_shares": None,
+    }
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("shares", "message"),
+    [
+        ({"Alice": 100}, "name 2 owners"),
+        ({"Alice": 60, "Bob": 30}, "sum to 100"),
+        ({"Alice": 60, "Carol": 40}, "Unknown person: Carol"),
+    ],
+)
+async def test_bulk_update_rejects_bad_owner_shares(
+    shares: dict[str, int], message: str
+) -> None:
+    joint = make_transaction(joint=True)
+    uow = make_mock_uow()
+    uow.transactions.get_by_ids.return_value = [joint]
+
+    with _patch_execute_with_uow(uow), pytest.raises(ToolExecutionError, match=message):
+        await execute_tool(
+            "bulk_update_transactions",
+            {"transaction_ids": [str(joint.id)], "changes": {"owner_shares": shares}},
+            CTX,
+        )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("joint", "changes", "message"),
+    [
+        (False, {"depositor": "Alice"}, "Only a joint-account row"),
+        (True, {"payer_percentage": 50}, "no payer split"),
+        (True, {"household": False}, "always household"),
+    ],
+)
+async def test_bulk_update_rejects_changes_the_row_does_not_allow(
+    joint: bool, changes: dict[str, object], message: str
+) -> None:
+    tx = make_transaction(joint=joint)
+    uow = make_mock_uow()
+    uow.transactions.get_by_ids.return_value = [tx]
+
+    with _patch_execute_with_uow(uow), pytest.raises(ToolExecutionError, match=message):
+        await execute_tool(
+            "bulk_update_transactions",
+            {"transaction_ids": [str(tx.id)], "changes": changes},
+            CTX,
+        )
+
+
+@pytest.mark.anyio
+async def test_split_proposal_rejects_a_joint_row() -> None:
+    joint = make_transaction(joint=True)
+    uow = make_mock_uow()
+    uow.transactions.get_by_ids.return_value = [joint]
+
+    with (
+        _patch_execute_with_uow(uow),
+        pytest.raises(ToolExecutionError, match="no payer split"),
+    ):
+        await execute_tool(
+            "update_transaction_split",
+            {"transaction_id": str(joint.id), "payer_percentage": 50},
+            CTX,
+        )

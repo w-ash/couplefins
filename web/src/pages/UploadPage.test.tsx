@@ -174,6 +174,38 @@ describe("UploadPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("counts and badges joint-account rows in the preview", async () => {
+    const joint = {
+      date: "2026-01-17",
+      merchant: "Water Utility",
+      category: "Utilities",
+      amount: -80.0,
+      household: true,
+      payer_percentage: 100,
+      is_joint: true,
+    };
+    server.use(
+      http.post("/api/v1/uploads/preview", () =>
+        HttpResponse.json({
+          ...previewResponseAllNew,
+          new_transactions: [
+            ...previewResponseAllNew.new_transactions,
+            joint,
+            { ...joint, merchant: "Internet" },
+          ],
+        }),
+      ),
+    );
+
+    renderWithProviders(<UploadPage />);
+    setFileAndSubmit();
+
+    expect(
+      await screen.findByText("1 household, 1 personal, 2 joint"),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("Joint").length).toBeGreaterThanOrEqual(2);
+  });
+
   it("shows nothing-to-import message when all unchanged", async () => {
     server.use(
       http.post("/api/v1/uploads/preview", () =>

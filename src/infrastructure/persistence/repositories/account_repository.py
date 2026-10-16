@@ -1,11 +1,16 @@
 from uuid import UUID
 
+from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert
 
 from src.domain.entities.account import ACCOUNT_KINDS, Account
 from src.domain.literals import parse_literal
 from src.infrastructure.persistence.models.account_model import AccountModel
-from src.infrastructure.persistence.repositories.base import BaseRepository
+from src.infrastructure.persistence.repositories.base import (
+    BaseRepository,
+    optional_str,
+    optional_uuid,
+)
 
 
 class AccountRepository(BaseRepository[Account, AccountModel]):
@@ -17,9 +22,7 @@ class AccountRepository(BaseRepository[Account, AccountModel]):
             id=UUID(model.id),
             name=model.name,
             kind=parse_literal(model.kind, ACCOUNT_KINDS, "account kind"),
-            owner_person_id=(
-                UUID(model.owner_person_id) if model.owner_person_id else None
-            ),
+            owner_person_id=optional_uuid(model.owner_person_id),
         )
 
     @staticmethod
@@ -32,9 +35,7 @@ class AccountRepository(BaseRepository[Account, AccountModel]):
             "id": str(entity.id),
             "name": entity.name,
             "kind": entity.kind,
-            "owner_person_id": (
-                str(entity.owner_person_id) if entity.owner_person_id else None
-            ),
+            "owner_person_id": optional_str(entity.owner_person_id),
         }
 
     async def add_missing(self, entities: list[Account]) -> None:
@@ -50,3 +51,9 @@ class AccountRepository(BaseRepository[Account, AccountModel]):
             .on_conflict_do_nothing()
         )
         await self._execute_rowcount(stmt)
+
+    async def delete_by_ids(self, ids: list[UUID]) -> int:
+        if not ids:
+            return 0
+        stmt = delete(AccountModel).where(AccountModel.id.in_([str(i) for i in ids]))
+        return await self._execute_rowcount(stmt)

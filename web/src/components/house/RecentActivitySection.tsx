@@ -18,7 +18,9 @@ export function RecentActivitySection({
   owners,
   getPersonName,
   getPersonColor,
+  example = false,
 }: {
+  example?: boolean;
   activity: ActivityRowResponse[];
   owners: Owner[];
   getPersonName: (id: string) => string;
@@ -32,6 +34,7 @@ export function RecentActivitySection({
   return (
     <Card as="section" aria-labelledby="house-activity">
       <SectionHeader
+        example={example}
         id="house-activity"
         title="Recent activity"
         description="The latest movement on the joint accounts."

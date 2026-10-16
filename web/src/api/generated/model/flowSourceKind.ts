@@ -13,4 +13,5 @@ export const FlowSourceKind = {
   household_share: 'household_share',
   personal: 'personal',
   spotted_for_me: 'spotted_for_me',
+  joint: 'joint',
 } as const;

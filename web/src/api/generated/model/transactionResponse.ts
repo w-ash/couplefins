@@ -4,6 +4,9 @@
  * Couplefins
  * OpenAPI spec version: 0.1.0
  */
+import type { TransactionResponseOwnerShares } from './transactionResponseOwnerShares.ts';
+import type { TransactionResponseShareAmounts } from './transactionResponseShareAmounts.ts';
+import type { TransactionResponseShares } from './transactionResponseShares.ts';
 
 export interface TransactionResponse {
   id: string;
@@ -14,7 +17,7 @@ export interface TransactionResponse {
   amount: number;
   notes: string;
   tags: string[];
-  payer_person_id: string;
+  payer_person_id: string | null;
   payer_percentage: number;
   household: boolean;
   is_excluded: boolean;
@@ -23,4 +26,10 @@ export interface TransactionResponse {
   is_income: boolean;
   original_date: string | null;
   original_amount: number | null;
+  is_joint: boolean;
+  account_id: string;
+  shares: TransactionResponseShares;
+  share_amounts: TransactionResponseShareAmounts;
+  owner_shares: TransactionResponseOwnerShares;
+  depositor_person_id: string | null;
 }

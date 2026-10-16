@@ -8,6 +8,7 @@ from src.domain.constants import SplitDefaults
 from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import InvariantViolationError
+from src.domain.filters import is_joint_row
 from src.domain.splits import compute_shares
 
 # 12 hex chars = 48 bits → ~1-in-281-trillion collision rate per pair
@@ -35,7 +36,8 @@ def compute_adjustments(
     adjustments: list[Adjustment] = []
 
     for tx in transactions:
-        if tx.is_excluded:
+        # A joint row was paid from both owners' money: nobody fronted it.
+        if tx.is_excluded or is_joint_row(tx):
             continue
         if tx.payer_percentage == SplitDefaults.MAX_PAYER_PERCENTAGE:
             continue

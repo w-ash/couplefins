@@ -2,6 +2,8 @@ from datetime import date
 from decimal import Decimal
 import uuid
 
+from attrs import evolve
+
 from src.domain.export.adjustments import (
     assert_adjustments_zero_sum,
     compute_adjustments,
@@ -306,3 +308,12 @@ def test_zero_sum_odd_penny_rounding() -> None:
         ),
     ]
     _assert_zero_sum(txs, alice, bob)
+
+
+def test_joint_rows_get_no_adjustment() -> None:
+    alice, bob = _alice_bob()
+    joint = make_transaction(joint=True, amount=Decimal("-100.00"))
+    joint_split = evolve(joint, id=uuid.uuid4(), payer_percentage=50)
+
+    assert compute_adjustments([joint, joint_split], alice) == []
+    assert compute_adjustments([joint, joint_split], bob) == []

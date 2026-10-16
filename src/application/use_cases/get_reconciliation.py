@@ -15,9 +15,11 @@ from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
 from src.application.use_cases._shared.transaction_reads import (
+    TransactionShares,
     fetch_latest_spending_month,
     fetch_scoped_rows,
     fetch_settlement_rows,
+    with_shares,
 )
 from src.application.use_cases._shared.transactions import (
     find_all_unmapped_categories,
@@ -104,6 +106,8 @@ class GetReconciliationResult:
     # dropped — what the summary was computed over.
     spending_transactions: list[Transaction]
     category_kinds: dict[str, GroupKind]
+    # Each listed row's split, by row id.
+    shares: dict[UUID, TransactionShares]
 
 
 @define(slots=True)
@@ -171,4 +175,5 @@ class GetReconciliationUseCase:
                 latest_transaction_month=latest_month,
                 spending_transactions=rows.spending,
                 category_kinds=ctx.category_kinds,
+                shares=with_shares(transactions, ctx),
             )

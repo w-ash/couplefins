@@ -1,4 +1,4 @@
-from collections.abc import Set
+from collections.abc import Mapping, Set
 from datetime import date
 from decimal import Decimal
 from uuid import UUID
@@ -21,7 +21,17 @@ from src.infrastructure.persistence.models.transaction_model import TransactionM
 from src.infrastructure.persistence.repositories.base import (
     BaseRepository,
     date_year_prefix,
+    optional_str,
+    optional_uuid,
 )
+
+
+def _owner_shares_column(shares: Mapping[UUID, int] | None) -> dict[str, int] | None:
+    return None if shares is None else {str(k): v for k, v in shares.items()}
+
+
+def _owner_shares_entity(column: dict[str, int] | None) -> dict[UUID, int] | None:
+    return None if column is None else {UUID(k): v for k, v in column.items()}
 
 
 class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
@@ -42,7 +52,7 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             notes=model.notes,
             amount=Decimal(model.amount),
             tags=tuple(model.tags),
-            payer_person_id=UUID(model.payer_person_id),
+            payer_person_id=optional_uuid(model.payer_person_id),
             payer_percentage=model.payer_percentage,
             household=model.household,
             is_settlement=model.is_settlement,
@@ -53,6 +63,8 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             original_amount=(
                 Decimal(model.original_amount) if model.original_amount else None
             ),
+            depositor_person_id=optional_uuid(model.depositor_person_id),
+            owner_shares=_owner_shares_entity(model.owner_shares),
         )
 
     @staticmethod
@@ -71,7 +83,7 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             "amount": str(entity.amount),
             "tags": list(entity.tags),
             "household": entity.household,
-            "payer_person_id": str(entity.payer_person_id),
+            "payer_person_id": optional_str(entity.payer_person_id),
             "payer_percentage": entity.payer_percentage,
             "is_settlement": entity.is_settlement,
             "is_excluded": entity.is_excluded,
@@ -83,6 +95,8 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
                 if entity.original_amount is not None
                 else None
             ),
+            "depositor_person_id": optional_str(entity.depositor_person_id),
+            "owner_shares": _owner_shares_column(entity.owner_shares),
         }
 
     @staticmethod
@@ -149,11 +163,16 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         end_date: date,
         *,
         tags: tuple[str, ...] | None = None,
+        payer_only: bool = False,
     ) -> list[Transaction]:
+        """Rows in a window. `payer_only` leaves out joint accounts' rows,
+        which have no payer."""
+        payer_filter = [TransactionModel.payer_person_id.is_not(None)]
         return await self._query(
             TransactionModel.date >= start_date.isoformat(),
             TransactionModel.date <= end_date.isoformat(),
             *self._tag_filter(tags),
+            *(payer_filter if payer_only else []),
         )
 
     async def get_household_by_year(self, year: int) -> list[Transaction]:
@@ -187,11 +206,13 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
     @staticmethod
     def _settlement_relevant_filters() -> list[ColumnElement[bool]]:
         """SQL twin of the domain's settlement-relevance predicate:
-        split rows that are neither settlement transfers nor excluded."""
+        split rows that are neither settlement transfers nor excluded, and
+        have a payer (a joint row has none)."""
         return [
             TransactionModel.payer_percentage < SplitDefaults.MAX_PAYER_PERCENTAGE,
             TransactionModel.is_settlement.is_(False),
             TransactionModel.is_excluded.is_(False),
+            TransactionModel.payer_person_id.is_not(None),
         ]
 
     async def get_settlement_relevant_by_date_range(
@@ -223,7 +244,8 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         """Rows relevant to this person's personal scope: everything they
         paid, plus non-household rows someone else paid where this person
         is the beneficiary (payer_percentage < 100, e.g. spotted) — their
-        share of those rows is their personal spending (v1.7.2)."""
+        share of those rows is their personal spending (v1.7.2). Joint rows
+        have no payer and are never returned."""
         pid = str(person_id)
         return await self._query(
             TransactionModel.date >= start_date.isoformat(),
@@ -240,25 +262,53 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             *self._tag_filter(tags),
         )
 
-    async def get_by_person_and_original_date_range(
+    @staticmethod
+    def _account_filter(account_ids: list[UUID]) -> ColumnElement[bool]:
+        return TransactionModel.account_id.in_([str(i) for i in account_ids])
+
+    async def get_by_account_ids_and_original_date_range(
         self,
-        person_id: UUID,
+        account_ids: list[UUID],
         start_date: date,
         end_date: date,
     ) -> list[Transaction]:
-        """Dedup fetch for CSV re-upload: match rows by the date the CSV knows
-        (original_date when the current date was edited in-app), so edited
-        rows still pair with their CSV twins instead of duplicating.
-        ISO-string comparison is chronological.
+        """Dedup fetch for CSV re-upload, over the accounts an upload may
+        touch: match rows by the date the CSV knows (original_date when the
+        current date was edited in-app), so edited rows still pair with
+        their CSV twins instead of duplicating. ISO-string comparison is
+        chronological.
         """
+        if not account_ids:
+            return []
         effective_date = func.coalesce(
             TransactionModel.original_date, TransactionModel.date
         )
         return await self._query(
-            TransactionModel.payer_person_id == str(person_id),
+            self._account_filter(account_ids),
             effective_date >= start_date.isoformat(),
             effective_date <= end_date.isoformat(),
         )
+
+    async def get_by_account_ids(self, account_ids: list[UUID]) -> list[Transaction]:
+        """Every row in the given accounts, at any date."""
+        if not account_ids:
+            return []
+        return await self._query(self._account_filter(account_ids))
+
+    async def get_recent_by_account_ids(
+        self, account_ids: list[UUID], limit: int
+    ) -> list[Transaction]:
+        """The newest `limit` rows in the given accounts, newest first."""
+        if not account_ids:
+            return []
+        stmt = (
+            select(TransactionModel)
+            .where(self._account_filter(account_ids))
+            .order_by(TransactionModel.date.desc(), TransactionModel.id)
+            .limit(limit)
+        )
+        result = await self._session.execute(stmt)
+        return [self._to_domain(row) for row in result.scalars().all()]
 
     _IMMUTABLE_KEYS = frozenset({
         "account",
@@ -279,7 +329,25 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
     # re-applied here (only brand-new rows via save_batch honor the CSV flag);
     # this is deliberate, to protect settlement links from being clobbered by
     # a freshly parsed row's defaults.
-    _IN_APP_KEYS = frozenset({"is_settlement", "is_excluded"})
+    # Hand assignments on a joint row (its depositor, its owner shares) are
+    # in-app too: a re-import never clears them.
+    _IN_APP_KEYS = frozenset({
+        "is_settlement",
+        "is_excluded",
+        "depositor_person_id",
+        "owner_shares",
+    })
+    # What moving a row between accounts rewrites (see rekey_batch).
+    _REKEY_KEYS = frozenset({
+        "id",
+        "account_id",
+        "payer_person_id",
+        "payer_percentage",
+        "household",
+        "is_settlement",
+        "owner_shares",
+        "depositor_person_id",
+    })
 
     async def _update(
         self, entity: Transaction, exclude: frozenset[str]
@@ -302,6 +370,24 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
 
     async def update_all_fields(self, entity: Transaction) -> Transaction:
         return await self._update(entity, self._IMMUTABLE_KEYS)
+
+    async def rekey_batch(self, entities: list[Transaction]) -> None:
+        """Move rows to another account: write each row's account id, payer,
+        split, household and settlement flags, owner shares, and depositor,
+        by id."""
+        if not entities:
+            return
+        params = [
+            {
+                k: v
+                for k, v in self._to_column_values(entity).items()
+                if k in self._REKEY_KEYS
+            }
+            for entity in entities
+        ]
+        # ORM bulk UPDATE by primary key, as in update_mutable_fields_batch.
+        await self._session.execute(update(TransactionModel), params)
+        await self._session.flush()
 
     async def get_latest_household_transaction_date(
         self, *, excluding_categories: Set[str], year: int | None = None

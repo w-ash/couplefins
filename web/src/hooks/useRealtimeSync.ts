@@ -5,11 +5,30 @@ import {
   getGetBudgetsQueryKey,
 } from "@/api/generated/budgets/budgets";
 import { getGetDashboardQueryKey } from "@/api/generated/dashboard/dashboard";
+import { getGetHouseQueryKey } from "@/api/generated/house/house";
 import { getGetSpendingTrendsQueryKey } from "@/api/generated/insights/insights";
 import { getGetReconciliationQueryKey } from "@/api/generated/reconciliation/reconciliation";
+import { getGetAccountsQueryKey } from "@/api/generated/settings/settings";
 import { getGetSettleUpDataQueryKey } from "@/api/generated/settlements/settlements";
 import { getGetTagsQueryKey } from "@/api/generated/transactions/transactions";
 import { subscribe } from "@/lib/event-source";
+
+const TRANSACTION_QUERY_KEYS = [
+  getGetReconciliationQueryKey(),
+  getGetDashboardQueryKey(),
+  getGetTagsQueryKey(),
+  getGetBudgetOverviewQueryKey(),
+  getGetSpendingTrendsQueryKey(),
+] as const;
+
+/** Queries a joint-account mark or unmark changes; also served by the SSE `accounts` event. */
+export const ACCOUNT_QUERY_KEYS = [
+  getGetAccountsQueryKey(),
+  getGetReconciliationQueryKey(),
+  getGetSettleUpDataQueryKey(),
+  getGetHouseQueryKey(),
+  getGetDashboardQueryKey(),
+] as const;
 
 export const ENTITY_QUERY_KEYS: Record<
   string,
@@ -20,13 +39,9 @@ export const ENTITY_QUERY_KEYS: Record<
     getGetDashboardQueryKey(),
     getGetReconciliationQueryKey(),
   ],
-  transactions: [
-    getGetReconciliationQueryKey(),
-    getGetDashboardQueryKey(),
-    getGetTagsQueryKey(),
-    getGetBudgetOverviewQueryKey(),
-    getGetSpendingTrendsQueryKey(),
-  ],
+  transactions: TRANSACTION_QUERY_KEYS,
+  // Mark or unmark moves rows in and out of settlement and budget.
+  accounts: [...ACCOUNT_QUERY_KEYS, ...TRANSACTION_QUERY_KEYS],
   uploads: [
     getGetDashboardQueryKey(),
     getGetReconciliationQueryKey(),

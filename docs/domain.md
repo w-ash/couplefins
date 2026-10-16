@@ -99,6 +99,22 @@ Neither field implies the other. A transaction can be household without being sp
 
 **Household (no split)**: An expense relevant to the couple's shared life but paid individually — concert tickets bought separately for a show they attend together, or groceries one person picked up but isn't splitting. Tagged `household` (or `shared, s100`) in Monarch. No settlement impact, but counts toward the shared budget.
 
+### Joint accounts
+
+A **joint account** is an `Account` that both partners fund. Its rows have no payer (`payer_person_id` is null) and are never one person's personal spending.
+
+- **Source**: Monarch (maintainer's decision, 2026-10-15). A partner marks an `Account` label seen in uploads as joint in Settings → Accounts. Both partners' exports of that account then resolve to the same account: its id is a uuid5 of a fixed namespace and the label.
+- **Marking** re-keys the rows both partners already imported under the label, through the same transform as importing (`as_joint_row` in `src/domain/joint.py`): payer cleared, `household=true`, out of settlement (`is_settlement` cleared too), 50/50 default shares (a hand-set split carries into the row's owner shares), and a deposit's depositor matched from its text. Natural-key twins from both partners collapse to one row, keeping the older upload's; in-app edits on the dropped twin are lost, and the confirm dialog says so. **Unmarking** reverses by upload provenance: each row returns to its uploader, `household=true`, with a carried split back as the uploader's `payer_percentage`. A mark→unmark round trip therefore restores `household=true` and a hand-set split; a row that was personal before marking comes back household. Both refuse when an affected month is finalized.
+- **Importing**: rows on a joint label import with no payer, `household=true`, and outside settlement. A re-import removes only the joint rows the uploader's own uploads imported: a file that does not name the joint account removes nothing from it, and a partner's file never removes a row the other partner imported.
+- **Lenses**: a joint row counts under the household lens in full and under each person's lens by their share. It never enters settlement math, so "missing upload" logic (which reads the uploader) is unchanged. Which joint rows count as spending stays the maintainer's call via `is_excluded` and transfer-kind groups.
+- **Depositor**: a credit into a joint account carries `depositor_person_id`, set at import or marking when the row's merchant, statement, or notes text names exactly one person, else unassigned; either partner can set it by hand. A deposit with a depositor is the depositor's money: it splits 100/0 to them whatever its owner shares, and the House activity lists it as a deposit even in a transfer-kind category.
+- **Owner shares**: a row's `owner_shares` override sets the per-person split of a joint row; without one it is 50/50. Hand-set depositor and owner shares survive re-imports.
+- **Natural key**: (date, amount, account_id, original statement, occurrence). Personal account ids already encode owner and label, so no existing row changed identity.
+
+### Shares
+
+`owner_shares(tx, person_ids)` in `src/domain/splits.py` is the one computation of every row's per-person percentages: personal rows from payer and `payer_percentage`; a joint deposit (amount > 0) with a depositor 100/0 to the depositor; other joint rows from the `owner_shares` override, else 50/50. `share_amounts` splits an amount exactly: the first owner rounds half-up, the second takes the remainder, so shares always sum to the amount. Every reader uses these; personal figures are unchanged. Transfer- and income-kind rows have no shares, except a joint deposit with a depositor, which is the depositor's. Listed rows get their shares once, in the application (`row_shares` in `src/application/use_cases/_shared/transaction_reads.py`); a row whose payer, depositor, or owners are not the couple lists with no shares and logs a warning instead of failing the read.
+
 ### Transfers and income
 
 A category **group** carries a `kind`: `expense` (the default, spending), `transfer` (money movement between the couple's own accounts — credit card payments, account transfers, balance adjustments), or `income` (money coming in — paychecks, dividends; v1.13.3). Monarch types its own groups this way, but its CSV export drops the type, so the app re-declares it on the group. The seeded "Transfer" group is `transfer` and the seeded "Income" group is `income`; the migrations that introduced each kind mark any existing group with that name the same way.
@@ -190,7 +206,7 @@ Couplefins vocabulary mapped to standard accounting terms:
 | Transaction | Source Document / Bank Statement Line | Imported from Monarch CSV |
 | Person | Account Holder | Implicit account — each person accumulates a running balance |
 | Upload | Batch Import / Document Provenance | Audit trail for data ingestion. Records the importer that read the file and the file's SHA-256 |
-| Account | Bank / Card Account | Where a transaction's money moved. Personal (one owner) or joint (both owners, no single owner). Every transaction has one; an import creates one per new source account label (v1.15.0) |
+| Account | Bank / Card Account | Where a transaction's money moved. Personal (one owner) or joint (both owners, no single owner). Every transaction has one; an import creates one per new source account label (v1.15.0). A joint account is created by marking a label joint (v1.15.2) |
 | ReconciliationPeriod | Transaction Lock | Freezes a month's data (uploads/edits rejected) — not a balance scope; settlements covering the month can still be recorded |
 | CategoryGroup | Chart of Accounts (level 1) | Reporting hierarchy |
 | CategoryMapping | Posting Rule | Routes categories to groups |
@@ -198,6 +214,7 @@ Couplefins vocabulary mapped to standard accounting terms:
 | Settlement | Payment with recorded coverage | Records that Person A paid Person B (amount, method, notes) plus a list of (year, month, amount) portions summing to the amount — the exact months the payment covers, allocated at record time and stored. Linked transfer transactions excluded from reconciliation. |
 | `payer_percentage` | Allocation Rule / Split Ratio | Determines each person's share (0-100, always set). Settlement: any transaction where `payer_percentage < 100` |
 | `household` | Expense Classification | Per-transaction flag — "relevant to the couple's shared life." Set by `shared`, `split`, or `household` tags (person-name tags do NOT set it — spotted is the beneficiary's personal spending) |
+| `depositor_person_id` | Contributor of record | Who deposited a credit into a joint account; matched from the row's text at import, else unassigned (v1.15.2) |
 | `include_personal` | Budget Scope Flag | Per-category toggle to also include personal (non-household) transactions in budget totals |
 | `CategoryGroup.kind` | Account Type (expense vs. transfer/contra) | `expense` groups are spending; `transfer` groups are money movement between own accounts, excluded from spending, budgets, and settlement |
 | `is_finalized` | Period Close | Prevents modification of a month's transactions after agreement; settlements covering the month stay possible |

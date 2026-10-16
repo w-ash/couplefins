@@ -98,7 +98,7 @@ class GetBudgetOverviewUseCase:
             category_lookup = build_category_lookup(ctx.categories, ctx.category_groups)
 
             if command.scope == "personal" and command.person_id is not None:
-                lens: SpendingLens = PersonalLens(command.person_id)
+                lens: SpendingLens = PersonalLens(command.person_id, ctx.person_ids)
                 fetch_scope: Scope = "personal"
                 budget_owner: UUID | None = command.person_id
             else:

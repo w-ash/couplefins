@@ -11,23 +11,52 @@ function serveHouse(response: HouseResponse) {
   server.use(http.get("/api/v1/house", () => HttpResponse.json(response)));
 }
 
+function withExamples(sections: string[]): HouseResponse {
+  return {
+    ...makeHouseResponse(),
+    example_sections: sections,
+  } as HouseResponse;
+}
+
 describe("HousePage", () => {
   beforeEach(() => {
     useIdentityStore.setState({ currentPersonId: ALICE_ID });
   });
 
   it("shows the example notice only for example data", async () => {
-    serveHouse(makeHouseResponse({ is_example: true }));
+    serveHouse(makeHouseResponse());
     const { unmount } = renderWithProviders(<HousePage />);
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Example figures",
     );
     unmount();
 
-    serveHouse(makeHouseResponse({ is_example: false }));
+    serveHouse(makeHouseResponse({ example_sections: [] }));
     renderWithProviders(<HousePage />);
     await screen.findByRole("heading", { name: "Put in" });
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("marks only the sections named in example_sections", async () => {
+    serveHouse(withExamples(["put_in", "loans"]));
+    renderWithProviders(<HousePage />);
+    await screen.findByRole("heading", { name: "Put in" });
+
+    expect(screen.getByRole("status")).toHaveTextContent("Example figures");
+    const pills = screen.getAllByText("Example");
+    expect(pills).toHaveLength(2);
+    const sectionOf = (pill: HTMLElement) =>
+      pill.closest("section")?.getAttribute("aria-labelledby");
+    expect(pills.map(sectionOf)).toEqual(["house-put-in", "house-loans"]);
+  });
+
+  it("shows no notice or pills once every section is real", async () => {
+    serveHouse(withExamples([]));
+    renderWithProviders(<HousePage />);
+    await screen.findByRole("heading", { name: "Put in" });
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByText("Example")).not.toBeInTheDocument();
   });
 
   it("renders the six sections", async () => {

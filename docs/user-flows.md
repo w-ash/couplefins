@@ -123,6 +123,13 @@ Getting transaction data into the system. Each person does this solo, on their o
 - Given the Upload page, then I can drag a file onto a drop zone instead of using a file picker
 - Given I've uploaded before, then I see a history of past uploads with dates and transaction counts
 
+**US-IMPORT-5** (v1.15.2): As a partner, I want rows from our joint account to import without a payer, so that nobody is charged for money we both funded.
+
+- Given my CSV has rows whose Account label is marked joint, then they import with no payer, as household, outside settlement
+- Given the preview, then those rows are classified "Joint"
+- Given Alice and Bob both upload exports containing the same joint-account rows, then each row is stored once
+- Given my file does not name the joint account, when I upload, then no joint row is removed
+
 ---
 
 ### Reviewing & Correcting Transactions
@@ -204,6 +211,26 @@ Making sure the data is right before settling. This is solo prep work — each p
 - Given I expand a transaction that has been edited, then I see the import event at the bottom and edits above it, each showing who changed what and when
 - Given an edit was made before v1.4.0 (no person tracking), then I see the edit with date and change details but no person name
 - Given a transaction whose CSV was re-uploaded, then the import event shows the date of the most recent upload, not the original
+
+---
+
+### Joint Accounts
+
+Rows from an account both partners fund have no payer. They count for the household in full and for each person by their share, and never enter settlement.
+
+**US-JOINT-1** (v1.15.2): As a partner, I want joint rows to show as joint, with each owner's share editable, so that the split reflects whose money it was.
+
+- Given a joint row, then the Transactions page shows a "Joint · {account}" badge instead of a payer
+- Given I expand a joint row, then I see an owner-shares editor with two complementary percent inputs; changing one sets the other to the remainder
+- Given an owner-shares override, when I reset it, then the row returns to 50/50
+- Given a joint row, then the payer split editor is not offered
+- Given I set owner shares, when the file is re-imported, then my shares are kept
+
+**US-JOINT-2** (v1.15.2): As a partner, I want deposits into the joint account attributed to whoever made them, so that contributions are tracked per person.
+
+- Given a joint-account credit whose merchant, statement, or notes text names exactly one person, then that person is its depositor on import
+- Given text naming no one or both, then the deposit is unassigned and the "Unassigned deposits" chip on Transactions counts it
+- Given a joint credit, then I can pick its depositor in the row; the choice persists across re-imports
 
 ---
 
@@ -510,6 +537,14 @@ Setup and maintenance tasks that happen occasionally, not monthly.
 
 ---
 
+**US-ACCOUNT-1** (v1.15.2): As a partner, I want to mark a Monarch account as joint, so that its rows stop being either of our personal spending.
+
+- Given Settings → Accounts, then I see each account label seen in uploads and whether it is joint
+- Given I mark a label joint, then a joint account is created and rows both of us already imported under that label lose their payer, default to 50/50 shares (a hand-set split is carried into the owner shares), and leave settlement
+- Given both of us imported the same joint row, then after marking they collapse to one row (the older upload's is kept)
+- Given I unmark a joint account, then its rows return to the uploader who imported them, by upload provenance
+- Given an affected month is finalized, then marking or unmarking is refused
+
 **US-CONFIG-5** (v1.12.x): As a partner, I want credit card payments and account transfers to stop counting as spending, because the purchases they pay for were already counted.
 
 - Given Settings → Category Groups, then each group shows whether it counts as Spending or is a Transfer, and I can switch it; a Transfer group shows a "Transfer" pill and the caption "Excluded from spending, budgets, and settlement"
@@ -559,6 +594,7 @@ The co-owned home on its own page. Every figure is computed in Python and served
 **US-HOUSE-7** (v1.15.1): As a co-owner, I want the joint accounts' latest activity, so that I can see what just moved.
 
 - Given the Recent activity section, then the joint accounts' latest rows show date, account, who, kind, budget line, amount, and each owner's share
+- Given a joint account has rows, then they appear here and the section is no longer marked example (v1.15.2)
 
 **US-HOUSE-8** (v1.15.1): As a co-owner, I want to know when the House figures are examples, so that I never mistake them for real ones.
 

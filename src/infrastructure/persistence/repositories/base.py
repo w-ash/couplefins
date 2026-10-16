@@ -16,6 +16,16 @@ def date_month_prefix(year: int, month: int) -> str:
     return f"{year:04d}-{month:02d}-"
 
 
+def optional_uuid(value: str | None) -> UUID | None:
+    """A nullable id column as a UUID, or None."""
+    return UUID(value) if value else None
+
+
+def optional_str(value: UUID | None) -> str | None:
+    """A nullable id as its column string, or None."""
+    return str(value) if value else None
+
+
 class BaseRepository[TEntity, TModel: Base]:
     _model_class: type[TModel]
 

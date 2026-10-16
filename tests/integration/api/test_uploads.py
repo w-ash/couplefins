@@ -4,6 +4,14 @@ import json
 from httpx import AsyncClient
 import pytest
 
+from tests.integration.api._joint import (
+    ALICE_CSV,
+    BOB_CSV,
+    HEADER as JOINT_HEADER,
+    couple_with_joint_exports,
+    january,
+    mark_joint,
+)
 from tests.integration.conftest import CookieAuth, setup_and_login
 
 VALID_CSV = (
@@ -381,3 +389,69 @@ async def test_upload_binary_file_returns_422(client: AsyncClient) -> None:
     )
     assert response.status_code == 422
     assert "UTF-8" in response.json()["error"]["message"]
+
+
+async def test_both_partners_exports_store_each_joint_row_once(
+    client: AsyncClient,
+) -> None:
+    """US-IMPORT-5: after marking, both exports of a joint row are one row,
+    and joint rows leave the settlement owed unchanged."""
+    couple = await couple_with_joint_exports(client)
+    await mark_joint(client, couple.alice)
+
+    alice_again = await _upload(client, ALICE_CSV, couple.alice)
+    bob_again = await _upload(client, BOB_CSV, couple.bob)
+
+    assert (alice_again["new_count"], alice_again["skipped_count"]) == (0, 3)
+    assert (bob_again["new_count"], bob_again["skipped_count"]) == (0, 3)
+    assert (alice_again["removed_count"], bob_again["removed_count"]) == (0, 0)
+    recon = await january(client, couple.alice)
+    joint = [tx["merchant"] for tx in recon["transactions"] if tx["is_joint"]]
+    assert sorted(joint) == ["Grocery Store", "Hardware Store", "Transfer From Alice"]
+    assert recon["settlement"]["amount"] == pytest.approx(40.0)
+
+
+async def test_new_joint_rows_import_without_a_payer(client: AsyncClient) -> None:
+    couple = await couple_with_joint_exports(client)
+    await mark_joint(client, couple.alice)
+    later = (
+        JOINT_HEADER
+        + '2026-01-25,Hardware Store,Home Improvement,Joint Checking,PAINT,,"-45.00",shared\n'
+    )
+
+    preview = await client.post(
+        "/api/v1/uploads/preview",
+        files={"file": ("test.csv", io.BytesIO(later.encode()), "text/csv")},
+        auth=couple.bob,
+    )
+    data = await _upload(client, later, couple.bob)
+
+    assert [tx["is_joint"] for tx in preview.json()["new_transactions"]] == [True]
+    assert data["new_count"] == 1
+    recon = await january(client, couple.alice)
+    [paint] = [tx for tx in recon["transactions"] if tx["date"] == "2026-01-25"]
+    assert (paint["payer_person_id"], paint["household"], paint["is_joint"]) == (
+        None,
+        True,
+        True,
+    )
+    assert recon["settlement"]["amount"] == pytest.approx(40.0)
+
+
+async def test_a_file_without_the_joint_account_removes_no_joint_row(
+    client: AsyncClient,
+) -> None:
+    """US-IMPORT-5: a re-upload replaces only the accounts the file names."""
+    couple = await couple_with_joint_exports(client)
+    await mark_joint(client, couple.alice)
+    chase_only = (
+        JOINT_HEADER
+        + '2026-01-10,Restaurant,Restaurants & Bars,Chase,RESTAURANT,,"-80.00",shared\n'
+        + '2026-01-28,Bakery,Restaurants & Bars,Chase,BAKERY,,"-12.00",\n'
+    )
+
+    data = await _upload(client, chase_only, couple.alice)
+
+    assert data["removed_count"] == 0
+    recon = await january(client, couple.alice)
+    assert sum(tx["is_joint"] for tx in recon["transactions"]) == 3

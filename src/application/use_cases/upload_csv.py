@@ -12,6 +12,7 @@ from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.application.use_cases._shared.finalization import assert_periods_not_finalized
 from src.application.use_cases._shared.transactions import (
     classify_against_existing,
+    delete_transactions_with_links,
     find_new_categories,
     find_unmapped_categories,
     parse_file,
@@ -113,33 +114,6 @@ def _partition_changes(
     return _Partition(new_txs, updated_txs, updated_existing, skipped_count)
 
 
-async def _delete_removed(
-    uow: UnitOfWorkProtocol, removed: list[Transaction]
-) -> list[str]:
-    """Delete rows the new CSV no longer contains; unlink settlements first.
-
-    Returns warnings for rows that were linked to a settlement — the link is
-    removed but the settlement record itself stays.
-    """
-    if not removed:
-        return []
-    removed_ids = [tx.id for tx in removed]
-    warnings: list[str] = []
-    links = await uow.settlement_transaction_links.get_by_transaction_ids(removed_ids)
-    if links:
-        linked_ids = {link.transaction_id for link in links}
-        warnings = [
-            f"Removed transaction {tx.merchant} ({tx.date.isoformat()}) "
-            "was linked to a settlement — the link was removed"
-            for tx in removed
-            if tx.id in linked_ids
-        ]
-        await uow.settlement_transaction_links.delete_by_transaction_ids(removed_ids)
-    await uow.transaction_edits.delete_by_transaction_ids(removed_ids)
-    await uow.transactions.delete_by_ids(removed_ids)
-    return warnings
-
-
 @define(slots=True)
 class UploadCsvUseCase:
     importer: Importer = field(factory=MonarchCsvImporter)
@@ -158,13 +132,19 @@ class UploadCsvUseCase:
             )
 
             upload_id = uuid.uuid4()
+            accounts = await uow.accounts.get_all()
             parsed = await parse_file(
-                uow, self.importer, command.data, command.person_id, upload_id
+                uow,
+                self.importer,
+                command.data,
+                person_id=command.person_id,
+                upload_id=upload_id,
+                accounts=accounts,
             )
             incoming = parsed.transactions
 
             classified, existing, removed = await classify_against_existing(
-                incoming, command.person_id, uow
+                incoming, command.person_id, accounts, uow
             )
             partition = _partition_changes(
                 classified,
@@ -209,7 +189,7 @@ class UploadCsvUseCase:
             if updated_txs:
                 await uow.transactions.update_mutable_fields_batch(updated_txs)
 
-            warnings = await _delete_removed(uow, removed)
+            warnings = await delete_transactions_with_links(uow, removed)
 
             await uow.commit()
             on_progress(4, 4, "Complete")

@@ -3,12 +3,15 @@ import uuid
 
 import pytest
 
+from src.application.use_cases._shared.command_validators import as_validation_error
 from src.application.use_cases._shared.transaction_pipeline import (
+    NO_PAYER_SPLIT,
     compute_edit,
     fetch_and_validate,
-    validate_payer_percentage,
+    reject_joint_rows,
 )
 from src.domain.exceptions import NotFoundError, PeriodFinalizedError, ValidationError
+from src.domain.split_rules import check_payer_percentage
 from tests.fixtures.factories import make_reconciliation_period, make_transaction
 from tests.fixtures.mocks import make_mock_uow
 
@@ -82,20 +85,27 @@ def test_compute_edit_handles_default_payer_percentage() -> None:
     assert edit.new_value == "50"
 
 
-def test_validate_payer_percentage_accepts_valid() -> None:
-    validate_payer_percentage(0)
-    validate_payer_percentage(50)
-    validate_payer_percentage(100)
+def test_as_validation_error_passes_a_valid_value() -> None:
+    as_validation_error(check_payer_percentage, 0)
+    as_validation_error(check_payer_percentage, 50)
+    as_validation_error(check_payer_percentage, 100)
 
 
-def test_validate_payer_percentage_rejects_too_high() -> None:
+@pytest.mark.parametrize("pct", [150, -1])
+def test_as_validation_error_raises_the_checks_value_error(pct: int) -> None:
     with pytest.raises(ValidationError, match="payer_percentage"):
-        validate_payer_percentage(150)
+        as_validation_error(check_payer_percentage, pct)
 
 
-def test_validate_payer_percentage_rejects_negative() -> None:
-    with pytest.raises(ValidationError, match="payer_percentage"):
-        validate_payer_percentage(-1)
+def test_reject_joint_rows_names_the_reason() -> None:
+    rows = [make_transaction(), make_transaction(joint=True)]
+
+    with pytest.raises(ValidationError, match="no payer split"):
+        reject_joint_rows(rows, NO_PAYER_SPLIT)
+
+
+def test_reject_joint_rows_passes_personal_rows() -> None:
+    reject_joint_rows([make_transaction(), make_transaction()], NO_PAYER_SPLIT)
 
 
 def test_compute_edit_passes_through_edited_by_person_id() -> None:

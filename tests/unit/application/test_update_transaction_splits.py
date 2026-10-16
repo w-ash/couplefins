@@ -175,3 +175,19 @@ async def test_edits_carry_edited_by_person_id() -> None:
     edits = uow.transaction_edits.save_batch.call_args[0][0]
     assert len(edits) == 1
     assert edits[0].edited_by_person_id == person_id
+
+
+async def test_rejects_a_joint_row() -> None:
+    """US-JOINT-1: a joint row has no payer split; its owner shares split it."""
+    uow = make_mock_uow()
+    joint = make_transaction(joint=True)
+    uow.transactions.get_by_ids.return_value = [joint]
+
+    with pytest.raises(ValidationError, match="no payer split"):
+        await UpdateTransactionSplitsUseCase().execute(
+            _make_command([SplitEntry(transaction_id=joint.id, payer_percentage=50)]),
+            uow,
+        )
+
+    uow.transactions.update_mutable_fields.assert_not_called()
+    uow.commit.assert_not_called()

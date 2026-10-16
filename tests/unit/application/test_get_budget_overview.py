@@ -65,7 +65,7 @@ async def test_personal_scope_calls_get_by_year() -> None:
     uow.category_group_budgets.get_all.return_value = [budget]
     uow.categories.get_all.return_value = []
     uow.category_groups.get_all.return_value = [group]
-    uow.persons.get_all.return_value = [alice]
+    uow.persons.get_all.return_value = [alice, make_person(name="Bob")]
     uow.transactions.get_by_year.return_value = []
 
     command = GetBudgetOverviewCommand(
@@ -191,7 +191,7 @@ async def test_transfer_rows_never_reach_the_budget() -> None:
     its group gets no status row."""
     uow = make_mock_uow()
     alice = make_person(name="Alice")
-    uow.persons.get_all.return_value = [alice]
+    uow.persons.get_all.return_value = [alice, make_person(name="Bob")]
     food = make_category_group(name="Food & Dining")
     transfer, card_payment = make_transfer_group()
     uow.category_groups.get_all.return_value = [food, transfer]

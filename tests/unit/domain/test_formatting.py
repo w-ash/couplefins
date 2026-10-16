@@ -1,7 +1,9 @@
 from datetime import date
 from decimal import Decimal
+from types import MappingProxyType
 
 from src.domain.formatting import field_str
+from tests.fixtures.factories import ALICE, BOB
 
 
 def test_str_value() -> None:
@@ -30,3 +32,12 @@ def test_tuple_value() -> None:
 
 def test_empty_tuple() -> None:
     assert not field_str(())
+
+
+def test_uuid_renders_as_its_string() -> None:
+    assert field_str(ALICE.id) == str(ALICE.id)
+
+
+def test_owner_shares_render_as_id_percent_pairs_by_id() -> None:
+    shares = MappingProxyType({BOB.id: 40, ALICE.id: 60})
+    assert field_str(shares) == f"{ALICE.id}:60,{BOB.id}:40"

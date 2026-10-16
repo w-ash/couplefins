@@ -6,10 +6,15 @@ from attrs import define
 from src.application.use_cases._shared.entity_lookup import require_by_id
 from src.application.use_cases._shared.finalization import (
     assert_periods_not_finalized,
+    months_of,
 )
 from src.application.use_cases._shared.settlement_records import (
     assert_legs_match_direction,
     assert_transactions_not_linked,
+)
+from src.application.use_cases._shared.transaction_pipeline import (
+    NOT_A_SETTLEMENT_LEG,
+    reject_joint_rows,
 )
 from src.domain.entities.settlement_transaction_link import SettlementTransactionLink
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
@@ -47,7 +52,9 @@ class MarkTransactionAsSettlementUseCase:
                 settlement = await require_by_id(
                     uow.settlements.get_by_id, command.settlement_id, "Settlement"
                 )
-            await assert_periods_not_finalized(uow, {(tx.date.year, tx.date.month)})
+            await assert_periods_not_finalized(uow, months_of([tx]))
+            if command.is_settlement:
+                reject_joint_rows([tx], NOT_A_SETTLEMENT_LEG)
 
             if command.is_settlement and command.settlement_id and settlement:
                 await assert_transactions_not_linked(uow, [command.transaction_id])

@@ -33,14 +33,12 @@ if TYPE_CHECKING:
 
     SeedCategoryGroupsResult.groups_created  # returned from startup seeder
     SeedCategoryGroupsResult.categories_created
-    SeedCategoryGroupsResult.skipped
 
     from src.application.use_cases.seed_settlement_merchants import (
         SeedSettlementMerchantsResult,
     )
 
     SeedSettlementMerchantsResult.merchants_created  # returned from startup seeder
-    SeedSettlementMerchantsResult.skipped
 
     # --- Pydantic BaseModel fields: serialized to JSON by FastAPI ---
 
@@ -66,18 +64,6 @@ if TYPE_CHECKING:
     HealthResponse.database_host
     HealthResponse.database_mode
     HealthResponse.chat_available
-
-    # --- Domain value objects: attrs fields accessed by callers ---
-
-    from src.domain.entities.import_event import ImportEvent
-
-    ImportEvent.imported_at  # accessed by route handler + tests
-
-    # --- Pydantic schema fields: serialized to JSON ---
-
-    from src.interface.api.schemas.transactions import ImportEventResponse
-
-    ImportEventResponse.imported_at  # serialized to JSON in GET /transactions/{id}/edits
 
     # --- Domain functions: tested + public API, not yet wired into a use case ---
 
@@ -112,7 +98,6 @@ if TYPE_CHECKING:
 
     from src.application.chat.voices import VoiceDict
 
-    VoiceDict.identity  # accessed via dict["identity"] in system_prompt.py
     VoiceDict.voice_examples  # accessed via dict["voice_examples"] in system_prompt.py
     VoiceDict.rules  # accessed via dict["rules"] in system_prompt.py
 
@@ -145,22 +130,17 @@ if TYPE_CHECKING:
         HouseFigures,
         LoanFigures,
         ObligationFigures,
-        PutInSection,
         SharesSection,
     )
 
     HouseFigures.as_of
     HouseFigures.put_in
     HouseFigures.loans
-    HouseFigures.upcoming
     HouseFigures.set_aside
     HouseFigures.recent_activity
-    PutInSection.totals
     SharesSection.total_capital
     LoanFigures.rate_percent
     ObligationFigures.is_estimate
     ObligationFigures.due
-    ObligationFigures.pays_from
-    ObligationFigures.shortfall
     Bucket.difference
     ActivityRow.account_name

@@ -254,6 +254,23 @@ GET_TAGS_SCHEMA: dict[str, object] = {
     },
 }
 
+GET_ACCOUNTS_SCHEMA: dict[str, object] = {
+    "name": "get_accounts",
+    "description": (
+        "Call this when the user asks which bank or card accounts the app "
+        "knows, whose they are, or which are joint. "
+        "Returns each account label seen in uploads with its kind: personal "
+        "(one partner's) or joint (both partners' money, no payer, outside "
+        "settlement). Marking an account joint is done in Settings, not here."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {},
+        "required": [],
+    },
+}
+
 GET_TRANSACTION_HISTORY_SCHEMA: dict[str, object] = {
     "name": "get_transaction_history",
     "description": (
@@ -588,7 +605,9 @@ BULK_UPDATE_TRANSACTIONS_SCHEMA: dict[str, object] = {
         "transaction IDs per call. All transaction_ids must come from "
         "search_transactions results — never fabricate IDs. Changes can "
         "include the household flag, split percentage, exclusion status, "
-        "category, or tag modifications. Returns a pending confirmation "
+        "category, or tag modifications. A joint-account row (payer "
+        '"Joint") has no payer split: set its owner_shares instead, and '
+        "its depositor if it is a deposit. Returns a pending confirmation "
         "card listing the affected transactions and proposed changes."
     ),
     "input_schema": {
@@ -620,6 +639,24 @@ BULK_UPDATE_TRANSACTIONS_SCHEMA: dict[str, object] = {
                     "category": {
                         "type": "string",
                         "description": "Set the category name.",
+                    },
+                    "depositor": {
+                        "type": "string",
+                        "description": (
+                            "Joint-account rows only: the partner, by name, "
+                            'whose deposit the row is, or "none" to leave '
+                            "it unassigned."
+                        ),
+                    },
+                    "owner_shares": {
+                        "type": "object",
+                        "additionalProperties": {"type": "integer"},
+                        "description": (
+                            "Joint-account rows only: each partner's percent "
+                            "of the row, by name, summing to 100 (e.g. "
+                            '{"Alice": 60, "Bob": 40}). An empty object '
+                            "resets the row to 50/50."
+                        ),
                     },
                     "tags": {
                         "type": "object",

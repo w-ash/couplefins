@@ -4,12 +4,15 @@
  * Couplefins
  * OpenAPI spec version: 0.1.0
  */
+import type { BulkUpdateRequestOwnerShares } from './bulkUpdateRequestOwnerShares.ts';
 
 export interface BulkUpdateRequest {
-  transaction_ids: string[];
   category?: string | null;
   payer_percentage?: number | null;
   household?: boolean | null;
   is_excluded?: boolean | null;
   notes?: string | null;
+  depositor_person_id?: string | null;
+  owner_shares?: BulkUpdateRequestOwnerShares;
+  transaction_ids: string[];
 }

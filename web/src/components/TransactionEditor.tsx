@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   TransactionResponse,
   UpdateTransactionRequest,
@@ -6,7 +6,12 @@ import type {
 import { Button } from "@/components/Button";
 import type { ComboboxOption } from "@/components/Combobox";
 import { Combobox } from "@/components/Combobox";
+import { DepositorSelect } from "@/components/DepositorSelect";
 import { InlineError } from "@/components/InlineError";
+import {
+  OwnerSharesEditor,
+  useOwnerShares,
+} from "@/components/OwnerSharesEditor";
 import { PercentInput } from "@/components/PercentInput";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { TransactionEditHistory } from "@/components/TransactionEditHistory";
@@ -53,6 +58,17 @@ export function TransactionEditor({
   const [isExcluded, setIsExcluded] = useState(tx.is_excluded);
   const firstInputRef = useRef<HTMLInputElement>(null);
 
+  const isJoint = tx.is_joint;
+  const owners = useMemo(
+    () => [...personNames].map(([id, name]) => ({ id, name })),
+    [personNames],
+  );
+  const ownerShares = useOwnerShares(
+    owners,
+    owners[0] ? (tx.shares[owners[0].id] ?? 50) : 50,
+  );
+  const [depositor, setDepositor] = useState(tx.depositor_person_id ?? "");
+
   const scopeValue: TransactionScope = household ? "household" : "personal";
 
   useEffect(() => {
@@ -79,7 +95,20 @@ export function TransactionEditor({
   const excludedChanged = isExcluded !== tx.is_excluded;
   const notesChanged = notes !== tx.notes;
 
+  const ownerSharesInvalid = isJoint && ownerShares.invalid;
+  // undefined = leave unchanged; null = reset to 50/50.
+  let ownerSharesChange: Record<string, number> | null | undefined;
+  if (isJoint) {
+    if (ownerShares.reset) {
+      if (tx.owner_shares !== null) ownerSharesChange = null;
+    } else if (ownerShares.edited) ownerSharesChange = ownerShares.payload;
+  }
+  const depositorChanged =
+    isJoint && depositor !== (tx.depositor_person_id ?? "");
+
   const hasChanges =
+    ownerSharesChange !== undefined ||
+    depositorChanged ||
     date !== tx.date ||
     (isAmountValid && parsedAmount !== tx.amount) ||
     category !== tx.category ||
@@ -97,8 +126,11 @@ export function TransactionEditor({
     if (category !== tx.category) fields.category = category;
     if (tagsChanged) fields.tags = tags;
     if (notesChanged) fields.notes = notes;
-    if (parsedSplit !== null && parsedSplit !== tx.payer_percentage)
+    if (!isJoint && parsedSplit !== null && parsedSplit !== tx.payer_percentage)
       fields.payer_percentage = parsedSplit;
+    if (ownerSharesChange !== undefined)
+      fields.owner_shares = ownerSharesChange;
+    if (depositorChanged) fields.depositor_person_id = depositor || null;
     if (householdChanged) fields.household = household;
     if (excludedChanged) fields.is_excluded = isExcluded;
     onSave(fields);
@@ -118,6 +150,10 @@ export function TransactionEditor({
     isExcluded,
     excludedChanged,
     onSave,
+    isJoint,
+    ownerSharesChange,
+    depositor,
+    depositorChanged,
   ]);
 
   const handleKeyDown = useCallback(
@@ -132,7 +168,7 @@ export function TransactionEditor({
     [hasChanges, handleSave, onCancel],
   );
 
-  const splitHasError = splitChanged && !isSplitValid;
+  const splitHasError = !isJoint && splitChanged && !isSplitValid;
   const amountHasError = amountChanged && !isAmountValid;
 
   return (
@@ -141,19 +177,21 @@ export function TransactionEditor({
       onKeyDown={handleKeyDown}
       onSubmit={(e) => e.preventDefault()}
     >
-      <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
-        <span className="w-16 shrink-0">Scope</span>
-        <SegmentedControl<TransactionScope>
-          options={[
-            { value: "household", label: "Household" },
-            { value: "personal", label: "Personal" },
-          ]}
-          value={scopeValue}
-          onChange={(v) => setHousehold(v === "household")}
-          size="sm"
-          shape="pill"
-        />
-      </div>
+      {!isJoint && (
+        <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="w-16 shrink-0">Scope</span>
+          <SegmentedControl<TransactionScope>
+            options={[
+              { value: "household", label: "Household" },
+              { value: "personal", label: "Personal" },
+            ]}
+            value={scopeValue}
+            onChange={(v) => setHousehold(v === "household")}
+            size="sm"
+            shape="pill"
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-3">
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -241,24 +279,51 @@ export function TransactionEditor({
         />
       </label>
 
-      <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-        <span className="w-16 shrink-0">Split</span>
-        <PercentInput
-          id="tx-split"
-          value={split}
-          onChange={setSplit}
-          disabled={saving}
-          error={splitHasError}
-        />
-        <div aria-live="polite">
-          {!splitHasError && isSplitValid ? (
-            <span className="tabular-nums">
-              {payerName}: {formatCurrency(payerShare)} &middot; {otherName}:{" "}
-              {formatCurrency(otherShare)}
-            </span>
-          ) : null}
+      {isJoint ? (
+        <div className="mt-3 space-y-3">
+          {ownerShares.pair && (
+            <OwnerSharesEditor
+              owners={ownerShares.pair}
+              values={ownerShares.values}
+              absAmount={absAmount}
+              disabled={saving}
+              isDefault={tx.owner_shares === null && !ownerShares.edited}
+              onChange={ownerShares.onChange}
+              onReset={ownerShares.onReset}
+            />
+          )}
+          {ownerSharesInvalid && (
+            <InlineError>Shares must be 0–100</InlineError>
+          )}
+          {tx.amount > 0 && (
+            <DepositorSelect
+              owners={owners}
+              value={depositor}
+              onChange={setDepositor}
+              disabled={saving}
+            />
+          )}
         </div>
-      </div>
+      ) : (
+        <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="w-16 shrink-0">Split</span>
+          <PercentInput
+            id="tx-split"
+            value={split}
+            onChange={setSplit}
+            disabled={saving}
+            error={splitHasError}
+          />
+          <div aria-live="polite">
+            {!splitHasError && isSplitValid ? (
+              <span className="tabular-nums">
+                {payerName}: {formatCurrency(payerShare)} &middot; {otherName}:{" "}
+                {formatCurrency(otherShare)}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      )}
 
       <div className="mt-3 flex flex-wrap items-center gap-4">
         <label

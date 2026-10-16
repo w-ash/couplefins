@@ -10,12 +10,15 @@ import { amountCellClass, cellClass, tableHeaderRowClass } from "@/lib/layout";
 
 export function UpcomingSection({
   upcoming,
+  example = false,
 }: {
+  example?: boolean;
   upcoming: ObligationResponse[];
 }) {
   return (
     <Card as="section" aria-labelledby="house-upcoming">
       <SectionHeader
+        example={example}
         id="house-upcoming"
         title="Upcoming"
         description="Obligations coming due and the bucket that pays each."

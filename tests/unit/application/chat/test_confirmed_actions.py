@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from decimal import Decimal
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -8,6 +9,8 @@ from src.application.chat.pending_actions import PendingAction
 from src.application.chat.registry import execute_confirmed_action
 from src.domain.exceptions import PeriodFinalizedError, ValidationError
 from tests.fixtures.factories import (
+    ALICE,
+    BOB,
     make_category_group,
     make_person,
     make_reconciliation_period,
@@ -360,3 +363,43 @@ async def test_exec_rename_group_preserves_transfer_kind() -> None:
 
     saved = uow.category_groups.save.call_args.args[0]
     assert (saved.name, saved.kind) == ("Transfers", "transfer")
+
+
+async def test_exec_bulk_passes_joint_changes_by_id() -> None:
+    """US-JOINT-1/2: owner shares and depositor resolved at propose time
+    reach the use case keyed by person id."""
+    user = make_person(name="Alice")
+    deposit = make_transaction(joint=True, amount=Decimal("1600.00"))
+    uow = make_mock_uow()
+    uow.persons.get_all.return_value = [ALICE, BOB]
+    uow.transactions.get_by_ids.return_value = [deposit]
+    action = PendingAction(
+        action_id=uuid4(),
+        person_id=user.id,
+        tool_name="bulk_update_transactions",
+        tool_input={},
+        description="Update 1 transaction: depositor to Bob, owner shares",
+        details={
+            "transaction_ids": [str(deposit.id)],
+            "count": 1,
+            "changes": {
+                "depositor_person_id": str(BOB.id),
+                "owner_shares": {str(ALICE.id): 30, str(BOB.id): 70},
+            },
+        },
+        created_at=datetime.now(UTC),
+    )
+
+    async def run_with_mock_uow(factory):
+        return await factory(uow)
+
+    with patch(
+        "src.application.chat.confirmed_actions.execute_use_case",
+        run_with_mock_uow,
+    ):
+        await execute_confirmed_action(action, user)
+
+    updated = uow.transactions.update_mutable_fields.call_args.args[0]
+    assert updated.depositor_person_id == BOB.id
+    assert updated.owner_shares == {ALICE.id: 30, BOB.id: 70}
+    uow.commit.assert_called_once()

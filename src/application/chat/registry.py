@@ -150,6 +150,12 @@ REGISTRY: tuple[ToolSpec, ...] = (
         use_cases=("GetTagsUseCase",),
     ),
     ToolSpec(
+        name="get_accounts",
+        schema=tools.GET_ACCOUNTS_SCHEMA,
+        handler=tool_executor.handle_get_accounts,
+        use_cases=("ListAccountsUseCase",),
+    ),
+    ToolSpec(
         name="get_transaction_history",
         schema=tools.GET_TRANSACTION_HISTORY_SCHEMA,
         handler=tool_executor.handle_get_transaction_history,
@@ -426,7 +432,7 @@ _PAGE_TOOL_HINTS: Mapping[str, tuple[str, ...]] = {
     "budget": ("get_budgets", "get_spending_by_group"),
     "insights": ("get_spending_trends", "get_spending_by_group"),
     "upload": ("get_upload_history", "get_reconciliation_report"),
-    "settings": ("get_category_setup", "get_tags"),
+    "settings": ("get_category_setup", "get_tags", "get_accounts"),
 }
 
 # Derived, never hand-maintained — the hints map is the one page registry.
@@ -666,6 +672,10 @@ BLACKLISTED_USE_CASES: frozenset[str] = frozenset({
     # 2026-10-15: serves a fixed example payload until v1.15.4; a
     # get_house_summary read tool lands with the real figures.
     "GetHouseUseCase",
+    # 2026-10-15: structural, like SetupCoupleUseCase — marking an account
+    # joint re-keys both partners' imported rows, a Settings decision.
+    "MarkAccountJointUseCase",
+    "UnmarkAccountJointUseCase",
 })
 
 # Excluded because chat has no file input/output channel, not by policy.

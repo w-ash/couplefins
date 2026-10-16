@@ -12,6 +12,7 @@ from src.application.use_cases._shared.command_validators import (
 )
 from src.application.use_cases._shared.finalization import (
     assert_periods_not_finalized,
+    months_of,
 )
 from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
@@ -23,6 +24,10 @@ from src.application.use_cases._shared.settlement_records import (
     build_settlement,
     derive_direction_from_legs,
     validate_settlement_persons,
+)
+from src.application.use_cases._shared.transaction_pipeline import (
+    NOT_A_SETTLEMENT_LEG,
+    reject_joint_rows,
 )
 from src.domain.constants import CoupleDefaults
 from src.domain.entities.settlement import Settlement
@@ -79,6 +84,7 @@ class RecordSettlementUseCase:
                 await assert_transactions_not_linked(
                     uow, command.linked_transaction_ids
                 )
+                reject_joint_rows(linked_txs, NOT_A_SETTLEMENT_LEG)
 
                 payer_ids = {tx.payer_person_id for tx in linked_txs}
                 if (
@@ -94,7 +100,7 @@ class RecordSettlementUseCase:
             # on each linked transaction in its own month.
             await assert_periods_not_finalized(
                 uow,
-                {(tx.date.year, tx.date.month) for tx in linked_txs},
+                months_of(linked_txs),
             )
 
             warnings: list[str] = []

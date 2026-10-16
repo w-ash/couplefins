@@ -206,3 +206,23 @@ class TestFindSettlementCandidates:
         result = await FindSettlementCandidatesUseCase().execute(command, uow)
         assert result.candidates == []
         uow.transactions.get_by_date_range.assert_not_called()
+
+
+async def test_joint_account_rows_are_never_candidates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The read asks for rows with a payer, so a joint row never arrives."""
+    _freeze_today(monkeypatch, date(2026, 4, 15))
+    uow = make_mock_uow()
+    venmo = make_settlement_merchant(name="Venmo", merchant_pattern="venmo")
+    uow.settlement_merchants.get_all.return_value = [venmo]
+    personal = make_transaction(merchant="Venmo", amount=Decimal("-100.00"))
+    uow.transactions.get_by_date_range.return_value = [personal]
+
+    command = FindSettlementCandidatesCommand(
+        amount=Decimal("100.00"), search_year=2026, search_month=1
+    )
+    result = await FindSettlementCandidatesUseCase().execute(command, uow)
+
+    assert [c.transaction.id for c in result.candidates] == [personal.id]
+    assert uow.transactions.get_by_date_range.call_args.kwargs == {"payer_only": True}
