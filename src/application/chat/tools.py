@@ -138,6 +138,14 @@ SEARCH_TRANSACTIONS_SCHEMA: dict[str, object] = {
                 "type": "string",
                 "description": "Tag to filter by (e.g. 'discuss', 'shared').",
             },
+            "tag_prefix": {
+                "type": "string",
+                "description": (
+                    "Tag namespace to filter by, with its colon (e.g. "
+                    "'line:' or 'pot:'): keeps rows carrying a namespaced "
+                    "tag such as 'line:mortgage'."
+                ),
+            },
             "scope": {
                 "type": "string",
                 "enum": ["all", "household", "personal"],

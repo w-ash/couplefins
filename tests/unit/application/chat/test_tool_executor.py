@@ -14,6 +14,7 @@ import pytest
 
 from src.application.chat.registry import execute_tool
 from src.application.chat.tool_executor import handle_search_transactions
+from src.application.use_cases._shared.transaction_reads import TagFilter
 from src.application.use_cases._shared.upload_status import UploadStatus
 from src.application.use_cases.get_budget_overview import GetBudgetOverviewResult
 from src.application.use_cases.get_dashboard import (
@@ -515,6 +516,29 @@ async def test_search_transactions_personal_scope_uses_current_user() -> None:
     command = mock_execute.call_args.args[0]
     assert command.scope == "personal"
     assert command.person_id == ALICE.id
+
+
+@pytest.mark.asyncio
+async def test_search_transactions_filters_by_tag_and_tag_prefix() -> None:
+    mock_execute = AsyncMock(
+        return_value=SearchTransactionsResult(transactions=[], total_count=0)
+    )
+    with (
+        patch(
+            "src.application.chat.tool_executor.execute_use_case",
+            side_effect=_run_factory_with_stub_uow,
+        ),
+        patch.object(SearchTransactionsUseCase, "execute", mock_execute),
+    ):
+        await execute_tool(
+            "search_transactions",
+            {"year": 2026, "month": 3, "tag": "discuss", "tag_prefix": "line:"},
+            CTX,
+        )
+
+    assert mock_execute.call_args.args[0].tag_filter == TagFilter(
+        tags=("discuss",), prefix="line:"
+    )
 
 
 @pytest.mark.asyncio

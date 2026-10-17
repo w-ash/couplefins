@@ -15,6 +15,8 @@ from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
 from src.application.use_cases._shared.transaction_reads import (
+    ANY_TAGS,
+    TagFilter,
     TransactionShares,
     fetch_latest_spending_month,
     fetch_scoped_rows,
@@ -41,12 +43,14 @@ from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 @define(frozen=True, slots=True)
 class GetReconciliationCommand:
+    """`tag_filter` keeps the rows carrying its tags and prefix."""
+
     start_date: date
     end_date: date
     single_month: tuple[int, int] | None
     scope: ReconciliationScope = "household"
     person_id: UUID | None = None
-    tags: tuple[str, ...] | None = None
+    tag_filter: TagFilter = ANY_TAGS
 
     @classmethod
     def from_month(
@@ -56,7 +60,7 @@ class GetReconciliationCommand:
         *,
         scope: ReconciliationScope = "household",
         person_id: UUID | None = None,
-        tags: tuple[str, ...] | None = None,
+        tag_filter: TagFilter = ANY_TAGS,
     ) -> GetReconciliationCommand:
         start, end = month_bounds(year, month)
         return cls(
@@ -65,7 +69,7 @@ class GetReconciliationCommand:
             single_month=(year, month),
             scope=scope,
             person_id=person_id,
-            tags=tags,
+            tag_filter=tag_filter,
         )
 
     @classmethod
@@ -76,7 +80,7 @@ class GetReconciliationCommand:
         *,
         scope: ReconciliationScope = "household",
         person_id: UUID | None = None,
-        tags: tuple[str, ...] | None = None,
+        tag_filter: TagFilter = ANY_TAGS,
     ) -> GetReconciliationCommand:
         single = detect_single_month(start_date, end_date)
         return cls(
@@ -85,7 +89,7 @@ class GetReconciliationCommand:
             single_month=single,
             scope=scope,
             person_id=person_id,
-            tags=tags,
+            tag_filter=tag_filter,
         )
 
 
@@ -119,7 +123,12 @@ class GetReconciliationUseCase:
             ctx = await load_reconciliation_context(uow)
             window = (command.start_date, command.end_date)
             rows = await fetch_scoped_rows(
-                uow, ctx, window, command.scope, command.person_id, tags=command.tags
+                uow,
+                ctx,
+                window,
+                command.scope,
+                command.person_id,
+                tag_filter=command.tag_filter,
             )
             transactions = rows.listed
             uploads = (
@@ -149,7 +158,7 @@ class GetReconciliationUseCase:
             # scope see the same number, matching the Settle Up page.
             # summary.split_transactions still describes the display set.
             settlement_txs = await fetch_settlement_rows(
-                uow, ctx, window, tags=command.tags
+                uow, ctx, window, tag_filter=command.tag_filter
             )
             summary = evolve(
                 summary,

@@ -86,11 +86,21 @@ class BucketResponse(_HouseModel):
     bank_balance: MoneyField | None
     bank_balance_as_of: datetime.date | None
     difference: MoneyField | None  # bank_balance - balance
+    is_unassigned: bool  # the money that no pot names
+
+
+class OwnerDepositsResponse(_HouseModel):
+    person_id: UUID
+    own_deposits: MoneyField
+    gift_deposits: MoneyField
+    share_of_payments: MoneyField
+    unspent: MoneyField  # own + gift - share of payments
 
 
 class SetAsideSectionResponse(_HouseModel):
     buckets: list[BucketResponse]
     total: MoneyField
+    owners: list[OwnerDepositsResponse]  # one per owner, in persons order
 
 
 class ActivityRowResponse(_HouseModel):

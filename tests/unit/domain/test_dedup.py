@@ -1,4 +1,7 @@
 from decimal import Decimal
+from uuid import uuid4
+
+from attrs import evolve
 
 from src.domain.dedup import (
     classify_transactions,
@@ -6,6 +9,7 @@ from src.domain.dedup import (
     natural_key,
 )
 from src.domain.entities.account import joint_account_id, personal_account_id
+from src.domain.entities.transaction import Transaction
 from tests.fixtures.factories import ALICE, BOB, make_transaction
 
 
@@ -288,3 +292,66 @@ def test_find_removed_with_no_incoming_removes_all_existing() -> None:
     existing = make_transaction(payer_person_id=person_id)
 
     assert find_removed_transactions([], [existing]) == [existing]
+
+
+# --- Namespaced tags: an import never removes a stored label ---
+
+
+def _twin(existing: Transaction, tags: tuple[str, ...]) -> Transaction:
+    """The source's export of `existing`, with the source's `tags`."""
+    return evolve(existing, id=uuid4(), upload_id=uuid4(), tags=tags)
+
+
+def test_a_stored_label_the_source_lacks_is_kept_without_a_diff() -> None:
+    existing = make_transaction(tags=("shared", "line:mortgage"))
+
+    [result] = classify_transactions([_twin(existing, ("shared",))], [existing])
+
+    assert (result.status, result.diffs) == ("unchanged", ())
+    assert result.incoming.tags == ("shared", "line:mortgage")
+
+
+def test_a_kept_label_rides_along_with_another_change() -> None:
+    """The update writes `incoming`, so the label must be in it."""
+    existing = make_transaction(tags=("shared", "pot:bills"), merchant="Old")
+    incoming = evolve(_twin(existing, ("shared",)), merchant="New")
+
+    [result] = classify_transactions([incoming], [existing])
+
+    assert result.status == "changed"
+    assert [d.field_name for d in result.diffs] == ["merchant"]
+    assert result.incoming.tags == ("shared", "pot:bills")
+
+
+def test_a_new_label_from_the_source_is_a_diff() -> None:
+    existing = make_transaction(tags=("shared",))
+
+    [result] = classify_transactions(
+        [_twin(existing, ("shared", "line:repair"))], [existing]
+    )
+
+    assert result.status == "changed"
+    [diff] = result.diffs
+    assert (diff.field_name, diff.old_value, diff.new_value) == (
+        "tags",
+        "shared",
+        "shared,line:repair",
+    )
+
+
+def test_a_plain_tag_the_source_removed_is_still_a_diff() -> None:
+    existing = make_transaction(tags=("shared", "discuss", "line:mortgage"))
+
+    [result] = classify_transactions([_twin(existing, ("shared",))], [existing])
+
+    assert result.status == "changed"
+    assert result.incoming.tags == ("shared", "line:mortgage")
+    assert [d.field_name for d in result.diffs] == ["tags"]
+
+
+def test_a_new_row_keeps_only_its_own_tags() -> None:
+    incoming = make_transaction(tags=("shared",))
+
+    [result] = classify_transactions([incoming], [])
+
+    assert result.incoming is incoming

@@ -343,3 +343,36 @@ async def test_income_rows_are_listed_with_a_badge_but_not_counted(
     assert rows["Employer"]["is_transfer"] is False
     assert rows["Restaurant"]["is_income"] is False
     assert response.json()["transaction_count"] == 1
+
+
+LINES_CSV = (
+    "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+    '2026-01-15,Lender,Groceries,Chase,LENDER,,"-100.00","shared,line:mortgage"\n'
+    '2026-01-16,Grocery Store,Groceries,Chase,GROCERY STORE,,"-60.00",shared\n'
+    '2026-01-17,Bakery,Groceries,Chase,BAKERY,,"-20.00","shared,pot:line"\n'
+)
+
+
+async def test_tag_prefix_keeps_rows_with_a_tag_in_the_namespace(
+    client: AsyncClient,
+) -> None:
+    """`tags` and `tag_prefix` filter the list, the totals, and the
+    settlement; a prefix that is no namespace is a 422."""
+    persons, cookies = await setup_and_login(client)
+    await upload_csv(client, persons[0]["id"], LINES_CSV, auth=cookies)
+    month = {"year": 2026, "month": 1, "tags": ["shared"]}
+
+    response = await client.get(
+        "/api/v1/reconciliation", params={**month, "tag_prefix": "line:"}, auth=cookies
+    )
+    rejected = await client.get(
+        "/api/v1/reconciliation", params={**month, "tag_prefix": "line"}, auth=cookies
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert [tx["merchant"] for tx in data["transactions"]] == ["Lender"]
+    assert data["total_household_spending"] == pytest.approx(100.0)
+    assert data["settlement"]["amount"] == pytest.approx(50.0)
+    assert rejected.status_code == 422
+    assert "tag_prefix" in rejected.json()["error"]["message"]

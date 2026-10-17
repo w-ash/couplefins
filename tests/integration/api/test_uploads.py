@@ -455,3 +455,32 @@ async def test_a_file_without_the_joint_account_removes_no_joint_row(
     assert data["removed_count"] == 0
     recon = await january(client, couple.alice)
     assert sum(tx["is_joint"] for tx in recon["transactions"]) == 3
+
+
+async def test_a_label_added_in_app_survives_a_reimport(client: AsyncClient) -> None:
+    """v1.15.3: an import never removes a namespaced tag added in couplefins."""
+    _, auth = await setup_and_login(client)
+    await _upload(client, VALID_CSV, auth)
+    [grocery] = (await january(client, auth))["transactions"]
+    tagged = await client.post(
+        "/api/v1/transactions/bulk-tags",
+        json={
+            "transaction_ids": [grocery["id"]],
+            "action": "add",
+            "tags": ["line:groceries"],
+        },
+        auth=auth,
+    )
+    assert tagged.status_code == 200, tagged.text
+
+    preview = await client.post(
+        "/api/v1/uploads/preview",
+        files={"file": ("test.csv", io.BytesIO(VALID_CSV.encode()), "text/csv")},
+        auth=auth,
+    )
+    again = await _upload(client, VALID_CSV, auth)
+
+    assert preview.json()["changed_transactions"] == []
+    assert (again["updated_count"], again["skipped_count"]) == (0, 2)
+    [grocery] = (await january(client, auth))["transactions"]
+    assert grocery["tags"] == ["shared", "line:groceries"]

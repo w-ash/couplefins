@@ -5,8 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BucketResponse } from './bucketResponse.ts';
+import type { OwnerDepositsResponse } from './ownerDepositsResponse.ts';
 
 export interface SetAsideSectionResponse {
   buckets: BucketResponse[];
   total: number;
+  owners: OwnerDepositsResponse[];
 }

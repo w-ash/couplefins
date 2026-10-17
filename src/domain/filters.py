@@ -64,6 +64,14 @@ def is_split_relevant(tx: Transaction) -> bool:
     )
 
 
+def in_spending_category(tx: Transaction, non_spending_categories: Set[str]) -> bool:
+    """True when the row's category is in no transfer- or income-kind group.
+
+    `non_spending_categories` names the categories of those groups.
+    """
+    return tx.category not in non_spending_categories
+
+
 def exclude_non_spending(
     transactions: list[Transaction], non_spending_categories: Set[str]
 ) -> list[Transaction]:
@@ -78,4 +86,6 @@ def exclude_non_spending(
     """
     if not non_spending_categories:
         return transactions
-    return [tx for tx in transactions if tx.category not in non_spending_categories]
+    return [
+        tx for tx in transactions if in_spending_category(tx, non_spending_categories)
+    ]

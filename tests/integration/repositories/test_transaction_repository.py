@@ -628,47 +628,6 @@ async def test_get_by_date_range_payer_only_leaves_out_joint_rows(
     assert {tx.id for tx in every_row} == {own.id, joint.id}
 
 
-async def test_get_recent_by_account_ids_is_newest_first_up_to_the_limit(
-    db_session: AsyncSession,
-) -> None:
-    alice, _, upload = await _seed_couple(db_session)
-    own = make_transaction(
-        upload_id=upload.id, payer_person_id=alice.id, date=date(2026, 3, 1)
-    )
-    await save_transactions(db_session, [own])
-    oldest, middle, newest = (
-        make_transaction(
-            upload_id=upload.id,
-            joint=True,
-            account="Joint Checking",
-            date=date(2026, 1, day),
-        )
-        for day in (3, 9, 20)
-    )
-    same_day = [
-        make_transaction(
-            upload_id=upload.id,
-            joint=True,
-            account="Joint Savings",
-            date=date(2026, 1, 9),
-            original_statement=statement,
-        )
-        for statement in ("PAINT", "TILE")
-    ]
-    await _save_joint(db_session, oldest, middle, newest, *same_day)
-    repo = TransactionRepository(db_session)
-    joint_ids = [joint_account_id("Joint Checking"), joint_account_id("Joint Savings")]
-
-    recent = await repo.get_recent_by_account_ids(joint_ids, 3)
-
-    # Ties on date order by id, so the read is stable.
-    assert [tx.id for tx in recent] == [
-        newest.id,
-        *sorted((middle.id, same_day[0].id, same_day[1].id), key=str)[:2],
-    ]
-    assert await repo.get_recent_by_account_ids([], 3) == []
-
-
 async def test_get_by_account_ids_returns_every_row_of_those_accounts(
     db_session: AsyncSession,
 ) -> None:

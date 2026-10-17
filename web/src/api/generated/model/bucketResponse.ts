@@ -11,4 +11,5 @@ export interface BucketResponse {
   bank_balance: number | null;
   bank_balance_as_of: string | null;
   difference: number | null;
+  is_unassigned: boolean;
 }

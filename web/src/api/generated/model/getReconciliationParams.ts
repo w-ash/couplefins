@@ -4,12 +4,20 @@
  * Couplefins
  * OpenAPI spec version: 0.1.0
  */
+import type { GetReconciliationScope } from './getReconciliationScope.ts';
 
 export type GetReconciliationParams = {
 start_date?: string | null;
 end_date?: string | null;
 year?: number | null;
 month?: number | null;
-scope?: string | null;
+scope?: GetReconciliationScope;
+/**
+ * Keep the rows that carry every one of these tags.
+ */
 tags?: string[] | null;
+/**
+ * A tag namespace such as `line:`: keep the rows that carry a tag in it.
+ */
+tag_prefix?: string | null;
 };

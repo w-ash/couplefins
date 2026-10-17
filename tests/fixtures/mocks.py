@@ -67,7 +67,6 @@ def make_mock_uow() -> AsyncMock:
     uow.transactions.get_all_settlement_relevant.return_value = []
     uow.transactions.get_by_account_ids_and_original_date_range.return_value = []
     uow.transactions.get_by_account_ids.return_value = []
-    uow.transactions.get_recent_by_account_ids.return_value = []
     uow.uploads.get_by_ids.return_value = []
     uow.accounts.get_all.return_value = []
     uow.accounts.get_by_ids.return_value = []

@@ -8,14 +8,24 @@ import {
   formatDate,
   formatSignedCurrency,
 } from "@/lib/format";
+import { forOwner, type Owner } from "@/lib/house";
 import { amountCellClass, cellClass, tableHeaderRowClass } from "@/lib/layout";
+
+/** The cell of a bank figure not entered yet. */
+const NO_BANK_BALANCE = (
+  <span title="Enter the bank balance in House settings">—</span>
+);
+
+const DEPOSIT_COLUMNS = ["Own", "Gift", "Share of payments", "Unspent"];
 
 export function SetAsideSection({
   setAside,
+  owners,
   example = false,
 }: {
   example?: boolean;
   setAside: SetAsideSectionResponse;
+  owners: Owner[];
 }) {
   return (
     <Card as="section" aria-labelledby="house-set-aside">
@@ -52,7 +62,17 @@ export function SetAsideSection({
                   key={b.name}
                   className="border-b border-border/60 align-top"
                 >
-                  <td className={cellClass}>{b.name}</td>
+                  <td
+                    className={cn(
+                      cellClass,
+                      b.is_unassigned && "text-muted-foreground",
+                    )}
+                  >
+                    {b.name}
+                    {b.is_unassigned && (
+                      <span className="ml-2 text-xs">no pot tag</span>
+                    )}
+                  </td>
                   <td className={amountCellClass}>
                     {formatCurrency(b.balance)}
                   </td>
@@ -67,7 +87,7 @@ export function SetAsideSection({
                         )}
                       </>
                     ) : (
-                      "—"
+                      NO_BANK_BALANCE
                     )}
                   </td>
                   <td
@@ -78,7 +98,7 @@ export function SetAsideSection({
                   >
                     {b.difference != null
                       ? formatSignedCurrency(b.difference)
-                      : "—"}
+                      : NO_BANK_BALANCE}
                   </td>
                 </tr>
               ))}
@@ -95,6 +115,60 @@ export function SetAsideSection({
             </tfoot>
           </table>
         </div>
+      )}
+      {setAside.owners.length > 0 && (
+        <>
+          <h3
+            id="house-deposits"
+            className="mt-6 mb-2 text-sm font-medium text-foreground"
+          >
+            Deposits
+          </h3>
+          <div className="overflow-x-auto">
+            <table aria-labelledby="house-deposits" className="w-full text-sm">
+              <thead>
+                <tr className={tableHeaderRowClass}>
+                  <th scope="col" className={cn(cellClass, "font-medium")}>
+                    Owner
+                  </th>
+                  {DEPOSIT_COLUMNS.map((label) => (
+                    <th
+                      key={label}
+                      scope="col"
+                      className={cn(amountCellClass, "font-medium")}
+                    >
+                      {label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {owners.map((o) => {
+                  const d = forOwner(setAside.owners, o.id);
+                  return (
+                    d && (
+                      <tr key={o.id} className="border-b border-border/60">
+                        <td className={cellClass}>{o.name}</td>
+                        <td className={amountCellClass}>
+                          {formatCurrency(d.own_deposits)}
+                        </td>
+                        <td className={amountCellClass}>
+                          {formatCurrency(d.gift_deposits)}
+                        </td>
+                        <td className={amountCellClass}>
+                          {formatCurrency(d.share_of_payments)}
+                        </td>
+                        <td className={cn(amountCellClass, "font-medium")}>
+                          {formatCurrency(d.unspent)}
+                        </td>
+                      </tr>
+                    )
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </Card>
   );

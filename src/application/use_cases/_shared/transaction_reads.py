@@ -20,14 +20,48 @@ from src.application.use_cases._shared.reconciliation_context import (
 )
 from src.domain.entities.category_group import is_spending_kind
 from src.domain.entities.transaction import Transaction
-from src.domain.exceptions import InvariantViolationError
+from src.domain.exceptions import InvariantViolationError, ValidationError
 from src.domain.filters import depositor_of, exclude_non_spending
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 from src.domain.splits import owner_shares, person_share, share_amounts
+from src.domain.tags import has_tag_prefix, is_tag_namespace
 
 logger = get_logger()
 
 type DateWindow = tuple[date, date]
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class TagFilter:
+    """The tags a read row must carry: every one of `tags`, and a tag in
+    the `prefix` namespace (such as `line:`). None sets no condition.
+
+    Raise ValidationError when `prefix` is not a tag namespace, so a bad
+    query parameter is a 422 and a bad tool input is a tool error.
+    """
+
+    tags: tuple[str, ...] | None = None
+    prefix: str | None = None
+
+    def __attrs_post_init__(self) -> None:
+        if self.prefix is not None and not is_tag_namespace(self.prefix):
+            raise ValidationError(
+                "tag_prefix must be a tag namespace such as 'line:', "
+                f"got {self.prefix!r}"
+            )
+
+    def apply_prefix(self, rows: list[Transaction]) -> list[Transaction]:
+        """The rows with a tag in the prefix namespace. The database checks
+        `tags`, as the GIN index on tags backs containment only. The prefix
+        is checked here, in memory, on purpose: a month window holds about
+        100-200 rows."""
+        if self.prefix is None:
+            return rows
+        prefix = self.prefix
+        return [tx for tx in rows if has_tag_prefix(tx.tags, prefix)]
+
+
+ANY_TAGS = TagFilter()
 
 
 @define(frozen=True, slots=True)
@@ -67,15 +101,15 @@ async def fetch_settlement_rows(
     ctx: ReconciliationContext,
     window: DateWindow,
     *,
-    tags: tuple[str, ...] | None = None,
+    tag_filter: TagFilter = ANY_TAGS,
 ) -> list[Transaction]:
     """Settlement-relevant rows in a date window."""
     start, end = window
+    rows = await uow.transactions.get_settlement_relevant_by_date_range(
+        start, end, tags=tag_filter.tags
+    )
     return exclude_non_spending(
-        await uow.transactions.get_settlement_relevant_by_date_range(
-            start, end, tags=tags
-        ),
-        ctx.non_spending_categories,
+        tag_filter.apply_prefix(rows), ctx.non_spending_categories
     )
 
 
@@ -86,7 +120,7 @@ async def fetch_scoped_rows(
     scope: Scope,
     person_id: UUID | None = None,
     *,
-    tags: tuple[str, ...] | None = None,
+    tag_filter: TagFilter = ANY_TAGS,
 ) -> ScopedRows:
     """Rows for a scoped list page. Personal = every row where the person's
     share is positive (`PersonalLens`): their share of household splits,
@@ -94,6 +128,7 @@ async def fetch_scoped_rows(
     the list sums to the Insights and Dashboard "my spending" figure.
     "all" with a person = household rows plus that person's own personal rows."""
     start, end = window
+    tags = tag_filter.tags
     if scope == "personal" and person_id is not None:
         window_txs = await uow.transactions.get_by_date_range(start, end, tags=tags)
         listed = [
@@ -114,6 +149,7 @@ async def fetch_scoped_rows(
         listed = await uow.transactions.get_household_by_date_range(
             start, end, tags=tags
         )
+    listed = tag_filter.apply_prefix(listed)
     return ScopedRows(
         listed=listed,
         spending=exclude_non_spending(listed, ctx.non_spending_categories),
@@ -159,12 +195,14 @@ async def fetch_listed_rows(
     uow: UnitOfWorkProtocol,
     window: DateWindow,
     *,
-    tags: tuple[str, ...] | None = None,
+    tag_filter: TagFilter = ANY_TAGS,
 ) -> list[Transaction]:
     """Every row in a window, transfers included. For the All list — takes
     no context so it cannot be "fixed" by accident."""
     start, end = window
-    return await uow.transactions.get_by_date_range(start, end, tags=tags)
+    return tag_filter.apply_prefix(
+        await uow.transactions.get_by_date_range(start, end, tags=tag_filter.tags)
+    )
 
 
 async def fetch_payer_rows(
@@ -181,16 +219,10 @@ async def fetch_account_rows(
     uow: UnitOfWorkProtocol, account_ids: list[UUID]
 ) -> list[Transaction]:
     """Every row in the given accounts, at any date, transfers included. For
-    moving rows between accounts, which needs all of them."""
+    moving rows between accounts, and for the House figures of the joint
+    accounts: pots and owner funds need all of them, and the activity list
+    shows transfers as such."""
     return await uow.transactions.get_by_account_ids(account_ids)
-
-
-async def fetch_joint_rows(
-    uow: UnitOfWorkProtocol, joint_account_ids: list[UUID], limit: int
-) -> list[Transaction]:
-    """The joint accounts' newest `limit` rows, newest first. Transfers stay:
-    the House activity list shows them as such."""
-    return await uow.transactions.get_recent_by_account_ids(joint_account_ids, limit)
 
 
 @define(frozen=True, slots=True)

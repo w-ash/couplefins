@@ -59,6 +59,7 @@ export function HousePage() {
           <SetAsideSection
             example={data.example_sections.includes("set_aside")}
             setAside={data.set_aside}
+            owners={data.persons}
           />
           <RecentActivitySection
             example={data.example_sections.includes("recent_activity")}

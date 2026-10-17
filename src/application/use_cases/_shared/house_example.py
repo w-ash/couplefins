@@ -20,12 +20,14 @@ from src.domain.house import (
     OwnerAmount,
     ShareHistoryPoint,
     bucket,
+    owner_deposits,
     put_in_section,
     set_aside_section,
     share_percentages,
     shares_section,
     with_shortfalls,
 )
+from src.domain.pots import OwnerFunds
 
 ALICE = UUID(int=1)
 BOB = UUID(int=2)
@@ -188,7 +190,24 @@ def example_house(alice: UUID, bob: UUID) -> HouseFigures:
             ),
             {b.name: b.balance for b in _BUCKETS},
         ),
-        set_aside=set_aside_section(_BUCKETS),
+        set_aside=set_aside_section(
+            _BUCKETS,
+            owners=(
+                owner_deposits(
+                    OwnerFunds(
+                        alice, Decimal("24000.00"), Decimal(0), Decimal("8240.00")
+                    )
+                ),
+                owner_deposits(
+                    OwnerFunds(
+                        bob,
+                        Decimal("14500.00"),
+                        Decimal("3000.00"),
+                        Decimal("6280.00"),
+                    )
+                ),
+            ),
+        ),
         recent_activity=(
             _row(
                 31, _on(10, 1), "payment", "mortgage", "-1798.65", mortgage.owner_parts

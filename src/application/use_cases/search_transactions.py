@@ -19,6 +19,8 @@ from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
 from src.application.use_cases._shared.transaction_reads import (
+    ANY_TAGS,
+    TagFilter,
     fetch_listed_rows,
     fetch_scoped_rows,
 )
@@ -31,11 +33,13 @@ _DEFAULT_LIMIT = 20
 
 @define(frozen=True, slots=True)
 class SearchTransactionsCommand:
+    """`tag_filter` keeps the rows carrying its tags and prefix."""
+
     year: int = field(validator=positive_int)
     month: int = field(validator=month_range)
     merchant: str | None = None
     category_group_id: UUID | None = None
-    tag: str | None = None
+    tag_filter: TagFilter = ANY_TAGS
     scope: Scope = "all"
     person_id: UUID | None = None
     limit: int = _DEFAULT_LIMIT
@@ -59,18 +63,24 @@ class SearchTransactionsUseCase:
     ) -> SearchTransactionsResult:
         async with uow:
             window = month_bounds(command.year, command.month)
-            tags = (command.tag,) if command.tag else None
 
             ctx: ReconciliationContext | None = None
             if command.scope == "all":
-                txns = await fetch_listed_rows(uow, window, tags=tags)
+                txns = await fetch_listed_rows(
+                    uow, window, tag_filter=command.tag_filter
+                )
             else:
                 # Spending scopes never list money movement; "all" keeps it
                 # visible — the same rule as the Transactions page.
                 ctx = await load_reconciliation_context(uow)
                 txns = (
                     await fetch_scoped_rows(
-                        uow, ctx, window, command.scope, command.person_id, tags=tags
+                        uow,
+                        ctx,
+                        window,
+                        command.scope,
+                        command.person_id,
+                        tag_filter=command.tag_filter,
                     )
                 ).spending
 

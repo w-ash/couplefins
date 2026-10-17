@@ -99,6 +99,7 @@ export function makeHouseResponse(
           bank_balance: 2800,
           bank_balance_as_of: "2026-10-01",
           difference: 50,
+          is_unassigned: false,
         },
         {
           name: "Repairs fund",
@@ -106,9 +107,34 @@ export function makeHouseResponse(
           bank_balance: null,
           bank_balance_as_of: null,
           difference: null,
+          is_unassigned: false,
+        },
+        {
+          name: "Unassigned",
+          balance: -60,
+          bank_balance: null,
+          bank_balance_as_of: null,
+          difference: null,
+          is_unassigned: true,
         },
       ],
-      total: 3650,
+      total: 3590,
+      owners: [
+        {
+          person_id: ALICE_ID,
+          own_deposits: 4000,
+          gift_deposits: 0,
+          share_of_payments: 1825,
+          unspent: 2175,
+        },
+        {
+          person_id: BOB_ID,
+          own_deposits: 2200,
+          gift_deposits: 1000,
+          share_of_payments: 1785,
+          unspent: 1415,
+        },
+      ],
     },
     recent_activity: [
       {

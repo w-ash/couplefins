@@ -5,13 +5,36 @@ from pydantic import BaseModel, Field
 
 from src.application.use_cases._shared.transaction_reads import TransactionShares
 from src.application.use_cases._shared.upload_status import UploadStatus
-from src.application.use_cases.get_reconciliation import GetReconciliationResult
+from src.application.use_cases.get_reconciliation import (
+    GetReconciliationResult,
+    ReconciliationScope,
+)
 from src.domain.entities.category_group import GroupKind
 from src.domain.entities.reconciliation_period import ReconciliationPeriod
 from src.domain.entities.transaction import Transaction
 from src.domain.filters import is_joint_row
 from src.domain.reconciliation import PersonSummary, SettlementResult
 from src.interface.api.schemas.types import MoneyField
+
+
+class ReconciliationQuery(BaseModel):
+    """The query of `GET /reconciliation`: a date range or a year/month (the
+    current month when neither is given), a scope, and the tags a row must
+    carry."""
+
+    start_date: datetime.date | None = None
+    end_date: datetime.date | None = None
+    year: int | None = None
+    month: int | None = None
+    scope: ReconciliationScope = "household"
+    tags: list[str] | None = Field(
+        default=None, description="Keep the rows that carry every one of these tags."
+    )
+    tag_prefix: str | None = Field(
+        default=None,
+        description="A tag namespace such as `line:`: keep the rows that carry "
+        "a tag in it.",
+    )
 
 
 class MonthReference(BaseModel):

@@ -1,10 +1,12 @@
 import datetime
 from datetime import UTC
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 
 from src.application.runner import execute_use_case
+from src.application.use_cases._shared.transaction_reads import TagFilter
 from src.application.use_cases.finalize_period import (
     FinalizePeriodCommand,
     FinalizePeriodUseCase,
@@ -12,7 +14,6 @@ from src.application.use_cases.finalize_period import (
 from src.application.use_cases.get_reconciliation import (
     GetReconciliationCommand,
     GetReconciliationUseCase,
-    ReconciliationScope,
 )
 from src.application.use_cases.unfinalize_period import (
     UnfinalizePeriodCommand,
@@ -26,6 +27,7 @@ from src.interface.api.dependencies import get_current_user
 from src.interface.api.schemas.reconciliation import (
     FinalizePeriodRequest,
     PeriodStatusResponse,
+    ReconciliationQuery,
     ReconciliationResponse,
     UnfinalizePeriodRequest,
 )
@@ -34,45 +36,27 @@ router = APIRouter(tags=["reconciliation"], dependencies=[Depends(get_current_us
 
 
 @router.get("/reconciliation")
-async def get_reconciliation(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
-    start_date: datetime.date | None = None,
-    end_date: datetime.date | None = None,
-    year: int | None = None,
-    month: int | None = None,
-    scope: str | None = None,
-    tags: list[str] | None = Query(None),
-    current_user: Person = Depends(get_current_user),
+async def get_reconciliation(
+    query: Annotated[ReconciliationQuery, Query()],
+    current_user: Annotated[Person, Depends(get_current_user)],
 ) -> ReconciliationResponse:
-    person_id = current_user.id if scope in {"personal", "all"} else None
-    command = _build_command(start_date, end_date, year, month, scope, person_id, tags)
+    person_id = current_user.id if query.scope in {"personal", "all"} else None
+    command = _build_command(query, person_id)
     result = await execute_use_case(
         lambda uow: GetReconciliationUseCase().execute(command, uow)
     )
     return ReconciliationResponse.from_result(result)
 
 
-_VALID_SCOPES: set[ReconciliationScope] = {"household", "personal", "all"}
-
-
-def _build_command(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
-    start_date: datetime.date | None,
-    end_date: datetime.date | None,
-    year: int | None,
-    month: int | None,
-    scope: str | None,
-    person_id: UUID | None,
-    tags: list[str] | None,
+def _build_command(
+    query: ReconciliationQuery, person_id: UUID | None
 ) -> GetReconciliationCommand:
-    resolved_scope: ReconciliationScope = "household"
-    if scope is not None:
-        if scope not in _VALID_SCOPES:
-            raise ValidationError(f"Invalid scope: {scope}")
-        resolved_scope = scope  # type: ignore[assignment]
-
-    resolved_tags = tuple(tags) if tags else None
-
+    tag_filter = TagFilter(
+        tags=tuple(query.tags) if query.tags else None, prefix=query.tag_prefix
+    )
+    start_date, end_date = query.start_date, query.end_date
     has_range = start_date is not None or end_date is not None
-    has_ym = year is not None or month is not None
+    has_ym = query.year is not None or query.month is not None
 
     if has_range and has_ym:
         raise ValidationError(
@@ -87,18 +71,18 @@ def _build_command(  # ruff: ignore[too-many-arguments, too-many-positional-argu
         return GetReconciliationCommand.from_range(
             start_date,
             end_date,
-            scope=resolved_scope,
+            scope=query.scope,
             person_id=person_id,
-            tags=resolved_tags,
+            tag_filter=tag_filter,
         )
 
     now = datetime.datetime.now(UTC).date()
     return GetReconciliationCommand.from_month(
-        year or now.year,
-        month or now.month,
-        scope=resolved_scope,
+        query.year or now.year,
+        query.month or now.month,
+        scope=query.scope,
         person_id=person_id,
-        tags=resolved_tags,
+        tag_filter=tag_filter,
     )
 
 

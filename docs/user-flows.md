@@ -232,6 +232,24 @@ Rows from an account both partners fund have no payer. They count for the househ
 - Given text naming no one or both, then the deposit is unassigned and the "Unassigned deposits" chip on Transactions counts it
 - Given a joint credit, then I can pick its depositor in the row; the choice persists across re-imports
 
+**US-JOINT-3** (v1.15.3): As a partner, I want to label rows with `<namespace>:<value>` tags that never change the split, so that other tools can group rows without couplefins knowing what the labels mean.
+
+- Given a row tagged `line:mortgage` and `s50`, then its split stays 50
+- Given a label whose value holds spaces, `.`, `_`, or `-` (such as `line:home loan`), then it is a label like any other
+- Given a row carries a label, from Monarch or added in the app, when I re-import a source that lacks it, then the label stays and the re-import preview does not propose removing it
+- Given I want a label gone or renamed, then I remove or rename it in the app's tag editor, since an import never removes one
+- Given rows where some carry a `line:` tag, when `GET /reconciliation` or the chat transaction search is called with `tag_prefix=line:`, then only the rows carrying a `line:` tag are returned
+- Given a `tag_prefix` that is no namespace (such as `line`), then the API answers 422 and the chat tool returns an error
+
+**US-JOINT-4** (v1.15.3): As a partner, I want joint rows tagged with a pot and a source, so that I can see what is in each pot and whose deposits are still unspent.
+
+- Given joint deposits, payments, and transfers tagged `pot:<name>`, then each pot's balance is the sum of its rows' signed amounts; rows with no pot tag fall in an "Unassigned" pot
+- Given deposits tagged `source:own` or `source:gift` (own when absent), then each owner's deposits are shown split into own and gift
+- Given an owner's deposits and their share of the joint payments, then their unspent deposits are deposits minus that share
+- Given money in with no depositor in a spending category, then it is a refund: it takes each owner's share off their share of payments
+- Given a pot-to-pot transfer, then balance moves between the two pots and the transfer is nobody's spending
+- Given an excluded joint row, then it counts in no pot balance, deposit, or payment
+
 ---
 
 ### Understanding Where We Stand
@@ -571,6 +589,7 @@ The co-owned home on its own page. Every figure is computed in Python and served
 
 - Given the Put in section, then each owner's total to date is shown by kind: closing, loan interest, loan principal, property tax, insurance, repairs, agreed work
 - Given the Put in section, then each owner's deposits not yet spent are shown beside those totals
+- Given a joint account exists (v1.15.3), then Put in, "Deposits not yet spent" included, stays example figures until v1.15.4; each owner's real deposits show under Set aside (US-HOUSE-6)
 
 **US-HOUSE-3** (v1.15.1): As a co-owner, I want to see each owner's share of the home, now and over time, so that I know how ownership has moved.
 
@@ -590,6 +609,9 @@ The co-owned home on its own page. Every figure is computed in Python and served
 **US-HOUSE-6** (v1.15.1): As a co-owner, I want each bucket beside the balance last entered from the bank, so that I can see whether the books match the bank.
 
 - Given the Set aside section, then each bucket shows its balance, the balance last entered from the bank, and the difference
+- Given a joint account exists (v1.15.3), then Set aside lists the real pots from `pot:` tags and is no longer marked example; the bank balance beside each stays empty until House settings (v1.15.4)
+- Given joint rows with no pot tag, then their bucket is listed last, muted, and marked "no pot tag"
+- Given a joint account exists (v1.15.3), then a Deposits table under the buckets shows each owner's own deposits, gift deposits, share of payments, and unspent deposits
 
 **US-HOUSE-7** (v1.15.1): As a co-owner, I want the joint accounts' latest activity, so that I can see what just moved.
 

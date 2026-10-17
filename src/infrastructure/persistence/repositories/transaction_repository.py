@@ -295,21 +295,6 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             return []
         return await self._query(self._account_filter(account_ids))
 
-    async def get_recent_by_account_ids(
-        self, account_ids: list[UUID], limit: int
-    ) -> list[Transaction]:
-        """The newest `limit` rows in the given accounts, newest first."""
-        if not account_ids:
-            return []
-        stmt = (
-            select(TransactionModel)
-            .where(self._account_filter(account_ids))
-            .order_by(TransactionModel.date.desc(), TransactionModel.id)
-            .limit(limit)
-        )
-        result = await self._session.execute(stmt)
-        return [self._to_domain(row) for row in result.scalars().all()]
-
     _IMMUTABLE_KEYS = frozenset({
         "account",
         "account_id",

@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 from uuid import uuid4
 
+import pytest
 from structlog.testing import capture_logs
 
 from src.application.use_cases._shared.reconciliation_context import (
@@ -15,9 +16,9 @@ from src.application.use_cases._shared.reconciliation_context import (
 )
 from src.application.use_cases._shared.transaction_reads import (
     NO_SHARES,
+    TagFilter,
     fetch_account_rows,
     fetch_all_settlement_rows,
-    fetch_joint_rows,
     fetch_latest_spending_month,
     fetch_listed_rows,
     fetch_payer_rows,
@@ -28,6 +29,7 @@ from src.application.use_cases._shared.transaction_reads import (
     row_shares,
     with_shares,
 )
+from src.domain.exceptions import ValidationError
 from src.domain.repositories.transaction_repository import (
     TransactionRepositoryProtocol,
 )
@@ -35,7 +37,6 @@ from tests.fixtures.factories import (
     ALICE,
     BOB,
     make_income_group,
-    make_joint_account,
     make_transaction,
     make_transfer_group,
 )
@@ -52,7 +53,6 @@ _LIST_READS = {
     "get_all_settlement_relevant",
     "get_by_person_and_date_range",
     "get_by_account_ids",
-    "get_recent_by_account_ids",
 }
 # Scalar reads that still answer "what spending exists?" and so must apply
 # the transfer rule the same way the list reads do.
@@ -99,7 +99,8 @@ async def test_settlement_rows_drop_transfers_and_forward_tags() -> None:
     uow.transactions.get_settlement_relevant_by_date_range.return_value = [dinner, card]
 
     assert await fetch_all_settlement_rows(uow, ctx) == [dinner]
-    assert await fetch_settlement_rows(uow, ctx, WINDOW, tags=("shared",)) == [dinner]
+    shared = TagFilter(tags=("shared",))
+    assert await fetch_settlement_rows(uow, ctx, WINDOW, tag_filter=shared) == [dinner]
     uow.transactions.get_settlement_relevant_by_date_range.assert_called_once_with(
         *WINDOW, tags=("shared",)
     )
@@ -124,6 +125,37 @@ async def test_scoped_rows_list_transfers_but_do_not_spend_them() -> None:
     both = await fetch_scoped_rows(uow, ctx, WINDOW, "all", ALICE.id)
     assert both.listed == [dinner, card, personal]
     assert both.spending == [dinner, personal]
+
+
+async def test_a_tag_prefix_keeps_rows_with_a_tag_in_its_namespace() -> None:
+    """The database filters by containment; the prefix filters in memory,
+    in every read that takes tags."""
+    uow, ctx = await _ctx()
+    mortgage = make_transaction(
+        tags=("shared", "line:mortgage"), payer_person_id=ALICE.id
+    )
+    pot_only = make_transaction(tags=("shared", "pot:line"), payer_person_id=ALICE.id)
+    lines = TagFilter(tags=("shared",), prefix="line:")
+    for read in (
+        uow.transactions.get_household_by_date_range,
+        uow.transactions.get_by_date_range,
+        uow.transactions.get_settlement_relevant_by_date_range,
+    ):
+        read.return_value = [mortgage, pot_only]
+
+    scoped = await fetch_scoped_rows(uow, ctx, WINDOW, "household", tag_filter=lines)
+    assert (scoped.listed, scoped.spending) == ([mortgage], [mortgage])
+    assert await fetch_listed_rows(uow, WINDOW, tag_filter=lines) == [mortgage]
+    assert await fetch_settlement_rows(uow, ctx, WINDOW, tag_filter=lines) == [mortgage]
+    uow.transactions.get_by_date_range.assert_awaited_once_with(
+        *WINDOW, tags=("shared",)
+    )
+
+
+@pytest.mark.parametrize("prefix", ["line", "line:mortgage", "Line:", ""])
+def test_a_tag_prefix_must_be_a_namespace(prefix: str) -> None:
+    with pytest.raises(ValidationError, match="tag_prefix"):
+        TagFilter(prefix=prefix)
 
 
 async def test_listed_rows_keep_transfers_and_never_touch_categories() -> None:
@@ -279,21 +311,6 @@ async def test_account_rows_are_every_row_of_the_accounts() -> None:
 
     assert await fetch_account_rows(uow, [dinner.account_id]) == [dinner, card]
     uow.transactions.get_by_account_ids.assert_awaited_once_with([dinner.account_id])
-
-
-async def test_joint_rows_are_the_bounded_newest_first_read() -> None:
-    """Transfers stay: the House activity list shows them as such. The
-    repository orders and bounds the read."""
-    uow = make_mock_uow()
-    joint = make_joint_account()
-    new, card = (
-        make_transaction(joint=True, account=joint.name, date=date(2026, 1, day))
-        for day in (20, 9)
-    )
-    uow.transactions.get_recent_by_account_ids.return_value = [new, card]
-
-    assert await fetch_joint_rows(uow, [joint.id], 2) == [new, card]
-    uow.transactions.get_recent_by_account_ids.assert_awaited_once_with([joint.id], 2)
 
 
 async def test_payer_rows_leave_out_joint_rows_at_the_read() -> None:

@@ -10,6 +10,14 @@ deploy. There is no `[Unreleased]` section.
 Versions before 1.14.0 predate this file. Their scope is recorded per series in
 `docs/backlog/completed/` and in the version matrix in `docs/backlog/README.md`.
 
+## [1.15.3] - 2026-10-15
+
+### Added
+
+- Labels. A tag like `line:mortgage` is a label: it never changes a split, and an import never removes one, whether it came from Monarch or the app. Remove or rename a label in the app's tag editor.
+- Pots and sources on the House page. Tag joint rows `pot:<name>` and deposits `source:own` or `source:gift`: Set aside lists each pot's balance (rows with no pot fall in "Unassigned") and each owner's deposits, share of payments, and unspent deposits.
+- `tag_prefix` on `GET /reconciliation` and the chat transaction search returns only rows carrying a tag in that namespace.
+
 ## [1.15.2] - 2026-10-15
 
 ### Added

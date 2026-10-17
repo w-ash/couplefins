@@ -3,6 +3,7 @@ import uuid
 
 import pytest
 
+from src.application.use_cases._shared.transaction_reads import TagFilter
 from src.application.use_cases.search_transactions import (
     SearchTransactionsCommand,
     SearchTransactionsUseCase,
@@ -212,7 +213,9 @@ async def test_filters_by_tag() -> None:
         make_transaction(merchant="Bakery", tags=("discuss",)),
     ]
 
-    command = SearchTransactionsCommand(year=2026, month=3, tag="discuss")
+    command = SearchTransactionsCommand(
+        year=2026, month=3, tag_filter=TagFilter(tags=("discuss",))
+    )
     result = await SearchTransactionsUseCase().execute(command, uow)
 
     assert result.total_count == 2
@@ -229,7 +232,7 @@ async def test_tag_filter_pushed_to_repo_per_scope() -> None:
     ]
 
     command = SearchTransactionsCommand(
-        year=2026, month=3, scope="household", tag="discuss"
+        year=2026, month=3, scope="household", tag_filter=TagFilter(tags=("discuss",))
     )
     result = await SearchTransactionsUseCase().execute(command, uow)
 
@@ -237,3 +240,20 @@ async def test_tag_filter_pushed_to_repo_per_scope() -> None:
     assert result.transactions[0].merchant == "Coffee Shop"
     call = uow.transactions.get_household_by_date_range.call_args
     assert call.kwargs["tags"] == ("discuss",)
+
+
+@pytest.mark.asyncio
+async def test_tag_prefix_keeps_rows_with_a_tag_in_the_namespace() -> None:
+    uow = make_mock_uow()
+    uow.transactions.get_by_date_range.return_value = [
+        make_transaction(merchant="Lender", tags=("line:mortgage",)),
+        make_transaction(merchant="Grocer", tags=("shared",)),
+    ]
+
+    command = SearchTransactionsCommand(
+        year=2026, month=3, tag_filter=TagFilter(prefix="line:")
+    )
+    result = await SearchTransactionsUseCase().execute(command, uow)
+
+    assert [t.merchant for t in result.transactions] == ["Lender"]
+    assert result.total_count == 1

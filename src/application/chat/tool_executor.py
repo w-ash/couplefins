@@ -43,6 +43,7 @@ from src.application.use_cases._shared.transaction_pipeline import (
     NO_PAYER_SPLIT,
     reject_joint_rows,
 )
+from src.application.use_cases._shared.transaction_reads import TagFilter
 from src.application.use_cases.bulk_update_transactions import validate_bulk_changes
 from src.application.use_cases.export_adjustments import (
     ExportAdjustmentsCommand,
@@ -334,12 +335,16 @@ async def handle_search_transactions(
         group_id = (await _require_group(group_name)).id
 
     scope: Scope = _scope_from_input(tool_input, allowed=_SCOPES, default="all")
+    tag = cast(str | None, tool_input.get("tag"))
     command = SearchTransactionsCommand(
         year=cast(int, tool_input["year"]),
         month=cast(int, tool_input["month"]),
         merchant=cast(str | None, tool_input.get("merchant")),
         category_group_id=group_id,
-        tag=cast(str | None, tool_input.get("tag")),
+        tag_filter=TagFilter(
+            tags=(tag,) if tag else None,
+            prefix=cast(str | None, tool_input.get("tag_prefix")),
+        ),
         scope=scope,
         person_id=person_for_scope(scope, ctx.current_user),
     )

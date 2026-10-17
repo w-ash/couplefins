@@ -28,6 +28,21 @@ class SettlementTags:
 RESERVED_TAGS: Final = SharedTags.TAGS | HouseholdTags.TAGS | SettlementTags.TAGS
 
 
+# Namespaces of the labels (namespaced tags, see src/domain/tags.py) that
+# couplefins reads.
+# A joint row's budget line.
+LINE_TAG_PREFIX: Final = "line:"
+# The pot of a joint deposit, payment, or pot-to-pot transfer leg.
+POT_TAG_PREFIX: Final = "pot:"
+# Where a joint deposit's money came from: a gift to the depositor when
+# tagged `source:gift`, else the depositor's own money.
+SOURCE_TAG_PREFIX: Final = "source:"
+SOURCE_GIFT: Final = "gift"
+# The pot of a joint row that carries no pot tag. Capitalized, so no `pot:`
+# tag (tags are stored lowercased) can name it.
+UNASSIGNED_POT: Final = "Unassigned"
+
+
 # Group label for transactions whose category is unmapped (group_id is None).
 UNCATEGORIZED_GROUP_NAME: Final = "Uncategorized"
 

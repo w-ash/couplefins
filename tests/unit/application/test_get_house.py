@@ -22,12 +22,14 @@ from src.application.use_cases.get_house import (
     GetHouseResult,
     GetHouseUseCase,
 )
+from src.domain.constants import UNASSIGNED_POT
 from src.domain.entities.transaction import Transaction
 from src.domain.house import (
     ActivityRow,
     HouseFigures,
     HousePerson,
     OwnerAmount,
+    OwnerDeposits,
     OwnerShare,
 )
 from tests.fixtures.factories import (
@@ -69,6 +71,7 @@ class TestExampleHouse:
             *(p.owners for p in figures.shares.history),
             *(loan.owner_parts for loan in figures.loans),
             *(row.shares for row in figures.recent_activity),
+            figures.set_aside.owners,
         ]
         for owners in owner_lists:
             assert [o.person_id for o in owners] == ids
@@ -155,7 +158,7 @@ class TestRecentActivity:
         uow.category_groups.get_all.return_value = [transfer]
         uow.categories.get_all.return_value = [card_payment]
         uow.accounts.get_all.return_value = [TestRecentActivity.JOINT]
-        uow.transactions.get_recent_by_account_ids.return_value = rows
+        uow.transactions.get_by_account_ids.return_value = rows
         return await GetHouseUseCase().execute(GetHouseCommand(), uow)
 
     @staticmethod
@@ -165,10 +168,20 @@ class TestRecentActivity:
             **overrides,
         )
 
+    @staticmethod
+    def _newest_first(rows: list[Transaction]) -> list[Transaction]:
+        """Date the rows a day apart, so the activity lists them in order."""
+        return [
+            attrs.evolve(tx, date=date(2026, 1, 28 - n)) for n, tx in enumerate(rows)
+        ]
+
     async def test_the_section_is_real_and_the_rest_still_example(self) -> None:
         result = await self._house([])
 
-        assert result.example_sections == HOUSE_SECTIONS - {"recent_activity"}
+        assert result.example_sections == HOUSE_SECTIONS - {
+            "recent_activity",
+            "set_aside",
+        }
         assert result.figures.recent_activity == ()
         assert result.figures.persons == COUPLE
 
@@ -200,7 +213,7 @@ class TestRecentActivity:
             self._row(amount=Decimal("-500.00"), category="Credit Card Payment"),
         ]
 
-        result = await self._house(rows)
+        result = await self._house(self._newest_first(rows))
 
         assert [r.kind for r in result.figures.recent_activity] == [
             "payment",
@@ -227,7 +240,7 @@ class TestRecentActivity:
             self._row(amount=Decimal("1500.00"), category="Credit Card Payment"),
         ]
 
-        result = await self._house(rows)
+        result = await self._house(self._newest_first(rows))
 
         deposit, transfer = result.figures.recent_activity
         assert (deposit.kind, deposit.person_id) == ("deposit", BOB.id)
@@ -246,7 +259,7 @@ class TestRecentActivity:
             self._row(amount=Decimal("-100.00"), category="Credit Card Payment"),
         ]
 
-        result = await self._house(rows)
+        result = await self._house(self._newest_first(rows))
 
         assert [r.shares for r in result.figures.recent_activity] == [
             (
@@ -266,25 +279,118 @@ class TestRecentActivity:
             self._row(tags=("shared",)),
         ]
 
-        result = await self._house(rows)
+        result = await self._house(self._newest_first(rows))
 
         assert [r.budget_line for r in result.figures.recent_activity] == [
             "repair",
             None,
         ]
 
-    async def test_reads_the_newest_twenty_rows_with_their_account(self) -> None:
-        rows = [self._row(date=date(2026, 1, 25 - n)) for n in range(20)]
-        uow = make_mock_uow()
-        uow.persons.get_all.return_value = [ALICE, BOB]
-        uow.accounts.get_all.return_value = [self.JOINT]
-        uow.transactions.get_recent_by_account_ids.return_value = rows
+    async def test_lists_the_newest_twenty_rows_with_their_account(self) -> None:
+        rows = [self._row(date=date(2026, 1, day)) for day in range(1, 26)]
+        same_day = [self._row(date=date(2026, 1, 26)) for _ in range(2)]
 
-        result = await GetHouseUseCase().execute(GetHouseCommand(), uow)
+        result = await self._house([*rows[::2], *same_day, *rows[1::2]])
 
-        uow.transactions.get_recent_by_account_ids.assert_awaited_once_with(
-            [self.JOINT.id], 20
-        )
         activity: tuple[ActivityRow, ...] = result.figures.recent_activity
-        assert [r.date for r in activity] == [tx.date for tx in rows]
+        assert [r.id for r in activity] == [
+            *sorted(tx.id for tx in same_day),
+            *(tx.id for tx in reversed(rows[-18:])),
+        ]
         assert {r.account_name for r in activity} == {"Joint Checking"}
+
+
+class TestJointFunds:
+    """The set-aside pots and each owner's unspent deposits, from every row
+    of the joint accounts, once one exists."""
+
+    JOINT = make_joint_account("Joint Checking")
+
+    @staticmethod
+    async def _house(rows: list[Transaction]) -> GetHouseResult:
+        uow = make_mock_uow()
+        transfer, card_payment = make_transfer_group()
+        uow.persons.get_all.return_value = [ALICE, BOB]
+        uow.category_groups.get_all.return_value = [transfer]
+        uow.categories.get_all.return_value = [card_payment]
+        uow.accounts.get_all.return_value = [TestJointFunds.JOINT]
+        uow.transactions.get_by_account_ids.return_value = rows
+        result = await GetHouseUseCase().execute(GetHouseCommand(), uow)
+        uow.transactions.get_by_account_ids.assert_awaited_once_with([
+            TestJointFunds.JOINT.id
+        ])
+        return result
+
+    @staticmethod
+    def _row(amount: str, *tags: str, **overrides: object) -> Transaction:
+        return attrs.evolve(
+            make_transaction(
+                joint=True,
+                account=TestJointFunds.JOINT.name,
+                amount=Decimal(amount),
+                tags=tags,
+            ),
+            **overrides,
+        )
+
+    ROWS = (
+        ("1000.00", ("pot:bills",), {"depositor_person_id": ALICE.id}),
+        ("600.00", ("pot:renovation",), {"depositor_person_id": BOB.id}),
+        ("-300.00", ("pot:bills", "line:mortgage"), {}),
+        ("-100.00", ("pot:bills",), {"category": "Credit Card Payment"}),
+        ("100.00", ("pot:renovation",), {"category": "Credit Card Payment"}),
+        ("-20.00", (), {}),
+    )
+
+    async def _month(self) -> GetHouseResult:
+        return await self._house([
+            self._row(amount, *tags, **overrides)
+            for amount, tags, overrides in self.ROWS
+        ])
+
+    async def test_set_aside_lists_each_pot_with_unassigned_last(self) -> None:
+        set_aside = (await self._month()).figures.set_aside
+
+        assert [(b.name, b.balance, b.is_unassigned) for b in set_aside.buckets] == [
+            ("bills", Decimal("600.00"), False),
+            ("renovation", Decimal("700.00"), False),
+            (UNASSIGNED_POT, Decimal("-20.00"), True),
+        ]
+        assert set_aside.total == Decimal("1280.00")
+        assert all(
+            (b.bank_balance, b.bank_balance_as_of, b.difference) == (None, None, None)
+            for b in set_aside.buckets
+        )
+
+    async def test_set_aside_holds_each_owners_deposits_and_put_in_stays_example(
+        self,
+    ) -> None:
+        result = await self._month()
+
+        # Spending 300 + 20 at 50/50; the transfer legs are no payment.
+        assert result.figures.set_aside.owners == (
+            OwnerDeposits(
+                ALICE.id,
+                Decimal("1000.00"),
+                Decimal(0),
+                Decimal("160.00"),
+                Decimal("840.00"),
+            ),
+            OwnerDeposits(
+                BOB.id,
+                Decimal("600.00"),
+                Decimal(0),
+                Decimal("160.00"),
+                Decimal("440.00"),
+            ),
+        )
+        assert result.figures.put_in == example_house(ALICE.id, BOB.id).put_in
+        assert "put_in" in result.example_sections
+        assert "set_aside" not in result.example_sections
+
+    async def test_no_joint_rows_no_pots(self) -> None:
+        set_aside = (await self._house([])).figures.set_aside
+
+        assert set_aside.buckets == ()
+        assert set_aside.total == 0
+        assert [o.unspent for o in set_aside.owners] == [0, 0]

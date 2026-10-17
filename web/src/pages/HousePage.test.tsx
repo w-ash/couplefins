@@ -4,7 +4,7 @@ import type { HouseResponse } from "@/api/generated/model";
 import { useIdentityStore } from "@/lib/identity";
 import { ALICE_ID, makeHouseResponse } from "@/test/house-fixtures";
 import { server } from "@/test/server";
-import { renderWithProviders, screen } from "@/test/test-utils";
+import { renderWithProviders, screen, within } from "@/test/test-utils";
 import { HousePage } from "./HousePage";
 
 function serveHouse(response: HouseResponse) {
@@ -93,12 +93,43 @@ describe("HousePage", () => {
     expect(screen.getAllByText("Joint checking")).toHaveLength(2);
   });
 
+  it("renders real set-aside buckets, the unassigned one last and muted", async () => {
+    serveHouse(
+      withExamples(["put_in", "loans", "upcoming", "recent_activity"]),
+    );
+    renderWithProviders(<HousePage />);
+
+    const heading = await screen.findByRole("heading", { name: "Set aside" });
+    const section = heading.closest("section") as HTMLElement;
+    expect(within(section).queryByText("Example")).not.toBeInTheDocument();
+    const [buckets] = within(section).getAllByRole("table");
+    const [, body] = within(buckets).getAllByRole("rowgroup");
+    const rows = within(body).getAllByRole("row");
+    const unassigned = rows[rows.length - 1];
+    expect(unassigned).toHaveTextContent("Unassigned");
+    expect(within(section).getAllByText("no pot tag")).toEqual([
+      within(unassigned).getByText("no pot tag"),
+    ]);
+    expect(unassigned.firstElementChild).toHaveClass("text-muted-foreground");
+    expect(rows[0].firstElementChild).not.toHaveClass("text-muted-foreground");
+  });
+
+  it("lists each owner's deposits under the buckets", async () => {
+    serveHouse(makeHouseResponse());
+    renderWithProviders(<HousePage />);
+
+    const table = await screen.findByRole("table", { name: "Deposits" });
+    const [, alice, bob] = within(table).getAllByRole("row");
+    expect(alice).toHaveTextContent("Alice$4,000.00$0.00$1,825.00$2,175.00");
+    expect(bob).toHaveTextContent("Bob$2,200.00$1,000.00$1,785.00$1,415.00");
+  });
+
   it("says so when a list is empty", async () => {
     serveHouse(
       makeHouseResponse({
         loans: [],
         upcoming: [],
-        set_aside: { buckets: [], total: 0 },
+        set_aside: { buckets: [], total: 0, owners: [] },
         recent_activity: [],
       }),
     );

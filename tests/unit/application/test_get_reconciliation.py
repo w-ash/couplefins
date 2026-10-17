@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
+from src.application.use_cases._shared.transaction_reads import TagFilter
 from src.application.use_cases.get_reconciliation import (
     GetReconciliationCommand,
     GetReconciliationUseCase,
@@ -242,7 +243,9 @@ async def test_tags_passed_to_repository() -> None:
     uow.transactions.get_household_by_date_range.return_value = []
     uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = []
 
-    command = GetReconciliationCommand.from_month(2026, 1, tags=("shared",))
+    command = GetReconciliationCommand.from_month(
+        2026, 1, tag_filter=TagFilter(tags=("shared",))
+    )
     await GetReconciliationUseCase().execute(command, uow)
 
     call_kwargs = uow.transactions.get_household_by_date_range.call_args
@@ -319,3 +322,34 @@ async def test_transfer_rows_listed_but_left_out_of_the_math() -> None:
     ]
     assert result.summary.settlement is not None
     assert result.summary.settlement.amount == Decimal("50.00")
+
+
+async def test_tag_prefix_filters_the_rows_and_the_settlement() -> None:
+    """`tag_prefix=line:` keeps the rows carrying a `line:` tag, in the list,
+    the summary, and the settlement figure alike."""
+    uow = make_mock_uow()
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    uow.persons.get_all.return_value = [alice, bob]
+    mortgage = make_transaction(
+        payer_person_id=alice.id,
+        amount=Decimal("-100.00"),
+        tags=("shared", "line:mortgage"),
+    )
+    dinner = make_transaction(payer_person_id=alice.id, amount=Decimal("-40.00"))
+    uow.transactions.get_household_by_date_range.return_value = [mortgage, dinner]
+    uow.transactions.get_settlement_relevant_by_date_range.return_value = [
+        mortgage,
+        dinner,
+    ]
+    uow.uploads.get_by_person_ids_with_transactions_in_date_range.return_value = []
+
+    command = GetReconciliationCommand.from_month(
+        2026, 1, tag_filter=TagFilter(prefix="line:")
+    )
+    result = await GetReconciliationUseCase().execute(command, uow)
+
+    assert result.transactions == [mortgage]
+    settlement = result.summary.settlement
+    assert settlement is not None
+    assert (settlement.from_person_id, settlement.amount) == (bob.id, Decimal("50.00"))

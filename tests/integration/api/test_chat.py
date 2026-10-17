@@ -485,6 +485,37 @@ async def test_tool_execution_error(client: AsyncClient) -> None:
     assert len(done_events) == 1
 
 
+# --- Test 6b: search_transactions by tag namespace ---
+
+
+_LINES_CSV = """Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags
+2026-03-01,Lender,Groceries,Checking,,,-100.00,"shared,line:mortgage"
+2026-03-02,Bakery,Groceries,Checking,,,-20.00,"shared,pot:line"
+"""
+
+
+async def test_search_transactions_by_tag_prefix(client: AsyncClient) -> None:
+    """`tag_prefix` keeps the rows with a tag in the namespace; a prefix
+    that is no namespace is a tool error."""
+    persons, cookies = await setup_and_login(client)
+    await upload_csv(client, persons[0]["id"], _LINES_CSV, auth=cookies)
+    month = {"year": 2026, "month": 3}
+
+    fake = FakeLLMClient([
+        _tool_use_script("search_transactions", {**month, "tag_prefix": "line:"}),
+        _tool_use_script("search_transactions", {**month, "tag_prefix": "line"}),
+        _text_only_script("One mortgage row."),
+    ])
+
+    events = await _post_chat(client, cookies, fake)
+
+    found, rejected = [e for e in events if e["type"] == "tool_result"]
+    assert found["is_error"] is False
+    assert [tx["merchant"] for tx in found["summary"]["transactions"]] == ["Lender"]
+    assert rejected["is_error"] is True
+    assert "tag_prefix" in rejected["summary"]["error"]
+
+
 # --- Test 7: Max rounds exceeded ---
 
 

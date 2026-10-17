@@ -371,6 +371,23 @@ def test_reserved_tag_not_treated_as_person_name() -> None:
     assert tx.payer_percentage == 50
 
 
+def test_a_namespaced_tag_leaves_the_split_alone() -> None:
+    """A label such as `line:mortgage` is never a split, reserved, or
+    person-name tag: the `s50` beside it sets the split."""
+    csv = _make_csv({"Tags": "Line:Mortgage, s50"})
+    [tx] = parse_monarch_csv(csv, CTX).transactions
+
+    assert (tx.household, tx.payer_percentage) == (False, 50)
+    assert tx.tags == ("line:mortgage", "s50")
+
+
+def test_a_namespaced_tag_holding_a_name_does_not_spot() -> None:
+    csv = _make_csv({"Tags": "pot:bob, source:gift"})
+    [tx] = parse_monarch_csv(csv, _knowing(BOB)).transactions
+
+    assert (tx.household, tx.payer_percentage, tx.is_settlement) == (False, 100, False)
+
+
 def test_sxx_alone_without_household_tag_is_personal_split() -> None:
     csv = _make_csv({"Tags": "s70"})
     result = parse_monarch_csv(csv, CTX).transactions

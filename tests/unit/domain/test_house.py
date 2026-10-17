@@ -3,12 +3,14 @@ from decimal import Decimal
 
 from src.domain.house import (
     bucket,
+    owner_deposits,
     put_in_section,
     set_aside_section,
     share_percentages,
     shares_section,
     with_shortfalls,
 )
+from src.domain.pots import OwnerFunds
 from tests.fixtures.factories import (
     ALICE,
     BOB,
@@ -135,13 +137,28 @@ class TestBucket:
         assert b.bank_balance is None
         assert b.bank_balance_as_of is None
         assert b.difference is None
+        assert not b.is_unassigned
 
 
 class TestSetAsideSection:
     def test_total_is_the_sum_of_balances(self) -> None:
         buckets = (bucket("Tax", Decimal(300)), bucket("Repairs", Decimal(200)))
 
-        assert set_aside_section(buckets).total == Decimal(500)
+        assert set_aside_section(buckets, owners=()).total == Decimal(500)
+
+
+class TestOwnerDeposits:
+    def test_unspent_is_the_deposits_less_the_share_of_payments(self) -> None:
+        funds = OwnerFunds(ALICE.id, Decimal(900), Decimal(100), Decimal(250))
+
+        deposits = owner_deposits(funds)
+
+        assert (deposits.person_id, deposits.unspent) == (ALICE.id, Decimal(750))
+        assert (
+            deposits.own_deposits,
+            deposits.gift_deposits,
+            deposits.share_of_payments,
+        ) == (Decimal(900), Decimal(100), Decimal(250))
 
 
 class TestWithShortfalls:

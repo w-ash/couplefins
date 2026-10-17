@@ -14,6 +14,8 @@ from uuid import UUID
 
 from attrs import define, evolve
 
+from src.domain.pots import OwnerFunds
+
 _TENTH = Decimal("0.1")
 
 # Equal to the ``share:`` tag values (v1.15.4), so these kinds use hyphens;
@@ -124,7 +126,8 @@ class Bucket:
     """Money set aside for one purpose, beside the bank's last balance.
 
     ``difference`` is ``bank_balance - balance``; all three bank fields are
-    None until the owners enter a bank balance.
+    None until the owners enter a bank balance. ``is_unassigned`` marks the
+    bucket of the money that no pot names.
     """
 
     name: str
@@ -132,12 +135,29 @@ class Bucket:
     bank_balance: Decimal | None
     bank_balance_as_of: datetime.date | None
     difference: Decimal | None
+    is_unassigned: bool
+
+
+@define(frozen=True, slots=True)
+class OwnerDeposits:
+    """One owner's deposits into the joint accounts and what of them is left.
+
+    ``unspent`` is ``own_deposits + gift_deposits - share_of_payments``
+    (``OwnerFunds.unspent``).
+    """
+
+    person_id: UUID
+    own_deposits: Decimal
+    gift_deposits: Decimal
+    share_of_payments: Decimal
+    unspent: Decimal
 
 
 @define(frozen=True, slots=True)
 class SetAsideSection:
     buckets: tuple[Bucket, ...]
     total: Decimal
+    owners: tuple[OwnerDeposits, ...]
 
 
 @define(frozen=True, slots=True)
@@ -236,6 +256,8 @@ def bucket(
     balance: Decimal,
     bank_balance: Decimal | None = None,
     bank_balance_as_of: datetime.date | None = None,
+    *,
+    is_unassigned: bool = False,
 ) -> Bucket:
     """Make a bucket and its difference from the bank balance, if one is known."""
     return Bucket(
@@ -244,13 +266,29 @@ def bucket(
         bank_balance=bank_balance,
         bank_balance_as_of=bank_balance_as_of,
         difference=None if bank_balance is None else bank_balance - balance,
+        is_unassigned=is_unassigned,
     )
 
 
-def set_aside_section(buckets: tuple[Bucket, ...]) -> SetAsideSection:
+def owner_deposits(funds: OwnerFunds) -> OwnerDeposits:
+    """Make the figures of one owner's funds, their unspent balance included."""
+    return OwnerDeposits(
+        person_id=funds.person_id,
+        own_deposits=funds.own_deposits,
+        gift_deposits=funds.gift_deposits,
+        share_of_payments=funds.share_of_payments,
+        unspent=funds.unspent,
+    )
+
+
+def set_aside_section(
+    buckets: tuple[Bucket, ...], owners: tuple[OwnerDeposits, ...]
+) -> SetAsideSection:
     """Total the balances of the buckets."""
     return SetAsideSection(
-        buckets=buckets, total=sum((b.balance for b in buckets), Decimal(0))
+        buckets=buckets,
+        total=sum((b.balance for b in buckets), Decimal(0)),
+        owners=owners,
     )
 
 

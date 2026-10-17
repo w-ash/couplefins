@@ -3,10 +3,11 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
-from attrs import define
+from attrs import define, evolve
 
 from src.domain.entities.transaction import Transaction
 from src.domain.formatting import field_str as _field_str
+from src.domain.tags import merge_namespaced_tags
 
 
 @define(frozen=True, slots=True)
@@ -97,6 +98,14 @@ def find_removed_transactions(
 def classify_transactions(
     incoming: list[Transaction], existing: list[Transaction]
 ) -> list[ClassifiedTransaction]:
+    """Pair each incoming row with its stored twin by natural key.
+
+    A matched row keeps the stored row's namespaced tags that the source
+    lacks (`merge_namespaced_tags`): an import never removes a label,
+    whether it came from the source or the app. The kept tags are part of
+    `incoming`, so neither the diffs nor the update that writes `incoming`
+    removes them.
+    """
     existing_by_key = {natural_key(tx): tx for tx in existing}
     results: list[ClassifiedTransaction] = []
     for tx in incoming:
@@ -109,10 +118,11 @@ def classify_transactions(
                 )
             )
         else:
-            diffs = _diff_fields(tx, match)
+            kept = evolve(tx, tags=merge_namespaced_tags(tx.tags, match.tags))
+            diffs = _diff_fields(kept, match)
             results.append(
                 ClassifiedTransaction(
-                    incoming=tx,
+                    incoming=kept,
                     status="changed" if diffs else "unchanged",
                     existing_id=match.id,
                     diffs=diffs,

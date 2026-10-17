@@ -28,6 +28,7 @@ The couple uses Monarch tags to classify transactions:
 - **`sXX`** tag (e.g., `s70`): sets the payer's share to XX%. Authoritative — overrides any default from other tags. If multiple `sXX` tags are present, the highest value wins (payer takes the most share)
 - **Person name** tag (e.g., `bob`): marks a transaction as spotted — the payer fronted the money but the other person owes 100%. A spotted expense is the *beneficiary's* personal spending, so `household` stays false. Detected by matching tags against known person names (case-insensitive). Reserved tags (`shared`, `split`, `household`, `settlement`) are never treated as person names.
 - **`settlement`** tag (case-insensitive): marks a transaction as a settlement payment (e.g., Venmo transfer to your partner). Sets `is_settlement=true`, which excludes the transaction from both spending totals and budget calculations. You can also link settlement transactions from the Settle Up page instead of tagging in Monarch.
+- **Namespaced labels** (v1.15.3): a tag of the form `<namespace>:<value>` (regex `[a-z][a-z0-9-]*:[a-z0-9][a-z0-9 ._-]*`, e.g. `line:mortgage`, `pot:bills`, `source:gift`, `line:home loan`) is a label for consumers. The namespace holds lowercase letters, digits, and `-`; the value starts with a letter or digit and may hold letters, digits, spaces, `.`, `_`, and `-` (tags are stored lowercased). A label is never a split, reserved, or person-name tag, so `line:mortgage` beside `s50` leaves the split at 50. An import never removes a label, whether it came from Monarch or the app: a re-import whose source lacks a stored label keeps it. To remove or rename a label, edit the row's tags in the app's tag editor. `GET /reconciliation` and the chat `search_transactions` tool take `tag_prefix` (a namespace such as `line:`) to return only rows carrying a tag in that namespace; the ext API (Read API v1) is unscheduled. `share:<kind>` (v1.15.4) and `loan:<slug>` (v1.15.5) are reserved for later versions.
 - Tags are dynamic — any integer 0-100 is valid for `sXX` (e.g., `s0`, `s30`, `s100`)
 
 **Input vs. internal representation**: Tags are the *input mechanism*. Internally, each transaction stores two fields: `payer_person_id` (who paid), `payer_percentage` (their share, 0-100, always set), and `household` (budget-relevant to the couple, bool).
@@ -114,6 +115,16 @@ A **joint account** is an `Account` that both partners fund. Its rows have no pa
 ### Shares
 
 `owner_shares(tx, person_ids)` in `src/domain/splits.py` is the one computation of every row's per-person percentages: personal rows from payer and `payer_percentage`; a joint deposit (amount > 0) with a depositor 100/0 to the depositor; other joint rows from the `owner_shares` override, else 50/50. `share_amounts` splits an amount exactly: the first owner rounds half-up, the second takes the remainder, so shares always sum to the amount. Every reader uses these; personal figures are unchanged. Transfer- and income-kind rows have no shares, except a joint deposit with a depositor, which is the depositor's. Listed rows get their shares once, in the application (`row_shares` in `src/application/use_cases/_shared/transaction_reads.py`); a row whose payer, depositor, or owners are not the couple lists with no shares and logs a warning instead of failing the read.
+
+### Sources and pots
+
+Pots and sources are `pot:` and `source:` labels on joint rows, computed and never stored (`src/domain/pots.py`; see "Why adjustments are computed, not stored").
+
+- **Pot balance**: the sum of signed amounts of the rows tagged `pot:<name>`, across joint deposits, joint payments, and pot-to-pot transfer legs. Rows without a pot tag fall in an "Unassigned" pot.
+- **Transfers**: transfer-kind rows count in pot balances, so a pot-to-pot transfer moves balance between pots, but never count as payments.
+- **Source**: `source:own` or `source:gift` on a deposit; own when absent.
+- **Per owner**: deposits (own vs gift), their share of joint spending payments (by `owner_shares`), and unspent = deposits − share of payments. Money in with no depositor in a spending category is a refund: it takes each owner's share off their share of payments.
+- **Excluded rows**: an excluded row counts nowhere: in no pot balance, deposit, or payment.
 
 ### Transfers and income
 
@@ -215,6 +226,8 @@ Couplefins vocabulary mapped to standard accounting terms:
 | `payer_percentage` | Allocation Rule / Split Ratio | Determines each person's share (0-100, always set). Settlement: any transaction where `payer_percentage < 100` |
 | `household` | Expense Classification | Per-transaction flag — "relevant to the couple's shared life." Set by `shared`, `split`, or `household` tags (person-name tags do NOT set it — spotted is the beneficiary's personal spending) |
 | `depositor_person_id` | Contributor of record | Who deposited a credit into a joint account; matched from the row's text at import, else unassigned (v1.15.2) |
+| `pot:` tag | Fund / sub-account label | Names the pot a joint row belongs to; the pot's balance is computed from its rows, never stored (v1.15.3) |
+| `source:` tag | Capital source of a contribution | Marks a deposit as the owner's own money or a gift to them (v1.15.3) |
 | `include_personal` | Budget Scope Flag | Per-category toggle to also include personal (non-household) transactions in budget totals |
 | `CategoryGroup.kind` | Account Type (expense vs. transfer/contra) | `expense` groups are spending; `transfer` groups are money movement between own accounts, excluded from spending, budgets, and settlement |
 | `is_finalized` | Period Close | Prevents modification of a month's transactions after agreement; settlements covering the month stay possible |
