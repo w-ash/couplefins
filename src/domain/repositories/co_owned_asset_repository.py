@@ -1,0 +1,9 @@
+from typing import Protocol
+
+from src.domain.entities.co_owned_asset import CoOwnedAsset
+
+
+class CoOwnedAssetRepositoryProtocol(Protocol):
+    async def get_current(self) -> CoOwnedAsset | None: ...
+    async def save(self, entity: CoOwnedAsset) -> CoOwnedAsset: ...
+    async def save_batch(self, entities: list[CoOwnedAsset]) -> list[CoOwnedAsset]: ...

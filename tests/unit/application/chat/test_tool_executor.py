@@ -668,6 +668,55 @@ async def test_get_tags_empty() -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_house_summary_reports_only_the_real_sections() -> None:
+    from src.application.use_cases._shared.house_example import example_house
+    from src.application.use_cases.get_house import HOUSE_SECTIONS, GetHouseResult
+    from tests.fixtures.factories import make_co_owned_asset
+
+    house = GetHouseResult(
+        figures=example_house(ALICE.id, BOB.id),
+        example_sections=HOUSE_SECTIONS - {"put_in", "shares", "set_aside"},
+        asset=make_co_owned_asset(
+            name="Home", qualifying_kinds=frozenset({"repair", "closing"})
+        ),
+    )
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        return_value=house,
+    ) as run:
+        result = await execute_tool("get_house_summary", {}, CTX)
+
+    run.assert_awaited_once()
+    assert result["example_sections"] == ["loans", "recent_activity", "upcoming"]
+    assert "recent_activity" not in result
+    assert result["home"] == {
+        "name": "Home",
+        "qualifying_kinds": ["closing", "repair"],
+        "repair_threshold": 500.0,
+    }
+    shares = result["shares"]
+    assert shares["capital"] == {"Alice": 58400.0, "Bob": 41600.0}
+    assert shares["percent"] == {"Alice": 58.4, "Bob": 41.6}
+    assert shares["history"][-1] == {
+        "month": "2026-09",
+        "percent": {"Alice": 58.4, "Bob": 41.6},
+    }
+    assert result["put_in"]["by_kind"]["closing"] == {
+        "Alice": 36000.0,
+        "Bob": 24000.0,
+    }
+    set_aside = result["set_aside"]
+    assert (
+        set_aside["total"],
+        set_aside["bank_balance"],
+        set_aside["bank_balance_as_of"],
+        set_aside["difference"],
+    ) == (26980.0, 26830.0, "2026-09-30", -150.0)
+    assert set_aside["unspent_deposits"] == {"Alice": 15760.0, "Bob": 11220.0}
+
+
+@pytest.mark.asyncio
 async def test_get_accounts_names_each_owner() -> None:
     from src.application.use_cases.list_accounts import ListAccountsResult
     from tests.fixtures.factories import make_account, make_joint_account

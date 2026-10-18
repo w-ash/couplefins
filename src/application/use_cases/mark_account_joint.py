@@ -6,6 +6,7 @@ from attrs import define
 from src.application.use_cases._shared.transactions import (
     delete_transactions_with_links,
     load_rows_to_move,
+    manual_accounts,
 )
 from src.domain.dedup import TransactionNaturalKey, natural_key
 from src.domain.entities.account import Account, joint_account_id, personal_account_id
@@ -68,12 +69,19 @@ class MarkAccountJointUseCase:
         """Make a label's account joint and move both partners' rows into it.
 
         Each row becomes the joint account's (`as_joint_row`), carrying a
-        hand-set split into its owner shares.
+        hand-set split into its owner shares. Raise NotFoundError when no
+        account has the label, and ValidationError when the label names a
+        hand-entered account: imported rows never join it.
         """
         async with uow:
             label = command.label
-            if not any(a.name == label for a in await uow.accounts.get_all()):
+            named = [a for a in await uow.accounts.get_all() if a.name == label]
+            if not named:
                 raise NotFoundError(f"No account named {label!r}")
+            if await manual_accounts(uow, named):
+                raise ValidationError(
+                    f"{label!r} is a hand-entered account; imported rows cannot join it"
+                )
             joint = Account(
                 id=joint_account_id(label),
                 name=label,

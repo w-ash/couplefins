@@ -15,10 +15,10 @@ via ToolSpec entries, never called by name from this module.
 """
 
 import calendar
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from decimal import Decimal
 from itertools import starmap
-from typing import cast, get_args
+from typing import Protocol, cast, get_args
 from uuid import UUID
 
 from src.application.chat.pending_actions import pending_action_store
@@ -64,6 +64,12 @@ from src.application.use_cases.get_dashboard import (
     GetDashboardCommand,
     GetDashboardResult,
     GetDashboardUseCase,
+)
+from src.application.use_cases.get_house import (
+    HOUSE_SECTIONS,
+    GetHouseCommand,
+    GetHouseResult,
+    GetHouseUseCase,
 )
 from src.application.use_cases.get_reconciliation import (
     GetReconciliationCommand,
@@ -118,11 +124,19 @@ from src.application.use_cases.search_transactions import (
     SearchTransactionsUseCase,
 )
 from src.domain.entities.category_group import CategoryGroup
+from src.domain.entities.co_owned_asset import CoOwnedAsset, ordered_kinds
 from src.domain.entities.person import Person
 from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import ToolExecutionError, ValidationError
 from src.domain.filters import is_reconciliation_relevant
 from src.domain.formatting import FieldValue
+from src.domain.house import (
+    OwnerAmount,
+    OwnerShare,
+    PutInSection,
+    SetAsideSection,
+    SharesSection,
+)
 from src.domain.ledger import MonthKey, SettlementLedger
 from src.domain.month_key import assert_month_key
 from src.domain.reconciliation import SettlementResult
@@ -521,6 +535,102 @@ async def handle_get_accounts(
             for a in shown
         ],
     }
+
+
+class _Owned(Protocol):
+    @property
+    def person_id(self) -> UUID: ...
+
+
+def _by_person[T: _Owned](
+    owners: Iterable[T], persons: list[Person], value: Callable[[T], Decimal]
+) -> dict[str, float]:
+    """One owner list as {owner name: value}."""
+    return {_person_name(o.person_id, persons): _fmt(value(o)) for o in owners}
+
+
+def _amounts(owners: Iterable[OwnerAmount], persons: list[Person]) -> dict[str, float]:
+    return _by_person(owners, persons, lambda a: a.amount)
+
+
+def _percents(owners: Iterable[OwnerShare], persons: list[Person]) -> dict[str, float]:
+    return _by_person(owners, persons, lambda o: o.percent)
+
+
+def _shares_summary(shares: SharesSection, persons: list[Person]) -> dict[str, object]:
+    return {
+        "total_capital": _fmt(shares.total_capital),
+        "capital": _by_person(shares.now, persons, lambda o: o.capital),
+        "percent": _percents(shares.now, persons),
+        "history": [
+            {
+                "month": f"{p.year}-{p.month:02d}",
+                "percent": _percents(p.owners, persons),
+            }
+            for p in shares.history[-_MAX_LIST_ROWS:]
+        ],
+    }
+
+
+def _put_in_summary(put_in: PutInSection, persons: list[Person]) -> dict[str, object]:
+    return {
+        "by_kind": {k.kind: _amounts(k.amounts, persons) for k in put_in.kinds},
+        "totals": _amounts(put_in.totals, persons),
+        "total": _fmt(put_in.total),
+    }
+
+
+def _set_aside_summary(
+    set_aside: SetAsideSection, persons: list[Person]
+) -> dict[str, object]:
+    as_of = set_aside.bank_balance_as_of
+    return {
+        "pots": [
+            {"name": UserData(b.name), "balance": _fmt(b.balance)}
+            for b in set_aside.buckets
+        ],
+        "total": _fmt(set_aside.total),
+        "bank_balance": (
+            None if set_aside.bank_balance is None else _fmt(set_aside.bank_balance)
+        ),
+        "bank_balance_as_of": as_of.isoformat() if as_of else None,
+        "difference": (
+            None if set_aside.difference is None else _fmt(set_aside.difference)
+        ),
+        "unspent_deposits": _by_person(set_aside.owners, persons, lambda o: o.unspent),
+    }
+
+
+def _home_summary(asset: CoOwnedAsset | None) -> dict[str, object] | None:
+    if asset is None:
+        return None
+    return {
+        "name": UserData(asset.name),
+        "qualifying_kinds": ordered_kinds(asset.qualifying_kinds),
+        "repair_threshold": _fmt(asset.repair_threshold),
+    }
+
+
+async def handle_get_house_summary(
+    _tool_input: dict[str, object],
+    ctx: ToolContext,
+) -> dict[str, object]:
+    house: GetHouseResult = await execute_use_case(
+        lambda uow: GetHouseUseCase().execute(GetHouseCommand(), uow)
+    )
+    figures, real = house.figures, HOUSE_SECTIONS - house.example_sections
+    summary: dict[str, object] = {
+        "as_of": figures.as_of.isoformat(),
+        "example_sections": sorted(house.example_sections),
+        "home": _home_summary(house.asset),
+    }
+    if "shares" in real:
+        summary["shares"] = _shares_summary(figures.shares, ctx.persons)
+    if "put_in" in real:
+        summary["put_in"] = _put_in_summary(figures.put_in, ctx.persons)
+    if "set_aside" in real:
+        summary["set_aside"] = _set_aside_summary(figures.set_aside, ctx.persons)
+    return summary
 
 
 async def handle_get_transaction_history(

@@ -13,6 +13,7 @@ from src.application.use_cases._shared.transactions import (
 )
 from src.domain.entities.category import Category
 from src.domain.entities.transaction import Transaction
+from src.domain.entities.upload import MANUAL_IMPORTER
 from src.domain.exceptions import NotFoundError
 from tests.fixtures.factories import (
     ALICE,
@@ -154,6 +155,23 @@ async def test_the_uploaders_personal_rows_stay_removal_candidates() -> None:
     alices_file = [_joint_row(ALICE_UPLOAD.id, "GROCERY STORE")]
 
     assert await _removed(ALICE.id, alices_file, [dinner]) == [dinner]
+
+
+async def test_a_reimport_never_removes_a_hand_entered_row() -> None:
+    """A manual upload is no import: the label's file never owns its rows,
+    even when the person who entered them uploads it."""
+    manual = make_upload(person_id=ALICE.id, importer=MANUAL_IMPORTER)
+    entered = _joint_row(manual.id, "CLOSING COSTS")
+    alices_file = [_joint_row(ALICE_UPLOAD.id, "GROCERY STORE")]
+    uow = make_mock_uow()
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = [entered]
+    uow.uploads.get_by_ids.return_value = [manual, ALICE_UPLOAD]
+
+    _, _, removed = await classify_against_existing(
+        alices_file, ALICE.id, [make_joint_account(JOINT_LABEL)], uow
+    )
+
+    assert removed == []
 
 
 def test_joint_accounts_keeps_only_the_joint_ones() -> None:

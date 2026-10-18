@@ -733,3 +733,43 @@ async def test_rekey_batch_back_to_personal_clears_joint_fields(
     assert stored.payer_person_id == alice.id
     assert stored.owner_shares is None
     assert stored.account_id == personal.account_id
+
+
+async def test_get_by_tag_prefix_returns_the_namespace_outside_the_excluded(
+    db_session: AsyncSession,
+) -> None:
+    """All time and every account but the excluded; `share:` never matches
+    `shared`."""
+    alice, _, upload = await _seed_couple(db_session)
+    closing = make_transaction(
+        upload_id=upload.id,
+        payer_person_id=alice.id,
+        date=date(2024, 3, 1),
+        tags=("shared", "share:closing"),
+        is_excluded=True,
+    )
+    shared = make_transaction(
+        upload_id=upload.id,
+        payer_person_id=alice.id,
+        tags=("shared", "line:share"),
+        original_statement="SHARED ONLY",
+    )
+    escrow = make_transaction(
+        upload_id=upload.id,
+        joint=True,
+        account="Escrow",
+        tags=("share:insurance",),
+        original_statement="ESCROW",
+    )
+    await save_transactions(db_session, [closing, shared])
+    await _save_joint(db_session, escrow)
+
+    repo = TransactionRepository(db_session)
+
+    rows = await repo.get_by_tag_prefix("share:")
+    outside = await repo.get_by_tag_prefix(
+        "share:", excluding_account_ids=[escrow.account_id]
+    )
+
+    assert {tx.id for tx in rows} == {closing.id, escrow.id}
+    assert [tx.id for tx in outside] == [closing.id]

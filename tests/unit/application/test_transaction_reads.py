@@ -19,6 +19,7 @@ from src.application.use_cases._shared.transaction_reads import (
     TagFilter,
     fetch_account_rows,
     fetch_all_settlement_rows,
+    fetch_house_rows,
     fetch_latest_spending_month,
     fetch_listed_rows,
     fetch_payer_rows,
@@ -53,6 +54,7 @@ _LIST_READS = {
     "get_all_settlement_relevant",
     "get_by_person_and_date_range",
     "get_by_account_ids",
+    "get_by_tag_prefix",
 }
 # Scalar reads that still answer "what spending exists?" and so must apply
 # the transfer rule the same way the list reads do.
@@ -311,6 +313,43 @@ async def test_account_rows_are_every_row_of_the_accounts() -> None:
 
     assert await fetch_account_rows(uow, [dinner.account_id]) == [dinner, card]
     uow.transactions.get_by_account_ids.assert_awaited_once_with([dinner.account_id])
+
+
+async def test_house_rows_read_each_row_once_through_the_date() -> None:
+    """The share rows outside the joint accounts are read apart; the joint
+    ones come from the joint rows. Every row is cut off at `through`."""
+    uow = make_mock_uow()
+    joint_id = make_transaction(joint=True).account_id
+    deposit = make_transaction(joint=True, amount=Decimal("500.00"))
+    premium = make_transaction(joint=True, tags=("share:insurance",))
+    later = make_transaction(joint=True, tags=("share:closing",), date=date(2026, 2, 1))
+    wire = make_transaction(
+        category="Credit Card Payment", tags=("share:closing",), is_excluded=True
+    )
+    uow.transactions.get_by_account_ids.return_value = [deposit, premium, later]
+    uow.transactions.get_by_tag_prefix.return_value = [wire]
+
+    rows = await fetch_house_rows(uow, [joint_id], date(2026, 1, 31), with_shares=True)
+
+    assert rows.joint == [deposit, premium]
+    assert rows.shares == [premium, wire]
+    uow.transactions.get_by_tag_prefix.assert_awaited_once_with(
+        "share:", excluding_account_ids=[joint_id]
+    )
+    uow.categories.get_all.assert_not_called()
+
+
+async def test_house_rows_without_shares_read_no_share_rows() -> None:
+    uow = make_mock_uow()
+    premium = make_transaction(joint=True, tags=("share:insurance",))
+    uow.transactions.get_by_account_ids.return_value = [premium]
+
+    rows = await fetch_house_rows(
+        uow, [premium.account_id], date(2026, 12, 31), with_shares=False
+    )
+
+    assert (rows.joint, rows.shares) == ([premium], [])
+    uow.transactions.get_by_tag_prefix.assert_not_called()
 
 
 async def test_payer_rows_leave_out_joint_rows_at_the_read() -> None:

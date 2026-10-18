@@ -65,6 +65,7 @@ describe("SettingsPage", () => {
         HttpResponse.json([]),
       ),
       http.get("/api/v1/settings/accounts", () => HttpResponse.json(accounts)),
+      http.get("/api/v1/house/asset", () => HttpResponse.json(null)),
     );
   });
   it("renders the settings heading", () => {
@@ -96,7 +97,7 @@ describe("SettingsPage", () => {
 
     await waitFor(() => {
       const sections = screen.getAllByRole("region");
-      expect(sections).toHaveLength(5);
+      expect(sections).toHaveLength(6);
 
       expect(sections[0]).toHaveAttribute(
         "aria-labelledby",
@@ -111,7 +112,8 @@ describe("SettingsPage", () => {
         "aria-labelledby",
         "settings-settlement-merchants",
       );
-      expect(sections[4]).toHaveAttribute("aria-labelledby", "settings-system");
+      expect(sections[4]).toHaveAttribute("aria-labelledby", "settings-house");
+      expect(sections[5]).toHaveAttribute("aria-labelledby", "settings-system");
     });
   });
 
@@ -134,6 +136,74 @@ describe("SettingsPage", () => {
       ).toBeInTheDocument();
       expect(screen.getByText("Local PostgreSQL")).toBeInTheDocument();
       expect(screen.getByText("localhost")).toBeInTheDocument();
+    });
+  });
+
+  describe("house", () => {
+    it("starts empty and saves the kinds and threshold", async () => {
+      let body: unknown;
+      server.use(
+        http.put("/api/v1/house/asset", async ({ request }) => {
+          body = await request.json();
+          return HttpResponse.json({});
+        }),
+      );
+      const user = userEvent.setup();
+      renderWithProviders(<SettingsPage />);
+
+      expect(
+        await screen.findByText(
+          "Set up the home once; both of you can edit it.",
+        ),
+      ).toBeInTheDocument();
+      await user.type(screen.getByLabelText("Name"), "Maple Street");
+      await user.clear(screen.getByLabelText("Repair threshold"));
+      await user.type(screen.getByLabelText("Repair threshold"), "500");
+      await user.click(screen.getByRole("checkbox", { name: "Insurance" }));
+      await user.click(screen.getByRole("button", { name: "Save house" }));
+
+      expect(await screen.findByText("House saved")).toBeInTheDocument();
+      expect(body).toEqual({
+        name: "Maple Street",
+        repair_threshold: 500,
+        qualifying_kinds: [
+          "closing",
+          "loan-interest",
+          "loan-principal",
+          "property-tax",
+          "repair",
+          "agreed-work",
+        ],
+        bank_balance: null,
+        bank_balance_as_of: null,
+      });
+    });
+
+    it("loads an existing asset", async () => {
+      server.use(
+        http.get("/api/v1/house/asset", () =>
+          HttpResponse.json({
+            id: "a",
+            name: "Maple Street",
+            repair_threshold: 250,
+            qualifying_kinds: ["closing"],
+            bank_balance: 1000,
+            bank_balance_as_of: "2026-10-01",
+            created_at: "2026-10-01T00:00:00Z",
+          }),
+        ),
+      );
+      renderWithProviders(<SettingsPage />);
+
+      expect(
+        await screen.findByDisplayValue("Maple Street"),
+      ).toBeInTheDocument();
+      expect(screen.getByDisplayValue("250")).toBeInTheDocument();
+      expect(screen.getByRole("checkbox", { name: "Closing" })).toBeChecked();
+      expect(
+        screen.getByRole("checkbox", { name: "Insurance" }),
+      ).not.toBeChecked();
+      expect(screen.getByDisplayValue("2026-10-01")).toBeInTheDocument();
     });
   });
 

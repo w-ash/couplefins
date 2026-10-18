@@ -207,6 +207,8 @@ def example_house(alice: UUID, bob: UUID) -> HouseFigures:
                     )
                 ),
             ),
+            bank_balance=Decimal("26830.00"),
+            bank_balance_as_of=_on(9, 30),
         ),
         recent_activity=(
             _row(

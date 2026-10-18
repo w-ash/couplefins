@@ -1,4 +1,4 @@
-from collections.abc import Set
+from collections.abc import Sequence, Set
 from datetime import date
 from typing import Protocol
 from uuid import UUID
@@ -63,3 +63,6 @@ class TransactionRepositoryProtocol(Protocol):
         self, *, excluding_categories: Set[str], year: int | None = None
     ) -> date | None: ...
     async def get_distinct_tags(self) -> list[str]: ...
+    async def get_by_tag_prefix(
+        self, prefix: str, *, excluding_account_ids: Sequence[UUID] = ()
+    ) -> list[Transaction]: ...

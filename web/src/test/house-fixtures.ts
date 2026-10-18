@@ -26,6 +26,15 @@ export function makeHouseResponse(
       "set_aside",
       "recent_activity",
     ],
+    asset: {
+      id: "asset-1",
+      name: "Maple Street",
+      repair_threshold: 500,
+      qualifying_kinds: ["closing", "repair"],
+      bank_balance: null,
+      bank_balance_as_of: null,
+      created_at: "2026-10-01T00:00:00Z",
+    },
     as_of: "2026-10-15",
     persons: [
       { id: ALICE_ID, name: "Alice" },
@@ -96,9 +105,9 @@ export function makeHouseResponse(
         {
           name: "Tax reserve",
           balance: 2750,
-          bank_balance: 2800,
-          bank_balance_as_of: "2026-10-01",
-          difference: 50,
+          bank_balance: null,
+          bank_balance_as_of: null,
+          difference: null,
           is_unassigned: false,
         },
         {
@@ -119,6 +128,9 @@ export function makeHouseResponse(
         },
       ],
       total: 3590,
+      bank_balance: 3640,
+      bank_balance_as_of: "2026-10-01",
+      difference: 50,
       owners: [
         {
           person_id: ALICE_ID,

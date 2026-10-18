@@ -10,5 +10,8 @@ import type { OwnerDepositsResponse } from './ownerDepositsResponse.ts';
 export interface SetAsideSectionResponse {
   buckets: BucketResponse[];
   total: number;
+  bank_balance: number | null;
+  bank_balance_as_of: string | null;
+  difference: number | null;
   owners: OwnerDepositsResponse[];
 }

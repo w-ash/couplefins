@@ -13,14 +13,22 @@ import type {
 } from 'msw';
 
 import type {
-  HouseResponse
+  CoOwnedAssetResponse,
+  DeleteManualEntry200,
+  HouseResponse,
+  ManualEntryResponse
 } from '../model';
 
 import {
-  getGetHouseResponseMock
+  getDeleteManualEntryResponseMock,
+  getGetCoOwnedAssetResponseMock,
+  getGetHouseResponseMock,
+  getListManualEntriesResponseMock,
+  getRecordManualEntryResponseMock,
+  getSaveCoOwnedAssetResponseMock
 } from './house.faker.ts';
 
-export { getGetHouseResponseMock } from './house.faker.ts';
+export { getGetHouseResponseMock, getGetCoOwnedAssetResponseMock, getSaveCoOwnedAssetResponseMock, getListManualEntriesResponseMock, getRecordManualEntryResponseMock, getDeleteManualEntryResponseMock } from './house.faker.ts';
 
 
 export const getGetHouseMockHandler = (overrideResponse?: HouseResponse | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<HouseResponse> | HouseResponse), options?: RequestHandlerOptions) => {
@@ -34,6 +42,71 @@ export const getGetHouseMockHandler = (overrideResponse?: HouseResponse | ((info
       })
   }, options)
 }
+
+export const getGetCoOwnedAssetMockHandler = (overrideResponse?: CoOwnedAssetResponse | null | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<CoOwnedAssetResponse | null> | CoOwnedAssetResponse | null), options?: RequestHandlerOptions) => {
+  return http.get('*/api/v1/house/asset', async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getGetCoOwnedAssetResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
+
+export const getSaveCoOwnedAssetMockHandler = (overrideResponse?: CoOwnedAssetResponse | ((info: Parameters<Parameters<typeof http.put>[1]>[0]) => Promise<CoOwnedAssetResponse> | CoOwnedAssetResponse), options?: RequestHandlerOptions) => {
+  return http.put('*/api/v1/house/asset', async (info: Parameters<Parameters<typeof http.put>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getSaveCoOwnedAssetResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
+
+export const getListManualEntriesMockHandler = (overrideResponse?: ManualEntryResponse[] | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<ManualEntryResponse[]> | ManualEntryResponse[]), options?: RequestHandlerOptions) => {
+  return http.get('*/api/v1/house/manual-entries', async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getListManualEntriesResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
+
+export const getRecordManualEntryMockHandler = (overrideResponse?: ManualEntryResponse | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<ManualEntryResponse> | ManualEntryResponse), options?: RequestHandlerOptions) => {
+  return http.post('*/api/v1/house/manual-entries', async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getRecordManualEntryResponseMock(),
+      { status: 201
+      })
+  }, options)
+}
+
+export const getDeleteManualEntryMockHandler = (overrideResponse?: DeleteManualEntry200 | ((info: Parameters<Parameters<typeof http.delete>[1]>[0]) => Promise<DeleteManualEntry200> | DeleteManualEntry200), options?: RequestHandlerOptions) => {
+  return http.delete('*/api/v1/house/manual-entries/:transactionId', async (info: Parameters<Parameters<typeof http.delete>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getDeleteManualEntryResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
 export const getHouseMock = () => [
-  getGetHouseMockHandler()
+  getGetHouseMockHandler(),
+  getGetCoOwnedAssetMockHandler(),
+  getSaveCoOwnedAssetMockHandler(),
+  getListManualEntriesMockHandler(),
+  getRecordManualEntryMockHandler(),
+  getDeleteManualEntryMockHandler()
 ]

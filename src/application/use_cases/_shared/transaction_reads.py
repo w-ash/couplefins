@@ -18,6 +18,7 @@ from src.application.use_cases._shared.command_validators import Scope
 from src.application.use_cases._shared.reconciliation_context import (
     ReconciliationContext,
 )
+from src.domain.constants import SHARE_TAG_PREFIX
 from src.domain.entities.category_group import is_spending_kind
 from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import InvariantViolationError, ValidationError
@@ -219,10 +220,52 @@ async def fetch_account_rows(
     uow: UnitOfWorkProtocol, account_ids: list[UUID]
 ) -> list[Transaction]:
     """Every row in the given accounts, at any date, transfers included. For
-    moving rows between accounts, and for the House figures of the joint
-    accounts: pots and owner funds need all of them, and the activity list
-    shows transfers as such."""
+    moving rows between accounts, and for listing a hand-entered account's
+    rows."""
     return await uow.transactions.get_by_account_ids(account_ids)
+
+
+@define(frozen=True, slots=True)
+class HouseRows:
+    """The rows of the House figures, dated through one day."""
+
+    joint: list[Transaction]  # every row of the joint accounts
+    shares: list[Transaction]  # every `share:` row, from any account
+
+
+async def fetch_house_rows(
+    uow: UnitOfWorkProtocol,
+    joint_account_ids: list[UUID],
+    through: date,
+    *,
+    with_shares: bool,
+) -> HouseRows:
+    """Every row of the joint accounts and, `with_shares`, every `share:`
+    row, dated through `through`, transfers included. Each row is read once:
+    the share rows outside the joint accounts are read apart, and the joint
+    ones come from the joint rows.
+
+    Pots, owner funds, and the activity list need every joint row. The share
+    rows are deliberately not filtered by `exclude_non_spending`, nor by
+    exclusion or settlement: the `share:` tag is the only lever
+    (`src/domain/capital.py`), and a closing wire is often in a
+    transfer-kind category.
+    """
+    joint = await uow.transactions.get_by_account_ids(joint_account_ids)
+    outside = (
+        await uow.transactions.get_by_tag_prefix(
+            SHARE_TAG_PREFIX, excluding_account_ids=joint_account_ids
+        )
+        if with_shares
+        else []
+    )
+    in_joint = set(joint_account_ids)
+    rows = [tx for tx in (*joint, *outside) if tx.date <= through]
+    shares = [tx for tx in rows if has_tag_prefix(tx.tags, SHARE_TAG_PREFIX)]
+    return HouseRows(
+        joint=[tx for tx in rows if tx.account_id in in_joint],
+        shares=shares if with_shares else [],
+    )
 
 
 @define(frozen=True, slots=True)

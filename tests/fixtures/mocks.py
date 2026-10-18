@@ -10,6 +10,9 @@ from src.domain.repositories.category_group_repository import (
 from src.domain.repositories.category_repository import (
     CategoryRepositoryProtocol,
 )
+from src.domain.repositories.co_owned_asset_repository import (
+    CoOwnedAssetRepositoryProtocol,
+)
 from src.domain.repositories.person_repository import PersonRepositoryProtocol
 from src.domain.repositories.reconciliation_period_repository import (
     ReconciliationPeriodRepositoryProtocol,
@@ -71,6 +74,9 @@ def make_mock_uow() -> AsyncMock:
     uow.accounts.get_all.return_value = []
     uow.accounts.get_by_ids.return_value = []
     uow.transactions.get_latest_household_transaction_date.return_value = None
+    uow.transactions.get_by_tag_prefix.return_value = []
+    uow.co_owned_assets = AsyncMock(spec=CoOwnedAssetRepositoryProtocol)
+    uow.co_owned_assets.get_current.return_value = None
     return uow
 
 

@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlalchemy import ColumnElement, case, func, select
 
-from src.domain.entities.upload import Upload, UploadWithCounts
+from src.domain.entities.upload import MANUAL_IMPORTER, Upload, UploadWithCounts
 from src.infrastructure.persistence.models.transaction_model import TransactionModel
 from src.infrastructure.persistence.models.upload_model import UploadModel
 from src.infrastructure.persistence.repositories.base import (
@@ -54,10 +54,12 @@ class UploadRepository(BaseRepository[Upload, UploadModel]):
             .distinct()
             .subquery()
         )
-        # By uploader, not payer: a joint account's rows have no payer.
+        # By uploader, not payer: a joint account's rows have no payer. A
+        # manual upload is no import, so it never counts as one.
         stmt = select(UploadModel).where(
             UploadModel.person_id.in_(person_id_strs),
             UploadModel.id.in_(select(subq)),
+            self._imported(),
         )
         result = await self._session.execute(stmt)
         return [self._to_domain(row) for row in result.scalars().all()]
@@ -80,8 +82,14 @@ class UploadRepository(BaseRepository[Upload, UploadModel]):
             TransactionModel.date <= end_date.isoformat(),
         )
 
-    async def get_all_with_transaction_counts(self) -> list[UploadWithCounts]:
+    @staticmethod
+    def _imported() -> ColumnElement[bool]:
+        """The uploads that read a file: all but the manual ones."""
+        return UploadModel.importer != MANUAL_IMPORTER
 
+    async def get_all_with_transaction_counts(self) -> list[UploadWithCounts]:
+        """Upload history: every import, newest first. Manual uploads hold
+        hand-entered rows, read no file, and are left out."""
         tx = TransactionModel
         stmt = (
             select(
@@ -97,6 +105,7 @@ class UploadRepository(BaseRepository[Upload, UploadModel]):
                 func.max(tx.date).label("date_range_end"),
             )
             .outerjoin(tx, UploadModel.id == tx.upload_id)
+            .where(self._imported())
             .group_by(UploadModel.id)
             .order_by(UploadModel.uploaded_at.desc())
         )

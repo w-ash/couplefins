@@ -5,7 +5,11 @@ import {
   getGetBudgetsQueryKey,
 } from "@/api/generated/budgets/budgets";
 import { getGetDashboardQueryKey } from "@/api/generated/dashboard/dashboard";
-import { getGetHouseQueryKey } from "@/api/generated/house/house";
+import {
+  getGetCoOwnedAssetQueryKey,
+  getGetHouseQueryKey,
+  getListManualEntriesQueryKey,
+} from "@/api/generated/house/house";
 import { getGetSpendingTrendsQueryKey } from "@/api/generated/insights/insights";
 import { getGetReconciliationQueryKey } from "@/api/generated/reconciliation/reconciliation";
 import { getGetAccountsQueryKey } from "@/api/generated/settings/settings";
@@ -30,6 +34,15 @@ export const ACCOUNT_QUERY_KEYS = [
   getGetDashboardQueryKey(),
 ] as const;
 
+/** Queries a House change refetches; also served by the SSE `house` event. */
+export const HOUSE_QUERY_KEYS = [
+  getGetHouseQueryKey(),
+  getGetCoOwnedAssetQueryKey(),
+  getListManualEntriesQueryKey(),
+  ...ACCOUNT_QUERY_KEYS,
+  getGetTagsQueryKey(),
+] as const;
+
 export const ENTITY_QUERY_KEYS: Record<
   string,
   readonly (readonly unknown[])[]
@@ -42,6 +55,7 @@ export const ENTITY_QUERY_KEYS: Record<
   transactions: TRANSACTION_QUERY_KEYS,
   // Mark or unmark moves rows in and out of settlement and budget.
   accounts: [...ACCOUNT_QUERY_KEYS, ...TRANSACTION_QUERY_KEYS],
+  house: HOUSE_QUERY_KEYS,
   uploads: [
     getGetDashboardQueryKey(),
     getGetReconciliationQueryKey(),

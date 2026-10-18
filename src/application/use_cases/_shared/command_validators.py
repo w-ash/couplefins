@@ -14,12 +14,13 @@ Scope = Literal["household", "personal", "all"]
 PersonScope = Literal["household", "personal"]
 
 
-def as_validation_error[**P](
-    check: Callable[P, object], /, *args: P.args, **kwargs: P.kwargs
-) -> None:
-    """Run a domain value check; raise its ValueError as a ValidationError."""
+def as_validation_error[**P, R](
+    check: Callable[P, R], /, *args: P.args, **kwargs: P.kwargs
+) -> R:
+    """Run a domain value check or build a validated value; return its
+    result, and raise its ValueError as a ValidationError."""
     try:
-        check(*args, **kwargs)
+        return check(*args, **kwargs)
     except ValueError as e:
         raise ValidationError(str(e)) from e
 

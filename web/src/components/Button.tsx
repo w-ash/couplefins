@@ -37,6 +37,7 @@ export function Button({
   loading = false,
   loadingText,
   icon,
+  type = "button",
   fullWidth = false,
   disabled,
   children,
@@ -45,6 +46,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
+      type={type}
       disabled={disabled || loading}
       className={cn(
         base,

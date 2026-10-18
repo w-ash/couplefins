@@ -1,8 +1,11 @@
 import { Database, Settings } from "lucide-react";
+import { useEffect } from "react";
+import { useLocation } from "react-router";
 import { useHealthCheck } from "@/api/generated/health/health";
 import { AccountsSettings } from "@/components/AccountsSettings";
 import { Card } from "@/components/Card";
 import { CategoryMappingEditor } from "@/components/CategoryMappingEditor";
+import { CoOwnedAssetEditor } from "@/components/CoOwnedAssetEditor";
 import { PageHeader } from "@/components/PageHeader";
 import { PersonAccountSettings } from "@/components/PersonAccountSettings";
 import { SectionHeader } from "@/components/SectionHeader";
@@ -10,6 +13,12 @@ import { SettlementMerchantsEditor } from "@/components/SettlementMerchantsEdito
 import { PAGE_PADDING } from "@/lib/layout";
 
 export function SettingsPage() {
+  const { hash } = useLocation();
+  useEffect(() => {
+    const target = hash ? document.getElementById(hash.slice(1)) : null;
+    target?.scrollIntoView?.({ block: "start" });
+  }, [hash]);
+
   const { data: healthResponse } = useHealthCheck();
   const health =
     healthResponse?.status === 200 ? healthResponse.data : undefined;
@@ -57,6 +66,15 @@ export function SettingsPage() {
             description="Transactions from these merchants can be auto-detected and linked to payments, so they don't inflate your spending totals"
           />
           <SettlementMerchantsEditor />
+        </Card>
+
+        <Card as="section" aria-labelledby="settings-house">
+          <SectionHeader
+            id="settings-house"
+            title="House"
+            description="The co-owned home: which contributions count toward shares, the repair threshold, and the balance last read from the bank."
+          />
+          <CoOwnedAssetEditor />
         </Card>
 
         {/* System */}

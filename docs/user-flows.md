@@ -590,11 +590,13 @@ The co-owned home on its own page. Every figure is computed in Python and served
 - Given the Put in section, then each owner's total to date is shown by kind: closing, loan interest, loan principal, property tax, insurance, repairs, agreed work
 - Given the Put in section, then each owner's deposits not yet spent are shown beside those totals
 - Given a joint account exists (v1.15.3), then Put in, "Deposits not yet spent" included, stays example figures until v1.15.4; each owner's real deposits show under Set aside (US-HOUSE-6)
+- Given the home's asset exists (v1.15.4), then Put in shows each owner's real totals by kind, computed from `share:` tags and recorded credits (US-HOUSE-10)
 
 **US-HOUSE-3** (v1.15.1): As a co-owner, I want to see each owner's share of the home, now and over time, so that I know how ownership has moved.
 
 - Given the Shares section, then each owner's capital account and percentage now are shown
 - Given the Shares section, then a chart plots both owners' shares over time
+- Given the home's asset exists (v1.15.4), then the capital accounts, percentages, and chart are real, computed from `share:` tags and recorded credits (US-HOUSE-10)
 
 **US-HOUSE-4** (v1.15.1): As a co-owner, I want to see the loans on the home, so that I know what is owed and who pays what.
 
@@ -623,6 +625,34 @@ The co-owned home on its own page. Every figure is computed in Python and served
 - Given the endpoint reports example data, then the page shows a notice that the figures are examples until the data behind each section is built
 - Given the endpoint reports real data, then the notice is gone
 - Given any figure on the page, then it comes precomputed from the endpoint; nothing is computed in the browser
+- Given the asset exists (v1.15.4), then Put in and Shares are real and no longer marked example; Loans and Upcoming stay examples until their versions
+
+**US-HOUSE-9** (v1.15.4): As a co-owner, I want to set up the home in Settings, so that the House page knows what counts toward our shares.
+
+- Given no asset exists, then the House page says to set it up in Settings → House
+- Given the Settings → House form, when I save the home's name, the contribution kinds that qualify, the necessary-repair threshold, and the bank balance last read from the bank with its date, then they persist and the House page uses them
+- Given an asset exists, then saving again updates it; there is one asset per couple
+
+**US-HOUSE-10** (v1.15.4): As a co-owner, I want to tag a row `share:<kind>` and see each owner's capital and share percentage, so that ownership follows what each of us put in.
+
+- Given a row tagged `share:<kind>` (closing, loan-interest, loan-principal, property-tax, insurance, repair, agreed-work) whose kind qualifies, then each owner is credited with their share of it; a personal `s100` or `household` row credits the payer in full
+- Given the credits, then the shares are each owner's capital divided by both totals, to 0.1, and sum to 100
+- Given a row with `share:none`, no `share:` tag, or a 50/50 utility bill with no tag, then it adds nothing
+- Given a `share:repair` row below the repair threshold, then it adds nothing; at or above it, it credits
+- Given a kind the asset does not list as qualifying, then its rows add nothing
+- Given any month, then its capital is the credits through that month, which the Shares chart plots
+- Given a row that is excluded, a settlement leg, or in a transfer-kind category, then a `share:` tag still credits it; the tag is the only lever
+- Given a refund (positive amount) tagged `share:<kind>`, then it reduces the credit. Assumption: the owners have not decided whether refunds reduce credits; reversible
+
+**US-HOUSE-11** (v1.15.4): As a co-owner, I want to record a contribution that never passed through an imported account, so that closing through escrow or an early premium still counts.
+
+- Given House → Record a credit, when I enter the date, amount, owner split, kind, description, a document reference, and an account name (default "Escrow"), then the credit appears in the shares
+- Given a missed payment one owner covered for both, when I record it as a credit with owner shares 100/0, then the whole amount credits the owner who covered it
+- Given an account name that is a Monarch account's label, when I record a credit to it, then it is refused; the hand-entered account's name must not be a Monarch account label
+- Given the hand-entered account in Settings → Accounts, then it shows as joint and cannot be unmarked
+- Given a recorded credit, when I delete it, then the credit is gone from the shares
+- Given a recorded credit, then it never enters settlement or budgets and does not appear in Upload history
+- Given a payment already in an owner's Monarch import, then I tag it there instead of entering it twice
 
 ### Asking Questions (v1.5.x)
 

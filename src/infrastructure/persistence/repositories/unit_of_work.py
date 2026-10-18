@@ -14,6 +14,9 @@ from src.infrastructure.persistence.repositories.category_group_repository impor
 from src.infrastructure.persistence.repositories.category_repository import (
     CategoryRepository,
 )
+from src.infrastructure.persistence.repositories.co_owned_asset_repository import (
+    CoOwnedAssetRepository,
+)
 from src.infrastructure.persistence.repositories.person_repository import (
     PersonRepository,
 )
@@ -59,6 +62,7 @@ class UnitOfWork:
         self.settlements = SettlementRepository(session)
         self.settlement_transaction_links = SettlementTransactionLinkRepository(session)
         self.settlement_portions = SettlementPortionRepository(session)
+        self.co_owned_assets = CoOwnedAssetRepository(session)
 
     async def __aenter__(self) -> Self:
         return self

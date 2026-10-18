@@ -38,6 +38,13 @@ POT_TAG_PREFIX: Final = "pot:"
 # tagged `source:gift`, else the depositor's own money.
 SOURCE_TAG_PREFIX: Final = "source:"
 SOURCE_GIFT: Final = "gift"
+# The kind of contribution a row is toward the owners' shares in their home
+# (src/domain/capital.py).
+SHARE_TAG_PREFIX: Final = "share:"
+# A hand-entered contribution (one that passed through no imported account):
+# the account it lands in unless the owners name another, and its category.
+DEFAULT_MANUAL_ACCOUNT: Final = "Escrow"
+HOUSE_CONTRIBUTION_CATEGORY: Final = "House contribution"
 # The pot of a joint row that carries no pot tag. Capitalized, so no `pot:`
 # tag (tags are stored lowercased) can name it.
 UNASSIGNED_POT: Final = "Unassigned"

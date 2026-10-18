@@ -150,6 +150,14 @@ REGISTRY: tuple[ToolSpec, ...] = (
         use_cases=("GetTagsUseCase",),
     ),
     ToolSpec(
+        name="get_house_summary",
+        schema=tools.GET_HOUSE_SUMMARY_SCHEMA,
+        handler=tool_executor.handle_get_house_summary,
+        # The House figures carry the home's settings, so the tool also
+        # covers what GetCoOwnedAssetUseCase serves Settings → House.
+        use_cases=("GetHouseUseCase", "GetCoOwnedAssetUseCase"),
+    ),
+    ToolSpec(
         name="get_accounts",
         schema=tools.GET_ACCOUNTS_SCHEMA,
         handler=tool_executor.handle_get_accounts,
@@ -433,6 +441,7 @@ _PAGE_TOOL_HINTS: Mapping[str, tuple[str, ...]] = {
     "insights": ("get_spending_trends", "get_spending_by_group"),
     "upload": ("get_upload_history", "get_reconciliation_report"),
     "settings": ("get_category_setup", "get_tags", "get_accounts"),
+    "house": ("get_house_summary",),
 }
 
 # Derived, never hand-maintained — the hints map is the one page registry.
@@ -669,9 +678,15 @@ BLACKLISTED_USE_CASES: frozenset[str] = frozenset({
     "ResetPartnerPasswordUseCase",
     "SetupCoupleUseCase",
     "UpdatePersonUseCase",
-    # 2026-10-15: serves a fixed example payload until v1.15.4; a
-    # get_house_summary read tool lands with the real figures.
-    "GetHouseUseCase",
+    # 2026-10-16: the home's share settings and hand-entered credits are
+    # entered on the House page and in Settings; get_house_summary reads them.
+    "SaveCoOwnedAssetUseCase",
+    "RecordManualTransactionUseCase",
+    "DeleteManualTransactionUseCase",
+    # 2026-10-17: the list behind the House page's delete buttons. Chat reads
+    # the credits through get_house_summary's Put in totals, and finds a row
+    # with search_transactions.
+    "ListManualTransactionsUseCase",
     # 2026-10-15: structural, like SetupCoupleUseCase — marking an account
     # joint re-keys both partners' imported rows, a Settings decision.
     "MarkAccountJointUseCase",

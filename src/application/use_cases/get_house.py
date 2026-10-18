@@ -1,3 +1,4 @@
+import datetime
 from itertools import starmap
 from uuid import UUID
 
@@ -13,13 +14,15 @@ from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
 from src.application.use_cases._shared.transaction_reads import (
-    fetch_account_rows,
+    fetch_house_rows,
     row_shares,
 )
 from src.application.use_cases._shared.transactions import joint_accounts
+from src.domain.capital import capital_accounts
 from src.domain.constants import LINE_TAG_PREFIX
 from src.domain.entities.account import Account
 from src.domain.entities.category_group import GroupKind
+from src.domain.entities.co_owned_asset import CoOwnedAsset
 from src.domain.entities.transaction import Transaction
 from src.domain.filters import depositor_of
 from src.domain.house import (
@@ -31,9 +34,11 @@ from src.domain.house import (
     SetAsideSection,
     bucket,
     owner_deposits,
+    put_in_section,
     set_aside_section,
+    shares_section,
 )
-from src.domain.pots import compute_owner_funds, compute_pot_balances
+from src.domain.pots import OwnerFunds, compute_owner_funds, compute_pot_balances
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 from src.domain.tags import tag_value
 
@@ -45,7 +50,9 @@ _RECENT_ACTIVITY_LIMIT = 20
 
 @define(frozen=True, slots=True)
 class GetHouseCommand:
-    """Parameterless — exists for API uniformity."""
+    """``as_of`` is the date of the real figures: today (UTC) when None."""
+
+    as_of: datetime.date | None = None
 
 
 @define(frozen=True, slots=True)
@@ -54,10 +61,12 @@ class GetHouseResult:
 
     ``example_sections`` names the sections whose figures are still the
     fixed example payload; the page says so until real figures replace them.
+    ``asset`` is the couple's home and its share settings, None before setup.
     """
 
     figures: HouseFigures
     example_sections: frozenset[str]
+    asset: CoOwnedAsset | None
 
 
 def _activity_kind(tx: Transaction, kind: GroupKind | None) -> ActivityKind:
@@ -99,43 +108,82 @@ def _recent_activity(
     )
 
 
-def _set_aside(rows: list[Transaction], ctx: ReconciliationContext) -> SetAsideSection:
+def _set_aside(
+    rows: list[Transaction], funds: tuple[OwnerFunds, ...], asset: CoOwnedAsset | None
+) -> SetAsideSection:
     """One bucket for each pot, the unassigned pot last, and each owner's
-    deposits. The bank balances stay unknown until the owners can enter them."""
+    deposits. The bank balance the asset holds stands beside the total; the
+    bank balance beside each pot stays unknown."""
     pots = compute_pot_balances(rows)
-    funds = compute_owner_funds(rows, ctx.person_ids, ctx.non_spending_categories)
     return set_aside_section(
         tuple(bucket(p.name, p.balance, is_unassigned=p.is_unassigned) for p in pots),
         owners=tuple(map(owner_deposits, funds)),
+        bank_balance=asset.bank_balance if asset else None,
+        bank_balance_as_of=asset.bank_balance_as_of if asset else None,
     )
+
+
+async def _real_sections(
+    uow: UnitOfWorkProtocol,
+    joint: list[Account],
+    asset: CoOwnedAsset | None,
+    ctx: ReconciliationContext,
+    as_of: datetime.date,
+) -> dict[str, object]:
+    """The sections whose data exists, by field name, from the rows dated
+    through `as_of`: Set aside once a joint account or the asset exists,
+    Recent activity once a joint account does, and Put in and Shares once
+    the asset does. Put in's unspent deposits are Set aside's."""
+    rows = await fetch_house_rows(
+        uow, [a.id for a in joint], as_of, with_shares=asset is not None
+    )
+    funds = compute_owner_funds(rows.joint, ctx.person_ids, ctx.non_spending_categories)
+    real: dict[str, object] = {"set_aside": _set_aside(rows.joint, funds, asset)}
+    if joint:
+        real["recent_activity"] = _recent_activity(rows.joint, ctx, joint)
+    if asset is not None:
+        capital = capital_accounts(
+            rows.shares, ctx.person_ids, asset, (as_of.year, as_of.month)
+        )
+        real["put_in"] = put_in_section(
+            ctx.person_ids,
+            capital.by_kind,
+            unspent_deposits=tuple(OwnerAmount(f.person_id, f.unspent) for f in funds),
+        )
+        real["shares"] = shares_section(capital.history)
+    return real
 
 
 @define(slots=True)
 class GetHouseUseCase:
     async def execute(
-        self, _command: GetHouseCommand, uow: UnitOfWorkProtocol
+        self, command: GetHouseCommand, uow: UnitOfWorkProtocol
     ) -> GetHouseResult:
         """The House figures: real where their data exists, else the example.
 
         Once a joint account exists, the sections built from its rows are
-        real, and only those leave `example_sections`. The example sections
-        then name the couple, so every owner list keys on the same persons.
+        real; once the asset exists, Set aside, Put in, and Shares are. Only
+        real sections leave `example_sections`. The example sections then
+        name the couple, so every owner list keys on the same persons, and
+        every real figure counts the rows dated through `command.as_of`.
         """
         async with uow:
             joint = joint_accounts(await uow.accounts.get_all())
-            if not joint:
+            asset = await uow.co_owned_assets.get_current()
+            if not joint and asset is None:
                 return GetHouseResult(
-                    figures=EXAMPLE_HOUSE, example_sections=HOUSE_SECTIONS
+                    figures=EXAMPLE_HOUSE, example_sections=HOUSE_SECTIONS, asset=None
                 )
             ctx = await load_reconciliation_context(uow)
-            rows = await fetch_account_rows(uow, [a.id for a in joint])
-            real = {
-                "set_aside": _set_aside(rows, ctx),
-                "recent_activity": _recent_activity(rows, ctx, joint),
-            }
+            as_of = command.as_of or datetime.datetime.now(datetime.UTC).date()
+            real = await _real_sections(uow, joint, asset, ctx, as_of)
             persons = tuple(HousePerson(p.id, p.name) for p in ctx.persons)
             first, second = (p.id for p in persons)
+            figures = evolve(
+                example_house(first, second), as_of=as_of, persons=persons, **real
+            )
             return GetHouseResult(
-                figures=evolve(example_house(first, second), persons=persons, **real),
+                figures=figures,
                 example_sections=HOUSE_SECTIONS.difference(real),
+                asset=asset,
             )

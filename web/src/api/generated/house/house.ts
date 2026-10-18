@@ -5,22 +5,32 @@
  * OpenAPI spec version: 0.1.0
  */
 import {
+  useMutation,
   useQuery
 } from '@tanstack/react-query';
 import type {
   DataTag,
   DefinedInitialDataOptions,
   DefinedUseQueryResult,
+  MutationFunction,
   QueryClient,
   QueryFunction,
   QueryKey,
   UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
 
 import type {
-  HouseResponse
+  CoOwnedAssetResponse,
+  DeleteManualEntry200,
+  HTTPValidationError,
+  HouseResponse,
+  ManualEntryResponse,
+  RecordManualTransactionRequest,
+  SaveCoOwnedAssetRequest
 } from '../model';
 
 import { customFetch } from '../../client.ts';
@@ -157,3 +167,531 @@ export function useGetHouse<TData = Awaited<ReturnType<typeof getHouse>>, TError
 
 
 
+export type getCoOwnedAssetResponse200 = {
+  data: CoOwnedAssetResponse | null
+  status: 200
+}
+
+export type getCoOwnedAssetResponseSuccess = (getCoOwnedAssetResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getCoOwnedAssetResponse = (getCoOwnedAssetResponseSuccess)
+
+export const getGetCoOwnedAssetUrl = () => {
+
+
+
+
+  return `/api/v1/house/asset`
+}
+
+/**
+ * @summary Get Co Owned Asset
+ */
+export const getCoOwnedAsset = async ( options?: Parameters<typeof customFetch>[1]): Promise<getCoOwnedAssetResponse> => {
+
+  return customFetch<getCoOwnedAssetResponse>(getGetCoOwnedAssetUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCoOwnedAssetQueryKey = () => {
+    return [
+    `/api/v1/house/asset`
+    ] as const;
+    }
+
+
+export const getGetCoOwnedAssetQueryOptions = <TData = Awaited<ReturnType<typeof getCoOwnedAsset>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoOwnedAsset>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCoOwnedAssetQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCoOwnedAsset>>> = ({ signal }) => getCoOwnedAsset({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCoOwnedAsset>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetCoOwnedAssetQueryResult = NonNullable<Awaited<ReturnType<typeof getCoOwnedAsset>>>
+export type GetCoOwnedAssetQueryError = unknown
+
+
+export function useGetCoOwnedAsset<TData = Awaited<ReturnType<typeof getCoOwnedAsset>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoOwnedAsset>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCoOwnedAsset>>,
+          TError,
+          Awaited<ReturnType<typeof getCoOwnedAsset>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCoOwnedAsset<TData = Awaited<ReturnType<typeof getCoOwnedAsset>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoOwnedAsset>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCoOwnedAsset>>,
+          TError,
+          Awaited<ReturnType<typeof getCoOwnedAsset>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCoOwnedAsset<TData = Awaited<ReturnType<typeof getCoOwnedAsset>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoOwnedAsset>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Co Owned Asset
+ */
+
+export function useGetCoOwnedAsset<TData = Awaited<ReturnType<typeof getCoOwnedAsset>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoOwnedAsset>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetCoOwnedAssetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type saveCoOwnedAssetResponse200 = {
+  data: CoOwnedAssetResponse
+  status: 200
+}
+
+export type saveCoOwnedAssetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type saveCoOwnedAssetResponseSuccess = (saveCoOwnedAssetResponse200) & {
+  headers: Headers;
+};
+export type saveCoOwnedAssetResponseError = (saveCoOwnedAssetResponse422) & {
+  headers: Headers;
+};
+
+export type saveCoOwnedAssetResponse = (saveCoOwnedAssetResponseSuccess | saveCoOwnedAssetResponseError)
+
+export const getSaveCoOwnedAssetUrl = () => {
+
+
+
+
+  return `/api/v1/house/asset`
+}
+
+/**
+ * @summary Save Co Owned Asset
+ */
+export const saveCoOwnedAsset = async (saveCoOwnedAssetRequest: SaveCoOwnedAssetRequest, options?: Parameters<typeof customFetch>[1]): Promise<saveCoOwnedAssetResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<saveCoOwnedAssetResponse>(getSaveCoOwnedAssetUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(saveCoOwnedAssetRequest)
+  }
+);}
+
+
+
+
+
+export const getSaveCoOwnedAssetMutationKey = () => ['saveCoOwnedAsset'] as const;
+
+export const getSaveCoOwnedAssetMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveCoOwnedAsset>>, TError,SaveCoOwnedAssetMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveCoOwnedAsset>>, TError,SaveCoOwnedAssetMutationVariables, TContext> => {
+
+const mutationKey = getSaveCoOwnedAssetMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveCoOwnedAsset>>, SaveCoOwnedAssetMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  saveCoOwnedAsset(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveCoOwnedAssetMutationResult = NonNullable<Awaited<ReturnType<typeof saveCoOwnedAsset>>>
+    export type SaveCoOwnedAssetMutationBody = SaveCoOwnedAssetRequest
+    export type SaveCoOwnedAssetMutationError = HTTPValidationError
+    export type SaveCoOwnedAssetMutationVariables = {data: SaveCoOwnedAssetRequest}
+
+    /**
+ * @summary Save Co Owned Asset
+ */
+export const useSaveCoOwnedAsset = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveCoOwnedAsset>>, TError,SaveCoOwnedAssetMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof saveCoOwnedAsset>>,
+        TError,
+        SaveCoOwnedAssetMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSaveCoOwnedAssetMutationOptions(options), queryClient);
+    }
+    export type listManualEntriesResponse200 = {
+  data: ManualEntryResponse[]
+  status: 200
+}
+
+export type listManualEntriesResponseSuccess = (listManualEntriesResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listManualEntriesResponse = (listManualEntriesResponseSuccess)
+
+export const getListManualEntriesUrl = () => {
+
+
+
+
+  return `/api/v1/house/manual-entries`
+}
+
+/**
+ * @summary List Manual Entries
+ */
+export const listManualEntries = async ( options?: Parameters<typeof customFetch>[1]): Promise<listManualEntriesResponse> => {
+
+  return customFetch<listManualEntriesResponse>(getListManualEntriesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListManualEntriesQueryKey = () => {
+    return [
+    `/api/v1/house/manual-entries`
+    ] as const;
+    }
+
+
+export const getListManualEntriesQueryOptions = <TData = Awaited<ReturnType<typeof listManualEntries>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listManualEntries>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListManualEntriesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listManualEntries>>> = ({ signal }) => listManualEntries({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listManualEntries>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListManualEntriesQueryResult = NonNullable<Awaited<ReturnType<typeof listManualEntries>>>
+export type ListManualEntriesQueryError = unknown
+
+
+export function useListManualEntries<TData = Awaited<ReturnType<typeof listManualEntries>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listManualEntries>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listManualEntries>>,
+          TError,
+          Awaited<ReturnType<typeof listManualEntries>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListManualEntries<TData = Awaited<ReturnType<typeof listManualEntries>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listManualEntries>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listManualEntries>>,
+          TError,
+          Awaited<ReturnType<typeof listManualEntries>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListManualEntries<TData = Awaited<ReturnType<typeof listManualEntries>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listManualEntries>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Manual Entries
+ */
+
+export function useListManualEntries<TData = Awaited<ReturnType<typeof listManualEntries>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listManualEntries>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListManualEntriesQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type recordManualEntryResponse201 = {
+  data: ManualEntryResponse
+  status: 201
+}
+
+export type recordManualEntryResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type recordManualEntryResponseSuccess = (recordManualEntryResponse201) & {
+  headers: Headers;
+};
+export type recordManualEntryResponseError = (recordManualEntryResponse422) & {
+  headers: Headers;
+};
+
+export type recordManualEntryResponse = (recordManualEntryResponseSuccess | recordManualEntryResponseError)
+
+export const getRecordManualEntryUrl = () => {
+
+
+
+
+  return `/api/v1/house/manual-entries`
+}
+
+/**
+ * @summary Record Manual Entry
+ */
+export const recordManualEntry = async (recordManualTransactionRequest: RecordManualTransactionRequest, options?: Parameters<typeof customFetch>[1]): Promise<recordManualEntryResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<recordManualEntryResponse>(getRecordManualEntryUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(recordManualTransactionRequest)
+  }
+);}
+
+
+
+
+
+export const getRecordManualEntryMutationKey = () => ['recordManualEntry'] as const;
+
+export const getRecordManualEntryMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordManualEntry>>, TError,RecordManualEntryMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof recordManualEntry>>, TError,RecordManualEntryMutationVariables, TContext> => {
+
+const mutationKey = getRecordManualEntryMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof recordManualEntry>>, RecordManualEntryMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  recordManualEntry(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RecordManualEntryMutationResult = NonNullable<Awaited<ReturnType<typeof recordManualEntry>>>
+    export type RecordManualEntryMutationBody = RecordManualTransactionRequest
+    export type RecordManualEntryMutationError = HTTPValidationError
+    export type RecordManualEntryMutationVariables = {data: RecordManualTransactionRequest}
+
+    /**
+ * @summary Record Manual Entry
+ */
+export const useRecordManualEntry = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordManualEntry>>, TError,RecordManualEntryMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof recordManualEntry>>,
+        TError,
+        RecordManualEntryMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRecordManualEntryMutationOptions(options), queryClient);
+    }
+    export type deleteManualEntryResponse200 = {
+  data: DeleteManualEntry200
+  status: 200
+}
+
+export type deleteManualEntryResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type deleteManualEntryResponseSuccess = (deleteManualEntryResponse200) & {
+  headers: Headers;
+};
+export type deleteManualEntryResponseError = (deleteManualEntryResponse422) & {
+  headers: Headers;
+};
+
+export type deleteManualEntryResponse = (deleteManualEntryResponseSuccess | deleteManualEntryResponseError)
+
+export const getDeleteManualEntryUrl = (transactionId: string,) => {
+
+
+
+
+  return `/api/v1/house/manual-entries/${transactionId}`
+}
+
+/**
+ * @summary Delete Manual Entry
+ */
+export const deleteManualEntry = async (transactionId: string, options?: Parameters<typeof customFetch>[1]): Promise<deleteManualEntryResponse> => {
+
+  return customFetch<deleteManualEntryResponse>(getDeleteManualEntryUrl(transactionId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteManualEntryMutationKey = () => ['deleteManualEntry'] as const;
+
+export const getDeleteManualEntryMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteManualEntry>>, TError,DeleteManualEntryMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteManualEntry>>, TError,DeleteManualEntryMutationVariables, TContext> => {
+
+const mutationKey = getDeleteManualEntryMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteManualEntry>>, DeleteManualEntryMutationVariables> = (props) => {
+          const {transactionId} = props ?? {};
+
+          return  deleteManualEntry(transactionId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteManualEntryMutationResult = NonNullable<Awaited<ReturnType<typeof deleteManualEntry>>>
+
+    export type DeleteManualEntryMutationError = HTTPValidationError
+    export type DeleteManualEntryMutationVariables = {transactionId: string}
+
+    /**
+ * @summary Delete Manual Entry
+ */
+export const useDeleteManualEntry = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteManualEntry>>, TError,DeleteManualEntryMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteManualEntry>>,
+        TError,
+        DeleteManualEntryMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteManualEntryMutationOptions(options), queryClient);
+    }

@@ -7,6 +7,9 @@ import type {
   OwnerAmountResponse,
 } from "@/api/generated/model";
 
+/** The account name a hand-entered contribution goes to unless changed. */
+export const DEFAULT_MANUAL_ACCOUNT = "Escrow";
+
 /** One owner of the house, as the House response names them. */
 export type Owner = DashboardPersonResponse;
 
@@ -18,6 +21,12 @@ export const CONTRIBUTION_KIND_LABELS: Record<ContributionKind, string> = {
   insurance: "Insurance",
   repair: "Repairs",
   "agreed-work": "Agreed work",
+};
+
+/** Labels for a manual entry's share kind, which may also be "none". */
+export const SHARE_KIND_LABELS: Record<ContributionKind | "none", string> = {
+  ...CONTRIBUTION_KIND_LABELS,
+  none: "None",
 };
 
 export const LOAN_KIND_LABELS: Record<LoanKind, string> = {

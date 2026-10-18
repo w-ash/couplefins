@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useDialogSync } from "@/hooks/useDialogSync";
+import { cn } from "@/lib/cn";
 
 type DialogSize = "sm" | "default";
 
@@ -28,7 +29,10 @@ export function Dialog({
     <dialog
       ref={dialogRef}
       onClose={onClose}
-      className={`mx-4 w-full ${sizes[size]} rounded-xl border border-border bg-card p-6 shadow-lg backdrop:bg-black/40`}
+      className={cn(
+        "mx-4 max-h-[90dvh] w-full overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-lg backdrop:bg-black/40",
+        sizes[size],
+      )}
       {...rest}
     >
       {children}

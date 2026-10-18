@@ -146,6 +146,26 @@ class TestSetAsideSection:
 
         assert set_aside_section(buckets, owners=()).total == Decimal(500)
 
+    def test_difference_is_the_bank_balance_less_the_total(self) -> None:
+        buckets = (bucket("Tax", Decimal(300)), bucket("Repairs", Decimal(200)))
+        as_of = datetime.date(2026, 9, 30)
+
+        section = set_aside_section(
+            buckets, owners=(), bank_balance=Decimal(450), bank_balance_as_of=as_of
+        )
+
+        assert (section.bank_balance, section.bank_balance_as_of) == (
+            Decimal(450),
+            as_of,
+        )
+        assert section.difference == Decimal(-50)
+
+    def test_no_bank_balance_no_difference(self) -> None:
+        section = set_aside_section((bucket("Tax", Decimal(300)),), owners=())
+
+        assert (section.bank_balance, section.bank_balance_as_of) == (None, None)
+        assert section.difference is None
+
 
 class TestOwnerDeposits:
     def test_unspent_is_the_deposits_less_the_share_of_payments(self) -> None:

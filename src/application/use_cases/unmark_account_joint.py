@@ -2,11 +2,14 @@ from uuid import UUID
 
 from attrs import define, evolve
 
-from src.application.use_cases._shared.transactions import load_rows_to_move
+from src.application.use_cases._shared.transactions import (
+    load_rows_to_move,
+    manual_accounts,
+)
 from src.domain.constants import SplitDefaults
 from src.domain.entities.account import Account, joint_account_id, personal_account_id
 from src.domain.entities.transaction import Transaction
-from src.domain.exceptions import NotFoundError
+from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 
 
@@ -43,11 +46,19 @@ class UnmarkAccountJointUseCase:
     async def execute(
         self, command: UnmarkAccountJointCommand, uow: UnitOfWorkProtocol
     ) -> UnmarkAccountJointResult:
-        """Return a joint account's rows to the partners who imported them."""
+        """Return a joint account's rows to the partners who imported them.
+
+        Raise NotFoundError when no joint account has the label, and
+        ValidationError when it is a hand-entered account: its rows were
+        imported by no one.
+        """
         async with uow:
             joint_id = joint_account_id(command.label)
-            if not await uow.accounts.get_by_ids([joint_id]):
+            joint = await uow.accounts.get_by_ids([joint_id])
+            if not joint:
                 raise NotFoundError(f"No joint account named {command.label!r}")
+            if await manual_accounts(uow, joint):
+                raise ValidationError("A hand-entered account cannot be unmarked")
             rows, uploads = await load_rows_to_move(uow, [joint_id])
             uploaders = {upload.person_id for upload in uploads.values()}
             await uow.accounts.add_missing([

@@ -1,4 +1,4 @@
-from collections.abc import Mapping, Set
+from collections.abc import Mapping, Sequence, Set
 from datetime import date
 from decimal import Decimal
 from uuid import UUID
@@ -7,6 +7,7 @@ from sqlalchemy import (
     ColumnElement,
     cast,
     delete as sa_delete,
+    exists,
     func,
     insert,
     select,
@@ -396,6 +397,33 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         result = await self._session.execute(stmt)
         value = result.scalar_one_or_none()
         return date.fromisoformat(value) if value else None
+
+    async def get_by_tag_prefix(
+        self, prefix: str, *, excluding_account_ids: Sequence[UUID] = ()
+    ) -> list[Transaction]:
+        """Every row, at any date, with a tag that starts with `prefix` (a
+        namespace such as `share:`), outside the excluded accounts. The GIN
+        index on tags backs containment only, so this scans; it reads all
+        time and the rows are few."""
+        tag = (
+            func
+            .jsonb_array_elements_text(TransactionModel.tags)
+            .table_valued("value")
+            .alias("tag")
+        )
+        outside = (
+            [~self._account_filter(list(excluding_account_ids))]
+            if excluding_account_ids
+            else []
+        )
+        return await self._query(
+            exists(
+                select(1)
+                .select_from(tag)
+                .where(tag.c.value.startswith(prefix, autoescape=True))
+            ),
+            *outside,
+        )
 
     async def get_distinct_tags(self) -> list[str]:
         stmt = (

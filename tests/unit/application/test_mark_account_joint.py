@@ -15,13 +15,14 @@ from src.application.use_cases.mark_account_joint import (
 )
 from src.domain.entities.account import joint_account_id, personal_account_id
 from src.domain.entities.transaction import Transaction
-from src.domain.entities.upload import Upload
+from src.domain.entities.upload import MANUAL_IMPORTER, Upload, manual_upload_id
 from src.domain.exceptions import NotFoundError, PeriodFinalizedError, ValidationError
 from src.domain.filters import is_joint_row
 from tests.fixtures.factories import (
     ALICE,
     BOB,
     make_account,
+    make_joint_account,
     make_reconciliation_period,
     make_settlement_transaction_link,
     make_transaction,
@@ -205,3 +206,24 @@ async def test_an_unknown_label_is_not_found() -> None:
         await _mark(uow)
 
     uow.accounts.add_missing.assert_not_called()
+
+
+async def test_a_hand_entered_accounts_label_is_refused() -> None:
+    """Imported rows never join the account of hand-entered rows."""
+    manual = make_joint_account(LABEL)
+    uow = _uow([_row(ALICE_UPLOAD)])
+    uow.accounts.get_all.return_value = [
+        *uow.accounts.get_all.return_value,
+        manual,
+    ]
+    uow.uploads.get_by_ids.return_value = [
+        make_upload(
+            id=manual_upload_id(manual.id), person_id=BOB.id, importer=MANUAL_IMPORTER
+        )
+    ]
+
+    with pytest.raises(ValidationError, match="hand-entered"):
+        await _mark(uow)
+
+    uow.transactions.rekey_batch.assert_not_called()
+    uow.accounts.delete_by_ids.assert_not_called()

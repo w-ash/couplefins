@@ -13,11 +13,13 @@ from src.application.use_cases.unmark_account_joint import (
 )
 from src.domain.entities.account import joint_account_id, personal_account_id
 from src.domain.entities.transaction import Transaction
-from src.domain.exceptions import NotFoundError, PeriodFinalizedError
+from src.domain.entities.upload import MANUAL_IMPORTER, manual_upload_id
+from src.domain.exceptions import NotFoundError, PeriodFinalizedError, ValidationError
 from tests.fixtures.factories import (
     ALICE,
     BOB,
     make_joint_account,
+    make_manual_transaction,
     make_reconciliation_period,
     make_transaction,
     make_upload,
@@ -105,3 +107,20 @@ async def test_a_label_that_is_not_joint_is_not_found() -> None:
         await _unmark(uow)
 
     uow.transactions.rekey_batch.assert_not_called()
+
+
+async def test_a_hand_entered_account_is_refused() -> None:
+    """Its rows were imported by no one, so no partner can take them back."""
+    joint = make_joint_account(LABEL)
+    uow = _uow([make_manual_transaction(account=LABEL)])
+    uow.uploads.get_by_ids.return_value = [
+        make_upload(
+            id=manual_upload_id(joint.id), person_id=BOB.id, importer=MANUAL_IMPORTER
+        )
+    ]
+
+    with pytest.raises(ValidationError, match="hand-entered"):
+        await _unmark(uow)
+
+    uow.transactions.rekey_batch.assert_not_called()
+    uow.accounts.delete_by_ids.assert_not_called()

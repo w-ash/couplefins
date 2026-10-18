@@ -9,6 +9,9 @@ from src.infrastructure.persistence.models.category_group_model import (
 from src.infrastructure.persistence.models.category_model import (
     CategoryModel,
 )
+from src.infrastructure.persistence.models.co_owned_asset_model import (
+    CoOwnedAssetModel,
+)
 from src.infrastructure.persistence.models.person_model import PersonModel
 from src.infrastructure.persistence.models.reconciliation_period_model import (
     ReconciliationPeriodModel,
@@ -35,6 +38,7 @@ __all__ = [
     "CategoryGroupBudgetModel",
     "CategoryGroupModel",
     "CategoryModel",
+    "CoOwnedAssetModel",
     "PersonModel",
     "ReconciliationPeriodModel",
     "SettlementMerchantModel",

@@ -15,7 +15,13 @@ from src.domain.spending_lens import (
     source_split,
     total_spending,
 )
-from tests.fixtures.factories import ALICE, BOB, COUPLE_IDS, make_transaction
+from tests.fixtures.factories import (
+    ALICE,
+    BOB,
+    COUPLE_IDS,
+    make_manual_transaction,
+    make_transaction,
+)
 
 FOOD = uuid4()
 LOOKUP = {"Dining Out": (FOOD, "Food & Dining"), "Groceries": (FOOD, "Food & Dining")}
@@ -335,3 +341,13 @@ def test_personal_flow_source_names_the_payer(
     source = PersonalLens(ALICE.id, COUPLE_IDS).flow_source(tx)
 
     assert (source.kind, source.person_id) == (kind, payer)
+
+
+@pytest.mark.parametrize("lens", ALL_LENSES, ids=type)
+def test_a_hand_entered_credit_counts_under_no_lens(lens: SpendingLens) -> None:
+    """US-HOUSE-11: a recorded credit is an excluded joint row, so it never
+    enters spending, budgets, or settlement."""
+    manual = make_manual_transaction()
+
+    assert not lens.is_relevant(manual)
+    assert total_spending(lens, [manual]) == 0

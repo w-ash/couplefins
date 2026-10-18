@@ -262,6 +262,27 @@ GET_TAGS_SCHEMA: dict[str, object] = {
     },
 }
 
+GET_HOUSE_SUMMARY_SCHEMA: dict[str, object] = {
+    "name": "get_house_summary",
+    "description": (
+        "Call this when the user asks about the home they co-own: each "
+        "owner's capital and share percentage, what each put in by kind "
+        "(closing, loan interest, property tax, repairs...), the money set "
+        "aside in the joint accounts' pots, or the credits recorded by hand. "
+        "Returns the House figures that are real; sections still on example "
+        "figures are named in example_sections and left out. Shares come "
+        "from rows tagged share:<kind> whose kind the home's settings count. "
+        "Setting up the home and recording credits are done on the House "
+        "page and in Settings, not here."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {},
+        "required": [],
+    },
+}
+
 GET_ACCOUNTS_SCHEMA: dict[str, object] = {
     "name": "get_accounts",
     "description": (

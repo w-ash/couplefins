@@ -3,13 +3,25 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.entities.upload import MANUAL_IMPORTER
+from src.infrastructure.persistence.repositories.account_repository import (
+    AccountRepository,
+)
 from src.infrastructure.persistence.repositories.person_repository import (
     PersonRepository,
+)
+from src.infrastructure.persistence.repositories.transaction_repository import (
+    TransactionRepository,
 )
 from src.infrastructure.persistence.repositories.upload_repository import (
     UploadRepository,
 )
-from tests.fixtures.factories import make_person, make_transaction, make_upload
+from tests.fixtures.factories import (
+    make_joint_account,
+    make_person,
+    make_transaction,
+    make_upload,
+)
 from tests.integration.seed import save_transactions
 
 
@@ -210,3 +222,41 @@ async def test_no_duplicate_uploads(db_session: AsyncSession) -> None:
     )
     assert len(result) == 1
     assert result[0].id == upload.id
+
+
+async def test_manual_uploads_are_neither_history_nor_an_import(
+    db_session: AsyncSession,
+) -> None:
+    """US-HOUSE-11: a manual upload holds hand-entered rows; it is left out
+    of Upload history and never counts as the person's upload for a month."""
+    person_repo = PersonRepository(db_session)
+    up_repo = UploadRepository(db_session)
+    alice = make_person(name="Alice")
+    bob = make_person(name="Bob")
+    await person_repo.save_batch([alice, bob])
+    imported = make_upload(person_id=alice.id, filename="alice-jan.csv")
+    manual = make_upload(person_id=bob.id, importer=MANUAL_IMPORTER)
+    await up_repo.save_batch([imported, manual])
+    await save_transactions(
+        db_session,
+        [make_transaction(upload_id=imported.id, payer_person_id=alice.id)],
+    )
+    await AccountRepository(db_session).add_missing([make_joint_account("Escrow")])
+    await TransactionRepository(db_session).save_batch([
+        make_transaction(
+            upload_id=manual.id, joint=True, account="Escrow", is_excluded=True
+        )
+    ])
+    await db_session.commit()
+
+    history = await up_repo.get_all_with_transaction_counts()
+    in_range = await up_repo.get_by_person_ids_with_transactions_in_date_range(
+        [alice.id, bob.id], date(2026, 1, 1), date(2026, 1, 31)
+    )
+    in_period = await up_repo.get_by_person_ids_with_transactions_in_period(
+        [alice.id, bob.id], 2026, 1
+    )
+
+    assert [u.id for u in history] == [imported.id]
+    assert [u.id for u in in_range] == [imported.id]
+    assert [u.id for u in in_period] == [imported.id]

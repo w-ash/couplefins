@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { SetAsideSectionResponse } from "@/api/generated/model";
 import { Card } from "@/components/Card";
 import { SectionHeader } from "@/components/SectionHeader";
@@ -18,6 +19,23 @@ const NO_BANK_BALANCE = (
 
 const DEPOSIT_COLUMNS = ["Own", "Gift", "Share of payments", "Unspent"];
 
+function FooterRow({
+  label,
+  className,
+  children,
+}: {
+  label: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex justify-between gap-4">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className={cn("tabular-nums", className)}>{children}</dd>
+    </div>
+  );
+}
+
 export function SetAsideSection({
   setAside,
   owners,
@@ -33,7 +51,7 @@ export function SetAsideSection({
         example={example}
         id="house-set-aside"
         title="Set aside"
-        description="Each bucket beside the balance last entered from the bank."
+        description="The balance of each bucket, beside the balance last entered from the bank."
       />
       {setAside.buckets.length === 0 ? (
         <p className="text-sm text-muted-foreground">No money set aside yet.</p>
@@ -47,12 +65,6 @@ export function SetAsideSection({
                 </th>
                 <th scope="col" className={cn(amountCellClass, "font-medium")}>
                   Set aside
-                </th>
-                <th scope="col" className={cn(amountCellClass, "font-medium")}>
-                  Bank balance
-                </th>
-                <th scope="col" className={cn(amountCellClass, "font-medium")}>
-                  Difference
                 </th>
               </tr>
             </thead>
@@ -76,44 +88,41 @@ export function SetAsideSection({
                   <td className={amountCellClass}>
                     {formatCurrency(b.balance)}
                   </td>
-                  <td className={amountCellClass}>
-                    {b.bank_balance != null ? (
-                      <>
-                        {formatCurrency(b.bank_balance)}
-                        {b.bank_balance_as_of && (
-                          <p className="text-xs text-muted-foreground">
-                            as of {formatDate(b.bank_balance_as_of)}
-                          </p>
-                        )}
-                      </>
-                    ) : (
-                      NO_BANK_BALANCE
-                    )}
-                  </td>
-                  <td
-                    className={cn(
-                      amountCellClass,
-                      b.difference != null && amountColorClass(b.difference),
-                    )}
-                  >
-                    {b.difference != null
-                      ? formatSignedCurrency(b.difference)
-                      : NO_BANK_BALANCE}
-                  </td>
                 </tr>
               ))}
             </tbody>
-            <tfoot>
-              <tr className="font-medium">
-                <td className={cellClass}>Total</td>
-                <td className={amountCellClass}>
-                  {formatCurrency(setAside.total)}
-                </td>
-                <td className={cellClass} />
-                <td className={cellClass} />
-              </tr>
-            </tfoot>
           </table>
+          <dl className="mt-3 space-y-1 text-sm">
+            <FooterRow label="Total set aside">
+              {formatCurrency(setAside.total)}
+            </FooterRow>
+            <FooterRow label="Bank balance">
+              {setAside.bank_balance != null ? (
+                <>
+                  {formatCurrency(setAside.bank_balance)}
+                  {setAside.bank_balance_as_of && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      as of {formatDate(setAside.bank_balance_as_of)}
+                    </span>
+                  )}
+                </>
+              ) : (
+                NO_BANK_BALANCE
+              )}
+            </FooterRow>
+            <FooterRow
+              label="Difference"
+              className={
+                setAside.difference != null
+                  ? amountColorClass(setAside.difference)
+                  : undefined
+              }
+            >
+              {setAside.difference != null
+                ? formatSignedCurrency(setAside.difference)
+                : NO_BANK_BALANCE}
+            </FooterRow>
+          </dl>
         </div>
       )}
       {setAside.owners.length > 0 && (

@@ -12,6 +12,7 @@ type BroadcastEntity = Literal[
     "budgets",
     "category_groups",
     "accounts",
+    "house",
 ]
 
 
@@ -35,8 +36,10 @@ class EventBus:
             with contextlib.suppress(asyncio.QueueFull):
                 queue.put_nowait(message)
 
-    def broadcast(self, entity: BroadcastEntity) -> None:
-        self._send(json.dumps({"entity": entity}))
+    def broadcast(self, *entities: BroadcastEntity) -> None:
+        """Tell every client that each of `entities` changed, one message each."""
+        for entity in entities:
+            self._send(json.dumps({"entity": entity}))
 
     def broadcast_progress(
         self,

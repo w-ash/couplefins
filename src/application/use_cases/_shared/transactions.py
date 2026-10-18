@@ -14,7 +14,7 @@ from src.domain.dedup import (
 from src.domain.entities.account import Account
 from src.domain.entities.category import Category
 from src.domain.entities.transaction import Transaction
-from src.domain.entities.upload import Upload
+from src.domain.entities.upload import Upload, manual_upload_id
 from src.domain.exceptions import NotFoundError
 from src.domain.filters import is_joint_row, payer_of
 from src.domain.parsing.importer import ImportContext, Importer, ParseResult
@@ -24,6 +24,20 @@ from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 def joint_accounts(accounts: Iterable[Account]) -> list[Account]:
     """The joint accounts among `accounts`."""
     return [a for a in accounts if a.kind == "joint"]
+
+
+async def manual_accounts(
+    uow: UnitOfWorkProtocol, accounts: Iterable[Account]
+) -> list[Account]:
+    """The hand-entered accounts among `accounts`, in their order: the joint
+    accounts whose manual upload exists. One read of the uploads, and none
+    when `accounts` holds no joint account."""
+    joint = joint_accounts(accounts)
+    if not joint:
+        return []
+    uploads = await uow.uploads.get_by_ids([manual_upload_id(a.id) for a in joint])
+    manual = {u.id for u in uploads if u.is_manual}
+    return [a for a in joint if manual_upload_id(a.id) in manual]
 
 
 async def parse_file(
@@ -37,14 +51,19 @@ async def parse_file(
 ) -> ParseResult:
     """Parse a file into transactions for the uploader.
 
-    Rows on a label marked joint import into that joint account. `accounts`
-    is every account, read once per upload.
+    Rows on a label marked joint import into that joint account. A
+    hand-entered account is no import target: rows on its name import into
+    the uploader's personal account of that name. `accounts` is every
+    account, read once per upload.
     """
+    hand_entered = {a.id for a in await manual_accounts(uow, accounts)}
     ctx = ImportContext(
         payer_person_id=person_id,
         upload_id=upload_id,
         persons=tuple(await uow.persons.get_all()),
-        joint_labels=frozenset(a.name for a in joint_accounts(accounts)),
+        joint_labels=frozenset(
+            a.name for a in joint_accounts(accounts) if a.id not in hand_entered
+        ),
     )
     return importer.parse(data, ctx)
 
@@ -151,14 +170,17 @@ async def _owned_by(
     uow: UnitOfWorkProtocol, rows: list[Transaction], person_id: UUID
 ) -> list[Transaction]:
     """The rows a person owns: their personal rows, and the joint rows their
-    own uploads imported."""
+    own uploads imported. A hand-entered row is no import, so a re-import
+    never owns it and never removes it."""
     uploads = await load_uploads(uow, [tx for tx in rows if is_joint_row(tx)])
-    return [
-        tx
-        for tx in rows
-        if (uploads[tx.upload_id].person_id if is_joint_row(tx) else payer_of(tx))
-        == person_id
-    ]
+
+    def owner(tx: Transaction) -> UUID | None:
+        if not is_joint_row(tx):
+            return payer_of(tx)
+        upload = uploads[tx.upload_id]
+        return None if upload.is_manual else upload.person_id
+
+    return [tx for tx in rows if owner(tx) == person_id]
 
 
 async def load_uploads(

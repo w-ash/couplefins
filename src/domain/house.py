@@ -14,21 +14,13 @@ from uuid import UUID
 
 from attrs import define, evolve
 
+from src.domain.entities.co_owned_asset import ContributionKind
 from src.domain.pots import OwnerFunds
 
 _TENTH = Decimal("0.1")
 
-# Equal to the ``share:`` tag values (v1.15.4), so these kinds use hyphens;
-# the other kinds are API enums and use snake_case.
-type ContributionKind = Literal[
-    "closing",
-    "loan-interest",
-    "loan-principal",
-    "property-tax",
-    "insurance",
-    "repair",
-    "agreed-work",
-]
+# ``ContributionKind`` values are the ``share:`` tag values and use hyphens;
+# the kinds below are API enums and use snake_case.
 type LoanKind = Literal["interest_only", "amortizing"]
 type ObligationKind = Literal["loan_payment", "property_tax", "insurance", "other"]
 type ActivityKind = Literal["deposit", "payment", "refund", "transfer"]
@@ -126,8 +118,8 @@ class Bucket:
     """Money set aside for one purpose, beside the bank's last balance.
 
     ``difference`` is ``bank_balance - balance``; all three bank fields are
-    None until the owners enter a bank balance. ``is_unassigned`` marks the
-    bucket of the money that no pot names.
+    None when no bank balance is known for the bucket. ``is_unassigned``
+    marks the bucket of the money that no pot names.
     """
 
     name: str
@@ -155,8 +147,18 @@ class OwnerDeposits:
 
 @define(frozen=True, slots=True)
 class SetAsideSection:
+    """The buckets, their total beside the bank's last balance, and each
+    owner's deposits.
+
+    ``difference`` is ``bank_balance - total``; all three bank fields are
+    None until the owners enter a bank balance.
+    """
+
     buckets: tuple[Bucket, ...]
     total: Decimal
+    bank_balance: Decimal | None
+    bank_balance_as_of: datetime.date | None
+    difference: Decimal | None
     owners: tuple[OwnerDeposits, ...]
 
 
@@ -282,12 +284,20 @@ def owner_deposits(funds: OwnerFunds) -> OwnerDeposits:
 
 
 def set_aside_section(
-    buckets: tuple[Bucket, ...], owners: tuple[OwnerDeposits, ...]
+    buckets: tuple[Bucket, ...],
+    owners: tuple[OwnerDeposits, ...],
+    bank_balance: Decimal | None = None,
+    bank_balance_as_of: datetime.date | None = None,
 ) -> SetAsideSection:
-    """Total the balances of the buckets."""
+    """Total the balances of the buckets, and the total's difference from
+    the bank balance, if one is known."""
+    total = sum((b.balance for b in buckets), Decimal(0))
     return SetAsideSection(
         buckets=buckets,
-        total=sum((b.balance for b in buckets), Decimal(0)),
+        total=total,
+        bank_balance=bank_balance,
+        bank_balance_as_of=bank_balance_as_of,
+        difference=None if bank_balance is None else bank_balance - total,
         owners=owners,
     )
 

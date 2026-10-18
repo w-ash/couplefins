@@ -3,6 +3,9 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 import uuid
 
+import attrs
+
+from src.domain.constants import DEFAULT_MANUAL_ACCOUNT, HOUSE_CONTRIBUTION_CATEGORY
 from src.domain.entities.account import (
     Account,
     AccountKind,
@@ -12,6 +15,11 @@ from src.domain.entities.account import (
 from src.domain.entities.category import Category
 from src.domain.entities.category_group import CategoryGroup, GroupKind
 from src.domain.entities.category_group_budget import CategoryGroupBudget
+from src.domain.entities.co_owned_asset import (
+    CONTRIBUTION_KINDS,
+    ContributionKind,
+    CoOwnedAsset,
+)
 from src.domain.entities.person import Person
 from src.domain.entities.reconciliation_period import ReconciliationPeriod
 from src.domain.entities.settlement import Settlement
@@ -115,6 +123,73 @@ def make_transaction(
         original_amount=original_amount,
         depositor_person_id=depositor_person_id,
         owner_shares=owner_shares,
+    )
+
+
+def make_share_transaction(
+    kind: str,
+    amount: Decimal = Decimal("-100.00"),
+    *,
+    date: date = date(2026, 1, 15),
+    payer_person_id: uuid.UUID | None = None,
+    payer_percentage: int = 50,
+    joint: bool = False,
+    owner_shares: Mapping[uuid.UUID, int] | None = None,
+    tags: tuple[str, ...] = (),
+) -> Transaction:
+    """A row tagged `share:<kind>` after `tags`, paid by Alice unless another
+    payer is given or the row is `joint`."""
+    return make_transaction(
+        date=date,
+        amount=amount,
+        tags=(*tags, f"share:{kind}"),
+        payer_person_id=payer_person_id or ALICE.id,
+        payer_percentage=payer_percentage,
+        joint=joint,
+        owner_shares=owner_shares,
+    )
+
+
+def make_manual_transaction(
+    kind: ContributionKind = "closing",
+    amount: Decimal = Decimal("-1000.00"),
+    *,
+    owner_shares: Mapping[uuid.UUID, int] | None = None,
+    account: str = DEFAULT_MANUAL_ACCOUNT,
+) -> Transaction:
+    """A hand-entered contribution as recorded: a joint row, unsplit, not
+    household, excluded, tagged with its kind."""
+    row = make_transaction(
+        joint=True,
+        account=account,
+        category=HOUSE_CONTRIBUTION_CATEGORY,
+        amount=amount,
+        tags=(f"share:{kind}",),
+        owner_shares=owner_shares or {ALICE.id: 60, BOB.id: 40},
+        is_excluded=True,
+    )
+    return attrs.evolve(row, household=False)
+
+
+def make_co_owned_asset(
+    *,
+    id: uuid.UUID | None = None,
+    name: str = "Home",
+    repair_threshold: Decimal = Decimal("500.00"),
+    qualifying_kinds: frozenset[ContributionKind] = frozenset(CONTRIBUTION_KINDS),
+    bank_balance: Decimal | None = None,
+    bank_balance_as_of: date | None = None,
+    created_at: datetime | None = None,
+) -> CoOwnedAsset:
+    """An asset that counts every contribution kind by default."""
+    return CoOwnedAsset(
+        id=id or uuid.uuid4(),
+        name=name,
+        repair_threshold=repair_threshold,
+        qualifying_kinds=qualifying_kinds,
+        bank_balance=bank_balance,
+        bank_balance_as_of=bank_balance_as_of,
+        created_at=created_at or datetime(2026, 1, 1, tzinfo=UTC),
     )
 
 

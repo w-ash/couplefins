@@ -35,7 +35,9 @@ from src.domain.house import (
 from tests.fixtures.factories import (
     ALICE,
     BOB,
+    make_co_owned_asset,
     make_joint_account,
+    make_share_transaction,
     make_transaction,
     make_transfer_group,
 )
@@ -100,10 +102,13 @@ class TestExampleHouse:
             assert _sum(loan.owner_parts) == loan.payment, loan.name
 
     def test_bucket_difference_is_bank_minus_book(self, figures: HouseFigures) -> None:
-        for bucket in figures.set_aside.buckets:
+        set_aside = figures.set_aside
+        for bucket in set_aside.buckets:
             bank = bucket.bank_balance
             expected = None if bank is None else bank - bucket.balance
             assert bucket.difference == expected, bucket.name
+        assert set_aside.bank_balance is not None
+        assert set_aside.difference == set_aside.bank_balance - set_aside.total
 
     def test_activity_shares_sum_to_the_absolute_amount(
         self, figures: HouseFigures
@@ -394,3 +399,200 @@ class TestJointFunds:
         assert set_aside.buckets == ()
         assert set_aside.total == 0
         assert [o.unspent for o in set_aside.owners] == [0, 0]
+        assert (set_aside.bank_balance, set_aside.difference) == (None, None)
+
+
+class TestOwnerShares:
+    """US-HOUSE-2, -3, -10: once the asset exists, Put in, Shares, and Set
+    aside are real, from the rows dated through the as-of date."""
+
+    AS_OF = date(2026, 4, 10)
+    ASSET = make_co_owned_asset(
+        bank_balance=Decimal("950.00"), bank_balance_as_of=date(2026, 4, 1)
+    )
+    JOINT = make_joint_account("Joint Checking")
+    ROWS = (
+        make_share_transaction("closing", Decimal("-3000.00"), date=date(2025, 11, 3)),
+        make_share_transaction(
+            "insurance",
+            Decimal("-300.00"),
+            date=date(2026, 2, 27),
+            payer_person_id=BOB.id,
+            payer_percentage=100,
+            tags=("s100",),
+        ),
+        # After the as-of date, in its month: in no section yet.
+        make_share_transaction("closing", Decimal("-999.00"), date=date(2026, 4, 20)),
+    )
+
+    @staticmethod
+    async def _house(
+        rows: Iterable[Transaction] = ROWS,
+        joint_rows: Iterable[Transaction] | None = None,
+    ) -> GetHouseResult:
+        uow = make_mock_uow()
+        transfer, card_payment = make_transfer_group()
+        uow.persons.get_all.return_value = [ALICE, BOB]
+        uow.category_groups.get_all.return_value = [transfer]
+        uow.categories.get_all.return_value = [card_payment]
+        uow.co_owned_assets.get_current.return_value = TestOwnerShares.ASSET
+        uow.transactions.get_by_tag_prefix.return_value = list(rows)
+        joint_ids = []
+        if joint_rows is not None:
+            uow.accounts.get_all.return_value = [TestOwnerShares.JOINT]
+            uow.transactions.get_by_account_ids.return_value = list(joint_rows)
+            joint_ids = [TestOwnerShares.JOINT.id]
+        result = await GetHouseUseCase().execute(
+            GetHouseCommand(as_of=TestOwnerShares.AS_OF), uow
+        )
+        uow.transactions.get_by_tag_prefix.assert_awaited_once_with(
+            "share:", excluding_account_ids=joint_ids
+        )
+        return result
+
+    @staticmethod
+    def _joint_row(amount: str, *tags: str, **overrides: object) -> Transaction:
+        return attrs.evolve(
+            make_transaction(
+                joint=True,
+                account=TestOwnerShares.JOINT.name,
+                amount=Decimal(amount),
+                tags=tags,
+            ),
+            **overrides,
+        )
+
+    async def test_put_in_shares_and_set_aside_are_real_once_the_asset_exists(
+        self,
+    ) -> None:
+        result = await self._house()
+
+        assert result.example_sections == HOUSE_SECTIONS - {
+            "put_in",
+            "shares",
+            "set_aside",
+        }
+        assert result.asset == self.ASSET
+        assert result.figures.as_of == self.AS_OF
+        assert result.figures.persons == COUPLE
+
+    async def test_put_in_holds_each_owners_credits_by_kind(self) -> None:
+        put_in = (await self._house()).figures.put_in
+
+        assert [(k.kind, k.amounts, k.total) for k in put_in.kinds] == [
+            (
+                "closing",
+                (
+                    OwnerAmount(ALICE.id, Decimal("1500.00")),
+                    OwnerAmount(BOB.id, Decimal("1500.00")),
+                ),
+                Decimal("3000.00"),
+            ),
+            (
+                "insurance",
+                (
+                    OwnerAmount(ALICE.id, Decimal(0)),
+                    OwnerAmount(BOB.id, Decimal("300.00")),
+                ),
+                Decimal("300.00"),
+            ),
+        ]
+        assert put_in.total == Decimal("3300.00")
+
+    async def test_the_history_runs_from_the_first_credit_through_as_of(
+        self,
+    ) -> None:
+        shares = (await self._house()).figures.shares
+
+        assert [(p.year, p.month) for p in shares.history] == [
+            (2025, 11),
+            (2025, 12),
+            (2026, 1),
+            (2026, 2),
+            (2026, 3),
+            (2026, 4),
+        ]
+        assert shares.history[-1].owners == shares.now
+        assert [(s.capital, s.percent) for s in shares.now] == [
+            (Decimal("1500.00"), Decimal("45.5")),
+            (Decimal("1800.00"), Decimal("54.5")),
+        ]
+
+    async def test_without_credits_the_shares_are_zero_now(self) -> None:
+        figures = (await self._house(rows=[])).figures
+
+        assert figures.put_in.kinds == ()
+        assert [(p.year, p.month) for p in figures.shares.history] == [(2026, 4)]
+        assert [(s.capital, s.percent) for s in figures.shares.now] == [
+            (Decimal(0), Decimal(0)),
+            (Decimal(0), Decimal(0)),
+        ]
+
+    async def test_unspent_deposits_come_from_the_joint_funds(self) -> None:
+        deposit = self._joint_row("1000.00", depositor_person_id=ALICE.id)
+        payment = self._joint_row("-200.00")
+
+        result = await self._house(joint_rows=[deposit, payment])
+
+        figures = result.figures
+        assert figures.put_in.unspent_deposits == (
+            OwnerAmount(ALICE.id, Decimal("900.00")),
+            OwnerAmount(BOB.id, Decimal("-100.00")),
+        )
+        assert [o.unspent for o in figures.set_aside.owners] == [
+            a.amount for a in figures.put_in.unspent_deposits
+        ]
+        assert result.example_sections == {"loans", "upcoming"}
+
+    async def test_without_a_joint_account_set_aside_is_real_and_empty(
+        self,
+    ) -> None:
+        figures = (await self._house()).figures
+
+        assert figures.set_aside.buckets == ()
+        assert [o.unspent for o in figures.set_aside.owners] == [0, 0]
+        assert figures.put_in.unspent_deposits == (
+            OwnerAmount(ALICE.id, Decimal(0)),
+            OwnerAmount(BOB.id, Decimal(0)),
+        )
+
+    async def test_the_assets_bank_balance_stands_beside_the_pots(self) -> None:
+        rows = [
+            self._joint_row("1000.00", "pot:bills", depositor_person_id=ALICE.id),
+            self._joint_row("-20.00"),
+        ]
+
+        set_aside = (await self._house(joint_rows=rows)).figures.set_aside
+
+        assert set_aside.total == Decimal("980.00")
+        assert (set_aside.bank_balance, set_aside.bank_balance_as_of) == (
+            Decimal("950.00"),
+            date(2026, 4, 1),
+        )
+        assert set_aside.difference == Decimal("-30.00")
+        assert all(b.bank_balance is None for b in set_aside.buckets)
+
+    async def test_a_joint_share_row_is_read_once_and_credited_once(self) -> None:
+        """The share rows outside the joint accounts are read apart; the
+        joint ones come from the joint rows."""
+        premium = self._joint_row("-400.00", "share:insurance")
+
+        figures = (await self._house(rows=[], joint_rows=[premium])).figures
+
+        assert [s.capital for s in figures.shares.now] == [
+            Decimal("200.00"),
+            Decimal("200.00"),
+        ]
+
+    async def test_every_section_counts_the_rows_through_the_as_of_date(
+        self,
+    ) -> None:
+        on_time = self._joint_row("-100.00", "share:repair", date=self.AS_OF)
+        later = self._joint_row("-700.00", "share:repair", date=date(2026, 4, 11))
+
+        figures = (await self._house(rows=[], joint_rows=[on_time, later])).figures
+
+        assert [r.id for r in figures.recent_activity] == [on_time.id]
+        assert figures.set_aside.total == Decimal("-100.00")
+        assert figures.put_in.kinds == ()  # the on-time repair is under 500
+        assert [s.capital for s in figures.shares.now] == [0, 0]

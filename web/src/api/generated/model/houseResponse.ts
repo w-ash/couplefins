@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ActivityRowResponse } from './activityRowResponse.ts';
+import type { CoOwnedAssetResponse } from './coOwnedAssetResponse.ts';
 import type { DashboardPersonResponse } from './dashboardPersonResponse.ts';
 import type { LoanResponse } from './loanResponse.ts';
 import type { ObligationResponse } from './obligationResponse.ts';
@@ -17,9 +18,11 @@ import type { SharesSectionResponse } from './sharesSectionResponse.ts';
  *
  * ``example_sections`` names the sections still on the fixed example
  * payload, by their field names here; empty once every figure is real.
+ * ``asset`` is None until the home is set up.
  */
 export interface HouseResponse {
   example_sections: string[];
+  asset: CoOwnedAssetResponse | null;
   as_of: string;
   persons: DashboardPersonResponse[];
   put_in: PutInSectionResponse;

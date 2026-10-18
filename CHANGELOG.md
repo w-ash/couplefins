@@ -10,6 +10,15 @@ deploy. There is no `[Unreleased]` section.
 Versions before 1.14.0 predate this file. Their scope is recorded per series in
 `docs/backlog/completed/` and in the version matrix in `docs/backlog/README.md`.
 
+## [1.15.4] - 2026-10-16
+
+### Added
+
+- House settings. In Settings → House, set the home's name, which contribution kinds count toward shares, the necessary-repair threshold, and the bank balance last read from the bank with its date.
+- Owner shares. Tag a row `share:closing`, `share:loan-interest`, `share:loan-principal`, `share:property-tax`, `share:insurance`, `share:repair`, `share:agreed-work`, or `share:none`: each owner is credited with their share of it, and the House page shows real Put in and Shares. Nothing is stored; the tag is the only lever, and a refund carrying a share tag reduces the credit.
+- Record a credit. On the House page, enter a contribution that never passed through an imported account (closing through escrow, an early premium) with its owner split, kind, and document reference. It counts toward shares only, never settlement or budgets, and can be deleted.
+- Chat can read the House summary.
+
 ## [1.15.3] - 2026-10-15
 
 ### Added
