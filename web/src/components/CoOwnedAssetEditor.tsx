@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { errorMessage } from "@/api/client";
 import {
   useGetCoOwnedAsset,
   useSaveCoOwnedAsset,
@@ -162,9 +163,7 @@ function AssetForm({ asset }: { asset: CoOwnedAssetResponse | null }) {
         {saved && <InlineSuccess>House saved</InlineSuccess>}
         {mutation.isError && (
           <InlineError>
-            {mutation.error instanceof Error && mutation.error.message
-              ? mutation.error.message
-              : "Failed to save the house"}
+            {errorMessage(mutation.error, "Failed to save the house")}
           </InlineError>
         )}
       </div>

@@ -13,12 +13,21 @@ def assert_month_key(year: int, month: int) -> None:
         raise ValueError(f"month must be 1-{MAX_MONTH}, got {month}")
 
 
+def shift_month(key: MonthKey, months: int) -> MonthKey:
+    """The month `months` months after `key` (before it when negative)."""
+    year, month = key
+    shifted_year, shifted_index = divmod(
+        year * MAX_MONTH + month - 1 + months, MAX_MONTH
+    )
+    return shifted_year, shifted_index + 1
+
+
 def months_through(start: MonthKey, end: MonthKey) -> tuple[MonthKey, ...]:
     """Every month from `start` through `end`, ascending. Empty when `start`
     is after `end`."""
     months: list[MonthKey] = []
-    year, month = start
-    while (year, month) <= end:
-        months.append((year, month))
-        year, month = (year + 1, 1) if month == MAX_MONTH else (year, month + 1)
+    key = start
+    while key <= end:
+        months.append(key)
+        key = shift_month(key, 1)
     return tuple(months)

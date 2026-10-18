@@ -1,4 +1,5 @@
 import { type FormEvent, useState } from "react";
+import { errorMessage } from "@/api/client";
 import {
   useChangePassword,
   useResetPartnerPassword,
@@ -107,9 +108,7 @@ function ChangeMyPassword() {
       <div aria-live="polite" aria-atomic="true">
         {mutation.error && (
           <InlineError>
-            {mutation.error instanceof Error
-              ? mutation.error.message
-              : "Failed to change password"}
+            {errorMessage(mutation.error, "Failed to change password")}
           </InlineError>
         )}
         {success && <InlineSuccess>Password changed</InlineSuccess>}
@@ -211,9 +210,7 @@ function ResetPartnerPassword() {
       <div aria-live="polite" aria-atomic="true">
         {mutation.error && (
           <InlineError>
-            {mutation.error instanceof Error
-              ? mutation.error.message
-              : "Failed to reset password"}
+            {errorMessage(mutation.error, "Failed to reset password")}
           </InlineError>
         )}
         {success && (

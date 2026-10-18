@@ -602,11 +602,13 @@ The co-owned home on its own page. Every figure is computed in Python and served
 
 - Given the Loans section, then each loan shows its balance, rate, payment, and next due date
 - Given a loan, then each owner's part of the payment is shown
+- Given the home's asset exists (v1.15.5), then the Loans section shows real loans and balances (US-HOUSE-12)
 
 **US-HOUSE-5** (v1.15.1): As a co-owner, I want to see upcoming obligations and which bucket pays each, so that nothing is paid late.
 
 - Given the Upcoming section, then each obligation shows its due date, late date, and the bucket that pays it
 - Given a bucket that won't cover an obligation once the earlier obligations it pays are taken out, then that obligation carries a visible shortfall flag for the part the bucket can't cover
+- Given the home's asset exists (v1.15.5), then Upcoming lists the real unpaid obligations in due order (US-HOUSE-13)
 
 **US-HOUSE-6** (v1.15.1): As a co-owner, I want each bucket beside the balance last entered from the bank, so that I can see whether the books match the bank.
 
@@ -625,7 +627,8 @@ The co-owned home on its own page. Every figure is computed in Python and served
 - Given the endpoint reports example data, then the page shows a notice that the figures are examples until the data behind each section is built
 - Given the endpoint reports real data, then the notice is gone
 - Given any figure on the page, then it comes precomputed from the endpoint; nothing is computed in the browser
-- Given the asset exists (v1.15.4), then Put in and Shares are real and no longer marked example; Loans and Upcoming stay examples until their versions
+- Given the asset exists (v1.15.4), then Put in and Shares are real and no longer marked example; Loans and Upcoming stay examples until v1.15.5
+- Given the asset exists (v1.15.5), then every section is real and the example notice is gone; the example figures remain only for a couple with no asset (removed in v1.15.6)
 
 **US-HOUSE-9** (v1.15.4): As a co-owner, I want to set up the home in Settings, so that the House page knows what counts toward our shares.
 
@@ -653,6 +656,33 @@ The co-owned home on its own page. Every figure is computed in Python and served
 - Given a recorded credit, when I delete it, then the credit is gone from the shares
 - Given a recorded credit, then it never enters settlement or budgets and does not appear in Upload history
 - Given a payment already in an owner's Monarch import, then I tag it there instead of entering it twice
+
+**US-HOUSE-12** (v1.15.5): As a co-owner, I want to record the home's loans and see each balance match the servicer's statement, so that I know what is owed.
+
+- Given House → Loans, when I record a loan with its name, lender, kind (interest-only, `interest_only`, or amortizing, `amortizing`), principal, annual rate, scheduled payment, term, first due date, and a statement balance with its date, then it appears with that balance
+- Given a payment row tagged `loan:<slug>` (the slug derives from the loan's name) and dated after the statement date, then the loan's balance falls by the principal part of the payment
+- Given a linked payment also tagged `share:loan-principal`, then all of it is principal, on either kind of loan
+- Given an interest-only loan, then any other linked payment is all interest
+- Given an amortizing loan, then any other linked payment splits into interest (balance x rate / 12, to the cent) and principal (the rest), and the balance matches the servicer's next statement, extra principal payments included
+- Given a loan, then each owner's part of a payment follows their shares of the most recent linked payment, and is 50/50 before the first one
+- Given a refinance, when I replace the loan with a new one, then the old loan closes, points to its replacement, and keeps its history
+- Given a loan I no longer carry, when I close it on any date (before its first due date too), then it leaves the active loans and keeps its history
+- Given a loan closed or replaced, then its unpaid payment obligations due after the closing date are deleted, with any pot or notes edited on them
+- Given a loan, then its terms cannot be edited; a typo on a fresh loan is fixed by deleting and re-creating it, and delete is refused once payments or obligations exist, or once the loan has replaced another
+- Given an open loan, then its next due date is its earliest unpaid payment obligation, else its first scheduled date this month or later with no obligation; none once its term has run out with nothing unpaid
+- Given a new statement balance and date, when I enter it, then the balance re-anchors there and earlier payments no longer count
+
+**US-HOUSE-13** (v1.15.5): As a co-owner, I want to record what comes due and see which is paid, due, or late, so that nothing is paid late.
+
+- Given House → Upcoming, when I record an obligation (property-tax installment, insurance renewal, loan payment, or other bill) with its amount, due date, a later delinquency date where one exists, and the pot or account that pays it, then it appears in due order
+- Given an amount not yet billed, when I mark it an estimate, then it shows as an estimate until I update it with the bill's amount, which replaces the estimate
+- Given an unpaid obligation, when I choose "Mark paid", then money-out rows near its due date and amount, or tagged with its loan, are offered as candidates, and linking one makes its status paid
+- Given a row that already pays another obligation, then it is not offered, and linking it is refused; so is a row that is money in
+- Given the row that paid an obligation is removed by a re-import or deleted, then the obligation is unpaid again and the removal warns
+- Given an unpaid obligation past its delinquency date (its due date when there is none), then its status is late; otherwise it is due
+- Given a pot that cannot cover an obligation once the earlier obligations it pays are taken out, in due order, then the obligation shows the shortfall
+- Given a loan, when I choose "Add the next N payments", then its monthly payments are generated from its terms as obligations, from the first day of this month and after its latest payment obligation, skipping months that already have one
+- Given an obligation linked to its payment this month, then it leaves Upcoming
 
 ### Asking Questions (v1.5.x)
 

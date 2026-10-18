@@ -8,6 +8,7 @@ and difference must already agree with the figures it summarizes.
 from collections.abc import Iterable
 from datetime import date
 from decimal import Decimal
+import uuid
 
 import attrs
 import pytest
@@ -23,6 +24,7 @@ from src.application.use_cases.get_house import (
     GetHouseUseCase,
 )
 from src.domain.constants import UNASSIGNED_POT
+from src.domain.entities.obligation import Obligation
 from src.domain.entities.transaction import Transaction
 from src.domain.house import (
     ActivityRow,
@@ -37,6 +39,8 @@ from tests.fixtures.factories import (
     BOB,
     make_co_owned_asset,
     make_joint_account,
+    make_loan,
+    make_obligation,
     make_share_transaction,
     make_transaction,
     make_transfer_group,
@@ -131,10 +135,34 @@ class TestExampleHouse:
     def test_lists_are_in_their_served_order(self, figures: HouseFigures) -> None:
         months = [(p.year, p.month) for p in figures.shares.history]
         dues = [o.due for o in figures.upcoming]
+        paid_dues = [o.due for o in figures.recent_paid]
         dates = [row.date for row in figures.recent_activity]
         assert months == sorted(months)
         assert dues == sorted(dues)
+        assert paid_dues == sorted(paid_dues, reverse=True)
         assert dates == sorted(dates, reverse=True)
+
+    def test_upcoming_is_unpaid_and_recent_paid_names_its_rows(
+        self, figures: HouseFigures
+    ) -> None:
+        activity = {row.id for row in figures.recent_activity}
+        assert {o.status for o in figures.upcoming} <= {"due", "late"}
+        assert all(o.paid_by_transaction_id is None for o in figures.upcoming)
+        assert {o.status for o in figures.recent_paid} == {"paid"}
+        assert {o.paid_by_transaction_id for o in figures.recent_paid} <= activity
+
+    def test_loan_payments_and_past_loans_name_the_open_loans(
+        self, figures: HouseFigures
+    ) -> None:
+        open_ids = {loan.id for loan in figures.loans}
+        payments = [
+            o
+            for o in (*figures.upcoming, *figures.recent_paid)
+            if o.kind == "loan_payment"
+        ]
+        assert payments
+        assert {o.loan_id for o in payments} <= open_ids
+        assert {p.replaced_by_loan_id for p in figures.past_loans} <= open_ids
 
 
 def test_the_couples_example_keys_every_owner_on_the_couple() -> None:
@@ -190,18 +218,31 @@ class TestRecentActivity:
         assert result.figures.recent_activity == ()
         assert result.figures.persons == COUPLE
 
-    async def test_every_section_is_example_without_a_joint_account(self) -> None:
-        result = await GetHouseUseCase().execute(GetHouseCommand(), make_mock_uow())
+    async def test_a_couple_with_no_joint_account_or_asset_gets_the_example(
+        self,
+    ) -> None:
+        """Nothing real is read: no rows, loans, or obligations."""
+        uow = make_mock_uow()
+        uow.persons.get_all.return_value = [ALICE, BOB]
+
+        result = await GetHouseUseCase().execute(GetHouseCommand(), uow)
 
         assert result.example_sections == HOUSE_SECTIONS
         assert result.figures == EXAMPLE_HOUSE
+        assert result.asset is None
+        uow.transactions.get_by_account_ids.assert_not_awaited()
+        uow.transactions.get_by_tag_prefixes.assert_not_awaited()
+        uow.loans.get_by_asset_id.assert_not_awaited()
+        uow.obligations.get_by_asset_id.assert_not_awaited()
 
     def test_the_sections_are_every_figure_but_the_couple_and_date(self) -> None:
         assert {
             "put_in",
             "shares",
             "loans",
+            "past_loans",
             "upcoming",
+            "recent_paid",
             "set_aside",
             "recent_activity",
         } == HOUSE_SECTIONS
@@ -436,7 +477,7 @@ class TestOwnerShares:
         uow.category_groups.get_all.return_value = [transfer]
         uow.categories.get_all.return_value = [card_payment]
         uow.co_owned_assets.get_current.return_value = TestOwnerShares.ASSET
-        uow.transactions.get_by_tag_prefix.return_value = list(rows)
+        uow.transactions.get_by_tag_prefixes.return_value = list(rows)
         joint_ids = []
         if joint_rows is not None:
             uow.accounts.get_all.return_value = [TestOwnerShares.JOINT]
@@ -445,8 +486,8 @@ class TestOwnerShares:
         result = await GetHouseUseCase().execute(
             GetHouseCommand(as_of=TestOwnerShares.AS_OF), uow
         )
-        uow.transactions.get_by_tag_prefix.assert_awaited_once_with(
-            "share:", excluding_account_ids=joint_ids
+        uow.transactions.get_by_tag_prefixes.assert_awaited_once_with(
+            ("share:", "loan:"), excluding_account_ids=joint_ids
         )
         return result
 
@@ -462,16 +503,14 @@ class TestOwnerShares:
             **overrides,
         )
 
-    async def test_put_in_shares_and_set_aside_are_real_once_the_asset_exists(
-        self,
-    ) -> None:
+    async def test_every_section_is_real_once_the_asset_exists(self) -> None:
+        """US-HOUSE-8 (v1.15.5): with the asset, nothing is an example, even
+        before a joint account exists."""
         result = await self._house()
 
-        assert result.example_sections == HOUSE_SECTIONS - {
-            "put_in",
-            "shares",
-            "set_aside",
-        }
+        assert result.example_sections == frozenset()
+        assert result.figures.recent_activity == ()
+        assert result.figures.loans == result.figures.upcoming == ()
         assert result.asset == self.ASSET
         assert result.figures.as_of == self.AS_OF
         assert result.figures.persons == COUPLE
@@ -542,7 +581,7 @@ class TestOwnerShares:
         assert [o.unspent for o in figures.set_aside.owners] == [
             a.amount for a in figures.put_in.unspent_deposits
         ]
-        assert result.example_sections == {"loans", "upcoming"}
+        assert result.example_sections == frozenset()
 
     async def test_without_a_joint_account_set_aside_is_real_and_empty(
         self,
@@ -596,3 +635,147 @@ class TestOwnerShares:
         assert figures.set_aside.total == Decimal("-100.00")
         assert figures.put_in.kinds == ()  # the on-time repair is under 500
         assert [s.capital for s in figures.shares.now] == [0, 0]
+
+
+class TestLoansAndObligations:
+    """US-HOUSE-12, -13: once the asset exists, Loans, Upcoming, and their
+    history are real, from the loans and obligations and the rows dated
+    through the as-of date."""
+
+    AS_OF = date(2026, 4, 10)
+    ASSET = make_co_owned_asset()
+    JOINT = make_joint_account("Joint Checking")
+    MORTGAGE = make_loan(
+        asset_id=ASSET.id,
+        statement_balance=Decimal("300000.00"),
+        statement_balance_as_of=date(2026, 3, 15),
+        first_due_on=date(2026, 2, 1),
+    )
+    BRIDGE = make_loan(
+        name="Bridge loan",
+        asset_id=ASSET.id,
+        kind="interest_only",
+        first_due_on=date(2025, 11, 1),
+        closed_on=date(2026, 1, 31),
+        replaced_by_loan_id=MORTGAGE.id,
+    )
+
+    @staticmethod
+    async def _house(
+        obligations: Iterable[Obligation] = (),
+        outside: Iterable[Transaction] = (),
+        joint_rows: Iterable[Transaction] = (),
+    ) -> HouseFigures:
+        cls = TestLoansAndObligations
+        uow = make_mock_uow()
+        uow.persons.get_all.return_value = [ALICE, BOB]
+        uow.co_owned_assets.get_current.return_value = cls.ASSET
+        uow.accounts.get_all.return_value = [cls.JOINT]
+        uow.transactions.get_by_account_ids.return_value = list(joint_rows)
+        uow.transactions.get_by_tag_prefixes.return_value = list(outside)
+        uow.loans.get_by_asset_id.return_value = [cls.BRIDGE, cls.MORTGAGE]
+        uow.obligations.get_by_asset_id.return_value = list(obligations)
+        result = await GetHouseUseCase().execute(GetHouseCommand(as_of=cls.AS_OF), uow)
+        assert result.example_sections == frozenset()
+        uow.loans.get_by_asset_id.assert_awaited_once_with(cls.ASSET.id)
+        return result.figures
+
+    @staticmethod
+    def _joint_row(amount: str, *tags: str, **overrides: object) -> Transaction:
+        row = make_transaction(
+            joint=True,
+            account=TestLoansAndObligations.JOINT.name,
+            amount=Decimal(amount),
+            tags=tags,
+        )
+        return attrs.evolve(row, **overrides)
+
+    def _payment_due(self, day: date, **fields: object) -> Obligation:
+        return make_obligation(
+            asset_id=self.ASSET.id,
+            kind="loan_payment",
+            loan_id=self.MORTGAGE.id,
+            description="Mortgage payment",
+            amount=self.MORTGAGE.payment,
+            due_on=day,
+            **fields,
+        )
+
+    async def test_open_loans_show_the_balance_from_the_linked_rows(self) -> None:
+        """A paydown from Alice's own account counts as a joint payment does;
+        a row after the as-of date does not."""
+        paydown = make_transaction(
+            payer_person_id=ALICE.id,
+            payer_percentage=100,
+            amount=Decimal("-1798.65"),
+            date=date(2026, 4, 1),
+            tags=("loan:mortgage",),
+        )
+        later = attrs.evolve(paydown, id=uuid.uuid4(), date=date(2026, 4, 20))
+
+        figures = await self._house(outside=[paydown, later])
+
+        [loan] = figures.loans
+        assert (loan.id, loan.balance) == (self.MORTGAGE.id, Decimal("299701.35"))
+        assert loan.owner_parts == (
+            OwnerAmount(ALICE.id, Decimal("1798.65")),
+            OwnerAmount(BOB.id, Decimal(0)),
+        )
+        assert (loan.statement_balance, loan.statement_balance_as_of) == (
+            Decimal("300000.00"),
+            date(2026, 3, 15),
+        )
+
+    async def test_closed_loans_are_past_loans(self) -> None:
+        figures = await self._house()
+
+        [past] = figures.past_loans
+        assert (past.id, past.closed_on, past.replaced_by_loan_id) == (
+            self.BRIDGE.id,
+            date(2026, 1, 31),
+            self.MORTGAGE.id,
+        )
+        assert [loan.id for loan in figures.loans] == [self.MORTGAGE.id]
+
+    async def test_next_due_is_the_earliest_unpaid_payment(self) -> None:
+        late = self._payment_due(date(2026, 4, 1))
+
+        figures = await self._house([self._payment_due(date(2026, 5, 1)), late])
+
+        assert figures.loans[0].next_due == date(2026, 4, 1)
+
+    async def test_without_one_next_due_is_the_first_open_date_this_month(
+        self,
+    ) -> None:
+        """On the 10th, the payment due on the 1st has no obligation yet."""
+        assert (await self._house()).loans[0].next_due == date(2026, 4, 1)
+
+    async def test_upcoming_is_unpaid_in_due_order_against_its_pot(self) -> None:
+        deposit = self._joint_row("1000.00", "pot:bills", depositor_person_id=ALICE.id)
+        late = self._payment_due(date(2026, 4, 1), pays_from="bills")
+        tax = make_obligation(
+            asset_id=self.ASSET.id,
+            amount=Decimal("600.00"),
+            due_on=date(2026, 5, 1),
+            late_after=date(2026, 5, 31),
+            pays_from="bills",
+        )
+        paid = self._payment_due(
+            date(2026, 3, 1), paid_by_transaction_id=deposit.id, pays_from="bills"
+        )
+
+        figures = await self._house([tax, paid, late], joint_rows=[deposit])
+
+        assert [(o.id, o.status) for o in figures.upcoming] == [
+            (late.id, "late"),
+            (tax.id, "due"),
+        ]
+        # The pot holds 1,000: the mortgage takes 798.65 of it first.
+        assert [o.shortfall for o in figures.upcoming] == [
+            Decimal("798.65"),
+            Decimal("600.00"),
+        ]
+        assert [
+            (o.id, o.status, o.paid_by_transaction_id) for o in figures.recent_paid
+        ] == [(paid.id, "paid", deposit.id)]
+        assert figures.upcoming[0].loan_id == self.MORTGAGE.id

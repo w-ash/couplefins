@@ -10,6 +10,7 @@ from sqlalchemy import (
     exists,
     func,
     insert,
+    or_,
     select,
     text,
     update,
@@ -398,13 +399,15 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
         value = result.scalar_one_or_none()
         return date.fromisoformat(value) if value else None
 
-    async def get_by_tag_prefix(
-        self, prefix: str, *, excluding_account_ids: Sequence[UUID] = ()
+    async def get_by_tag_prefixes(
+        self, prefixes: Sequence[str], *, excluding_account_ids: Sequence[UUID] = ()
     ) -> list[Transaction]:
-        """Every row, at any date, with a tag that starts with `prefix` (a
-        namespace such as `share:`), outside the excluded accounts. The GIN
-        index on tags backs containment only, so this scans; it reads all
-        time and the rows are few."""
+        """Every row, at any date, with a tag that starts with one of
+        `prefixes` (namespaces such as `share:`), outside the excluded
+        accounts. The GIN index on tags backs containment only, so this
+        scans; it reads all time and the rows are few."""
+        if not prefixes:
+            return []
         tag = (
             func
             .jsonb_array_elements_text(TransactionModel.tags)
@@ -420,7 +423,9 @@ class TransactionRepository(BaseRepository[Transaction, TransactionModel]):
             exists(
                 select(1)
                 .select_from(tag)
-                .where(tag.c.value.startswith(prefix, autoescape=True))
+                .where(
+                    or_(*(tag.c.value.startswith(p, autoescape=True) for p in prefixes))
+                )
             ),
             *outside,
         )

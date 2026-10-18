@@ -17,6 +17,11 @@ export class ApiError extends Error {
   }
 }
 
+/** The server's message for a failed write, or the fallback. */
+export function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 let onUnauthorized: (() => void) | null = null;
 
 export function setOnUnauthorized(fn: () => void) {

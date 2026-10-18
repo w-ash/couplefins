@@ -20,6 +20,8 @@ from src.domain.entities.co_owned_asset import (
     ContributionKind,
     CoOwnedAsset,
 )
+from src.domain.entities.loan import Loan, LoanKind, slugify
+from src.domain.entities.obligation import Obligation, ObligationKind, ObligationStatus
 from src.domain.entities.person import Person
 from src.domain.entities.reconciliation_period import ReconciliationPeriod
 from src.domain.entities.settlement import Settlement
@@ -31,7 +33,6 @@ from src.domain.entities.transaction_edit import TransactionEdit
 from src.domain.entities.upload import Upload
 from src.domain.house import (
     ObligationFigures,
-    ObligationKind,
     OwnerAmount,
     OwnerShare,
     ShareHistoryPoint,
@@ -433,11 +434,12 @@ def make_share_history_point(
     return ShareHistoryPoint(year=year, month=month, owners=owners)
 
 
-def make_obligation(
+def make_obligation_figures(
     *,
     id: uuid.UUID | None = None,
     name: str = "Mortgage payment",
-    kind: ObligationKind = "loan_payment",
+    kind: ObligationKind = "property_tax",
+    status: ObligationStatus = "due",
     amount: Decimal = Decimal("100.00"),
     is_estimate: bool = False,
     due: date = date(2026, 11, 1),
@@ -449,10 +451,87 @@ def make_obligation(
         id=id or uuid.uuid4(),
         name=name,
         kind=kind,
+        status=status,
         amount=amount,
         is_estimate=is_estimate,
         due=due,
         late_after=late_after,
         pays_from=pays_from,
+        loan_id=None,
+        paid_by_transaction_id=None,
         shortfall=shortfall,
+    )
+
+
+def make_loan(
+    *,
+    id: uuid.UUID | None = None,
+    asset_id: uuid.UUID | None = None,
+    name: str = "Mortgage",
+    slug: str | None = None,
+    lender: str = "Example Bank",
+    kind: LoanKind = "amortizing",
+    principal: Decimal = Decimal("300000.00"),
+    annual_rate: Decimal = Decimal("6.000"),
+    payment: Decimal = Decimal("1798.65"),
+    term_months: int | None = 360,
+    first_due_on: date = date(2026, 2, 1),
+    statement_balance: Decimal = Decimal("300000.00"),
+    statement_balance_as_of: date = date(2026, 1, 1),
+    replaced_by_loan_id: uuid.UUID | None = None,
+    closed_on: date | None = None,
+    notes: str = "",
+    created_at: datetime | None = None,
+) -> Loan:
+    """An open loan; its slug is its name's (`slugify`) unless given."""
+    return Loan(
+        id=id or uuid.uuid4(),
+        asset_id=asset_id or uuid.uuid4(),
+        name=name,
+        slug=slug or slugify(name),
+        lender=lender,
+        kind=kind,
+        principal=principal,
+        annual_rate=annual_rate,
+        payment=payment,
+        term_months=term_months,
+        first_due_on=first_due_on,
+        statement_balance=statement_balance,
+        statement_balance_as_of=statement_balance_as_of,
+        replaced_by_loan_id=replaced_by_loan_id,
+        closed_on=closed_on,
+        notes=notes,
+        created_at=created_at or datetime(2026, 1, 1, tzinfo=UTC),
+    )
+
+
+def make_obligation(
+    *,
+    id: uuid.UUID | None = None,
+    asset_id: uuid.UUID | None = None,
+    kind: ObligationKind = "property_tax",
+    description: str = "Property tax, first installment",
+    amount: Decimal = Decimal("1200.00"),
+    is_estimate: bool = False,
+    due_on: date = date(2026, 11, 1),
+    late_after: date | None = None,
+    pays_from: str | None = None,
+    loan_id: uuid.UUID | None = None,
+    paid_by_transaction_id: uuid.UUID | None = None,
+    notes: str = "",
+) -> Obligation:
+    """An unpaid obligation; a `loan_payment` needs `loan_id`."""
+    return Obligation(
+        id=id or uuid.uuid4(),
+        asset_id=asset_id or uuid.uuid4(),
+        kind=kind,
+        description=description,
+        amount=amount,
+        is_estimate=is_estimate,
+        due_on=due_on,
+        late_after=late_after,
+        pays_from=pays_from,
+        loan_id=loan_id,
+        paid_by_transaction_id=paid_by_transaction_id,
+        notes=notes,
     )

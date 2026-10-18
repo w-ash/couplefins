@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { errorMessage } from "@/api/client";
 import {
   getGetPersonsQueryKey,
   useGetPersons,
@@ -69,9 +70,7 @@ function PersonAccountRow({ person }: { person: Person }) {
         {mutation.error && (
           <div className="mt-1">
             <InlineError>
-              {mutation.error instanceof Error
-                ? mutation.error.message
-                : "Failed to save"}
+              {errorMessage(mutation.error, "Failed to save")}
             </InlineError>
           </div>
         )}

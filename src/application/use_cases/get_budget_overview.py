@@ -32,6 +32,7 @@ from src.domain.categories import (
 from src.domain.entities.category import Category
 from src.domain.entities.category_group_budget import CategoryGroupBudget
 from src.domain.entities.person import Person
+from src.domain.month_key import shift_month
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 from src.domain.spending_lens import HouseholdLens, PersonalLens, SpendingLens
 
@@ -60,9 +61,6 @@ class GetBudgetOverviewResult:
     source_budgets: list[CategoryGroupBudget] = Factory(list[CategoryGroupBudget])
 
 
-_DECEMBER = 12
-
-
 class _CopyIndicators(NamedTuple):
     copyable_source: tuple[int, int] | None
     next_month_has_budgets: bool
@@ -77,7 +75,7 @@ def _compute_copy_indicators(
 ) -> _CopyIndicators:
     scoped = [b for b in all_budgets if b.person_id is None or b.person_id == person_id]
     copyable = find_copyable_source(scoped, year, month)
-    next_year, next_month = (year + 1, 1) if month == _DECEMBER else (year, month + 1)
+    next_year, next_month = shift_month((year, month), 1)
     next_has = has_budgets_for_month(scoped, next_year, next_month)
     src = (
         [b for b in scoped if b.year == copyable[0] and b.month == copyable[1]]

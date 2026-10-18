@@ -198,7 +198,7 @@ pnpm --prefix web check && pnpm --prefix web test
 | v1.15.2 | Joint accounts — Monarch labels marked joint, joint rows outside settlement, owner shares ([spec](v1.15.x.md)) | Completed (2026-10-15) | L |
 | v1.15.3 | Sources, pots, and labels — whose money paid each joint row and from which pot; namespaced tags ([spec](v1.15.x.md)) | Completed (2026-10-15) | M |
 | v1.15.4 | Owner shares — capital accounts and share percentages from tagged rows and hand entries ([spec](v1.15.x.md)) | Completed (2026-10-16) | L |
-| v1.15.5 | Loans and upcoming obligations — loan terms, due dates, each linked to its payment ([spec](v1.15.x.md)) | Planned | M |
+| v1.15.5 | Loans and upcoming obligations — loan terms, due dates, each linked to its payment ([spec](v1.15.x.md)) | Completed (2026-10-17) | M |
 | v1.15.6 | House page on real data — every figure from its computation, dummy data removed ([spec](v1.15.x.md)) | Planned | M |
 | v1.16.0 | Slim month-status endpoint — Transactions header card stops polling the full settle-up payload ([spec](v1.16.x.md)) | Planned | S |
 | v1.16.1 | Structured warnings — use cases return codes + params, frontend owns the copy ([spec](v1.16.x.md)) | Planned | M |

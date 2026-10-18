@@ -8,7 +8,9 @@ import { getGetDashboardQueryKey } from "@/api/generated/dashboard/dashboard";
 import {
   getGetCoOwnedAssetQueryKey,
   getGetHouseQueryKey,
+  getListLoansQueryKey,
   getListManualEntriesQueryKey,
+  getListObligationsQueryKey,
 } from "@/api/generated/house/house";
 import { getGetSpendingTrendsQueryKey } from "@/api/generated/insights/insights";
 import { getGetReconciliationQueryKey } from "@/api/generated/reconciliation/reconciliation";
@@ -39,6 +41,8 @@ export const HOUSE_QUERY_KEYS = [
   getGetHouseQueryKey(),
   getGetCoOwnedAssetQueryKey(),
   getListManualEntriesQueryKey(),
+  getListLoansQueryKey(),
+  getListObligationsQueryKey(),
   ...ACCOUNT_QUERY_KEYS,
   getGetTagsQueryKey(),
 ] as const;

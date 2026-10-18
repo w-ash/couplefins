@@ -72,12 +72,16 @@ export function HousePage() {
           <LoansSection
             example={data.example_sections.includes("loans")}
             loans={data.loans}
+            pastLoans={data.past_loans}
             owners={data.persons}
             getPersonColor={getPersonColor}
           />
           <UpcomingSection
             example={data.example_sections.includes("upcoming")}
             upcoming={data.upcoming}
+            recentPaid={data.recent_paid}
+            loans={data.loans}
+            pastLoans={data.past_loans}
           />
           <SetAsideSection
             example={data.example_sections.includes("set_aside")}

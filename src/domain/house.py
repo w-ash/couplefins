@@ -15,14 +15,15 @@ from uuid import UUID
 from attrs import define, evolve
 
 from src.domain.entities.co_owned_asset import ContributionKind
+from src.domain.entities.loan import LoanKind
+from src.domain.entities.obligation import ObligationKind, ObligationStatus
 from src.domain.pots import OwnerFunds
 
 _TENTH = Decimal("0.1")
 
 # ``ContributionKind`` values are the ``share:`` tag values and use hyphens;
-# the kinds below are API enums and use snake_case.
-type LoanKind = Literal["interest_only", "amortizing"]
-type ObligationKind = Literal["loan_payment", "property_tax", "insurance", "other"]
+# ``LoanKind``, ``ObligationKind``, and the kind below are API enums and use
+# snake_case.
 type ActivityKind = Literal["deposit", "payment", "refund", "transfer"]
 
 
@@ -84,32 +85,53 @@ class SharesSection:
 
 @define(frozen=True, slots=True)
 class LoanFigures:
+    """One loan, open or past: its terms, its balance now, and the next
+    payment.
+
+    ``balance`` is ``statement_balance`` less the principal paid since
+    ``statement_balance_as_of``. ``next_due`` is None once the loan is
+    closed, or its term has run out with nothing unpaid. ``owner_parts``
+    split ``payment`` and sum to it. A past loan has ``closed_on``, and
+    ``replaced_by_loan_id`` when a refinance replaced it.
+    """
+
     id: UUID
     name: str
+    lender: str
     kind: LoanKind
+    principal: Decimal
     balance: Decimal
     rate_percent: Decimal
     payment: Decimal
-    next_due: datetime.date
-    owner_parts: tuple[OwnerAmount, ...]  # sum to payment
+    statement_balance: Decimal
+    statement_balance_as_of: datetime.date
+    next_due: datetime.date | None
+    owner_parts: tuple[OwnerAmount, ...]
+    closed_on: datetime.date | None
+    replaced_by_loan_id: UUID | None
 
 
 @define(frozen=True, slots=True)
 class ObligationFigures:
-    """One upcoming payment and the bucket that pays it.
+    """One payment due and the bucket that pays it.
 
-    ``shortfall`` is set when the balance that the bucket has left, after the
-    earlier payments from it, cannot cover the payment.
+    ``status`` is where it stands on the as-of date. ``shortfall`` is set
+    when the balance that the bucket has left, after the earlier payments
+    from it, cannot cover the payment. ``paid_by_transaction_id`` is the
+    row that paid it.
     """
 
     id: UUID
     name: str
     kind: ObligationKind
+    status: ObligationStatus
     amount: Decimal
     is_estimate: bool
     due: datetime.date
     late_after: datetime.date | None
     pays_from: str | None
+    loan_id: UUID | None
+    paid_by_transaction_id: UUID | None
     shortfall: Decimal | None
 
 
@@ -186,8 +208,10 @@ class HouseFigures:
     persons: tuple[HousePerson, ...]
     put_in: PutInSection
     shares: SharesSection
-    loans: tuple[LoanFigures, ...]
-    upcoming: tuple[ObligationFigures, ...]  # ascending by due
+    loans: tuple[LoanFigures, ...]  # the open loans
+    past_loans: tuple[LoanFigures, ...]  # closed or replaced
+    upcoming: tuple[ObligationFigures, ...]  # unpaid, ascending by due
+    recent_paid: tuple[ObligationFigures, ...]  # paid, newest due first
     set_aside: SetAsideSection
     recent_activity: tuple[ActivityRow, ...]  # newest first
 

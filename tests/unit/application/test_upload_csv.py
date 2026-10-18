@@ -392,6 +392,39 @@ async def test_removed_settlement_linked_row_unlinks_with_warning() -> None:
     uow.transactions.delete_by_ids.assert_called_once_with([dropped.id])
 
 
+async def test_a_removed_row_that_paid_an_obligation_warns() -> None:
+    """The database clears the obligation's paying row, so it is unpaid
+    again; the warning says so."""
+    from tests.fixtures.factories import make_obligation
+
+    uow = make_mock_uow()
+    person = make_person()
+    uow.persons.get_by_id.return_value = person
+    uow.categories.get_all.return_value = []
+    dropped = make_transaction(
+        payer_person_id=person.id, account="Chase", merchant="County Tax Office"
+    )
+    uow.transactions.get_by_account_ids_and_original_date_range.return_value = [dropped]
+    uow.obligations.get_by_paid_transaction_ids.return_value = [
+        make_obligation(paid_by_transaction_id=dropped.id)
+    ]
+
+    csv = (
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags\n"
+        f'{dropped.date.isoformat()},Grocery Store,Groceries,Chase,GROCERY STORE,,"-50.00",shared\n'
+    )
+    command = _make_command(csv_text=csv, person_id=person.id)
+
+    result = await UploadCsvUseCase().execute(command, uow)
+
+    assert len(result.warnings) == 1
+    assert "County Tax Office" in result.warnings[0]
+    assert "paid an obligation" in result.warnings[0]
+    uow.obligations.get_by_paid_transaction_ids.assert_awaited_once_with([dropped.id])
+    uow.settlement_transaction_links.delete_by_transaction_ids.assert_not_called()
+    uow.transactions.delete_by_ids.assert_called_once_with([dropped.id])
+
+
 async def test_rejects_removal_from_finalized_month() -> None:
     """A removed row's own month is guarded even when no incoming row is in it."""
     from datetime import date

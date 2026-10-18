@@ -13,6 +13,10 @@ from src.domain.repositories.category_repository import (
 from src.domain.repositories.co_owned_asset_repository import (
     CoOwnedAssetRepositoryProtocol,
 )
+from src.domain.repositories.loan_repository import LoanRepositoryProtocol
+from src.domain.repositories.obligation_repository import (
+    ObligationRepositoryProtocol,
+)
 from src.domain.repositories.person_repository import PersonRepositoryProtocol
 from src.domain.repositories.reconciliation_period_repository import (
     ReconciliationPeriodRepositoryProtocol,
@@ -74,10 +78,34 @@ def make_mock_uow() -> AsyncMock:
     uow.accounts.get_all.return_value = []
     uow.accounts.get_by_ids.return_value = []
     uow.transactions.get_latest_household_transaction_date.return_value = None
-    uow.transactions.get_by_tag_prefix.return_value = []
+    uow.transactions.get_by_tag_prefixes.return_value = []
     uow.co_owned_assets = AsyncMock(spec=CoOwnedAssetRepositoryProtocol)
     uow.co_owned_assets.get_current.return_value = None
+    uow.loans = _mock_loans()
+    uow.obligations = _mock_obligations()
     return uow
+
+
+def _mock_loans() -> AsyncMock:
+    loans = AsyncMock(spec=LoanRepositoryProtocol)
+    loans.get_by_id.return_value = None
+    loans.get_by_slug.return_value = None
+    loans.get_by_asset_id.return_value = []
+    loans.exists_replaced_by.return_value = False
+    loans.save = AsyncMock(side_effect=lambda entity: entity)
+    return loans
+
+
+def _mock_obligations() -> AsyncMock:
+    obligations = AsyncMock(spec=ObligationRepositoryProtocol)
+    obligations.get_by_id.return_value = None
+    obligations.get_by_asset_id.return_value = []
+    obligations.get_by_loan_id.return_value = []
+    obligations.get_by_paid_transaction_ids.return_value = []
+    obligations.save = AsyncMock(side_effect=lambda entity: entity)
+    obligations.save_batch = AsyncMock(side_effect=lambda entities: entities)
+    obligations.delete_by_ids.return_value = 0
+    return obligations
 
 
 def set_passthrough_save(uow_mock: AsyncMock) -> None:

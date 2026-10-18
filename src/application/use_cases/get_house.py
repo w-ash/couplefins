@@ -14,6 +14,7 @@ from src.application.use_cases._shared.reconciliation_context import (
     load_reconciliation_context,
 )
 from src.application.use_cases._shared.transaction_reads import (
+    HouseRows,
     fetch_house_rows,
     row_shares,
 )
@@ -30,6 +31,8 @@ from src.domain.house import (
     ActivityRow,
     HouseFigures,
     HousePerson,
+    LoanFigures,
+    ObligationFigures,
     OwnerAmount,
     SetAsideSection,
     bucket,
@@ -37,8 +40,16 @@ from src.domain.house import (
     put_in_section,
     set_aside_section,
     shares_section,
+    with_shortfalls,
 )
-from src.domain.pots import OwnerFunds, compute_owner_funds, compute_pot_balances
+from src.domain.loans import loan_figures
+from src.domain.obligations import obligation_figures, recently_paid, upcoming
+from src.domain.pots import (
+    OwnerFunds,
+    PotBalance,
+    compute_owner_funds,
+    compute_pot_balances,
+)
 from src.domain.repositories.unit_of_work import UnitOfWorkProtocol
 from src.domain.tags import tag_value
 
@@ -109,17 +120,54 @@ def _recent_activity(
 
 
 def _set_aside(
-    rows: list[Transaction], funds: tuple[OwnerFunds, ...], asset: CoOwnedAsset | None
+    pots: tuple[PotBalance, ...],
+    funds: tuple[OwnerFunds, ...],
+    asset: CoOwnedAsset | None,
 ) -> SetAsideSection:
     """One bucket for each pot, the unassigned pot last, and each owner's
     deposits. The bank balance the asset holds stands beside the total; the
     bank balance beside each pot stays unknown."""
-    pots = compute_pot_balances(rows)
     return set_aside_section(
         tuple(bucket(p.name, p.balance, is_unassigned=p.is_unassigned) for p in pots),
         owners=tuple(map(owner_deposits, funds)),
         bank_balance=asset.bank_balance if asset else None,
         bank_balance_as_of=asset.bank_balance_as_of if asset else None,
+    )
+
+
+@define(frozen=True, slots=True)
+class _LoanSections:
+    """The House sections of the loans and obligations, named as the
+    response names them."""
+
+    loans: tuple[LoanFigures, ...]
+    past_loans: tuple[LoanFigures, ...]
+    upcoming: tuple[ObligationFigures, ...]
+    recent_paid: tuple[ObligationFigures, ...]
+
+
+async def _loans_and_obligations(
+    uow: UnitOfWorkProtocol,
+    asset: CoOwnedAsset,
+    rows: HouseRows,
+    pots: tuple[PotBalance, ...],
+    ctx: ReconciliationContext,
+    as_of: datetime.date,
+) -> _LoanSections:
+    """The asset's loans, open and past, and its obligations: the unpaid
+    ones in due order, each against what its pot has left, and the newest
+    paid ones."""
+    loans = await uow.loans.get_by_asset_id(asset.id)
+    obligations = await uow.obligations.get_by_asset_id(asset.id)
+    figures = loan_figures(loans, rows.loans, obligations, ctx.person_ids, as_of)
+    due = [obligation_figures(o, as_of) for o in upcoming(obligations)]
+    return _LoanSections(
+        loans=tuple(f for f in figures if f.closed_on is None),
+        past_loans=tuple(f for f in figures if f.closed_on is not None),
+        upcoming=with_shortfalls(due, {p.name: p.balance for p in pots}),
+        recent_paid=tuple(
+            obligation_figures(o, as_of) for o in recently_paid(obligations)
+        ),
     )
 
 
@@ -131,16 +179,18 @@ async def _real_sections(
     as_of: datetime.date,
 ) -> dict[str, object]:
     """The sections whose data exists, by field name, from the rows dated
-    through `as_of`: Set aside once a joint account or the asset exists,
-    Recent activity once a joint account does, and Put in and Shares once
-    the asset does. Put in's unspent deposits are Set aside's."""
+    through `as_of`: Set aside and Recent activity once a joint account or
+    the asset exists, and every other section once the asset does. Put in's
+    unspent deposits are Set aside's."""
     rows = await fetch_house_rows(
-        uow, [a.id for a in joint], as_of, with_shares=asset is not None
+        uow, [a.id for a in joint], as_of, with_asset=asset is not None
     )
     funds = compute_owner_funds(rows.joint, ctx.person_ids, ctx.non_spending_categories)
-    real: dict[str, object] = {"set_aside": _set_aside(rows.joint, funds, asset)}
-    if joint:
-        real["recent_activity"] = _recent_activity(rows.joint, ctx, joint)
+    pots = compute_pot_balances(rows.joint)
+    real: dict[str, object] = {
+        "set_aside": _set_aside(pots, funds, asset),
+        "recent_activity": _recent_activity(rows.joint, ctx, joint),
+    }
     if asset is not None:
         capital = capital_accounts(
             rows.shares, ctx.person_ids, asset, (as_of.year, as_of.month)
@@ -151,6 +201,8 @@ async def _real_sections(
             unspent_deposits=tuple(OwnerAmount(f.person_id, f.unspent) for f in funds),
         )
         real["shares"] = shares_section(capital.history)
+        sections = await _loans_and_obligations(uow, asset, rows, pots, ctx, as_of)
+        real |= attrs.asdict(sections, recurse=False)
     return real
 
 
@@ -162,10 +214,10 @@ class GetHouseUseCase:
         """The House figures: real where their data exists, else the example.
 
         Once a joint account exists, the sections built from its rows are
-        real; once the asset exists, Set aside, Put in, and Shares are. Only
-        real sections leave `example_sections`. The example sections then
-        name the couple, so every owner list keys on the same persons, and
-        every real figure counts the rows dated through `command.as_of`.
+        real; once the asset exists, every section is. Only real sections
+        leave `example_sections`. The example sections then name the couple,
+        so every owner list keys on the same persons, and every real figure
+        counts the rows dated through `command.as_of`.
         """
         async with uow:
             joint = joint_accounts(await uow.accounts.get_all())

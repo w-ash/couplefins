@@ -1,6 +1,7 @@
 import { ArrowDownLeft, ArrowUpRight, Download, Loader2 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Link } from "react-router";
+import { errorMessage } from "@/api/client";
 import type { AdjustmentResponse } from "@/api/generated/model";
 import {
   useGetPersons,
@@ -71,7 +72,7 @@ export function AdjustmentExportDialog({
 
   const [isDownloading, setIsDownloading] = useState(false);
   const [successMessage, setSuccessMessage] = useTemporary<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const hasAccount = (person?.adjustment_account ?? "").trim() !== "";
   const monthLabel = `${MONTHS[month - 1]} ${year}`;
@@ -79,12 +80,12 @@ export function AdjustmentExportDialog({
   const handleDownload = useCallback(async () => {
     if (!personId) return;
     setIsDownloading(true);
-    setErrorMessage(null);
+    setDownloadError(null);
     try {
       const { rowCount } = await downloadAdjustmentCsv(personId, year, month);
       setSuccessMessage(`Downloaded ${plural("row", rowCount)}`);
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "Download failed");
+      setDownloadError(errorMessage(err, "Download failed"));
     } finally {
       setIsDownloading(false);
     }
@@ -123,7 +124,7 @@ export function AdjustmentExportDialog({
 
         {hasAccount && error && (
           <InlineError>
-            {error instanceof Error ? error.message : "Failed to load preview"}
+            {errorMessage(error, "Failed to load preview")}
           </InlineError>
         )}
 
@@ -162,9 +163,9 @@ export function AdjustmentExportDialog({
           </>
         )}
 
-        {errorMessage && (
+        {downloadError && (
           <div className="mt-3">
-            <InlineError>{errorMessage}</InlineError>
+            <InlineError>{downloadError}</InlineError>
           </div>
         )}
       </div>

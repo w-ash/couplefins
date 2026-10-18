@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { errorMessage } from "@/api/client";
 import { useRecordManualEntry } from "@/api/generated/house/house";
 import type { ContributionKind } from "@/api/generated/model";
 import { Button } from "@/components/Button";
@@ -17,11 +18,13 @@ import {
   DEFAULT_MANUAL_ACCOUNT,
   type Owner,
 } from "@/lib/house";
-import { baseInputClass, selectInputClass } from "@/lib/input-styles";
+import {
+  baseInputClass,
+  fieldLabelClass,
+  selectInputClass,
+} from "@/lib/input-styles";
 
 const KINDS = Object.keys(CONTRIBUTION_KIND_LABELS) as ContributionKind[];
-
-const fieldLabelClass = "block space-y-1 text-sm font-medium text-foreground";
 
 function CreditForm({
   owners,
@@ -161,9 +164,7 @@ function CreditForm({
       {mutation.isError && (
         <div className="mt-3">
           <InlineError>
-            {mutation.error instanceof Error && mutation.error.message
-              ? mutation.error.message
-              : "Failed to record the credit"}
+            {errorMessage(mutation.error, "Failed to record the credit")}
           </InlineError>
         </div>
       )}

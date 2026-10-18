@@ -13,6 +13,10 @@ from src.domain.repositories.category_repository import (
 from src.domain.repositories.co_owned_asset_repository import (
     CoOwnedAssetRepositoryProtocol,
 )
+from src.domain.repositories.loan_repository import LoanRepositoryProtocol
+from src.domain.repositories.obligation_repository import (
+    ObligationRepositoryProtocol,
+)
 from src.domain.repositories.person_repository import PersonRepositoryProtocol
 from src.domain.repositories.reconciliation_period_repository import (
     ReconciliationPeriodRepositoryProtocol,
@@ -80,6 +84,12 @@ class UnitOfWorkProtocol(Protocol):
 
     @property
     def co_owned_assets(self) -> CoOwnedAssetRepositoryProtocol: ...
+
+    @property
+    def loans(self) -> LoanRepositoryProtocol: ...
+
+    @property
+    def obligations(self) -> ObligationRepositoryProtocol: ...
 
     async def __aenter__(self) -> Self: ...
 

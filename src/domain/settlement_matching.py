@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from attrs import define
 
+from src.domain.candidate_ranking import MAX_CANDIDATES, rank_and_limit
 from src.domain.entities.settlement_merchant import SettlementMerchant
 from src.domain.entities.transaction import Transaction
 from src.domain.filters import is_reconciliation_relevant
@@ -12,7 +13,6 @@ _SCORE_CATEGORY_MATCH = 2
 _SCORE_PERSONAL = 1
 _AMOUNT_TOLERANCE = Decimal("0.50")
 _TRANSFER_KEYWORDS = {"transfer", "payment", "adjustment"}
-_MAX_CANDIDATES = 20
 
 
 @define(frozen=True, slots=True)
@@ -70,5 +70,4 @@ def find_settlement_candidates(
             )
         )
 
-    candidates.sort(key=lambda c: (-c.score, c.transaction.date.isoformat()))
-    return candidates[:_MAX_CANDIDATES]
+    return rank_and_limit(candidates, MAX_CANDIDATES)

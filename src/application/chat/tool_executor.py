@@ -131,6 +131,8 @@ from src.domain.exceptions import ToolExecutionError, ValidationError
 from src.domain.filters import is_reconciliation_relevant
 from src.domain.formatting import FieldValue
 from src.domain.house import (
+    LoanFigures,
+    ObligationFigures,
     OwnerAmount,
     OwnerShare,
     PutInSection,
@@ -601,6 +603,44 @@ def _set_aside_summary(
     }
 
 
+def _loan_summary(loan: LoanFigures, persons: list[Person]) -> dict[str, object]:
+    summary: dict[str, object] = {
+        "name": UserData(loan.name),
+        "lender": UserData(loan.lender),
+        "kind": loan.kind,
+        "principal": _fmt(loan.principal),
+        "balance": _fmt(loan.balance),
+        "rate_percent": _fmt(loan.rate_percent),
+        "payment": _fmt(loan.payment),
+        "statement_balance": _fmt(loan.statement_balance),
+        "statement_balance_as_of": loan.statement_balance_as_of.isoformat(),
+    }
+    if loan.closed_on is None:
+        summary["next_due"] = loan.next_due.isoformat() if loan.next_due else None
+        summary["owner_parts"] = _amounts(loan.owner_parts, persons)
+    else:
+        summary["closed_on"] = loan.closed_on.isoformat()
+        summary["replaced"] = loan.replaced_by_loan_id is not None
+    return summary
+
+
+def _obligation_summary(obligation: ObligationFigures) -> dict[str, object]:
+    late_after = obligation.late_after
+    return {
+        "description": UserData(obligation.name),
+        "kind": obligation.kind,
+        "status": obligation.status,
+        "amount": _fmt(obligation.amount),
+        "is_estimate": obligation.is_estimate,
+        "due": obligation.due.isoformat(),
+        "late_after": late_after.isoformat() if late_after else None,
+        "pays_from": UserData(obligation.pays_from) if obligation.pays_from else None,
+        "shortfall": (
+            None if obligation.shortfall is None else _fmt(obligation.shortfall)
+        ),
+    }
+
+
 def _home_summary(asset: CoOwnedAsset | None) -> dict[str, object] | None:
     if asset is None:
         return None
@@ -630,6 +670,18 @@ async def handle_get_house_summary(
         summary["put_in"] = _put_in_summary(figures.put_in, ctx.persons)
     if "set_aside" in real:
         summary["set_aside"] = _set_aside_summary(figures.set_aside, ctx.persons)
+    if "loans" in real:
+        summary["loans"] = [_loan_summary(loan, ctx.persons) for loan in figures.loans]
+    if "past_loans" in real:
+        summary["past_loans"] = [
+            _loan_summary(loan, ctx.persons) for loan in figures.past_loans
+        ]
+    if "upcoming" in real:
+        summary["upcoming"] = [
+            _obligation_summary(o) for o in figures.upcoming[:_MAX_LIST_ROWS]
+        ]
+    if "recent_paid" in real:
+        summary["recent_paid"] = [_obligation_summary(o) for o in figures.recent_paid]
     return summary
 
 

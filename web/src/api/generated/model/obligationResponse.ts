@@ -5,15 +5,19 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ObligationKind } from './obligationKind.ts';
+import type { ObligationStatus } from './obligationStatus.ts';
 
 export interface ObligationResponse {
   id: string;
   name: string;
   kind: ObligationKind;
+  status: ObligationStatus;
   amount: number;
   is_estimate: boolean;
   due: string;
   late_after: string | null;
   pays_from: string | null;
+  loan_id: string | null;
+  paid_by_transaction_id: string | null;
   shortfall: number | null;
 }

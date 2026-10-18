@@ -14,21 +14,40 @@ import type {
 
 import type {
   CoOwnedAssetResponse,
+  DeleteLoan200,
   DeleteManualEntry200,
+  DeleteObligation200,
   HouseResponse,
-  ManualEntryResponse
+  LoanRecordResponse,
+  ManualEntryResponse,
+  ObligationCandidateResponse,
+  ObligationRecordResponse,
+  ReplaceLoanResponse
 } from '../model';
 
 import {
+  getAddLoanPaymentObligationsResponseMock,
+  getCloseLoanResponseMock,
+  getCreateLoanResponseMock,
+  getCreateObligationResponseMock,
+  getDeleteLoanResponseMock,
   getDeleteManualEntryResponseMock,
+  getDeleteObligationResponseMock,
+  getFindObligationPaymentCandidatesResponseMock,
   getGetCoOwnedAssetResponseMock,
   getGetHouseResponseMock,
+  getListLoansResponseMock,
   getListManualEntriesResponseMock,
+  getListObligationsResponseMock,
+  getMarkObligationPaidResponseMock,
   getRecordManualEntryResponseMock,
-  getSaveCoOwnedAssetResponseMock
+  getReplaceLoanResponseMock,
+  getSaveCoOwnedAssetResponseMock,
+  getUpdateLoanStatementResponseMock,
+  getUpdateObligationResponseMock
 } from './house.faker.ts';
 
-export { getGetHouseResponseMock, getGetCoOwnedAssetResponseMock, getSaveCoOwnedAssetResponseMock, getListManualEntriesResponseMock, getRecordManualEntryResponseMock, getDeleteManualEntryResponseMock } from './house.faker.ts';
+export { getGetHouseResponseMock, getGetCoOwnedAssetResponseMock, getSaveCoOwnedAssetResponseMock, getListManualEntriesResponseMock, getRecordManualEntryResponseMock, getDeleteManualEntryResponseMock, getListLoansResponseMock, getCreateLoanResponseMock, getReplaceLoanResponseMock, getCloseLoanResponseMock, getUpdateLoanStatementResponseMock, getDeleteLoanResponseMock, getAddLoanPaymentObligationsResponseMock, getListObligationsResponseMock, getCreateObligationResponseMock, getUpdateObligationResponseMock, getDeleteObligationResponseMock, getMarkObligationPaidResponseMock, getFindObligationPaymentCandidatesResponseMock } from './house.faker.ts';
 
 
 export const getGetHouseMockHandler = (overrideResponse?: HouseResponse | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<HouseResponse> | HouseResponse), options?: RequestHandlerOptions) => {
@@ -102,11 +121,180 @@ export const getDeleteManualEntryMockHandler = (overrideResponse?: DeleteManualE
       })
   }, options)
 }
+
+export const getListLoansMockHandler = (overrideResponse?: LoanRecordResponse[] | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<LoanRecordResponse[]> | LoanRecordResponse[]), options?: RequestHandlerOptions) => {
+  return http.get('*/api/v1/house/loans', async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getListLoansResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
+
+export const getCreateLoanMockHandler = (overrideResponse?: LoanRecordResponse | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<LoanRecordResponse> | LoanRecordResponse), options?: RequestHandlerOptions) => {
+  return http.post('*/api/v1/house/loans', async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getCreateLoanResponseMock(),
+      { status: 201
+      })
+  }, options)
+}
+
+export const getReplaceLoanMockHandler = (overrideResponse?: ReplaceLoanResponse | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<ReplaceLoanResponse> | ReplaceLoanResponse), options?: RequestHandlerOptions) => {
+  return http.post('*/api/v1/house/loans/:loanId/replace', async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getReplaceLoanResponseMock(),
+      { status: 201
+      })
+  }, options)
+}
+
+export const getCloseLoanMockHandler = (overrideResponse?: LoanRecordResponse | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<LoanRecordResponse> | LoanRecordResponse), options?: RequestHandlerOptions) => {
+  return http.post('*/api/v1/house/loans/:loanId/close', async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getCloseLoanResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
+
+export const getUpdateLoanStatementMockHandler = (overrideResponse?: LoanRecordResponse | ((info: Parameters<Parameters<typeof http.put>[1]>[0]) => Promise<LoanRecordResponse> | LoanRecordResponse), options?: RequestHandlerOptions) => {
+  return http.put('*/api/v1/house/loans/:loanId/statement', async (info: Parameters<Parameters<typeof http.put>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getUpdateLoanStatementResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
+
+export const getDeleteLoanMockHandler = (overrideResponse?: DeleteLoan200 | ((info: Parameters<Parameters<typeof http.delete>[1]>[0]) => Promise<DeleteLoan200> | DeleteLoan200), options?: RequestHandlerOptions) => {
+  return http.delete('*/api/v1/house/loans/:loanId', async (info: Parameters<Parameters<typeof http.delete>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getDeleteLoanResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
+
+export const getAddLoanPaymentObligationsMockHandler = (overrideResponse?: ObligationRecordResponse[] | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<ObligationRecordResponse[]> | ObligationRecordResponse[]), options?: RequestHandlerOptions) => {
+  return http.post('*/api/v1/house/loans/:loanId/payment-obligations', async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getAddLoanPaymentObligationsResponseMock(),
+      { status: 201
+      })
+  }, options)
+}
+
+export const getListObligationsMockHandler = (overrideResponse?: ObligationRecordResponse[] | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<ObligationRecordResponse[]> | ObligationRecordResponse[]), options?: RequestHandlerOptions) => {
+  return http.get('*/api/v1/house/obligations', async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getListObligationsResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
+
+export const getCreateObligationMockHandler = (overrideResponse?: ObligationRecordResponse | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<ObligationRecordResponse> | ObligationRecordResponse), options?: RequestHandlerOptions) => {
+  return http.post('*/api/v1/house/obligations', async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getCreateObligationResponseMock(),
+      { status: 201
+      })
+  }, options)
+}
+
+export const getUpdateObligationMockHandler = (overrideResponse?: ObligationRecordResponse | ((info: Parameters<Parameters<typeof http.put>[1]>[0]) => Promise<ObligationRecordResponse> | ObligationRecordResponse), options?: RequestHandlerOptions) => {
+  return http.put('*/api/v1/house/obligations/:obligationId', async (info: Parameters<Parameters<typeof http.put>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getUpdateObligationResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
+
+export const getDeleteObligationMockHandler = (overrideResponse?: DeleteObligation200 | ((info: Parameters<Parameters<typeof http.delete>[1]>[0]) => Promise<DeleteObligation200> | DeleteObligation200), options?: RequestHandlerOptions) => {
+  return http.delete('*/api/v1/house/obligations/:obligationId', async (info: Parameters<Parameters<typeof http.delete>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getDeleteObligationResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
+
+export const getMarkObligationPaidMockHandler = (overrideResponse?: ObligationRecordResponse | ((info: Parameters<Parameters<typeof http.put>[1]>[0]) => Promise<ObligationRecordResponse> | ObligationRecordResponse), options?: RequestHandlerOptions) => {
+  return http.put('*/api/v1/house/obligations/:obligationId/payment', async (info: Parameters<Parameters<typeof http.put>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getMarkObligationPaidResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
+
+export const getFindObligationPaymentCandidatesMockHandler = (overrideResponse?: ObligationCandidateResponse[] | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<ObligationCandidateResponse[]> | ObligationCandidateResponse[]), options?: RequestHandlerOptions) => {
+  return http.get('*/api/v1/house/obligations/:obligationId/candidates', async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getFindObligationPaymentCandidatesResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
 export const getHouseMock = () => [
   getGetHouseMockHandler(),
   getGetCoOwnedAssetMockHandler(),
   getSaveCoOwnedAssetMockHandler(),
   getListManualEntriesMockHandler(),
   getRecordManualEntryMockHandler(),
-  getDeleteManualEntryMockHandler()
+  getDeleteManualEntryMockHandler(),
+  getListLoansMockHandler(),
+  getCreateLoanMockHandler(),
+  getReplaceLoanMockHandler(),
+  getCloseLoanMockHandler(),
+  getUpdateLoanStatementMockHandler(),
+  getDeleteLoanMockHandler(),
+  getAddLoanPaymentObligationsMockHandler(),
+  getListObligationsMockHandler(),
+  getCreateObligationMockHandler(),
+  getUpdateObligationMockHandler(),
+  getDeleteObligationMockHandler(),
+  getMarkObligationPaidMockHandler(),
+  getFindObligationPaymentCandidatesMockHandler()
 ]

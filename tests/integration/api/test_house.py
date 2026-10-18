@@ -17,7 +17,16 @@ from tests.integration.conftest import (
     upload_csv,
 )
 
-_SECTIONS = ("put_in", "shares", "loans", "upcoming", "set_aside", "recent_activity")
+_SECTIONS = (
+    "put_in",
+    "shares",
+    "loans",
+    "past_loans",
+    "upcoming",
+    "recent_paid",
+    "set_aside",
+    "recent_activity",
+)
 
 
 async def test_house_serves_the_example_with_every_section_filled(

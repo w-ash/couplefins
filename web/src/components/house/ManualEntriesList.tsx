@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
+import { errorMessage } from "@/api/client";
 import {
   useDeleteManualEntry,
   useListManualEntries,
@@ -53,9 +54,7 @@ function DeleteConfirm({
           {mutation.isError && (
             <div className="mt-3">
               <InlineError>
-                {mutation.error instanceof Error
-                  ? mutation.error.message
-                  : "Failed to delete credit"}
+                {errorMessage(mutation.error, "Failed to delete credit")}
               </InlineError>
             </div>
           )}

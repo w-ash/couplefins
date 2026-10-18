@@ -15,3 +15,6 @@ export const actionLinkClass =
 
 export const inputErrorClass =
   "border-negative focus:border-negative focus:ring-negative";
+
+export const fieldLabelClass =
+  "block space-y-1 text-sm font-medium text-foreground";

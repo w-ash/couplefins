@@ -4,6 +4,7 @@ import type {
   DashboardPersonResponse,
   LoanKind,
   ObligationKind,
+  ObligationStatus,
   OwnerAmountResponse,
 } from "@/api/generated/model";
 
@@ -63,3 +64,9 @@ export function ownerAmount(
 ): number {
   return forOwner(list, personId)?.amount ?? 0;
 }
+
+export const OBLIGATION_STATUS_LABELS: Record<ObligationStatus, string> = {
+  due: "Due",
+  late: "Late",
+  paid: "Paid",
+};

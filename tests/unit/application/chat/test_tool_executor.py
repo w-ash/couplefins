@@ -688,8 +688,14 @@ async def test_get_house_summary_reports_only_the_real_sections() -> None:
         result = await execute_tool("get_house_summary", {}, CTX)
 
     run.assert_awaited_once()
-    assert result["example_sections"] == ["loans", "recent_activity", "upcoming"]
-    assert "recent_activity" not in result
+    assert result["example_sections"] == [
+        "loans",
+        "past_loans",
+        "recent_activity",
+        "recent_paid",
+        "upcoming",
+    ]
+    assert {"recent_activity", "loans", "upcoming"}.isdisjoint(result)
     assert result["home"] == {
         "name": "Home",
         "qualifying_kinds": ["closing", "repair"],
@@ -714,6 +720,54 @@ async def test_get_house_summary_reports_only_the_real_sections() -> None:
         set_aside["difference"],
     ) == (26980.0, 26830.0, "2026-09-30", -150.0)
     assert set_aside["unspent_deposits"] == {"Alice": 15760.0, "Bob": 11220.0}
+
+
+@pytest.mark.asyncio
+async def test_get_house_summary_reports_loans_and_obligations_once_real() -> None:
+    from src.application.use_cases._shared.house_example import example_house
+    from src.application.use_cases.get_house import GetHouseResult
+    from tests.fixtures.factories import make_co_owned_asset
+
+    house = GetHouseResult(
+        figures=example_house(ALICE.id, BOB.id),
+        example_sections=frozenset(),
+        asset=make_co_owned_asset(),
+    )
+    with patch(
+        "src.application.chat.tool_executor.execute_use_case",
+        new_callable=AsyncMock,
+        return_value=house,
+    ):
+        result = await execute_tool("get_house_summary", {}, CTX)
+
+    mortgage, _ = result["loans"]
+    assert mortgage == {
+        "name": "Mortgage",
+        "lender": "Example Bank",
+        "kind": "amortizing",
+        "principal": 300000.0,
+        "balance": 296620.0,
+        "rate_percent": 6.0,
+        "payment": 1798.65,
+        "statement_balance": 296933.98,
+        "statement_balance_as_of": "2026-09-15",
+        "next_due": "2026-11-01",
+        "owner_parts": {"Alice": 1050.41, "Bob": 748.24},
+    }
+    [bridge] = result["past_loans"]
+    assert (bridge["closed_on"], bridge["replaced"]) == ("2026-03-31", True)
+    assert [(o["kind"], o["status"], o["due"]) for o in result["upcoming"]] == [
+        ("loan_payment", "due", "2026-10-15"),
+        ("loan_payment", "due", "2026-11-01"),
+        ("property_tax", "due", "2026-11-01"),
+    ]
+    tax = result["upcoming"][-1]
+    assert (tax["is_estimate"], tax["late_after"], tax["shortfall"]) == (
+        True,
+        "2026-12-10",
+        1240.0,
+    )
+    assert [o["status"] for o in result["recent_paid"]] == ["paid"] * 3
 
 
 @pytest.mark.asyncio

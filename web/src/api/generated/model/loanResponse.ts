@@ -7,13 +7,20 @@
 import type { LoanKind } from './loanKind.ts';
 import type { OwnerAmountResponse } from './ownerAmountResponse.ts';
 
+/**
+ * An open loan.
+ */
 export interface LoanResponse {
   id: string;
   name: string;
+  lender: string;
   kind: LoanKind;
+  principal: number;
   balance: number;
   rate_percent: number;
   payment: number;
-  next_due: string;
+  statement_balance: number;
+  statement_balance_as_of: string;
+  next_due: string | null;
   owner_parts: OwnerAmountResponse[];
 }

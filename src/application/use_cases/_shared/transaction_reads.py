@@ -18,7 +18,7 @@ from src.application.use_cases._shared.command_validators import Scope
 from src.application.use_cases._shared.reconciliation_context import (
     ReconciliationContext,
 )
-from src.domain.constants import SHARE_TAG_PREFIX
+from src.domain.constants import LOAN_TAG_PREFIX, SHARE_TAG_PREFIX
 from src.domain.entities.category_group import is_spending_kind
 from src.domain.entities.transaction import Transaction
 from src.domain.exceptions import InvariantViolationError, ValidationError
@@ -225,12 +225,22 @@ async def fetch_account_rows(
     return await uow.transactions.get_by_account_ids(account_ids)
 
 
+async def fetch_labelled_rows(
+    uow: UnitOfWorkProtocol, prefix: str
+) -> list[Transaction]:
+    """Every row with a tag that starts with `prefix` (a namespace such as
+    `loan:`, or one tag such as `loan:mortgage`, which `loan:mortgage-2`
+    also starts with), from any account, at any date, transfers included."""
+    return await uow.transactions.get_by_tag_prefixes((prefix,))
+
+
 @define(frozen=True, slots=True)
 class HouseRows:
     """The rows of the House figures, dated through one day."""
 
     joint: list[Transaction]  # every row of the joint accounts
     shares: list[Transaction]  # every `share:` row, from any account
+    loans: list[Transaction]  # every `loan:` row, from any account
 
 
 async def fetch_house_rows(
@@ -238,34 +248,42 @@ async def fetch_house_rows(
     joint_account_ids: list[UUID],
     through: date,
     *,
-    with_shares: bool,
+    with_asset: bool,
 ) -> HouseRows:
-    """Every row of the joint accounts and, `with_shares`, every `share:`
-    row, dated through `through`, transfers included. Each row is read once:
-    the share rows outside the joint accounts are read apart, and the joint
-    ones come from the joint rows.
+    """Every row of the joint accounts and, `with_asset`, every `share:` and
+    `loan:` row, dated through `through`, transfers included. Each row is
+    read once: the labelled rows outside the joint accounts are read apart,
+    in one query, and the joint ones come from the joint rows.
 
     Pots, owner funds, and the activity list need every joint row. The share
-    rows are deliberately not filtered by `exclude_non_spending`, nor by
-    exclusion or settlement: the `share:` tag is the only lever
-    (`src/domain/capital.py`), and a closing wire is often in a
-    transfer-kind category.
+    and loan rows are deliberately not filtered by `exclude_non_spending`,
+    nor by exclusion or settlement: the tag is the only lever
+    (`src/domain/capital.py`, `src/domain/loans.py`), and a closing wire or
+    a loan paydown is often in a transfer-kind category.
     """
-    joint = await uow.transactions.get_by_account_ids(joint_account_ids)
+    in_joint = await uow.transactions.get_by_account_ids(joint_account_ids)
     outside = (
-        await uow.transactions.get_by_tag_prefix(
-            SHARE_TAG_PREFIX, excluding_account_ids=joint_account_ids
+        await uow.transactions.get_by_tag_prefixes(
+            (SHARE_TAG_PREFIX, LOAN_TAG_PREFIX),
+            excluding_account_ids=joint_account_ids,
         )
-        if with_shares
+        if with_asset
         else []
     )
-    in_joint = set(joint_account_ids)
-    rows = [tx for tx in (*joint, *outside) if tx.date <= through]
-    shares = [tx for tx in rows if has_tag_prefix(tx.tags, SHARE_TAG_PREFIX)]
-    return HouseRows(
-        joint=[tx for tx in rows if tx.account_id in in_joint],
-        shares=shares if with_shares else [],
-    )
+    joint_ids = set(joint_account_ids)
+    joint: list[Transaction] = []
+    shares: list[Transaction] = []
+    loans: list[Transaction] = []
+    for tx in (*in_joint, *outside):
+        if tx.date > through:
+            continue
+        if tx.account_id in joint_ids:
+            joint.append(tx)
+        if with_asset and has_tag_prefix(tx.tags, SHARE_TAG_PREFIX):
+            shares.append(tx)
+        if with_asset and has_tag_prefix(tx.tags, LOAN_TAG_PREFIX):
+            loans.append(tx)
+    return HouseRows(joint=joint, shares=shares, loans=loans)
 
 
 @define(frozen=True, slots=True)

@@ -24,13 +24,27 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  CloseLoanRequest,
   CoOwnedAssetResponse,
+  CreateLoanRequest,
+  CreateObligationRequest,
+  DeleteLoan200,
   DeleteManualEntry200,
+  DeleteObligation200,
   HTTPValidationError,
   HouseResponse,
+  LoanPaymentObligationsRequest,
+  LoanRecordResponse,
+  LoanStatementRequest,
   ManualEntryResponse,
+  ObligationCandidateResponse,
+  ObligationPaymentRequest,
+  ObligationRecordResponse,
   RecordManualTransactionRequest,
-  SaveCoOwnedAssetRequest
+  ReplaceLoanRequest,
+  ReplaceLoanResponse,
+  SaveCoOwnedAssetRequest,
+  UpdateObligationRequest
 } from '../model';
 
 import { customFetch } from '../../client.ts';
@@ -695,3 +709,1384 @@ export const useDeleteManualEntry = <TError = HTTPValidationError,
       > => {
       return useMutation(getDeleteManualEntryMutationOptions(options), queryClient);
     }
+    export type listLoansResponse200 = {
+  data: LoanRecordResponse[]
+  status: 200
+}
+
+export type listLoansResponseSuccess = (listLoansResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listLoansResponse = (listLoansResponseSuccess)
+
+export const getListLoansUrl = () => {
+
+
+
+
+  return `/api/v1/house/loans`
+}
+
+/**
+ * @summary List Loans
+ */
+export const listLoans = async ( options?: Parameters<typeof customFetch>[1]): Promise<listLoansResponse> => {
+
+  return customFetch<listLoansResponse>(getListLoansUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListLoansQueryKey = () => {
+    return [
+    `/api/v1/house/loans`
+    ] as const;
+    }
+
+
+export const getListLoansQueryOptions = <TData = Awaited<ReturnType<typeof listLoans>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listLoans>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListLoansQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLoans>>> = ({ signal }) => listLoans({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listLoans>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListLoansQueryResult = NonNullable<Awaited<ReturnType<typeof listLoans>>>
+export type ListLoansQueryError = unknown
+
+
+export function useListLoans<TData = Awaited<ReturnType<typeof listLoans>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listLoans>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listLoans>>,
+          TError,
+          Awaited<ReturnType<typeof listLoans>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListLoans<TData = Awaited<ReturnType<typeof listLoans>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listLoans>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listLoans>>,
+          TError,
+          Awaited<ReturnType<typeof listLoans>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListLoans<TData = Awaited<ReturnType<typeof listLoans>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listLoans>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Loans
+ */
+
+export function useListLoans<TData = Awaited<ReturnType<typeof listLoans>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listLoans>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListLoansQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type createLoanResponse201 = {
+  data: LoanRecordResponse
+  status: 201
+}
+
+export type createLoanResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type createLoanResponseSuccess = (createLoanResponse201) & {
+  headers: Headers;
+};
+export type createLoanResponseError = (createLoanResponse422) & {
+  headers: Headers;
+};
+
+export type createLoanResponse = (createLoanResponseSuccess | createLoanResponseError)
+
+export const getCreateLoanUrl = () => {
+
+
+
+
+  return `/api/v1/house/loans`
+}
+
+/**
+ * @summary Create Loan
+ */
+export const createLoan = async (createLoanRequest: CreateLoanRequest, options?: Parameters<typeof customFetch>[1]): Promise<createLoanResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<createLoanResponse>(getCreateLoanUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createLoanRequest)
+  }
+);}
+
+
+
+
+
+export const getCreateLoanMutationKey = () => ['createLoan'] as const;
+
+export const getCreateLoanMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLoan>>, TError,CreateLoanMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createLoan>>, TError,CreateLoanMutationVariables, TContext> => {
+
+const mutationKey = getCreateLoanMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createLoan>>, CreateLoanMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createLoan(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateLoanMutationResult = NonNullable<Awaited<ReturnType<typeof createLoan>>>
+    export type CreateLoanMutationBody = CreateLoanRequest
+    export type CreateLoanMutationError = HTTPValidationError
+    export type CreateLoanMutationVariables = {data: CreateLoanRequest}
+
+    /**
+ * @summary Create Loan
+ */
+export const useCreateLoan = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLoan>>, TError,CreateLoanMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createLoan>>,
+        TError,
+        CreateLoanMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateLoanMutationOptions(options), queryClient);
+    }
+    export type replaceLoanResponse201 = {
+  data: ReplaceLoanResponse
+  status: 201
+}
+
+export type replaceLoanResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type replaceLoanResponseSuccess = (replaceLoanResponse201) & {
+  headers: Headers;
+};
+export type replaceLoanResponseError = (replaceLoanResponse422) & {
+  headers: Headers;
+};
+
+export type replaceLoanResponse = (replaceLoanResponseSuccess | replaceLoanResponseError)
+
+export const getReplaceLoanUrl = (loanId: string,) => {
+
+
+
+
+  return `/api/v1/house/loans/${loanId}/replace`
+}
+
+/**
+ * @summary Replace Loan
+ */
+export const replaceLoan = async (loanId: string,
+    replaceLoanRequest: ReplaceLoanRequest, options?: Parameters<typeof customFetch>[1]): Promise<replaceLoanResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<replaceLoanResponse>(getReplaceLoanUrl(loanId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(replaceLoanRequest)
+  }
+);}
+
+
+
+
+
+export const getReplaceLoanMutationKey = () => ['replaceLoan'] as const;
+
+export const getReplaceLoanMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceLoan>>, TError,ReplaceLoanMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof replaceLoan>>, TError,ReplaceLoanMutationVariables, TContext> => {
+
+const mutationKey = getReplaceLoanMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof replaceLoan>>, ReplaceLoanMutationVariables> = (props) => {
+          const {loanId,data} = props ?? {};
+
+          return  replaceLoan(loanId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReplaceLoanMutationResult = NonNullable<Awaited<ReturnType<typeof replaceLoan>>>
+    export type ReplaceLoanMutationBody = ReplaceLoanRequest
+    export type ReplaceLoanMutationError = HTTPValidationError
+    export type ReplaceLoanMutationVariables = {loanId: string;data: ReplaceLoanRequest}
+
+    /**
+ * @summary Replace Loan
+ */
+export const useReplaceLoan = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceLoan>>, TError,ReplaceLoanMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof replaceLoan>>,
+        TError,
+        ReplaceLoanMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReplaceLoanMutationOptions(options), queryClient);
+    }
+    export type closeLoanResponse200 = {
+  data: LoanRecordResponse
+  status: 200
+}
+
+export type closeLoanResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type closeLoanResponseSuccess = (closeLoanResponse200) & {
+  headers: Headers;
+};
+export type closeLoanResponseError = (closeLoanResponse422) & {
+  headers: Headers;
+};
+
+export type closeLoanResponse = (closeLoanResponseSuccess | closeLoanResponseError)
+
+export const getCloseLoanUrl = (loanId: string,) => {
+
+
+
+
+  return `/api/v1/house/loans/${loanId}/close`
+}
+
+/**
+ * @summary Close Loan
+ */
+export const closeLoan = async (loanId: string,
+    closeLoanRequest: CloseLoanRequest, options?: Parameters<typeof customFetch>[1]): Promise<closeLoanResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<closeLoanResponse>(getCloseLoanUrl(loanId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(closeLoanRequest)
+  }
+);}
+
+
+
+
+
+export const getCloseLoanMutationKey = () => ['closeLoan'] as const;
+
+export const getCloseLoanMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof closeLoan>>, TError,CloseLoanMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof closeLoan>>, TError,CloseLoanMutationVariables, TContext> => {
+
+const mutationKey = getCloseLoanMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof closeLoan>>, CloseLoanMutationVariables> = (props) => {
+          const {loanId,data} = props ?? {};
+
+          return  closeLoan(loanId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CloseLoanMutationResult = NonNullable<Awaited<ReturnType<typeof closeLoan>>>
+    export type CloseLoanMutationBody = CloseLoanRequest
+    export type CloseLoanMutationError = HTTPValidationError
+    export type CloseLoanMutationVariables = {loanId: string;data: CloseLoanRequest}
+
+    /**
+ * @summary Close Loan
+ */
+export const useCloseLoan = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof closeLoan>>, TError,CloseLoanMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof closeLoan>>,
+        TError,
+        CloseLoanMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCloseLoanMutationOptions(options), queryClient);
+    }
+    export type updateLoanStatementResponse200 = {
+  data: LoanRecordResponse
+  status: 200
+}
+
+export type updateLoanStatementResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type updateLoanStatementResponseSuccess = (updateLoanStatementResponse200) & {
+  headers: Headers;
+};
+export type updateLoanStatementResponseError = (updateLoanStatementResponse422) & {
+  headers: Headers;
+};
+
+export type updateLoanStatementResponse = (updateLoanStatementResponseSuccess | updateLoanStatementResponseError)
+
+export const getUpdateLoanStatementUrl = (loanId: string,) => {
+
+
+
+
+  return `/api/v1/house/loans/${loanId}/statement`
+}
+
+/**
+ * @summary Update Loan Statement
+ */
+export const updateLoanStatement = async (loanId: string,
+    loanStatementRequest: LoanStatementRequest, options?: Parameters<typeof customFetch>[1]): Promise<updateLoanStatementResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<updateLoanStatementResponse>(getUpdateLoanStatementUrl(loanId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(loanStatementRequest)
+  }
+);}
+
+
+
+
+
+export const getUpdateLoanStatementMutationKey = () => ['updateLoanStatement'] as const;
+
+export const getUpdateLoanStatementMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLoanStatement>>, TError,UpdateLoanStatementMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateLoanStatement>>, TError,UpdateLoanStatementMutationVariables, TContext> => {
+
+const mutationKey = getUpdateLoanStatementMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateLoanStatement>>, UpdateLoanStatementMutationVariables> = (props) => {
+          const {loanId,data} = props ?? {};
+
+          return  updateLoanStatement(loanId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateLoanStatementMutationResult = NonNullable<Awaited<ReturnType<typeof updateLoanStatement>>>
+    export type UpdateLoanStatementMutationBody = LoanStatementRequest
+    export type UpdateLoanStatementMutationError = HTTPValidationError
+    export type UpdateLoanStatementMutationVariables = {loanId: string;data: LoanStatementRequest}
+
+    /**
+ * @summary Update Loan Statement
+ */
+export const useUpdateLoanStatement = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLoanStatement>>, TError,UpdateLoanStatementMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateLoanStatement>>,
+        TError,
+        UpdateLoanStatementMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateLoanStatementMutationOptions(options), queryClient);
+    }
+    export type deleteLoanResponse200 = {
+  data: DeleteLoan200
+  status: 200
+}
+
+export type deleteLoanResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type deleteLoanResponseSuccess = (deleteLoanResponse200) & {
+  headers: Headers;
+};
+export type deleteLoanResponseError = (deleteLoanResponse422) & {
+  headers: Headers;
+};
+
+export type deleteLoanResponse = (deleteLoanResponseSuccess | deleteLoanResponseError)
+
+export const getDeleteLoanUrl = (loanId: string,) => {
+
+
+
+
+  return `/api/v1/house/loans/${loanId}`
+}
+
+/**
+ * @summary Delete Loan
+ */
+export const deleteLoan = async (loanId: string, options?: Parameters<typeof customFetch>[1]): Promise<deleteLoanResponse> => {
+
+  return customFetch<deleteLoanResponse>(getDeleteLoanUrl(loanId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteLoanMutationKey = () => ['deleteLoan'] as const;
+
+export const getDeleteLoanMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLoan>>, TError,DeleteLoanMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteLoan>>, TError,DeleteLoanMutationVariables, TContext> => {
+
+const mutationKey = getDeleteLoanMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteLoan>>, DeleteLoanMutationVariables> = (props) => {
+          const {loanId} = props ?? {};
+
+          return  deleteLoan(loanId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteLoanMutationResult = NonNullable<Awaited<ReturnType<typeof deleteLoan>>>
+
+    export type DeleteLoanMutationError = HTTPValidationError
+    export type DeleteLoanMutationVariables = {loanId: string}
+
+    /**
+ * @summary Delete Loan
+ */
+export const useDeleteLoan = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLoan>>, TError,DeleteLoanMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteLoan>>,
+        TError,
+        DeleteLoanMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteLoanMutationOptions(options), queryClient);
+    }
+    export type addLoanPaymentObligationsResponse201 = {
+  data: ObligationRecordResponse[]
+  status: 201
+}
+
+export type addLoanPaymentObligationsResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type addLoanPaymentObligationsResponseSuccess = (addLoanPaymentObligationsResponse201) & {
+  headers: Headers;
+};
+export type addLoanPaymentObligationsResponseError = (addLoanPaymentObligationsResponse422) & {
+  headers: Headers;
+};
+
+export type addLoanPaymentObligationsResponse = (addLoanPaymentObligationsResponseSuccess | addLoanPaymentObligationsResponseError)
+
+export const getAddLoanPaymentObligationsUrl = (loanId: string,) => {
+
+
+
+
+  return `/api/v1/house/loans/${loanId}/payment-obligations`
+}
+
+/**
+ * @summary Add Loan Payment Obligations
+ */
+export const addLoanPaymentObligations = async (loanId: string,
+    loanPaymentObligationsRequest: LoanPaymentObligationsRequest, options?: Parameters<typeof customFetch>[1]): Promise<addLoanPaymentObligationsResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<addLoanPaymentObligationsResponse>(getAddLoanPaymentObligationsUrl(loanId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(loanPaymentObligationsRequest)
+  }
+);}
+
+
+
+
+
+export const getAddLoanPaymentObligationsMutationKey = () => ['addLoanPaymentObligations'] as const;
+
+export const getAddLoanPaymentObligationsMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addLoanPaymentObligations>>, TError,AddLoanPaymentObligationsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof addLoanPaymentObligations>>, TError,AddLoanPaymentObligationsMutationVariables, TContext> => {
+
+const mutationKey = getAddLoanPaymentObligationsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof addLoanPaymentObligations>>, AddLoanPaymentObligationsMutationVariables> = (props) => {
+          const {loanId,data} = props ?? {};
+
+          return  addLoanPaymentObligations(loanId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AddLoanPaymentObligationsMutationResult = NonNullable<Awaited<ReturnType<typeof addLoanPaymentObligations>>>
+    export type AddLoanPaymentObligationsMutationBody = LoanPaymentObligationsRequest
+    export type AddLoanPaymentObligationsMutationError = HTTPValidationError
+    export type AddLoanPaymentObligationsMutationVariables = {loanId: string;data: LoanPaymentObligationsRequest}
+
+    /**
+ * @summary Add Loan Payment Obligations
+ */
+export const useAddLoanPaymentObligations = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addLoanPaymentObligations>>, TError,AddLoanPaymentObligationsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof addLoanPaymentObligations>>,
+        TError,
+        AddLoanPaymentObligationsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAddLoanPaymentObligationsMutationOptions(options), queryClient);
+    }
+    export type listObligationsResponse200 = {
+  data: ObligationRecordResponse[]
+  status: 200
+}
+
+export type listObligationsResponseSuccess = (listObligationsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listObligationsResponse = (listObligationsResponseSuccess)
+
+export const getListObligationsUrl = () => {
+
+
+
+
+  return `/api/v1/house/obligations`
+}
+
+/**
+ * @summary List Obligations
+ */
+export const listObligations = async ( options?: Parameters<typeof customFetch>[1]): Promise<listObligationsResponse> => {
+
+  return customFetch<listObligationsResponse>(getListObligationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListObligationsQueryKey = () => {
+    return [
+    `/api/v1/house/obligations`
+    ] as const;
+    }
+
+
+export const getListObligationsQueryOptions = <TData = Awaited<ReturnType<typeof listObligations>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listObligations>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListObligationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listObligations>>> = ({ signal }) => listObligations({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listObligations>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListObligationsQueryResult = NonNullable<Awaited<ReturnType<typeof listObligations>>>
+export type ListObligationsQueryError = unknown
+
+
+export function useListObligations<TData = Awaited<ReturnType<typeof listObligations>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listObligations>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listObligations>>,
+          TError,
+          Awaited<ReturnType<typeof listObligations>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListObligations<TData = Awaited<ReturnType<typeof listObligations>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listObligations>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listObligations>>,
+          TError,
+          Awaited<ReturnType<typeof listObligations>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListObligations<TData = Awaited<ReturnType<typeof listObligations>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listObligations>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Obligations
+ */
+
+export function useListObligations<TData = Awaited<ReturnType<typeof listObligations>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listObligations>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListObligationsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export type createObligationResponse201 = {
+  data: ObligationRecordResponse
+  status: 201
+}
+
+export type createObligationResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type createObligationResponseSuccess = (createObligationResponse201) & {
+  headers: Headers;
+};
+export type createObligationResponseError = (createObligationResponse422) & {
+  headers: Headers;
+};
+
+export type createObligationResponse = (createObligationResponseSuccess | createObligationResponseError)
+
+export const getCreateObligationUrl = () => {
+
+
+
+
+  return `/api/v1/house/obligations`
+}
+
+/**
+ * @summary Create Obligation
+ */
+export const createObligation = async (createObligationRequest: CreateObligationRequest, options?: Parameters<typeof customFetch>[1]): Promise<createObligationResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<createObligationResponse>(getCreateObligationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createObligationRequest)
+  }
+);}
+
+
+
+
+
+export const getCreateObligationMutationKey = () => ['createObligation'] as const;
+
+export const getCreateObligationMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createObligation>>, TError,CreateObligationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createObligation>>, TError,CreateObligationMutationVariables, TContext> => {
+
+const mutationKey = getCreateObligationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createObligation>>, CreateObligationMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createObligation(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateObligationMutationResult = NonNullable<Awaited<ReturnType<typeof createObligation>>>
+    export type CreateObligationMutationBody = CreateObligationRequest
+    export type CreateObligationMutationError = HTTPValidationError
+    export type CreateObligationMutationVariables = {data: CreateObligationRequest}
+
+    /**
+ * @summary Create Obligation
+ */
+export const useCreateObligation = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createObligation>>, TError,CreateObligationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createObligation>>,
+        TError,
+        CreateObligationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateObligationMutationOptions(options), queryClient);
+    }
+    export type updateObligationResponse200 = {
+  data: ObligationRecordResponse
+  status: 200
+}
+
+export type updateObligationResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type updateObligationResponseSuccess = (updateObligationResponse200) & {
+  headers: Headers;
+};
+export type updateObligationResponseError = (updateObligationResponse422) & {
+  headers: Headers;
+};
+
+export type updateObligationResponse = (updateObligationResponseSuccess | updateObligationResponseError)
+
+export const getUpdateObligationUrl = (obligationId: string,) => {
+
+
+
+
+  return `/api/v1/house/obligations/${obligationId}`
+}
+
+/**
+ * @summary Update Obligation
+ */
+export const updateObligation = async (obligationId: string,
+    updateObligationRequest: UpdateObligationRequest, options?: Parameters<typeof customFetch>[1]): Promise<updateObligationResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<updateObligationResponse>(getUpdateObligationUrl(obligationId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updateObligationRequest)
+  }
+);}
+
+
+
+
+
+export const getUpdateObligationMutationKey = () => ['updateObligation'] as const;
+
+export const getUpdateObligationMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateObligation>>, TError,UpdateObligationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateObligation>>, TError,UpdateObligationMutationVariables, TContext> => {
+
+const mutationKey = getUpdateObligationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateObligation>>, UpdateObligationMutationVariables> = (props) => {
+          const {obligationId,data} = props ?? {};
+
+          return  updateObligation(obligationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateObligationMutationResult = NonNullable<Awaited<ReturnType<typeof updateObligation>>>
+    export type UpdateObligationMutationBody = UpdateObligationRequest
+    export type UpdateObligationMutationError = HTTPValidationError
+    export type UpdateObligationMutationVariables = {obligationId: string;data: UpdateObligationRequest}
+
+    /**
+ * @summary Update Obligation
+ */
+export const useUpdateObligation = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateObligation>>, TError,UpdateObligationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateObligation>>,
+        TError,
+        UpdateObligationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateObligationMutationOptions(options), queryClient);
+    }
+    export type deleteObligationResponse200 = {
+  data: DeleteObligation200
+  status: 200
+}
+
+export type deleteObligationResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type deleteObligationResponseSuccess = (deleteObligationResponse200) & {
+  headers: Headers;
+};
+export type deleteObligationResponseError = (deleteObligationResponse422) & {
+  headers: Headers;
+};
+
+export type deleteObligationResponse = (deleteObligationResponseSuccess | deleteObligationResponseError)
+
+export const getDeleteObligationUrl = (obligationId: string,) => {
+
+
+
+
+  return `/api/v1/house/obligations/${obligationId}`
+}
+
+/**
+ * @summary Delete Obligation
+ */
+export const deleteObligation = async (obligationId: string, options?: Parameters<typeof customFetch>[1]): Promise<deleteObligationResponse> => {
+
+  return customFetch<deleteObligationResponse>(getDeleteObligationUrl(obligationId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteObligationMutationKey = () => ['deleteObligation'] as const;
+
+export const getDeleteObligationMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteObligation>>, TError,DeleteObligationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteObligation>>, TError,DeleteObligationMutationVariables, TContext> => {
+
+const mutationKey = getDeleteObligationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteObligation>>, DeleteObligationMutationVariables> = (props) => {
+          const {obligationId} = props ?? {};
+
+          return  deleteObligation(obligationId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteObligationMutationResult = NonNullable<Awaited<ReturnType<typeof deleteObligation>>>
+
+    export type DeleteObligationMutationError = HTTPValidationError
+    export type DeleteObligationMutationVariables = {obligationId: string}
+
+    /**
+ * @summary Delete Obligation
+ */
+export const useDeleteObligation = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteObligation>>, TError,DeleteObligationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteObligation>>,
+        TError,
+        DeleteObligationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteObligationMutationOptions(options), queryClient);
+    }
+    export type markObligationPaidResponse200 = {
+  data: ObligationRecordResponse
+  status: 200
+}
+
+export type markObligationPaidResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type markObligationPaidResponseSuccess = (markObligationPaidResponse200) & {
+  headers: Headers;
+};
+export type markObligationPaidResponseError = (markObligationPaidResponse422) & {
+  headers: Headers;
+};
+
+export type markObligationPaidResponse = (markObligationPaidResponseSuccess | markObligationPaidResponseError)
+
+export const getMarkObligationPaidUrl = (obligationId: string,) => {
+
+
+
+
+  return `/api/v1/house/obligations/${obligationId}/payment`
+}
+
+/**
+ * @summary Mark Obligation Paid
+ */
+export const markObligationPaid = async (obligationId: string,
+    obligationPaymentRequest: ObligationPaymentRequest, options?: Parameters<typeof customFetch>[1]): Promise<markObligationPaidResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<markObligationPaidResponse>(getMarkObligationPaidUrl(obligationId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(obligationPaymentRequest)
+  }
+);}
+
+
+
+
+
+export const getMarkObligationPaidMutationKey = () => ['markObligationPaid'] as const;
+
+export const getMarkObligationPaidMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markObligationPaid>>, TError,MarkObligationPaidMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markObligationPaid>>, TError,MarkObligationPaidMutationVariables, TContext> => {
+
+const mutationKey = getMarkObligationPaidMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markObligationPaid>>, MarkObligationPaidMutationVariables> = (props) => {
+          const {obligationId,data} = props ?? {};
+
+          return  markObligationPaid(obligationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkObligationPaidMutationResult = NonNullable<Awaited<ReturnType<typeof markObligationPaid>>>
+    export type MarkObligationPaidMutationBody = ObligationPaymentRequest
+    export type MarkObligationPaidMutationError = HTTPValidationError
+    export type MarkObligationPaidMutationVariables = {obligationId: string;data: ObligationPaymentRequest}
+
+    /**
+ * @summary Mark Obligation Paid
+ */
+export const useMarkObligationPaid = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markObligationPaid>>, TError,MarkObligationPaidMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof markObligationPaid>>,
+        TError,
+        MarkObligationPaidMutationVariables,
+        TContext
+      > => {
+      return useMutation(getMarkObligationPaidMutationOptions(options), queryClient);
+    }
+    export type findObligationPaymentCandidatesResponse200 = {
+  data: ObligationCandidateResponse[]
+  status: 200
+}
+
+export type findObligationPaymentCandidatesResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type findObligationPaymentCandidatesResponseSuccess = (findObligationPaymentCandidatesResponse200) & {
+  headers: Headers;
+};
+export type findObligationPaymentCandidatesResponseError = (findObligationPaymentCandidatesResponse422) & {
+  headers: Headers;
+};
+
+export type findObligationPaymentCandidatesResponse = (findObligationPaymentCandidatesResponseSuccess | findObligationPaymentCandidatesResponseError)
+
+export const getFindObligationPaymentCandidatesUrl = (obligationId: string,) => {
+
+
+
+
+  return `/api/v1/house/obligations/${obligationId}/candidates`
+}
+
+/**
+ * @summary Find Obligation Payment Candidates
+ */
+export const findObligationPaymentCandidates = async (obligationId: string, options?: Parameters<typeof customFetch>[1]): Promise<findObligationPaymentCandidatesResponse> => {
+
+  return customFetch<findObligationPaymentCandidatesResponse>(getFindObligationPaymentCandidatesUrl(obligationId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getFindObligationPaymentCandidatesQueryKey = (obligationId: string,) => {
+    return [
+    `/api/v1/house/obligations/${obligationId}/candidates`
+    ] as const;
+    }
+
+
+export const getFindObligationPaymentCandidatesQueryOptions = <TData = Awaited<ReturnType<typeof findObligationPaymentCandidates>>, TError = HTTPValidationError>(obligationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findObligationPaymentCandidates>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getFindObligationPaymentCandidatesQueryKey(obligationId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof findObligationPaymentCandidates>>> = ({ signal }) => findObligationPaymentCandidates(obligationId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: obligationId !== null && obligationId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof findObligationPaymentCandidates>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type FindObligationPaymentCandidatesQueryResult = NonNullable<Awaited<ReturnType<typeof findObligationPaymentCandidates>>>
+export type FindObligationPaymentCandidatesQueryError = HTTPValidationError
+
+
+export function useFindObligationPaymentCandidates<TData = Awaited<ReturnType<typeof findObligationPaymentCandidates>>, TError = HTTPValidationError>(
+ obligationId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof findObligationPaymentCandidates>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof findObligationPaymentCandidates>>,
+          TError,
+          Awaited<ReturnType<typeof findObligationPaymentCandidates>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useFindObligationPaymentCandidates<TData = Awaited<ReturnType<typeof findObligationPaymentCandidates>>, TError = HTTPValidationError>(
+ obligationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findObligationPaymentCandidates>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof findObligationPaymentCandidates>>,
+          TError,
+          Awaited<ReturnType<typeof findObligationPaymentCandidates>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useFindObligationPaymentCandidates<TData = Awaited<ReturnType<typeof findObligationPaymentCandidates>>, TError = HTTPValidationError>(
+ obligationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findObligationPaymentCandidates>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Find Obligation Payment Candidates
+ */
+
+export function useFindObligationPaymentCandidates<TData = Awaited<ReturnType<typeof findObligationPaymentCandidates>>, TError = HTTPValidationError>(
+ obligationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findObligationPaymentCandidates>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getFindObligationPaymentCandidatesQueryOptions(obligationId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+

@@ -144,3 +144,11 @@ if TYPE_CHECKING:
     ObligationFigures.due
     Bucket.difference
     ActivityRow.account_name
+
+    # --- Loan balance parts: the invariants that the balance and its payment
+    # splits add up are asserted in tests/unit/domain/test_loans.py ---
+
+    from src.domain.loans import LoanBalance
+
+    LoanBalance.principal_paid
+    LoanBalance.interest_paid

@@ -153,9 +153,15 @@ REGISTRY: tuple[ToolSpec, ...] = (
         name="get_house_summary",
         schema=tools.GET_HOUSE_SUMMARY_SCHEMA,
         handler=tool_executor.handle_get_house_summary,
-        # The House figures carry the home's settings, so the tool also
-        # covers what GetCoOwnedAssetUseCase serves Settings → House.
-        use_cases=("GetHouseUseCase", "GetCoOwnedAssetUseCase"),
+        # The House figures carry the home's settings, loans, and
+        # obligations, so the tool also covers what Settings → House and
+        # the House page's loan and obligation lists read.
+        use_cases=(
+            "GetHouseUseCase",
+            "GetCoOwnedAssetUseCase",
+            "ListLoansUseCase",
+            "ListObligationsUseCase",
+        ),
     ),
     ToolSpec(
         name="get_accounts",
@@ -687,6 +693,21 @@ BLACKLISTED_USE_CASES: frozenset[str] = frozenset({
     # the credits through get_house_summary's Put in totals, and finds a row
     # with search_transactions.
     "ListManualTransactionsUseCase",
+    # 2026-10-17: the home's loans and obligations are entered and linked to
+    # their payment rows on the House page; get_house_summary reads them.
+    # Candidates feed the House page's "Mark paid" picker, which only a
+    # person confirms.
+    "CreateLoanUseCase",
+    "ReplaceLoanUseCase",
+    "CloseLoanUseCase",
+    "UpdateLoanStatementUseCase",
+    "DeleteLoanUseCase",
+    "CreateObligationUseCase",
+    "UpdateObligationUseCase",
+    "DeleteObligationUseCase",
+    "MarkObligationPaidUseCase",
+    "AddLoanPaymentObligationsUseCase",
+    "FindObligationPaymentCandidatesUseCase",
     # 2026-10-15: structural, like SetupCoupleUseCase — marking an account
     # joint re-keys both partners' imported rows, a Settings decision.
     "MarkAccountJointUseCase",

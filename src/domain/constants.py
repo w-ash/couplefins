@@ -41,6 +41,8 @@ SOURCE_GIFT: Final = "gift"
 # The kind of contribution a row is toward the owners' shares in their home
 # (src/domain/capital.py).
 SHARE_TAG_PREFIX: Final = "share:"
+# The loan a payment row pays (src/domain/loans.py): `loan:<slug>`.
+LOAN_TAG_PREFIX: Final = "loan:"
 # A hand-entered contribution (one that passed through no imported account):
 # the account it lands in unless the owners name another, and its category.
 DEFAULT_MANUAL_ACCOUNT: Final = "Escrow"

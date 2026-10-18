@@ -73,22 +73,32 @@ async def delete_transactions_with_links(
 ) -> list[str]:
     """Delete rows with their edit history and settlement links.
 
-    Return one warning for each row that was linked to a settlement. The link
-    is removed; the settlement record stays.
+    Return one warning for each row that was linked to a settlement, and one
+    for each row that paid an obligation. The link is removed; the
+    settlement record stays. The obligation stays and is unpaid again (the
+    database clears its `paid_by_transaction_id`).
     """
     if not transactions:
         return []
     ids = [tx.id for tx in transactions]
-    warnings: list[str] = []
     links = await uow.settlement_transaction_links.get_by_transaction_ids(ids)
+    settled = {link.transaction_id for link in links}
+    paying = {
+        o.paid_by_transaction_id
+        for o in await uow.obligations.get_by_paid_transaction_ids(ids)
+    }
+    warnings: list[str] = []
+    for tx in transactions:
+        removed = f"Removed transaction {tx.merchant} ({tx.date.isoformat()})"
+        if tx.id in settled:
+            warnings.append(
+                f"{removed} was linked to a settlement — the link was removed"
+            )
+        if tx.id in paying:
+            warnings.append(
+                f"{removed} paid an obligation — the obligation is unpaid again"
+            )
     if links:
-        linked_ids = {link.transaction_id for link in links}
-        warnings = [
-            f"Removed transaction {tx.merchant} ({tx.date.isoformat()}) "
-            "was linked to a settlement — the link was removed"
-            for tx in transactions
-            if tx.id in linked_ids
-        ]
         await uow.settlement_transaction_links.delete_by_transaction_ids(ids)
     await uow.transaction_edits.delete_by_transaction_ids(ids)
     await uow.transactions.delete_by_ids(ids)

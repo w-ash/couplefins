@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 from uuid import UUID
@@ -23,6 +23,17 @@ def as_validation_error[**P, R](
         return check(*args, **kwargs)
     except ValueError as e:
         raise ValidationError(str(e)) from e
+
+
+def build_validated[R](
+    build: Callable[..., R], values: Mapping[str, object], /, **extra: object
+) -> R:
+    """Build a value by keyword from `values` and `extra`, as
+    `as_validation_error` does. For values named as the built value's
+    fields (a request's `model_dump`, a record's `attrs.asdict`). The type
+    checker does not see those names, so a field `build` lacks raises
+    TypeError; the route tests reach every caller."""
+    return as_validation_error(build, **values, **extra)
 
 
 def require_person_for_personal_scope(scope: Scope, person_id: UUID | None) -> None:
@@ -55,6 +66,16 @@ def non_empty(
     """attrs validator — reject empty or whitespace-only text or bytes."""
     if not value or value.isspace():
         raise ValueError(f"{attribute.name} must not be empty")
+
+
+def bounded_int(lo: int, hi: int) -> Callable[[object, Attribute[int], int], None]:
+    """attrs validator factory — reject an int outside `lo`..`hi`."""
+
+    def check(_instance: object, attribute: Attribute[int], value: int) -> None:
+        if not lo <= value <= hi:
+            raise ValueError(f"{attribute.name} must be {lo}-{hi}, got {value}")
+
+    return check
 
 
 def positive_int(_instance: object, attribute: Attribute[int], value: int) -> None:

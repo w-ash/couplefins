@@ -9,6 +9,7 @@ import type { CoOwnedAssetResponse } from './coOwnedAssetResponse.ts';
 import type { DashboardPersonResponse } from './dashboardPersonResponse.ts';
 import type { LoanResponse } from './loanResponse.ts';
 import type { ObligationResponse } from './obligationResponse.ts';
+import type { PastLoanResponse } from './pastLoanResponse.ts';
 import type { PutInSectionResponse } from './putInSectionResponse.ts';
 import type { SetAsideSectionResponse } from './setAsideSectionResponse.ts';
 import type { SharesSectionResponse } from './sharesSectionResponse.ts';
@@ -28,7 +29,9 @@ export interface HouseResponse {
   put_in: PutInSectionResponse;
   shares: SharesSectionResponse;
   loans: LoanResponse[];
+  past_loans: PastLoanResponse[];
   upcoming: ObligationResponse[];
+  recent_paid: ObligationResponse[];
   set_aside: SetAsideSectionResponse;
   recent_activity: ActivityRowResponse[];
 }

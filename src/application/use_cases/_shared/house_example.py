@@ -53,17 +53,26 @@ _TAX_BILL = Decimal("4860.00")
 
 
 def _loan_payment(
-    n: int, loan: LoanFigures, late_after: datetime.date
+    n: int,
+    loan: LoanFigures,
+    due: datetime.date,
+    late_after: datetime.date,
+    paid_by: UUID | None = None,
 ) -> ObligationFigures:
+    """A payment of the loan from the loan bucket, due on `due`; paid by the
+    activity row `paid_by` when given, else due."""
     return ObligationFigures(
         id=UUID(int=n),
         name=f"{loan.name} payment",
         kind="loan_payment",
+        status="due" if paid_by is None else "paid",
         amount=loan.payment,
         is_estimate=False,
-        due=loan.next_due,
+        due=due,
         late_after=late_after,
         pays_from=_LOAN_BUCKET.name,
+        loan_id=loan.id,
+        paid_by_transaction_id=paid_by,
         shortfall=None,
     )
 
@@ -124,22 +133,51 @@ def example_house(alice: UUID, bob: UUID) -> HouseFigures:
     mortgage = LoanFigures(
         id=UUID(int=11),
         name="Mortgage",
+        lender="Example Bank",
         kind="amortizing",
+        principal=Decimal("300000.00"),
         balance=Decimal("296620.00"),
         rate_percent=Decimal("6.0"),
         payment=Decimal("1798.65"),
+        # The 10-01 payment takes 1,484.67 interest and 313.98 principal.
+        statement_balance=Decimal("296933.98"),
+        statement_balance_as_of=_on(9, 15),
         next_due=_on(11, 1),
         owner_parts=pair("1050.41", "748.24"),
+        closed_on=None,
+        replaced_by_loan_id=None,
     )
     short_term_loan = LoanFigures(
         id=UUID(int=12),
         name="Short-term loan",
+        lender="Example Credit Union",
         kind="interest_only",
+        principal=Decimal("40000.00"),
         balance=Decimal("40000.00"),
         rate_percent=Decimal("8.5"),
         payment=Decimal("283.33"),
+        statement_balance=Decimal("40000.00"),
+        statement_balance_as_of=_on(9, 30),
         next_due=_on(10, 15),
         owner_parts=pair("141.67", "141.66"),
+        closed_on=None,
+        replaced_by_loan_id=None,
+    )
+    bridge_loan = LoanFigures(
+        id=UUID(int=13),
+        name="Bridge loan",
+        lender="Example Bank",
+        kind="interest_only",
+        principal=Decimal("300000.00"),
+        balance=Decimal(0),
+        rate_percent=Decimal("9.0"),
+        payment=Decimal("2250.00"),
+        statement_balance=Decimal("300000.00"),
+        statement_balance_as_of=_on(9, 1, 2025),
+        next_due=None,
+        owner_parts=pair("1125.00", "1125.00"),
+        closed_on=_on(3, 31),
+        replaced_by_loan_id=mortgage.id,
     )
     return HouseFigures(
         as_of=_on(10, 1),
@@ -172,23 +210,32 @@ def example_house(alice: UUID, bob: UUID) -> HouseFigures:
             point(2026, 9, "58400.00", "41600.00"),
         )),
         loans=(mortgage, short_term_loan),
+        past_loans=(bridge_loan,),
         upcoming=with_shortfalls(
             (
-                _loan_payment(21, short_term_loan, _on(10, 25)),
-                _loan_payment(22, mortgage, _on(11, 16)),
+                _loan_payment(21, short_term_loan, _on(10, 15), _on(10, 25)),
+                _loan_payment(22, mortgage, _on(11, 1), _on(11, 16)),
                 ObligationFigures(
                     id=UUID(int=23),
                     name="Property tax, first installment",
                     kind="property_tax",
+                    status="due",
                     amount=_TAX_BILL,
                     is_estimate=True,
                     due=_on(11, 1),
                     late_after=_on(12, 10),
                     pays_from=_TAX_BUCKET.name,
+                    loan_id=None,
+                    paid_by_transaction_id=None,
                     shortfall=None,
                 ),
             ),
             {b.name: b.balance for b in _BUCKETS},
+        ),
+        recent_paid=(
+            _loan_payment(24, mortgage, _on(10, 1), _on(10, 16), UUID(int=31)),
+            _loan_payment(25, short_term_loan, _on(9, 15), _on(9, 25), UUID(int=36)),
+            _loan_payment(26, mortgage, _on(9, 1), _on(9, 16), UUID(int=39)),
         ),
         set_aside=set_aside_section(
             _BUCKETS,

@@ -17,6 +17,12 @@ from src.infrastructure.persistence.repositories.category_repository import (
 from src.infrastructure.persistence.repositories.co_owned_asset_repository import (
     CoOwnedAssetRepository,
 )
+from src.infrastructure.persistence.repositories.loan_repository import (
+    LoanRepository,
+)
+from src.infrastructure.persistence.repositories.obligation_repository import (
+    ObligationRepository,
+)
 from src.infrastructure.persistence.repositories.person_repository import (
     PersonRepository,
 )
@@ -63,6 +69,8 @@ class UnitOfWork:
         self.settlement_transaction_links = SettlementTransactionLinkRepository(session)
         self.settlement_portions = SettlementPortionRepository(session)
         self.co_owned_assets = CoOwnedAssetRepository(session)
+        self.loans = LoanRepository(session)
+        self.obligations = ObligationRepository(session)
 
     async def __aenter__(self) -> Self:
         return self

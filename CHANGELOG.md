@@ -10,6 +10,14 @@ deploy. There is no `[Unreleased]` section.
 Versions before 1.14.0 predate this file. Their scope is recorded per series in
 `docs/backlog/completed/` and in the version matrix in `docs/backlog/README.md`.
 
+## [1.15.5] - 2026-10-17
+
+### Added
+
+- Loans. In House → Loans, record a loan (lender, interest-only or amortizing, principal, rate, payment, term, first due date) with a statement balance. Tag payment rows `loan:<name>`: the balance is the statement balance minus the principal paid since, so it matches the servicer's statement. An interest-only loan moves only with a payment also tagged `share:loan-principal`; an amortizing loan splits each payment into interest and principal. A refinance replaces the loan and keeps the old one's history; a new statement balance re-anchors.
+- Upcoming obligations. Record property-tax installments, insurance renewals, loan payments, and other bills with a due date, a later delinquency date, the paying pot, and an estimate flag until the bill arrives. Status is due, paid (linked to its payment row, from suggested candidates), or late. A pot that cannot cover what is due shows the shortfall. "Add the next N payments" generates a loan's monthly obligations.
+- The House page is fully real once the home is set up: Loans and Upcoming show real figures and the example notice is gone.
+
 ## [1.15.4] - 2026-10-16
 
 ### Added

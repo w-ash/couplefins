@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { errorMessage } from "@/api/client";
 import type { SettlementMerchantResponse } from "@/api/generated/model";
 import {
   getGetSettlementMerchantsQueryKey,
@@ -107,9 +108,7 @@ function AddMerchantForm({ onSuccess }: { onSuccess: () => void }) {
       </Button>
       {mutation.isError && (
         <InlineError>
-          {mutation.error instanceof Error
-            ? mutation.error.message
-            : "Failed to add merchant"}
+          {errorMessage(mutation.error, "Failed to add merchant")}
         </InlineError>
       )}
     </form>

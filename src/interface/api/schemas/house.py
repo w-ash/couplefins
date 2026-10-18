@@ -2,35 +2,52 @@ import datetime
 from uuid import UUID
 
 import attrs
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 
 from src.application.use_cases._shared.command_validators import (
     as_validation_error,
+    build_validated,
 )
+from src.application.use_cases._shared.house_records import (
+    LoanTerms,
+    ObligationTerms,
+)
+from src.application.use_cases.add_loan_payment_obligations import (
+    AddLoanPaymentObligationsCommand,
+)
+from src.application.use_cases.close_loan import CloseLoanCommand
+from src.application.use_cases.create_loan import CreateLoanCommand
+from src.application.use_cases.create_obligation import CreateObligationCommand
 from src.application.use_cases.get_house import GetHouseResult
+from src.application.use_cases.mark_obligation_paid import MarkObligationPaidCommand
 from src.application.use_cases.record_manual_transaction import (
     RecordManualTransactionCommand,
 )
+from src.application.use_cases.replace_loan import ReplaceLoanCommand
 from src.application.use_cases.save_co_owned_asset import SaveCoOwnedAssetCommand
+from src.application.use_cases.update_loan_statement import (
+    UpdateLoanStatementCommand,
+)
+from src.application.use_cases.update_obligation import UpdateObligationCommand
 from src.domain.capital import share_kind
-from src.domain.constants import DEFAULT_MANUAL_ACCOUNT
+from src.domain.constants import DEFAULT_MANUAL_ACCOUNT, LOAN_TAG_PREFIX
 from src.domain.entities.co_owned_asset import (
     ContributionKind,
     CoOwnedAsset,
     ordered_kinds,
 )
+from src.domain.entities.loan import LoanKind
+from src.domain.entities.obligation import ObligationKind, ObligationStatus
 from src.domain.entities.transaction import Transaction
-from src.domain.house import (
-    ActivityKind,
-    LoanKind,
-    ObligationKind,
-)
+from src.domain.house import ActivityKind
+from src.domain.obligations import PaymentCandidate
 from src.interface.api.schemas.dashboard import DashboardPersonResponse
 from src.interface.api.schemas.types import MoneyField, PercentField
 
 
 class _HouseModel(BaseModel):
-    """Validates straight from the frozen ``src.domain.house`` records."""
+    """Validates straight from frozen attrs records: the ``src.domain.house``
+    figures, the loan and obligation entities, and use case results."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -71,26 +88,47 @@ class SharesSectionResponse(_HouseModel):
     history: list[ShareHistoryPointResponse]  # ascending; the last point equals now
 
 
-class LoanResponse(_HouseModel):
+class _LoanFiguresResponse(_HouseModel):
+    """What an open and a past loan both show."""
+
     id: UUID
     name: str
+    lender: str
     kind: LoanKind
-    balance: MoneyField
+    principal: MoneyField
+    balance: MoneyField  # statement_balance less the principal paid since
     rate_percent: PercentField
     payment: MoneyField
-    next_due: datetime.date
-    owner_parts: list[OwnerAmountResponse]
+    statement_balance: MoneyField
+    statement_balance_as_of: datetime.date
+
+
+class LoanResponse(_LoanFiguresResponse):
+    """An open loan."""
+
+    next_due: datetime.date | None  # None once the term has run out, all paid
+    owner_parts: list[OwnerAmountResponse]  # sum to payment
+
+
+class PastLoanResponse(_LoanFiguresResponse):
+    """A closed or replaced loan, kept with its history."""
+
+    closed_on: datetime.date
+    replaced_by_loan_id: UUID | None  # None when closed without a refinance
 
 
 class ObligationResponse(_HouseModel):
     id: UUID
     name: str
     kind: ObligationKind
+    status: ObligationStatus  # on the as-of date
     amount: MoneyField
     is_estimate: bool
     due: datetime.date
     late_after: datetime.date | None
     pays_from: str | None
+    loan_id: UUID | None
+    paid_by_transaction_id: UUID | None
     shortfall: MoneyField | None  # set when the paying bucket falls short
 
 
@@ -244,8 +282,10 @@ class HouseResponse(_HouseModel):
     persons: list[DashboardPersonResponse]
     put_in: PutInSectionResponse
     shares: SharesSectionResponse
-    loans: list[LoanResponse]
-    upcoming: list[ObligationResponse]  # ascending by due
+    loans: list[LoanResponse]  # the open loans
+    past_loans: list[PastLoanResponse]
+    upcoming: list[ObligationResponse]  # unpaid, ascending by due
+    recent_paid: list[ObligationResponse]  # paid, newest due first
     set_aside: SetAsideSectionResponse
     recent_activity: list[ActivityRowResponse]  # newest first
 
@@ -258,3 +298,186 @@ class HouseResponse(_HouseModel):
             ),
             **attrs.asdict(result.figures, recurse=False),
         })
+
+
+class LoanRecordResponse(_HouseModel):
+    """A loan as entered. ``tag`` (`loan:<slug>`) links its payment rows;
+    ``annual_rate`` is a percent."""
+
+    id: UUID
+    name: str
+    slug: str
+    lender: str
+    kind: LoanKind
+    principal: MoneyField
+    annual_rate: PercentField
+    payment: MoneyField
+    term_months: int | None
+    first_due_on: datetime.date
+    statement_balance: MoneyField
+    statement_balance_as_of: datetime.date
+    replaced_by_loan_id: UUID | None
+    closed_on: datetime.date | None
+    notes: str
+    created_at: datetime.datetime
+
+    @computed_field
+    @property
+    def tag(self) -> str:
+        return f"{LOAN_TAG_PREFIX}{self.slug}"
+
+
+class ReplaceLoanResponse(_HouseModel):
+    replaced: LoanRecordResponse  # closed, naming its replacement
+    replacement: LoanRecordResponse
+
+
+class LoanTermsRequest(BaseModel):
+    """A new loan's terms. The command and the loan check the values (a 422
+    when they fail)."""
+
+    name: str
+    lender: str
+    kind: LoanKind
+    principal: MoneyField
+    annual_rate: PercentField  # a percent: 6.5 for 6.5%
+    payment: MoneyField  # the scheduled monthly payment
+    term_months: int | None = None
+    first_due_on: datetime.date
+    statement_balance: MoneyField
+    statement_balance_as_of: datetime.date
+    notes: str = ""
+
+    def to_terms(self) -> LoanTerms:
+        return build_validated(
+            LoanTerms, self.model_dump(include=set(LoanTermsRequest.model_fields))
+        )
+
+
+class CreateLoanRequest(LoanTermsRequest):
+    def to_command(self) -> CreateLoanCommand:
+        return CreateLoanCommand(terms=self.to_terms())
+
+
+class ReplaceLoanRequest(LoanTermsRequest):
+    """The replacing loan's terms, and the day the old loan closes."""
+
+    closed_on: datetime.date
+
+    def to_command(self, loan_id: UUID) -> ReplaceLoanCommand:
+        return ReplaceLoanCommand(
+            loan_id=loan_id, closed_on=self.closed_on, replacement=self.to_terms()
+        )
+
+
+class CloseLoanRequest(BaseModel):
+    closed_on: datetime.date
+
+    def to_command(self, loan_id: UUID) -> CloseLoanCommand:
+        return CloseLoanCommand(loan_id=loan_id, closed_on=self.closed_on)
+
+
+class LoanStatementRequest(BaseModel):
+    """The balance on the servicer's statement of ``as_of``."""
+
+    balance: MoneyField
+    as_of: datetime.date
+
+    def to_command(self, loan_id: UUID) -> UpdateLoanStatementCommand:
+        return UpdateLoanStatementCommand(
+            loan_id=loan_id, balance=self.balance, as_of=self.as_of
+        )
+
+
+class LoanPaymentObligationsRequest(BaseModel):
+    months: int  # how many monthly payments to add, 1-24
+
+    def to_command(self, loan_id: UUID) -> AddLoanPaymentObligationsCommand:
+        return as_validation_error(
+            AddLoanPaymentObligationsCommand, loan_id=loan_id, months=self.months
+        )
+
+
+class ObligationRecordResponse(_HouseModel):
+    """An obligation as entered; ``paid_by_transaction_id`` is the row that
+    paid it, None while unpaid."""
+
+    id: UUID
+    kind: ObligationKind
+    description: str
+    amount: MoneyField
+    is_estimate: bool
+    due_on: datetime.date
+    late_after: datetime.date | None
+    pays_from: str | None
+    loan_id: UUID | None
+    paid_by_transaction_id: UUID | None
+    notes: str
+
+
+class ObligationTermsRequest(BaseModel):
+    """An obligation's values, all but the row that paid it. The command
+    and the obligation check them (a 422 when they fail)."""
+
+    kind: ObligationKind
+    description: str
+    amount: MoneyField  # what is due, > 0
+    is_estimate: bool = False  # not yet billed
+    due_on: datetime.date
+    late_after: datetime.date | None = None  # the delinquency date
+    pays_from: str | None = None  # a pot's or an account's name
+    loan_id: UUID | None = None  # required for, and only for, a loan_payment
+    notes: str = ""
+
+    def to_terms(self) -> ObligationTerms:
+        return build_validated(ObligationTerms, self.model_dump())
+
+
+class CreateObligationRequest(ObligationTermsRequest):
+    def to_command(self) -> CreateObligationCommand:
+        return CreateObligationCommand(terms=self.to_terms())
+
+
+class UpdateObligationRequest(ObligationTermsRequest):
+    def to_command(self, obligation_id: UUID) -> UpdateObligationCommand:
+        return UpdateObligationCommand(
+            obligation_id=obligation_id, terms=self.to_terms()
+        )
+
+
+class ObligationPaymentRequest(BaseModel):
+    transaction_id: UUID | None  # the row that paid it; None marks it unpaid
+
+    def to_command(self, obligation_id: UUID) -> MarkObligationPaidCommand:
+        return MarkObligationPaidCommand(
+            obligation_id=obligation_id, transaction_id=self.transaction_id
+        )
+
+
+class ObligationCandidateResponse(BaseModel):
+    """A row that may pay an obligation. ``score`` adds 3 for an amount
+    within $1 or 2%, 2 for a date within a week of the due date (1 within
+    30 days), and 2 for the obligation's loan tag."""
+
+    id: UUID
+    date: datetime.date
+    merchant: str
+    account_name: str
+    category: str
+    amount: MoneyField  # signed: negative = money out
+    payer_person_id: UUID | None  # None for a joint row
+    score: int
+
+    @classmethod
+    def from_domain(cls, candidate: PaymentCandidate) -> ObligationCandidateResponse:
+        tx = candidate.transaction
+        return cls(
+            id=tx.id,
+            date=tx.date,
+            merchant=tx.merchant,
+            account_name=tx.account,
+            category=tx.category,
+            amount=tx.amount,
+            payer_person_id=tx.payer_person_id,
+            score=candidate.score,
+        )

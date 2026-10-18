@@ -14,7 +14,7 @@ from src.domain.pots import OwnerFunds
 from tests.fixtures.factories import (
     ALICE,
     BOB,
-    make_obligation,
+    make_obligation_figures,
     make_owner_amount,
     make_owner_share,
     make_share_history_point,
@@ -183,8 +183,8 @@ class TestOwnerDeposits:
 
 class TestWithShortfalls:
     def test_only_the_later_payment_from_a_bucket_runs_short(self) -> None:
-        first = make_obligation(amount=Decimal(300), pays_from="Loans")
-        second = make_obligation(amount=Decimal(300), pays_from="Loans")
+        first = make_obligation_figures(amount=Decimal(300), pays_from="Loans")
+        second = make_obligation_figures(amount=Decimal(300), pays_from="Loans")
 
         result = with_shortfalls((first, second), {"Loans": Decimal(500)})
 
@@ -192,16 +192,16 @@ class TestWithShortfalls:
         assert [o.id for o in result] == [first.id, second.id]
 
     def test_a_short_first_payment_leaves_nothing_for_the_next(self) -> None:
-        first = make_obligation(amount=Decimal(300), pays_from="Loans")
-        second = make_obligation(amount=Decimal(50), pays_from="Loans")
+        first = make_obligation_figures(amount=Decimal(300), pays_from="Loans")
+        second = make_obligation_figures(amount=Decimal(50), pays_from="Loans")
 
         result = with_shortfalls((first, second), {"Loans": Decimal(100)})
 
         assert [o.shortfall for o in result] == [Decimal(200), Decimal(50)]
 
     def test_each_bucket_keeps_its_own_balance(self) -> None:
-        loan = make_obligation(amount=Decimal(300), pays_from="Loans")
-        tax = make_obligation(amount=Decimal(300), pays_from="Tax")
+        loan = make_obligation_figures(amount=Decimal(300), pays_from="Loans")
+        tax = make_obligation_figures(amount=Decimal(300), pays_from="Tax")
 
         result = with_shortfalls(
             (loan, tax), {"Loans": Decimal(300), "Tax": Decimal(300)}
@@ -210,8 +210,8 @@ class TestWithShortfalls:
         assert [o.shortfall for o in result] == [None, None]
 
     def test_no_bucket_or_an_unknown_bucket_gives_no_shortfall(self) -> None:
-        unknown = make_obligation(amount=Decimal(300), pays_from="Tax")
-        no_bucket = make_obligation(amount=Decimal(300), pays_from=None)
+        unknown = make_obligation_figures(amount=Decimal(300), pays_from="Tax")
+        no_bucket = make_obligation_figures(amount=Decimal(300), pays_from=None)
 
         result = with_shortfalls((unknown, no_bucket), {"Loans": Decimal(0)})
 
